@@ -98,6 +98,36 @@ class HttpBodyStreamCopierTest {
     }
 
     @Test
+    fun `copies close-delimited body until end of stream`() {
+        val inputBytes = "hello close-delimited body".toByteArray(Charsets.UTF_8)
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyCloseDelimited(
+            input = ByteArrayInputStream(inputBytes),
+            output = output,
+            bufferSize = 5,
+        )
+
+        assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = inputBytes.size.toLong()), result)
+        assertContentEquals(inputBytes, output.toByteArray())
+    }
+
+    @Test
+    fun `copies binary close-delimited body without string conversion`() {
+        val inputBytes = byteArrayOf(0, 1, 2, 127, (-1).toByte())
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyCloseDelimited(
+            input = ByteArrayInputStream(inputBytes),
+            output = output,
+            bufferSize = 2,
+        )
+
+        assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = inputBytes.size.toLong()), result)
+        assertContentEquals(inputBytes, output.toByteArray())
+    }
+
+    @Test
     fun `returns premature end for incomplete chunked body`() {
         val input = ByteArrayInputStream("5\r\nabc".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
@@ -263,6 +293,14 @@ class HttpBodyStreamCopierTest {
 
         assertFailsWith<IllegalArgumentException> {
             HttpBodyStreamCopier.copyChunked(
+                input = ByteArrayInputStream(ByteArray(0)),
+                output = ByteArrayOutputStream(),
+                bufferSize = 0,
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            HttpBodyStreamCopier.copyCloseDelimited(
                 input = ByteArrayInputStream(ByteArray(0)),
                 output = ByteArrayOutputStream(),
                 bufferSize = 0,

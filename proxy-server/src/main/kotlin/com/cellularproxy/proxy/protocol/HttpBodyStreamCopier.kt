@@ -76,6 +76,26 @@ object HttpBodyStreamCopier {
         return HttpBodyStreamCopyResult.Completed(bytesCopied = copied)
     }
 
+    fun copyCloseDelimited(
+        input: InputStream,
+        output: OutputStream,
+        bufferSize: Int = DEFAULT_BODY_BUFFER_BYTES,
+    ): HttpBodyStreamCopyResult {
+        require(bufferSize > 0) { "Buffer size must be positive" }
+
+        val buffer = ByteArray(bufferSize)
+        var copied = 0L
+        while (true) {
+            val readBytes = input.read(buffer)
+            if (readBytes == END_OF_STREAM) {
+                return HttpBodyStreamCopyResult.Completed(bytesCopied = copied)
+            }
+
+            output.write(buffer, 0, readBytes)
+            copied += readBytes.toLong()
+        }
+    }
+
     fun copyChunked(
         input: InputStream,
         output: OutputStream,
