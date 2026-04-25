@@ -2,6 +2,9 @@ package com.cellularproxy.proxy.forwarding
 
 import com.cellularproxy.proxy.protocol.ParsedHttpRequest
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.util.Collections
 import java.util.Locale
 
@@ -10,8 +13,12 @@ class ForwardedHttpRequest(
     val port: Int,
     val requestLine: String,
     headers: Map<String, List<String>>,
+    body: ByteArray = EMPTY_BODY,
 ) {
     val headers: Map<String, List<String>>
+    private val bodyBytes: ByteArray
+    val body: ByteArray
+        get() = bodyBytes.copyOf()
 
     init {
         require(host.isNotBlank()) { "Forward host must not be blank" }
@@ -31,10 +38,44 @@ class ForwardedHttpRequest(
                 },
             )
         }
+        val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
+        require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
+            "HTTP header names must not contain case-variant duplicates"
+        }
+        require(TRANSFER_ENCODING_HEADER !in normalizedHeaderNames) {
+            "Transfer-Encoding is not supported for forwarded fixed-length requests"
+        }
+
+        val contentLengthValues = copiedHeaders.caseInsensitiveHeaderValues(CONTENT_LENGTH_HEADER)
+        require(contentLengthValues.size <= 1) {
+            "Forwarded requests must not contain duplicate Content-Length headers"
+        }
+        val bodyCopy = body.copyOf()
+        val contentLength = contentLengthValues.singleOrNull()
+        if (contentLength == null) {
+            require(bodyCopy.isEmpty()) {
+                "Forwarded request bodies require a fixed Content-Length header"
+            }
+        } else {
+            require(contentLength.isDecimalDigits()) {
+                "Content-Length must be a non-negative decimal value"
+            }
+            val declaredLength = contentLength.toLong()
+            require(declaredLength == bodyCopy.size.toLong()) {
+                "Content-Length must match the forwarded request body size"
+            }
+        }
         this.headers = Collections.unmodifiableMap(copiedHeaders)
+        this.bodyBytes = bodyCopy
     }
 
     fun toHttpString(): String =
+        headerString() + bodyBytes.decodeStrictUtf8()
+
+    fun toByteArray(): ByteArray =
+        headerString().toByteArray(Charsets.UTF_8) + bodyBytes
+
+    private fun headerString(): String =
         buildString {
             append(requestLine).append(CRLF)
             headers.forEach { (name, values) ->
@@ -44,14 +85,18 @@ class ForwardedHttpRequest(
             }
             append(CRLF)
         }
-
-    fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
 }
 
 object HttpProxyForwardRequestRenderer {
-    fun render(request: ParsedHttpRequest): ForwardedHttpRequest {
+    fun render(
+        request: ParsedHttpRequest,
+        body: ByteArray = EMPTY_BODY,
+    ): ForwardedHttpRequest {
         val proxyRequest = request.request as? ParsedProxyRequest.HttpProxy
             ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
+        require(!request.headers.containsHeader(TRANSFER_ENCODING_HEADER)) {
+            "Transfer-Encoding request bodies are not supported by the HTTP forward renderer"
+        }
 
         val headersToStrip = HOP_BY_HOP_HEADERS + request.connectionNominatedHeaderNames()
         val outboundHeaders = linkedMapOf<String, List<String>>("host" to listOf(proxyRequest.forwardHostHeaderValue()))
@@ -66,6 +111,7 @@ object HttpProxyForwardRequestRenderer {
             port = proxyRequest.port,
             requestLine = "${proxyRequest.method} ${proxyRequest.originTarget} HTTP/1.1",
             headers = outboundHeaders,
+            body = body,
         )
     }
 
@@ -89,13 +135,41 @@ private fun String.isSafeSingleLine(): Boolean =
 private fun String.isHttpToken(): Boolean =
     isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
+private fun String.isDecimalDigits(): Boolean =
+    isNotEmpty() && all { it in '0'..'9' }
+
 private fun Char.isDisallowedHeaderValueControl(): Boolean =
     code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+
+private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String): List<String> {
+    val normalizedName = name.lowercase(Locale.US)
+    return entries
+        .filter { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }
+        .flatMap { (_, values) -> values }
+}
+
+private fun Map<String, List<String>>.containsHeader(name: String): Boolean =
+    caseInsensitiveHeaderValues(name).isNotEmpty()
+
+private fun ByteArray.decodeStrictUtf8(): String =
+    try {
+        Charsets.UTF_8
+            .newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(this))
+            .toString()
+    } catch (_: CharacterCodingException) {
+        throw IllegalStateException("Forwarded request body is not valid UTF-8; use toByteArray() for byte-accurate rendering")
+    }
 
 private const val CRLF = "\r\n"
 private const val DELETE_CONTROL_CHAR = 0x7F
 private const val HTTP_DEFAULT_PORT = 80
 private const val CONNECTION_HEADER = "connection"
+private const val CONTENT_LENGTH_HEADER = "content-length"
+private const val TRANSFER_ENCODING_HEADER = "transfer-encoding"
+private val EMPTY_BODY = ByteArray(0)
 private val VALID_PORT_RANGE = 1..65535
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
 private val HOP_BY_HOP_HEADERS = setOf(

@@ -21,10 +21,10 @@ data class ProxyRequestAdmissionConfig(
 }
 
 sealed interface ProxyRequestAdmissionDecision {
-    data class Accepted(
-        val request: ParsedProxyRequest,
-        val requiresAuditLog: Boolean,
-    ) : ProxyRequestAdmissionDecision
+    sealed interface Accepted : ProxyRequestAdmissionDecision {
+        val request: ParsedProxyRequest
+        val requiresAuditLog: Boolean
+    }
 
     data class Rejected(
         val reason: ProxyRequestAdmissionRejectionReason,
@@ -83,7 +83,7 @@ object ProxyRequestAdmissionPolicy {
             proxyAuthorization = proxyAuthorization,
         )
         return if (authenticationDecision.accepted) {
-            ProxyRequestAdmissionDecision.Accepted(
+            accepted(
                 request = request.request,
                 requiresAuditLog = false,
             )
@@ -110,7 +110,7 @@ object ProxyRequestAdmissionPolicy {
         }
 
         if (!request.requiresToken) {
-            return ProxyRequestAdmissionDecision.Accepted(
+            return accepted(
                 request = request,
                 requiresAuditLog = request.requiresAuditLog,
             )
@@ -140,7 +140,7 @@ object ProxyRequestAdmissionPolicy {
         }
 
         return if (ConstantTimeSecret.equalsUtf8(token, config.managementApiToken)) {
-            ProxyRequestAdmissionDecision.Accepted(
+            accepted(
                 request = request,
                 requiresAuditLog = request.requiresAuditLog,
             )
@@ -155,7 +155,21 @@ object ProxyRequestAdmissionPolicy {
         ProxyRequestAdmissionDecision.Rejected(
             ProxyRequestAdmissionRejectionReason.ManagementAuthorization(reason),
         )
+
+    private fun accepted(
+        request: ParsedProxyRequest,
+        requiresAuditLog: Boolean,
+    ): ProxyRequestAdmissionDecision.Accepted =
+        AcceptedProxyRequestAdmissionDecision(
+            request = request,
+            requiresAuditLog = requiresAuditLog,
+        )
 }
+
+private data class AcceptedProxyRequestAdmissionDecision(
+    override val request: ParsedProxyRequest,
+    override val requiresAuditLog: Boolean,
+) : ProxyRequestAdmissionDecision.Accepted
 
 private sealed interface HeaderLookup {
     data object Missing : HeaderLookup
