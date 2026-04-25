@@ -65,6 +65,69 @@ class HttpProxyForwardRequestRendererTest {
     }
 
     @Test
+    fun `strips standard hop-by-hop headers before forwarding to the origin server`() {
+        val request = ParsedHttpRequest(
+            request = ParsedProxyRequest.HttpProxy(
+                method = "GET",
+                host = "origin.example",
+                port = 80,
+                originTarget = "/resource",
+            ),
+            headers = linkedMapOf(
+                "connection" to listOf("keep-alive"),
+                "keep-alive" to listOf("timeout=5"),
+                "proxy-authenticate" to listOf("Basic realm=\"proxy\""),
+                "te" to listOf("trailers"),
+                "trailer" to listOf("x-checksum"),
+                "transfer-encoding" to listOf("chunked"),
+                "upgrade" to listOf("websocket"),
+                "accept" to listOf("application/json"),
+            ),
+        )
+
+        val rendered = HttpProxyForwardRequestRenderer.render(request).toHttpString()
+
+        assertContains(rendered, "GET /resource HTTP/1.1\r\n")
+        assertContains(rendered, "host: origin.example\r\n")
+        assertContains(rendered, "accept: application/json\r\n")
+        assertEquals(false, rendered.contains("connection:", ignoreCase = true))
+        assertEquals(false, rendered.contains("keep-alive:", ignoreCase = true))
+        assertEquals(false, rendered.contains("proxy-authenticate:", ignoreCase = true))
+        assertEquals(false, rendered.contains("te:", ignoreCase = true))
+        assertEquals(false, rendered.contains("trailer:", ignoreCase = true))
+        assertEquals(false, rendered.contains("transfer-encoding:", ignoreCase = true))
+        assertEquals(false, rendered.contains("upgrade:", ignoreCase = true))
+    }
+
+    @Test
+    fun `strips headers nominated by the connection header before forwarding`() {
+        val request = ParsedHttpRequest(
+            request = ParsedProxyRequest.HttpProxy(
+                method = "GET",
+                host = "origin.example",
+                port = 80,
+                originTarget = "/resource",
+            ),
+            headers = linkedMapOf(
+                "connection" to listOf("X-Hop, keep-alive", "X-Trace"),
+                "x-hop" to listOf("remove-me"),
+                "x-trace" to listOf("remove-too"),
+                "x-end-to-end" to listOf("preserve-me"),
+            ),
+        )
+
+        val rendered = HttpProxyForwardRequestRenderer.render(request).toHttpString()
+
+        assertContains(rendered, "host: origin.example\r\n")
+        assertContains(rendered, "x-end-to-end: preserve-me\r\n")
+        assertEquals(false, rendered.contains("connection:", ignoreCase = true))
+        assertEquals(false, rendered.contains("x-hop:", ignoreCase = true))
+        assertEquals(false, rendered.contains("x-trace:", ignoreCase = true))
+        assertEquals(false, rendered.contains("remove-me"))
+        assertEquals(false, rendered.contains("remove-too"))
+    }
+
+    @Test
     fun `derives host header from parsed absolute-form target instead of client supplied headers`() {
         val request = ParsedHttpRequest(
             request = ParsedProxyRequest.HttpProxy(

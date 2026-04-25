@@ -53,19 +53,34 @@ object HttpProxyForwardRequestRenderer {
         val proxyRequest = request.request as? ParsedProxyRequest.HttpProxy
             ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
 
+        val headersToStrip = HOP_BY_HOP_HEADERS + request.connectionNominatedHeaderNames()
+        val outboundHeaders = linkedMapOf<String, List<String>>("host" to listOf(proxyRequest.forwardHostHeaderValue()))
+        request.headers.forEach { (headerName, values) ->
+            if (headerName.lowercase(Locale.US) !in headersToStrip) {
+                outboundHeaders[headerName] = values
+            }
+        }
+
         return ForwardedHttpRequest(
             host = proxyRequest.host,
             port = proxyRequest.port,
             requestLine = "${proxyRequest.method} ${proxyRequest.originTarget} HTTP/1.1",
-            headers = linkedMapOf<String, List<String>>("host" to listOf(proxyRequest.forwardHostHeaderValue())) +
-                request.headers.filterKeys { headerName ->
-                    headerName.lowercase(Locale.US) !in HEADERS_REPLACED_BY_FORWARDER
-                },
+            headers = outboundHeaders,
         )
     }
 
     private fun ParsedProxyRequest.HttpProxy.forwardHostHeaderValue(): String =
         if (port == HTTP_DEFAULT_PORT) host else "$host:$port"
+
+    private fun ParsedHttpRequest.connectionNominatedHeaderNames(): Set<String> =
+        headers
+            .filterKeys { headerName -> headerName.lowercase(Locale.US) == CONNECTION_HEADER }
+            .values
+            .flatten()
+            .flatMap { value -> value.split(',') }
+            .map { option -> option.trim().lowercase(Locale.US) }
+            .filter { option -> option.isHttpToken() }
+            .toSet()
 }
 
 private fun String.isSafeSingleLine(): Boolean =
@@ -80,9 +95,21 @@ private fun Char.isDisallowedHeaderValueControl(): Boolean =
 private const val CRLF = "\r\n"
 private const val DELETE_CONTROL_CHAR = 0x7F
 private const val HTTP_DEFAULT_PORT = 80
+private const val CONNECTION_HEADER = "connection"
 private val VALID_PORT_RANGE = 1..65535
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
-private val HEADERS_REPLACED_BY_FORWARDER = setOf("host", "proxy-authorization", "proxy-connection")
+private val HOP_BY_HOP_HEADERS = setOf(
+    "connection",
+    "host",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+)
 private val HTTP_TOKEN_CHARS = (
     ('0'..'9') +
         ('A'..'Z') +
