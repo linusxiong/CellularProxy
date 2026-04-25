@@ -129,4 +129,16 @@ class LogRedactorTest {
 
         assertEquals("token=[REDACTED] prefix=[REDACTED]", redacted)
     }
+
+    @Test
+    fun `redacts configured secrets inside url queries without leaking redaction delimiters`() {
+        val secrets = LogRedactionSecrets(managementApiToken = "raw-token")
+
+        val redacted = LogRedactor.redact(
+            "url=https://edge.example.test/cdn-cgi?token=raw-token",
+            secrets,
+        )
+
+        assertEquals("url=https://edge.example.test/cdn-cgi?[REDACTED]", redacted)
+    }
 }

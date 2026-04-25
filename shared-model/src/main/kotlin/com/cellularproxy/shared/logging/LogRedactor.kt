@@ -21,10 +21,7 @@ object LogRedactor {
     )
 
     fun redact(message: String, secrets: LogRedactionSecrets = LogRedactionSecrets()): String {
-        val secretRedacted = secrets.nonBlankValues()
-            .fold(message) { current, secret -> current.replace(secret, REDACTED_VALUE) }
-
-        return secretRedacted
+        val structurallyRedacted = message
             .replace(sensitiveHeaderFieldRegex) { match ->
                 val key = match.groupValues[1]
                 val separator = match.groupValues[2]
@@ -39,6 +36,9 @@ object LogRedactor {
             .replace(sensitiveHeaderLineRegex, "$1$REDACTED_VALUE")
             .redactQueryStrings(absoluteUrlQueryRegex)
             .redactQueryStrings(relativePathQueryRegex)
+
+        return secrets.nonBlankValues()
+            .fold(structurallyRedacted) { current, secret -> current.replace(secret, REDACTED_VALUE) }
     }
 
     private fun String.redactQueryStrings(regex: Regex): String = replace(regex) { match ->
