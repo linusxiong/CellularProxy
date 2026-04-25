@@ -2,10 +2,12 @@ package com.cellularproxy.proxy.management
 
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import com.cellularproxy.shared.management.HttpMethod
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ManagementApiDispatcherTest {
@@ -40,6 +42,52 @@ class ManagementApiDispatcherTest {
         assertEquals(202, responded.response.statusCode)
         assertEquals(listOf(ManagementApiOperation.RotateMobileData), handler.operations)
         assertTrue(responded.requiresAuditLog)
+    }
+
+    @Test
+    fun `wraps high-impact handler exceptions with operation and audit metadata`() {
+        val failure = IOException("backend unavailable")
+
+        val thrown = assertFailsWith<ManagementApiHandlerException> {
+            ManagementApiDispatcher.dispatch(
+                request = managementRequest(HttpMethod.Post, "/api/rotate/mobile-data"),
+                handler = ManagementApiHandler { throw failure },
+            )
+        }
+
+        assertEquals(ManagementApiOperation.RotateMobileData, thrown.operation)
+        assertTrue(thrown.requiresAuditLog)
+        assertSame(failure, thrown.cause)
+    }
+
+    @Test
+    fun `wraps read-only handler exceptions with operation and no audit metadata`() {
+        val failure = IOException("backend unavailable")
+
+        val thrown = assertFailsWith<ManagementApiHandlerException> {
+            ManagementApiDispatcher.dispatch(
+                request = managementRequest(HttpMethod.Get, "/api/status"),
+                handler = ManagementApiHandler { throw failure },
+            )
+        }
+
+        assertEquals(ManagementApiOperation.Status, thrown.operation)
+        assertEquals(false, thrown.requiresAuditLog)
+        assertSame(failure, thrown.cause)
+    }
+
+    @Test
+    fun `rethrows fatal handler errors unchanged`() {
+        val failure = FatalHandlerError("vm failure")
+
+        val thrown = assertFailsWith<FatalHandlerError> {
+            ManagementApiDispatcher.dispatch(
+                request = managementRequest(HttpMethod.Post, "/api/service/stop"),
+                handler = ManagementApiHandler { throw failure },
+            )
+        }
+
+        assertSame(failure, thrown)
     }
 
     @Test
@@ -178,6 +226,8 @@ class ManagementApiDispatcherTest {
             return response
         }
     }
+
+    private class FatalHandlerError(message: String) : Error(message)
 
     private fun managementRequest(
         method: HttpMethod,

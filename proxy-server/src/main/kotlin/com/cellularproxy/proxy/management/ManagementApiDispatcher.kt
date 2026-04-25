@@ -9,6 +9,12 @@ fun interface ManagementApiHandler {
     fun handle(operation: ManagementApiOperation): ManagementApiResponse
 }
 
+class ManagementApiHandlerException(
+    val operation: ManagementApiOperation,
+    val requiresAuditLog: Boolean,
+    cause: Exception,
+) : RuntimeException("Management API handler failed for operation $operation", cause)
+
 sealed interface ManagementApiDispatchDecision {
     data class Respond(
         val response: ManagementApiResponse,
@@ -122,11 +128,22 @@ object ManagementApiDispatcher {
         handler: ManagementApiHandler,
     ): ManagementApiDispatchDecision =
         when (val route = ManagementApiRouter.route(request)) {
-            is ManagementApiRouteDecision.Accepted ->
+            is ManagementApiRouteDecision.Accepted -> {
+                val response = try {
+                    handler.handle(route.operation)
+                } catch (failure: Exception) {
+                    throw ManagementApiHandlerException(
+                        operation = route.operation,
+                        requiresAuditLog = route.requiresAuditLog,
+                        cause = failure,
+                    )
+                }
+
                 ManagementApiDispatchDecision.Respond(
-                    response = handler.handle(route.operation),
+                    response = response,
                     requiresAuditLog = route.requiresAuditLog,
                 )
+            }
             is ManagementApiRouteDecision.Rejected ->
                 ManagementApiDispatchDecision.Reject(
                     response = route.reason.toResponse(),
