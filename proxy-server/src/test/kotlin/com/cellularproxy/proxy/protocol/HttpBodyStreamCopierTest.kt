@@ -44,6 +44,168 @@ class HttpBodyStreamCopierTest {
     }
 
     @Test
+    fun `copies chunked body including trailers without consuming following bytes`() {
+        val chunkedBody = (
+            "5\r\n" +
+                "hello\r\n" +
+                "6;kind=greeting\r\n" +
+                " world\r\n" +
+                "0\r\n" +
+                "Expires: never\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val input = ByteArrayInputStream(chunkedBody + "NEXT".toByteArray(Charsets.US_ASCII))
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyChunked(
+            input = input,
+            output = output,
+            bufferSize = 3,
+        )
+
+        assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = chunkedBody.size.toLong()), result)
+        assertContentEquals(chunkedBody, output.toByteArray())
+        assertEquals('N'.code, input.read())
+    }
+
+    @Test
+    fun `copies binary chunk data without string conversion`() {
+        val chunkedBody = byteArrayOf(
+            '3'.code.toByte(),
+            '\r'.code.toByte(),
+            '\n'.code.toByte(),
+            0,
+            127,
+            (-1).toByte(),
+            '\r'.code.toByte(),
+            '\n'.code.toByte(),
+            '0'.code.toByte(),
+            '\r'.code.toByte(),
+            '\n'.code.toByte(),
+            '\r'.code.toByte(),
+            '\n'.code.toByte(),
+        )
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyChunked(
+            input = ByteArrayInputStream(chunkedBody),
+            output = output,
+            bufferSize = 2,
+        )
+
+        assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = chunkedBody.size.toLong()), result)
+        assertContentEquals(chunkedBody, output.toByteArray())
+    }
+
+    @Test
+    fun `returns premature end for incomplete chunked body`() {
+        val input = ByteArrayInputStream("5\r\nabc".toByteArray(Charsets.US_ASCII))
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyChunked(
+            input = input,
+            output = output,
+            bufferSize = 2,
+        )
+
+        assertEquals(HttpBodyStreamCopyResult.ChunkedPrematureEnd(bytesCopied = 6), result)
+        assertEquals("5\r\nabc", output.toString(Charsets.US_ASCII))
+    }
+
+    @Test
+    fun `rejects malformed chunked framing before forwarding invalid chunk lines`() {
+        val input = ByteArrayInputStream("Z\r\nNEXT".toByteArray(Charsets.US_ASCII))
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyChunked(
+            input = input,
+            output = output,
+        )
+
+        assertEquals(
+            HttpBodyStreamCopyResult.MalformedChunk(
+                bytesCopied = 0,
+                reason = HttpChunkedBodyMalformedReason.InvalidChunkSize,
+            ),
+            result,
+        )
+        assertContentEquals(ByteArray(0), output.toByteArray())
+    }
+
+    @Test
+    fun `validates chunk extensions before forwarding chunk lines`() {
+        val validChunkedBody = "5 ; name = value ; quoted = \"hello world\"\r\nhello\r\n0\r\n\r\n"
+            .toByteArray(Charsets.US_ASCII)
+        val validOutput = ByteArrayOutputStream()
+
+        val validResult = HttpBodyStreamCopier.copyChunked(
+            input = ByteArrayInputStream(validChunkedBody),
+            output = validOutput,
+        )
+
+        assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = validChunkedBody.size.toLong()), validResult)
+        assertContentEquals(validChunkedBody, validOutput.toByteArray())
+
+        val invalidOutput = ByteArrayOutputStream()
+        val invalidResult = HttpBodyStreamCopier.copyChunked(
+            input = ByteArrayInputStream("5 ; = value\r\nhello\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+            output = invalidOutput,
+        )
+
+        assertEquals(
+            HttpBodyStreamCopyResult.MalformedChunk(
+                bytesCopied = 0,
+                reason = HttpChunkedBodyMalformedReason.InvalidChunkSize,
+            ),
+            invalidResult,
+        )
+        assertContentEquals(ByteArray(0), invalidOutput.toByteArray())
+    }
+
+    @Test
+    fun `reports malformed chunk line endings separately from size limits`() {
+        val output = ByteArrayOutputStream()
+
+        val result = HttpBodyStreamCopier.copyChunked(
+            input = ByteArrayInputStream("5\rXhello\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+            output = output,
+        )
+
+        assertEquals(
+            HttpBodyStreamCopyResult.MalformedChunk(
+                bytesCopied = 0,
+                reason = HttpChunkedBodyMalformedReason.MalformedLineEnding,
+            ),
+            result,
+        )
+        assertContentEquals(ByteArray(0), output.toByteArray())
+    }
+
+    @Test
+    fun `rejects horizontal tab in chunk extension metadata`() {
+        listOf(
+            "5\t;name=value\r\nhello\r\n0\r\n\r\n",
+            "5;name=\"a\tb\"\r\nhello\r\n0\r\n\r\n",
+        ).forEach { chunkedBody ->
+            val output = ByteArrayOutputStream()
+
+            val result = HttpBodyStreamCopier.copyChunked(
+                input = ByteArrayInputStream(chunkedBody.toByteArray(Charsets.US_ASCII)),
+                output = output,
+            )
+
+            assertEquals(
+                HttpBodyStreamCopyResult.MalformedChunk(
+                    bytesCopied = 0,
+                    reason = HttpChunkedBodyMalformedReason.InvalidChunkSize,
+                ),
+                result,
+            )
+            assertContentEquals(ByteArray(0), output.toByteArray())
+        }
+    }
+
+    @Test
     fun `zero-length body does not read from the input stream`() {
         val input = CountingInputStream("body".toByteArray(Charsets.UTF_8))
         val output = ByteArrayOutputStream()
@@ -95,6 +257,14 @@ class HttpBodyStreamCopierTest {
                 input = ByteArrayInputStream(ByteArray(0)),
                 output = ByteArrayOutputStream(),
                 contentLength = 0,
+                bufferSize = 0,
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            HttpBodyStreamCopier.copyChunked(
+                input = ByteArrayInputStream(ByteArray(0)),
+                output = ByteArrayOutputStream(),
                 bufferSize = 0,
             )
         }
