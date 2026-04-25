@@ -34,7 +34,7 @@ object ManagementApiReadOnlyResponses {
                 append(status.metricsJson())
                 append(',')
                 append(""""cloudflare":""")
-                append(status.cloudflare.cloudflareJson(secrets))
+                append(status.cloudflare.managementApiJson(secrets))
                 append(',')
                 append(""""root":{"availability":""")
                 append(status.rootAvailability.apiValue().jsonString())
@@ -64,7 +64,7 @@ object ManagementApiReadOnlyResponses {
     ): ManagementApiResponse =
         ManagementApiResponse.json(
             statusCode = 200,
-            body = """{"cloudflare":${status.cloudflareJson(secrets)}}""",
+            body = """{"cloudflare":${status.managementApiJson(secrets)}}""",
         )
 }
 
@@ -106,7 +106,7 @@ private fun ProxyServiceStatus.metricsJson(): String =
         """"bytesSent":${metrics.bytesSent}""" +
         "}"
 
-private fun CloudflareTunnelStatus.cloudflareJson(secrets: LogRedactionSecrets): String =
+internal fun CloudflareTunnelStatus.managementApiJson(secrets: LogRedactionSecrets): String =
     buildString {
         append('{')
         append(""""state":""")
