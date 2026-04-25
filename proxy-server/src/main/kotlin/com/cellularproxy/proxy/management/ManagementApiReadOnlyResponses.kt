@@ -188,10 +188,10 @@ private fun ProxyStartupError.apiValue(): String =
         ProxyStartupError.MissingCloudflareTunnelToken -> "missing_cloudflare_tunnel_token"
     }
 
-private fun String?.jsonNullableString(): String =
+internal fun String?.jsonNullableString(): String =
     this?.jsonString() ?: "null"
 
-private fun String.jsonString(): String =
+internal fun String.jsonString(): String =
     buildString {
         append('"')
         this@jsonString.forEach { character ->
