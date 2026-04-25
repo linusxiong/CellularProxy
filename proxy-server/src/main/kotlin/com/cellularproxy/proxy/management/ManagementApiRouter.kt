@@ -28,10 +28,10 @@ sealed interface ManagementApiRouteDecision {
     ) : ManagementApiRouteDecision
 }
 
-enum class ManagementApiRouteRejectionReason {
-    UnknownEndpoint,
-    UnsupportedMethod,
-    QueryUnsupported,
+sealed interface ManagementApiRouteRejectionReason {
+    data object UnknownEndpoint : ManagementApiRouteRejectionReason
+    data class UnsupportedMethod(val allowedMethod: HttpMethod) : ManagementApiRouteRejectionReason
+    data object QueryUnsupported : ManagementApiRouteRejectionReason
 }
 
 object ManagementApiRouter {
@@ -44,7 +44,9 @@ object ManagementApiRouter {
             ?: return ManagementApiRouteDecision.Rejected(ManagementApiRouteRejectionReason.UnknownEndpoint)
 
         if (endpoint.method != request.method) {
-            return ManagementApiRouteDecision.Rejected(ManagementApiRouteRejectionReason.UnsupportedMethod)
+            return ManagementApiRouteDecision.Rejected(
+                ManagementApiRouteRejectionReason.UnsupportedMethod(endpoint.method),
+            )
         }
 
         val accessDecision = ManagementAccessPolicy.evaluate(request.method, request.originTarget)

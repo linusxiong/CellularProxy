@@ -93,15 +93,17 @@ class ManagementApiRouterTest {
 
     @Test
     fun `rejects known endpoints with unsupported methods`() {
-        val unsupportedMethodRequests = listOf(
-            managementRequest(HttpMethod.Post, "/api/status"),
-            managementRequest(HttpMethod.Get, "/api/cloudflare/start"),
-            managementRequest(HttpMethod.Get, "/api/service/stop"),
+        val unsupportedMethodRequests = mapOf(
+            managementRequest(HttpMethod.Post, "/api/status") to HttpMethod.Get,
+            managementRequest(HttpMethod.Get, "/api/cloudflare/start") to HttpMethod.Post,
+            managementRequest(HttpMethod.Get, "/api/service/stop") to HttpMethod.Post,
         )
 
-        unsupportedMethodRequests.forEach { request ->
+        unsupportedMethodRequests.forEach { (request, expectedAllowedMethod) ->
             assertEquals(
-                ManagementApiRouteDecision.Rejected(ManagementApiRouteRejectionReason.UnsupportedMethod),
+                ManagementApiRouteDecision.Rejected(
+                    ManagementApiRouteRejectionReason.UnsupportedMethod(expectedAllowedMethod),
+                ),
                 ManagementApiRouter.route(request),
                 "Expected $request to reject unsupported method",
             )
