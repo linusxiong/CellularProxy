@@ -39,7 +39,10 @@ data class ProxyConfig(
     val listenHost: String = "0.0.0.0",
     val listenPort: Int = 8080,
     val authEnabled: Boolean = true,
-)
+) {
+    val hasHighSecurityRisk: Boolean
+        get() = !authEnabled && listenHost == BROAD_LISTEN_HOST
+}
 
 data class NetworkConfig(
     val defaultRoutePolicy: RouteTarget = RouteTarget.Automatic,
@@ -78,6 +81,7 @@ enum class ConfigValidationError {
 }
 
 private val TCP_PORT_RANGE = 1..65_535
+private const val BROAD_LISTEN_HOST = "0.0.0.0"
 
 private fun String.isSupportedListenHost(): Boolean {
     if (isEmpty() || this != trim()) {

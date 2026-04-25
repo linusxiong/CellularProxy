@@ -30,6 +30,25 @@ class AppConfigTest {
     }
 
     @Test
+    fun `proxy security risk is high only when authentication is disabled on a broad listener`() {
+        val defaultConfig = AppConfig.default()
+        val authDisabledBroadListener = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(authEnabled = false, listenHost = "0.0.0.0")
+        )
+        val authDisabledLocalhost = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(authEnabled = false, listenHost = "127.0.0.1")
+        )
+        val authEnabledBroadListener = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(authEnabled = true, listenHost = "0.0.0.0")
+        )
+
+        assertFalse(defaultConfig.proxy.hasHighSecurityRisk)
+        assertTrue(authDisabledBroadListener.proxy.hasHighSecurityRisk)
+        assertFalse(authDisabledLocalhost.proxy.hasHighSecurityRisk)
+        assertFalse(authEnabledBroadListener.proxy.hasHighSecurityRisk)
+    }
+
+    @Test
     fun `listen port must be in the TCP port range`() {
         val minPort = AppConfig.default().copy(
             proxy = AppConfig.default().proxy.copy(listenPort = 1)
