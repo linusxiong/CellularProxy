@@ -26,6 +26,7 @@ sealed interface HttpRequestHeaderBlockParseResult {
 enum class HttpRequestHeaderBlockRejectionReason {
     RequestLineRejected,
     MalformedHeader,
+    MalformedHeaderEncoding,
     ObsoleteLineFolding,
     IncompleteHeaderBlock,
     HeaderBlockTooLarge,

@@ -251,9 +251,9 @@ object HttpBodyStreamCopier {
     }
 }
 
-private const val DEFAULT_BODY_BUFFER_BYTES = 8 * 1024
-private const val DEFAULT_CHUNK_HEADER_BYTES = 8 * 1024
-private const val DEFAULT_TRAILER_BYTES = 16 * 1024
+internal const val DEFAULT_BODY_BUFFER_BYTES = 8 * 1024
+internal const val DEFAULT_CHUNK_HEADER_BYTES = 8 * 1024
+internal const val DEFAULT_TRAILER_BYTES = 16 * 1024
 private const val END_OF_STREAM = -1
 private const val CARRIAGE_RETURN = '\r'.code
 private const val LINE_FEED = '\n'.code

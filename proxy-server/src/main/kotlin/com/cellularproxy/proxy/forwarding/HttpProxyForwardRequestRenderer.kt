@@ -8,6 +8,28 @@ import java.nio.charset.CodingErrorAction
 import java.util.Collections
 import java.util.Locale
 
+class ForwardedHttpRequestHead(
+    val host: String,
+    val port: Int,
+    val requestLine: String,
+    headers: Map<String, List<String>>,
+) {
+    val headers: Map<String, List<String>>
+
+    init {
+        require(host.isNotBlank()) { "Forward host must not be blank" }
+        require(port in VALID_PORT_RANGE) { "Forward port must be in range 1..65535" }
+        require(requestLine.isSafeSingleLine()) { "Request line must not contain control characters" }
+        this.headers = copySafeForwardedRequestHeaders(headers)
+    }
+
+    fun toHttpString(): String =
+        renderRequestHeaderString(requestLine, headers)
+
+    fun toByteArray(): ByteArray =
+        renderRequestHeaderString(requestLine, headers).toByteArray(Charsets.UTF_8)
+}
+
 class ForwardedHttpRequest(
     val host: String,
     val port: Int,
@@ -25,31 +47,8 @@ class ForwardedHttpRequest(
         require(port in VALID_PORT_RANGE) { "Forward port must be in range 1..65535" }
         require(requestLine.isSafeSingleLine()) { "Request line must not contain control characters" }
 
-        val copiedHeaders = linkedMapOf<String, List<String>>()
-        headers.forEach { (name, values) ->
-            require(name.isHttpToken()) { "Header name must be a valid HTTP token" }
-            require(values.isNotEmpty()) { "Header values must not be empty" }
-            copiedHeaders[name] = Collections.unmodifiableList(
-                values.map { value ->
-                    require(value.none(Char::isDisallowedHeaderValueControl)) {
-                        "Header value must not contain control characters"
-                    }
-                    value
-                },
-            )
-        }
-        val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
-        require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
-            "HTTP header names must not contain case-variant duplicates"
-        }
-        require(TRANSFER_ENCODING_HEADER !in normalizedHeaderNames) {
-            "Transfer-Encoding is not supported for forwarded fixed-length requests"
-        }
-
+        val copiedHeaders = copySafeForwardedRequestHeaders(headers)
         val contentLengthValues = copiedHeaders.caseInsensitiveHeaderValues(CONTENT_LENGTH_HEADER)
-        require(contentLengthValues.size <= 1) {
-            "Forwarded requests must not contain duplicate Content-Length headers"
-        }
         val bodyCopy = body.copyOf()
         val contentLength = contentLengthValues.singleOrNull()
         if (contentLength == null) {
@@ -57,15 +56,12 @@ class ForwardedHttpRequest(
                 "Forwarded request bodies require a fixed Content-Length header"
             }
         } else {
-            require(contentLength.isDecimalDigits()) {
-                "Content-Length must be a non-negative decimal value"
-            }
             val declaredLength = contentLength.toLong()
             require(declaredLength == bodyCopy.size.toLong()) {
                 "Content-Length must match the forwarded request body size"
             }
         }
-        this.headers = Collections.unmodifiableMap(copiedHeaders)
+        this.headers = copiedHeaders
         this.bodyBytes = bodyCopy
     }
 
@@ -76,18 +72,25 @@ class ForwardedHttpRequest(
         headerString().toByteArray(Charsets.UTF_8) + bodyBytes
 
     private fun headerString(): String =
-        buildString {
-            append(requestLine).append(CRLF)
-            headers.forEach { (name, values) ->
-                values.forEach { value ->
-                    append(name).append(": ").append(value).append(CRLF)
-                }
-            }
-            append(CRLF)
-        }
+        renderRequestHeaderString(requestLine, headers)
 }
 
 object HttpProxyForwardRequestRenderer {
+    fun renderHead(request: ParsedHttpRequest): ForwardedHttpRequestHead {
+        val proxyRequest = request.request as? ParsedProxyRequest.HttpProxy
+            ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
+        require(!request.headers.containsHeader(TRANSFER_ENCODING_HEADER)) {
+            "Transfer-Encoding request bodies are not supported by the HTTP forward renderer"
+        }
+
+        return ForwardedHttpRequestHead(
+            host = proxyRequest.host,
+            port = proxyRequest.port,
+            requestLine = "${proxyRequest.method} ${proxyRequest.originTarget} HTTP/1.1",
+            headers = request.forwardedHeaders(proxyRequest),
+        )
+    }
+
     fun render(
         request: ParsedHttpRequest,
         body: ByteArray = EMPTY_BODY,
@@ -98,21 +101,26 @@ object HttpProxyForwardRequestRenderer {
             "Transfer-Encoding request bodies are not supported by the HTTP forward renderer"
         }
 
-        val headersToStrip = HOP_BY_HOP_HEADERS + request.connectionNominatedHeaderNames()
-        val outboundHeaders = linkedMapOf<String, List<String>>("host" to listOf(proxyRequest.forwardHostHeaderValue()))
-        request.headers.forEach { (headerName, values) ->
-            if (headerName.lowercase(Locale.US) !in headersToStrip) {
-                outboundHeaders[headerName] = values
-            }
-        }
-
         return ForwardedHttpRequest(
             host = proxyRequest.host,
             port = proxyRequest.port,
             requestLine = "${proxyRequest.method} ${proxyRequest.originTarget} HTTP/1.1",
-            headers = outboundHeaders,
+            headers = request.forwardedHeaders(proxyRequest),
             body = body,
         )
+    }
+
+    private fun ParsedHttpRequest.forwardedHeaders(
+        proxyRequest: ParsedProxyRequest.HttpProxy,
+    ): Map<String, List<String>> {
+        val headersToStrip = HOP_BY_HOP_HEADERS + connectionNominatedHeaderNames()
+        val outboundHeaders = linkedMapOf<String, List<String>>("host" to listOf(proxyRequest.forwardHostHeaderValue()))
+        headers.forEach { (headerName, values) ->
+            if (headerName.lowercase(Locale.US) !in headersToStrip) {
+                outboundHeaders[headerName] = values
+            }
+        }
+        return outboundHeaders
     }
 
     private fun ParsedProxyRequest.HttpProxy.forwardHostHeaderValue(): String =
@@ -140,6 +148,58 @@ private fun String.isDecimalDigits(): Boolean =
 
 private fun Char.isDisallowedHeaderValueControl(): Boolean =
     code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+
+private fun copySafeForwardedRequestHeaders(headers: Map<String, List<String>>): Map<String, List<String>> {
+    val copiedHeaders = linkedMapOf<String, List<String>>()
+    headers.forEach { (name, values) ->
+        require(name.isHttpToken()) { "Header name must be a valid HTTP token" }
+        require(values.isNotEmpty()) { "Header values must not be empty" }
+        copiedHeaders[name] = Collections.unmodifiableList(
+            values.map { value ->
+                require(value.none(Char::isDisallowedHeaderValueControl)) {
+                    "Header value must not contain control characters"
+                }
+                value
+            },
+        )
+    }
+    val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
+    require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
+        "HTTP header names must not contain case-variant duplicates"
+    }
+    require(TRANSFER_ENCODING_HEADER !in normalizedHeaderNames) {
+        "Transfer-Encoding is not supported for forwarded fixed-length requests"
+    }
+
+    val contentLengthValues = copiedHeaders.caseInsensitiveHeaderValues(CONTENT_LENGTH_HEADER)
+    require(contentLengthValues.size <= 1) {
+        "Forwarded requests must not contain duplicate Content-Length headers"
+    }
+    contentLengthValues.singleOrNull()?.let { contentLength ->
+        require(contentLength.isDecimalDigits()) {
+            "Content-Length must be a non-negative decimal value"
+        }
+        require(contentLength.toLongOrNull() != null) {
+            "Content-Length must fit in a signed 64-bit integer"
+        }
+    }
+
+    return Collections.unmodifiableMap(copiedHeaders)
+}
+
+private fun renderRequestHeaderString(
+    requestLine: String,
+    headers: Map<String, List<String>>,
+): String =
+    buildString {
+        append(requestLine).append(CRLF)
+        headers.forEach { (name, values) ->
+            values.forEach { value ->
+                append(name).append(": ").append(value).append(CRLF)
+            }
+        }
+        append(CRLF)
+    }
 
 private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String): List<String> {
     val normalizedName = name.lowercase(Locale.US)

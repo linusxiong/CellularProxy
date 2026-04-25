@@ -225,6 +225,84 @@ class HttpProxyForwardRequestRendererTest {
     }
 
     @Test
+    fun `renders forwarded request head for streaming a fixed-length body separately`() {
+        val request = ParsedHttpRequest(
+            request = ParsedProxyRequest.HttpProxy(
+                method = "POST",
+                host = "origin.example",
+                port = 8080,
+                originTarget = "/upload",
+            ),
+            headers = linkedMapOf(
+                "host" to listOf("attacker.example"),
+                "proxy-authorization" to listOf("Basic secret"),
+                "content-length" to listOf("1048576"),
+                "content-type" to listOf("application/octet-stream"),
+            ),
+        )
+
+        val forwarded = HttpProxyForwardRequestRenderer.renderHead(request)
+
+        assertEquals("origin.example", forwarded.host)
+        assertEquals(8080, forwarded.port)
+        assertEquals(
+            "POST /upload HTTP/1.1\r\n" +
+                "host: origin.example:8080\r\n" +
+                "content-length: 1048576\r\n" +
+                "content-type: application/octet-stream\r\n" +
+                "\r\n",
+            forwarded.toHttpString(),
+        )
+        assertEquals(forwarded.toHttpString().toByteArray(Charsets.UTF_8).toList(), forwarded.toByteArray().toList())
+        assertEquals(false, forwarded.toHttpString().contains("secret"))
+        assertEquals(false, forwarded.toHttpString().contains("attacker.example"))
+    }
+
+    @Test
+    fun `rejects unsafe public forwarded request head construction`() {
+        assertFailsWith<IllegalArgumentException> {
+            ForwardedHttpRequestHead(
+                host = "example.com",
+                port = 80,
+                requestLine = "GET / HTTP/1.1\r\nInjected: secret",
+                headers = emptyMap(),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ForwardedHttpRequestHead(
+                host = "example.com",
+                port = 80,
+                requestLine = "GET / HTTP/1.1",
+                headers = mapOf("x-test\r\ninjected" to listOf("value")),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ForwardedHttpRequestHead(
+                host = "example.com",
+                port = 80,
+                requestLine = "POST / HTTP/1.1",
+                headers = mapOf("content-length" to listOf("+4")),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ForwardedHttpRequestHead(
+                host = "example.com",
+                port = 80,
+                requestLine = "POST / HTTP/1.1",
+                headers = mapOf("content-length" to listOf("9223372036854775808")),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ForwardedHttpRequestHead(
+                host = "example.com",
+                port = 80,
+                requestLine = "POST / HTTP/1.1",
+                headers = mapOf("transfer-encoding" to listOf("chunked")),
+            )
+        }
+    }
+
+    @Test
     fun `rejects request bodies that do not match the forwarded content length`() {
         val request = ParsedHttpRequest(
             request = ParsedProxyRequest.HttpProxy(
