@@ -8,16 +8,26 @@ import com.cellularproxy.proxy.errors.ProxyServerFailure
 import com.cellularproxy.proxy.protocol.HttpHeaderBlockStreamReadResult
 import com.cellularproxy.proxy.protocol.HttpHeaderBlockStreamReader
 import com.cellularproxy.proxy.protocol.HttpRequestHeaderBlockRejectionReason
+import com.cellularproxy.proxy.protocol.ParsedHttpRequest
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import java.io.InputStream
 
 sealed interface ProxyIngressStreamPreflightDecision {
     data class Accepted(
-        val request: ParsedProxyRequest,
+        val httpRequest: ParsedHttpRequest,
         val activeConnectionsAfterAdmission: Long,
         val requiresAuditLog: Boolean,
         val headerBytesRead: Int,
-    ) : ProxyIngressStreamPreflightDecision
+    ) : ProxyIngressStreamPreflightDecision {
+        val request: ParsedProxyRequest
+            get() = httpRequest.request
+
+        override fun toString(): String =
+            "Accepted(request=$request, " +
+                "activeConnectionsAfterAdmission=$activeConnectionsAfterAdmission, " +
+                "requiresAuditLog=$requiresAuditLog, " +
+                "headerBytesRead=$headerBytesRead)"
+    }
 
     data class Rejected(
         val failure: ProxyServerFailure,
@@ -105,7 +115,7 @@ object ProxyIngressStreamPreflight {
         ) {
             is ProxyIngressPreflightDecision.Accepted ->
                 ProxyIngressStreamPreflightDecision.Accepted(
-                    request = decision.request,
+                    httpRequest = decision.httpRequest,
                     activeConnectionsAfterAdmission = decision.activeConnectionsAfterAdmission,
                     requiresAuditLog = decision.requiresAuditLog,
                     headerBytesRead = headerBytesRead,

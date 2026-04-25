@@ -45,10 +45,15 @@ class ProxyIngressStreamPreflightTest {
 
         val accepted = assertIs<ProxyIngressStreamPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.HttpProxy>(accepted.request)
+        assertEquals(request, accepted.httpRequest.request)
+        assertEquals(listOf("4"), accepted.httpRequest.headers["content-length"])
+        assertEquals(listOf(validProxyAuthorization()), accepted.httpRequest.headers["proxy-authorization"])
         assertEquals("example.com", request.host)
         assertEquals(headerBlock.length, accepted.headerBytesRead)
         assertEquals(2L, accepted.activeConnectionsAfterAdmission)
         assertFalse(accepted.requiresAuditLog)
+        assertFalse(accepted.toString().contains(validProxyAuthorization()))
+        assertFalse(accepted.toString().contains("proxy-authorization", ignoreCase = true))
         assertEquals('b'.code, input.read())
     }
 

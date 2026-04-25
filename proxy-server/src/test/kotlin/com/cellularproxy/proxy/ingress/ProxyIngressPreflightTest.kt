@@ -38,16 +38,22 @@ class ProxyIngressPreflightTest {
             config = config,
             activeConnections = 1,
             headerBlock = "GET http://example.com/resource HTTP/1.1\r\n" +
+                "Accept: text/plain\r\n" +
                 "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
                 "\r\n",
         )
 
         val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.HttpProxy>(accepted.request)
+        assertEquals(request, accepted.httpRequest.request)
+        assertEquals(listOf("text/plain"), accepted.httpRequest.headers["accept"])
+        assertEquals(listOf(validProxyAuthorization()), accepted.httpRequest.headers["proxy-authorization"])
         assertEquals("example.com", request.host)
         assertEquals("/resource", request.originTarget)
         assertEquals(2L, accepted.activeConnectionsAfterAdmission)
         assertFalse(accepted.requiresAuditLog)
+        assertFalse(accepted.toString().contains(validProxyAuthorization()))
+        assertFalse(accepted.toString().contains("proxy-authorization", ignoreCase = true))
     }
 
     @Test
