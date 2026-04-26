@@ -39,8 +39,8 @@ data class PublicIpProbeEndpoint(
 
 class RouteBoundPublicIpProbe(
     private val socketProvider: BoundSocketProvider,
-) {
-    suspend fun probe(
+) : PublicIpProbeRunner {
+    override suspend fun probe(
         route: RouteTarget,
         endpoint: PublicIpProbeEndpoint,
     ): PublicIpProbeResult =
