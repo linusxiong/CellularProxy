@@ -17,6 +17,7 @@ import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandler
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandlingResult
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
+import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -25,7 +26,7 @@ data class ProxyClientStreamConnection(
     val output: OutputStream,
     private val shutdownInputAction: () -> Unit = { input.close() },
     private val shutdownOutputAction: () -> Unit = { output.close() },
-) {
+) : Closeable {
     fun toConnectTunnelClientConnection(): ConnectTunnelClientConnection =
         ConnectTunnelClientConnection(
             input = input,
@@ -33,6 +34,26 @@ data class ProxyClientStreamConnection(
             shutdownInputAction = shutdownInputAction,
             shutdownOutputAction = shutdownOutputAction,
         )
+
+    override fun close() {
+        var failure: Throwable? = null
+
+        try {
+            input.close()
+        } catch (throwable: Throwable) {
+            failure = throwable
+        }
+
+        try {
+            output.close()
+        } catch (throwable: Throwable) {
+            failure?.addSuppressed(throwable) ?: run {
+                failure = throwable
+            }
+        }
+
+        failure?.let { throw it }
+    }
 }
 
 sealed interface ProxyClientStreamExchangeHandlingResult {
@@ -96,49 +117,61 @@ class ProxyClientStreamExchangeHandler(
         connectRelayBufferSize: Int = DEFAULT_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
     ): ProxyClientStreamExchangeHandlingResult {
-        require(httpBufferSize > 0) { "HTTP buffer size must be positive" }
-        require(maxOriginResponseHeaderBytes > 0) { "Maximum origin response header bytes must be positive" }
-        require(maxResponseChunkHeaderBytes > 0) { "Maximum response chunk header bytes must be positive" }
-        require(maxResponseTrailerBytes >= 0) { "Maximum response trailer bytes must be non-negative" }
-        require(connectRelayBufferSize > 0) { "CONNECT relay buffer size must be positive" }
+        try {
+            require(httpBufferSize > 0) { "HTTP buffer size must be positive" }
+            require(maxOriginResponseHeaderBytes > 0) { "Maximum origin response header bytes must be positive" }
+            require(maxResponseChunkHeaderBytes > 0) { "Maximum response chunk header bytes must be positive" }
+            require(maxResponseTrailerBytes >= 0) { "Maximum response trailer bytes must be non-negative" }
+            require(connectRelayBufferSize > 0) { "CONNECT relay buffer size must be positive" }
 
-        val preflight = ProxyIngressStreamPreflight.evaluate(
-            config = config,
-            activeConnections = activeConnections,
-            input = client.input,
-        )
+            val preflight = ProxyIngressStreamPreflight.evaluate(
+                config = config,
+                activeConnections = activeConnections,
+                input = client.input,
+            )
 
-        return when (preflight) {
-            is ProxyIngressStreamPreflightDecision.Accepted -> {
-                ProxyClientStreamExchangeMetrics.acceptedStartedEvents(preflight.headerBytesRead)
-                    .recordSafely(recordMetricEvent)
-                var completed = false
-                try {
-                    val result = handleAccepted(
-                        accepted = preflight,
-                        client = client,
-                        httpBufferSize = httpBufferSize,
-                        maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                        maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                        maxResponseTrailerBytes = maxResponseTrailerBytes,
-                        connectRelayBufferSize = connectRelayBufferSize,
-                    )
-                    ProxyClientStreamExchangeMetrics.acceptedCompletedEvents(result)
+            return when (preflight) {
+                is ProxyIngressStreamPreflightDecision.Accepted -> {
+                    ProxyClientStreamExchangeMetrics.acceptedStartedEvents(preflight.headerBytesRead)
                         .recordSafely(recordMetricEvent)
-                    completed = true
-                    result
-                } finally {
-                    if (!completed) {
-                        ProxyClientStreamExchangeMetrics.acceptedClosedEvent().recordSafely(recordMetricEvent)
+                    var completed = false
+                    try {
+                        val result = handleAccepted(
+                            accepted = preflight,
+                            client = client,
+                            httpBufferSize = httpBufferSize,
+                            maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                            maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                            maxResponseTrailerBytes = maxResponseTrailerBytes,
+                            connectRelayBufferSize = connectRelayBufferSize,
+                        )
+                        ProxyClientStreamExchangeMetrics.acceptedCompletedEvents(result)
+                            .recordSafely(recordMetricEvent)
+                        completed = true
+                        result
+                    } finally {
+                        if (!completed) {
+                            ProxyClientStreamExchangeMetrics.acceptedClosedEvent().recordSafely(recordMetricEvent)
+                        }
                     }
                 }
+                is ProxyIngressStreamPreflightDecision.Rejected ->
+                    writePreflightRejection(preflight, client.output)
+                        .also { rejected ->
+                            ProxyClientStreamExchangeMetrics.eventsFor(rejected)
+                                .recordSafely(recordMetricEvent)
+                        }
             }
-            is ProxyIngressStreamPreflightDecision.Rejected ->
-                writePreflightRejection(preflight, client.output)
-                    .also { rejected ->
-                        ProxyClientStreamExchangeMetrics.eventsFor(rejected)
-                            .recordSafely(recordMetricEvent)
-                    }
+        } finally {
+            client.closeAfterExchange()
+        }
+    }
+
+    private fun ProxyClientStreamConnection.closeAfterExchange() {
+        try {
+            close()
+        } catch (_: Exception) {
+            // Client socket close failures after handling must not replace the exchange outcome.
         }
     }
 
