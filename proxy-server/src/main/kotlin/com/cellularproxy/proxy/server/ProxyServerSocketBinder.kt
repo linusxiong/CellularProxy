@@ -23,6 +23,9 @@ class BoundProxyServerSocket internal constructor(
     val listenPort: Int
         get() = serverSocket.localPort
 
+    val isClosed: Boolean
+        get() = serverSocket.isClosed
+
     fun accept(
         headerReadIdleTimeoutMillis: Int = DEFAULT_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS,
     ): ProxyClientStreamConnection {

@@ -2,6 +2,7 @@ package com.cellularproxy.proxy.server
 
 import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 data class ProxyBoundClientConnectionHandlingResult(
@@ -18,6 +19,20 @@ data class ProxyBoundClientConnectionHandlingResult(
 class ProxyBoundClientConnectionHandler(
     private val exchangeHandler: ProxyClientStreamExchangeHandler,
 ) {
+    internal class AcceptedClientReservation internal constructor(
+        val client: ProxyClientStreamConnection,
+        val activeConnectionsBeforeAdmission: Long,
+        private val releaseAction: () -> Unit,
+    ) {
+        private val released = AtomicBoolean(false)
+
+        fun release() {
+            if (released.compareAndSet(false, true)) {
+                releaseAction()
+            }
+        }
+    }
+
     private val activeConnectionCount = AtomicLong(0)
 
     val activeClientConnections: Long
@@ -38,15 +53,81 @@ class ProxyBoundClientConnectionHandler(
             "Client header-read idle timeout must be positive"
         }
         val client = listener.accept(headerReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis)
+        val reservation = reserveAccepted(
+            client = client,
+            recordMetricEvent = recordMetricEvent,
+        )
+        return handleReserved(
+            reservation = reservation,
+            config = config,
+            httpBufferSize = httpBufferSize,
+            maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+            maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+            maxResponseTrailerBytes = maxResponseTrailerBytes,
+            connectRelayBufferSize = connectRelayBufferSize,
+            recordMetricEvent = recordMetricEvent,
+        )
+    }
+
+    fun handleAccepted(
+        client: ProxyClientStreamConnection,
+        config: ProxyIngressPreflightConfig,
+        httpBufferSize: Int = DEFAULT_BOUND_HTTP_BUFFER_BYTES,
+        maxOriginResponseHeaderBytes: Int = DEFAULT_BOUND_ORIGIN_RESPONSE_HEADER_BYTES,
+        maxResponseChunkHeaderBytes: Int = DEFAULT_BOUND_RESPONSE_CHUNK_HEADER_BYTES,
+        maxResponseTrailerBytes: Int = DEFAULT_BOUND_RESPONSE_TRAILER_BYTES,
+        connectRelayBufferSize: Int = DEFAULT_BOUND_CONNECT_RELAY_BUFFER_BYTES,
+        recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+    ): ProxyBoundClientConnectionHandlingResult {
+        val reservation = reserveAccepted(
+            client = client,
+            recordMetricEvent = recordMetricEvent,
+        )
+        return handleReserved(
+            reservation = reservation,
+            config = config,
+            httpBufferSize = httpBufferSize,
+            maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+            maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+            maxResponseTrailerBytes = maxResponseTrailerBytes,
+            connectRelayBufferSize = connectRelayBufferSize,
+            recordMetricEvent = recordMetricEvent,
+        )
+    }
+
+    internal fun reserveAccepted(
+        client: ProxyClientStreamConnection,
+        recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+    ): AcceptedClientReservation {
         val activeConnectionsBeforeAdmission = activeConnectionCount.getAndIncrement()
         ProxyTrafficMetricsEvent.ConnectionAccepted.recordSafely(recordMetricEvent)
+        return AcceptedClientReservation(
+            client = client,
+            activeConnectionsBeforeAdmission = activeConnectionsBeforeAdmission,
+            releaseAction = {
+                activeConnectionCount.decrementAndGet()
+                ProxyTrafficMetricsEvent.ConnectionClosed.recordSafely(recordMetricEvent)
+            },
+        )
+    }
+
+    internal fun handleReserved(
+        reservation: AcceptedClientReservation,
+        config: ProxyIngressPreflightConfig,
+        httpBufferSize: Int = DEFAULT_BOUND_HTTP_BUFFER_BYTES,
+        maxOriginResponseHeaderBytes: Int = DEFAULT_BOUND_ORIGIN_RESPONSE_HEADER_BYTES,
+        maxResponseChunkHeaderBytes: Int = DEFAULT_BOUND_RESPONSE_CHUNK_HEADER_BYTES,
+        maxResponseTrailerBytes: Int = DEFAULT_BOUND_RESPONSE_TRAILER_BYTES,
+        connectRelayBufferSize: Int = DEFAULT_BOUND_CONNECT_RELAY_BUFFER_BYTES,
+        recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+    ): ProxyBoundClientConnectionHandlingResult {
         return try {
             ProxyBoundClientConnectionHandlingResult(
-                activeConnectionsBeforeAdmission = activeConnectionsBeforeAdmission,
+                activeConnectionsBeforeAdmission = reservation.activeConnectionsBeforeAdmission,
                 exchange = exchangeHandler.handle(
                     config = config,
-                    activeConnections = activeConnectionsBeforeAdmission,
-                    client = client,
+                    activeConnections = reservation.activeConnectionsBeforeAdmission,
+                    client = reservation.client,
                     httpBufferSize = httpBufferSize,
                     maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
                     maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
@@ -60,8 +141,7 @@ class ProxyBoundClientConnectionHandler(
                 ),
             )
         } finally {
-            activeConnectionCount.decrementAndGet()
-            ProxyTrafficMetricsEvent.ConnectionClosed.recordSafely(recordMetricEvent)
+            reservation.release()
         }
     }
 }
