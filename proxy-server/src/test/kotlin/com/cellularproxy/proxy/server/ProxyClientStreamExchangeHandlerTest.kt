@@ -20,6 +20,7 @@ import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandlingResult
+import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
@@ -125,6 +126,7 @@ class ProxyClientStreamExchangeHandlerTest {
                 "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val output = ByteArrayOutputStream()
+        val metricEvents = mutableListOf<ProxyTrafficMetricsEvent>()
         val managementHandler = RecordingManagementHandler(
             ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
         )
@@ -140,6 +142,7 @@ class ProxyClientStreamExchangeHandlerTest {
                 input = ByteArrayInputStream(request),
                 output = output,
             ),
+            recordMetricEvent = { metricEvents.add(it) },
         )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
@@ -149,6 +152,64 @@ class ProxyClientStreamExchangeHandlerTest {
         assertEquals(ManagementApiStreamExchangeDisposition.Routed, responded.disposition)
         assertEquals(listOf(ManagementApiOperation.ServiceStop), managementHandler.operations)
         assertContains(output.toString(Charsets.UTF_8), "HTTP/1.1 202 Accepted")
+        assertEquals(
+            listOf(
+                ProxyTrafficMetricsEvent.ConnectionAccepted,
+                ProxyTrafficMetricsEvent.BytesReceived(request.size.toLong()),
+                ProxyTrafficMetricsEvent.BytesSent(responded.responseBytesWritten.toLong()),
+                ProxyTrafficMetricsEvent.ConnectionClosed,
+            ),
+            metricEvents,
+        )
+    }
+
+    @Test
+    fun `continues handling when metric callback throws an ordinary exception`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val output = ByteArrayOutputStream()
+        val metricEvents = mutableListOf<ProxyTrafficMetricsEvent>()
+        val managementHandler = RecordingManagementHandler(
+            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+        )
+
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = managementHandler,
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream(request),
+                output = output,
+            ),
+            recordMetricEvent = { event ->
+                metricEvents.add(event)
+                if (event is ProxyTrafficMetricsEvent.BytesReceived) {
+                    throw IllegalStateException("metrics sink unavailable")
+                }
+            },
+        )
+
+        val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
+        val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
+        assertEquals(202, responded.statusCode)
+        assertEquals(listOf(ManagementApiOperation.ServiceStop), managementHandler.operations)
+        assertContains(output.toString(Charsets.UTF_8), "HTTP/1.1 202 Accepted")
+        assertEquals(
+            listOf(
+                ProxyTrafficMetricsEvent.ConnectionAccepted,
+                ProxyTrafficMetricsEvent.BytesReceived(request.size.toLong()),
+                ProxyTrafficMetricsEvent.BytesSent(responded.responseBytesWritten.toLong()),
+                ProxyTrafficMetricsEvent.ConnectionClosed,
+            ),
+            metricEvents,
+        )
     }
 
     @Test

@@ -41,18 +41,22 @@ sealed interface HttpProxyStreamExchangeForwardingResult {
     data class OriginResponsePreflightRejected(
         val reason: OriginHttpResponseStreamPreflightRejectionReason,
         val responseHeaderBytesRead: Int,
+        val requestBodyBytesWritten: Long = 0,
     ) : HttpProxyStreamExchangeForwardingResult {
         init {
             require(responseHeaderBytesRead >= 0) { "Response header bytes read must be non-negative" }
+            require(requestBodyBytesWritten >= 0) { "Request body bytes written must be non-negative" }
         }
     }
 
     data class ResponseForwardingFailed(
         val responseHeaderBytesRead: Int,
+        val requestBodyBytesWritten: Long = 0,
         val result: HttpProxyResponseStreamForwardingResult,
     ) : HttpProxyStreamExchangeForwardingResult {
         init {
             require(responseHeaderBytesRead > 0) { "Response header bytes read must be positive" }
+            require(requestBodyBytesWritten >= 0) { "Request body bytes written must be non-negative" }
             require(result !is HttpProxyResponseStreamForwardingResult.Forwarded) {
                 "Response forwarding failures cannot wrap forwarded results"
             }
@@ -97,6 +101,7 @@ object HttpProxyStreamExchangeForwarder {
                 return HttpProxyStreamExchangeForwardingResult.OriginResponsePreflightRejected(
                     reason = responsePreflightResult.reason,
                     responseHeaderBytesRead = responsePreflightResult.headerBytesRead,
+                    requestBodyBytesWritten = requestResult.bodyBytesWritten,
                 )
         }
 
@@ -126,6 +131,7 @@ object HttpProxyStreamExchangeForwarder {
             else ->
                 HttpProxyStreamExchangeForwardingResult.ResponseForwardingFailed(
                     responseHeaderBytesRead = acceptedResponse.headerBytesRead,
+                    requestBodyBytesWritten = requestResult.bodyBytesWritten,
                     result = responseResult,
                 )
         }

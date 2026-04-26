@@ -15,6 +15,7 @@ import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import com.cellularproxy.proxy.management.ManagementApiHandler
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandler
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandlingResult
+import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import java.io.InputStream
 import java.io.OutputStream
@@ -48,16 +49,31 @@ sealed interface ProxyClientStreamExchangeHandlingResult {
     }
 
     data class HttpProxyHandled(
+        val headerBytesRead: Int,
         val result: HttpProxyOutboundExchangeHandlingResult,
-    ) : ProxyClientStreamExchangeHandlingResult
+    ) : ProxyClientStreamExchangeHandlingResult {
+        init {
+            require(headerBytesRead >= 0) { "Header bytes read must be non-negative" }
+        }
+    }
 
     data class ConnectTunnelHandled(
+        val headerBytesRead: Int,
         val result: ConnectTunnelOutboundExchangeRelayHandlingResult,
-    ) : ProxyClientStreamExchangeHandlingResult
+    ) : ProxyClientStreamExchangeHandlingResult {
+        init {
+            require(headerBytesRead >= 0) { "Header bytes read must be non-negative" }
+        }
+    }
 
     data class ManagementHandled(
+        val headerBytesRead: Int,
         val result: ManagementApiStreamExchangeHandlingResult,
-    ) : ProxyClientStreamExchangeHandlingResult
+    ) : ProxyClientStreamExchangeHandlingResult {
+        init {
+            require(headerBytesRead >= 0) { "Header bytes read must be non-negative" }
+        }
+    }
 }
 
 class ProxyClientStreamExchangeHandler(
@@ -78,6 +94,7 @@ class ProxyClientStreamExchangeHandler(
         maxResponseChunkHeaderBytes: Int = DEFAULT_RESPONSE_CHUNK_HEADER_BYTES,
         maxResponseTrailerBytes: Int = DEFAULT_RESPONSE_TRAILER_BYTES,
         connectRelayBufferSize: Int = DEFAULT_CONNECT_RELAY_BUFFER_BYTES,
+        recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
     ): ProxyClientStreamExchangeHandlingResult {
         require(httpBufferSize > 0) { "HTTP buffer size must be positive" }
         require(maxOriginResponseHeaderBytes > 0) { "Maximum origin response header bytes must be positive" }
@@ -92,18 +109,36 @@ class ProxyClientStreamExchangeHandler(
         )
 
         return when (preflight) {
-            is ProxyIngressStreamPreflightDecision.Accepted ->
-                handleAccepted(
-                    accepted = preflight,
-                    client = client,
-                    httpBufferSize = httpBufferSize,
-                    maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                    maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                    maxResponseTrailerBytes = maxResponseTrailerBytes,
-                    connectRelayBufferSize = connectRelayBufferSize,
-                )
+            is ProxyIngressStreamPreflightDecision.Accepted -> {
+                ProxyClientStreamExchangeMetrics.acceptedStartedEvents(preflight.headerBytesRead)
+                    .recordSafely(recordMetricEvent)
+                var completed = false
+                try {
+                    val result = handleAccepted(
+                        accepted = preflight,
+                        client = client,
+                        httpBufferSize = httpBufferSize,
+                        maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                        maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                        maxResponseTrailerBytes = maxResponseTrailerBytes,
+                        connectRelayBufferSize = connectRelayBufferSize,
+                    )
+                    ProxyClientStreamExchangeMetrics.acceptedCompletedEvents(result)
+                        .recordSafely(recordMetricEvent)
+                    completed = true
+                    result
+                } finally {
+                    if (!completed) {
+                        ProxyClientStreamExchangeMetrics.acceptedClosedEvent().recordSafely(recordMetricEvent)
+                    }
+                }
+            }
             is ProxyIngressStreamPreflightDecision.Rejected ->
                 writePreflightRejection(preflight, client.output)
+                    .also { rejected ->
+                        ProxyClientStreamExchangeMetrics.eventsFor(rejected)
+                            .recordSafely(recordMetricEvent)
+                    }
         }
     }
 
@@ -119,6 +154,7 @@ class ProxyClientStreamExchangeHandler(
         when (accepted.request) {
             is ParsedProxyRequest.HttpProxy ->
                 ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
+                    headerBytesRead = accepted.headerBytesRead,
                     httpHandler.handle(
                         accepted = accepted,
                         clientInput = client.input,
@@ -131,6 +167,7 @@ class ProxyClientStreamExchangeHandler(
                 )
             is ParsedProxyRequest.ConnectTunnel ->
                 ProxyClientStreamExchangeHandlingResult.ConnectTunnelHandled(
+                    headerBytesRead = accepted.headerBytesRead,
                     connectHandler.handleAndRelay(
                         accepted = accepted,
                         client = client.toConnectTunnelClientConnection(),
@@ -139,6 +176,7 @@ class ProxyClientStreamExchangeHandler(
                 )
             is ParsedProxyRequest.Management ->
                 ProxyClientStreamExchangeHandlingResult.ManagementHandled(
+                    headerBytesRead = accepted.headerBytesRead,
                     managementHandler.handle(
                         accepted = accepted,
                         clientOutput = client.output,
@@ -174,3 +212,15 @@ private const val DEFAULT_ORIGIN_RESPONSE_HEADER_BYTES = 16 * 1024
 private const val DEFAULT_RESPONSE_CHUNK_HEADER_BYTES = 8 * 1024
 private const val DEFAULT_RESPONSE_TRAILER_BYTES = 16 * 1024
 private const val DEFAULT_CONNECT_RELAY_BUFFER_BYTES = 8 * 1024
+
+private fun List<ProxyTrafficMetricsEvent>.recordSafely(recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit) {
+    forEach { event -> event.recordSafely(recordMetricEvent) }
+}
+
+private fun ProxyTrafficMetricsEvent.recordSafely(recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit) {
+    try {
+        recordMetricEvent(this)
+    } catch (_: Exception) {
+        // Metrics sinks are best-effort and must not interrupt proxy exchange handling.
+    }
+}
