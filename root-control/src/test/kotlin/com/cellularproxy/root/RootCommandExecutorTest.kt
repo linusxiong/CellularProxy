@@ -170,6 +170,7 @@ class RootCommandExecutorTest {
                 result = result,
                 started = completed,
                 completed = completed,
+                rawStdout = "",
             )
         }
     }

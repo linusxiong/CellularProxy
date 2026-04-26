@@ -58,6 +58,7 @@ sealed interface RootCommandProcessResult {
 
 class RootCommandExecution private constructor(
     val result: RootCommandResult,
+    internal val rawStdout: String,
     auditRecords: List<RootCommandAuditRecord>,
 ) {
     val auditRecords: List<RootCommandAuditRecord> = auditRecords.toList()
@@ -67,6 +68,7 @@ class RootCommandExecution private constructor(
             result: RootCommandResult,
             started: RootCommandAuditRecord,
             completed: RootCommandAuditRecord,
+            rawStdout: String,
         ): RootCommandExecution {
             require(started.phase == RootCommandAuditPhase.Started) {
                 "Started audit record must have started phase"
@@ -106,6 +108,7 @@ class RootCommandExecution private constructor(
             }
             return RootCommandExecution(
                 result = result,
+                rawStdout = rawStdout,
                 auditRecords = listOf(started, completed),
             )
         }
@@ -164,6 +167,7 @@ class RootCommandExecutor(
             result = result,
             started = started,
             completed = completed,
+            rawStdout = processResult.rawStdout,
         )
     }
 }
@@ -226,3 +230,9 @@ private fun String.validatedAndroidPackageName(): String {
 
 private val ANDROID_PACKAGE_NAME =
     Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
+
+private val RootCommandProcessResult.rawStdout: String
+    get() = when (this) {
+        is RootCommandProcessResult.Completed -> stdout
+        is RootCommandProcessResult.TimedOut -> stdout
+    }
