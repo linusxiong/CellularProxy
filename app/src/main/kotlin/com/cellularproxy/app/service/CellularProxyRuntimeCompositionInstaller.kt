@@ -1,10 +1,9 @@
 package com.cellularproxy.app.service
 
 import android.content.Context
-import androidx.datastore.preferences.preferencesDataStore
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.AppConfigBootstrapper
-import com.cellularproxy.app.config.PlainConfigDataStoreRepository
+import com.cellularproxy.app.config.CellularProxyPlainConfigStore
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
 import com.cellularproxy.app.network.AndroidBoundNetworkSocketConnector
 import com.cellularproxy.app.network.AndroidNetworkRouteMonitor
@@ -47,7 +46,7 @@ object CellularProxyRuntimeCompositionInstaller {
         val appContext = context.applicationContext
         val bootstrapResult = runBlocking {
             AppConfigBootstrapper(
-                plainRepository = PlainConfigDataStoreRepository(appContext.cellularProxyPlainConfigDataStore),
+                plainRepository = CellularProxyPlainConfigStore.repository(appContext),
                 sensitiveRepository = SensitiveConfigRepositoryFactory.create(appContext),
             ).loadOrCreate()
         }
@@ -213,10 +212,6 @@ private class RuntimeCompositionCleanup(
         firstFailure?.let { throw it }
     }
 }
-
-private val Context.cellularProxyPlainConfigDataStore by preferencesDataStore(
-    name = "cellularproxy_plain_config",
-)
 
 private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult =
     CloudflareTunnelTransitionResult(

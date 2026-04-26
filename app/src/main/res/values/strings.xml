@@ -2,7 +2,16 @@
     <string name="app_name">CellularProxy</string>
     <string name="dashboard_title">CellularProxy</string>
     <string name="dashboard_summary">Foreground HTTP proxy service</string>
-    <string name="dashboard_default_endpoint">Default endpoint: 0.0.0.0:8080</string>
+    <string name="dashboard_current_endpoint">Configured endpoint: %1$s:%2$s</string>
+    <string name="settings_listen_host">Listen host</string>
+    <string name="settings_listen_port">Listen port</string>
+    <string name="settings_proxy_auth_enabled">Require proxy authentication</string>
+    <string name="settings_route_policy">Outbound route</string>
+    <string name="settings_save">Save settings</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="settings_saved_with_broad_auth_warning">Settings saved. Authentication is off on a broad listener.</string>
+    <string name="settings_save_failed">Settings could not be saved.</string>
+    <string name="settings_invalid">Use a valid listen IP address and TCP port.</string>
     <string name="dashboard_start_proxy">Start proxy</string>
     <string name="dashboard_stop_proxy">Stop proxy</string>
     <string name="notification_channel_proxy_service">Proxy service</string>
