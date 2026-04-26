@@ -8,10 +8,19 @@ import java.util.concurrent.CancellationException
 
 class RootAvailabilityChecker(
     private val executor: RootCommandExecutor,
-) {
-    fun check(
+) : RotationRootAvailabilityProbe {
+    override fun check(
         timeoutMillis: Long,
-        secrets: LogRedactionSecrets = LogRedactionSecrets(),
+        secrets: LogRedactionSecrets,
+    ): RootAvailabilityCheckResult =
+        checkInternal(timeoutMillis = timeoutMillis, secrets = secrets)
+
+    fun check(timeoutMillis: Long): RootAvailabilityCheckResult =
+        check(timeoutMillis = timeoutMillis, secrets = LogRedactionSecrets())
+
+    private fun checkInternal(
+        timeoutMillis: Long,
+        secrets: LogRedactionSecrets,
     ): RootAvailabilityCheckResult {
         require(timeoutMillis > 0) { "Root availability timeout must be positive" }
 
