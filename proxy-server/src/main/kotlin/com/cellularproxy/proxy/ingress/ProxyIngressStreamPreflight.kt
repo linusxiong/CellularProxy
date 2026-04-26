@@ -11,6 +11,7 @@ import com.cellularproxy.proxy.protocol.HttpRequestHeaderBlockRejectionReason
 import com.cellularproxy.proxy.protocol.ParsedHttpRequest
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import java.io.InputStream
+import java.net.SocketTimeoutException
 
 sealed interface ProxyIngressStreamPreflightDecision {
     data class Accepted(
@@ -60,12 +61,21 @@ object ProxyIngressStreamPreflight {
             }
         }
 
-        return when (
-            val readResult = HttpHeaderBlockStreamReader.read(
-                input = input,
+        val countingInput = HeaderCountingInputStream(input)
+        val readResult = try {
+            HttpHeaderBlockStreamReader.read(
+                input = countingInput,
                 maxHeaderBytes = config.maxHeaderBytes,
             )
-        ) {
+        } catch (_: SocketTimeoutException) {
+            return rejected(
+                failure = ProxyServerFailure.IdleTimeout,
+                requiresAuditLog = false,
+                headerBytesRead = countingInput.bytesRead,
+            )
+        }
+
+        return when (readResult) {
             is HttpHeaderBlockStreamReadResult.Completed ->
                 mapHeaderBlockPreflight(
                     config = config,
@@ -140,4 +150,19 @@ object ProxyIngressStreamPreflight {
             requiresAuditLog = requiresAuditLog,
             headerBytesRead = headerBytesRead,
         )
+}
+
+private class HeaderCountingInputStream(
+    private val delegate: InputStream,
+) : InputStream() {
+    var bytesRead: Int = 0
+        private set
+
+    override fun read(): Int {
+        val next = delegate.read()
+        if (next != -1) {
+            bytesRead += 1
+        }
+        return next
+    }
 }

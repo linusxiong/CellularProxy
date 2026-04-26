@@ -200,6 +200,99 @@ class ProxyBoundClientConnectionHandlerTest {
         assertEquals(0, server.activeClientConnections)
     }
 
+    @Test
+    fun `header read idle timeout emits safe response and releases active connection`() {
+        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
+            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+        ).listener
+        val server = ProxyBoundClientConnectionHandler(
+            exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
+        )
+        val metricEvents = CopyOnWriteArrayList<ProxyTrafficMetricsEvent>()
+        val serverResult = AtomicReference<ProxyBoundClientConnectionHandlingResult?>()
+        val serverFailure = AtomicReference<Throwable?>()
+
+        listener.use {
+            Socket(LOOPBACK_HOST, listener.listenPort).use { client ->
+                client.soTimeout = CLIENT_TEST_READ_TIMEOUT_MILLIS
+                val serverThread = thread(start = true) {
+                    serverFailure.capture {
+                        serverResult.set(
+                            server.handleNext(
+                                listener = listener,
+                                config = config,
+                                clientHeaderReadIdleTimeoutMillis = 50,
+                                recordMetricEvent = { metricEvents.add(it) },
+                            ),
+                        )
+                    }
+                }
+
+                assertEquals(
+                    "HTTP/1.1 408 Request Timeout",
+                    BufferedReader(InputStreamReader(client.getInputStream(), Charsets.US_ASCII)).readLine(),
+                )
+
+                serverThread.join(1_000)
+                assertTrue(!serverThread.isAlive, "server handler should finish after the idle timeout response")
+                serverFailure.get()?.let { throw it }
+            }
+        }
+
+        val result = serverResult.get() ?: error("server result should be recorded")
+        val rejected = assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result.exchange)
+        assertIs<ProxyServerFailure.IdleTimeout>(rejected.failure)
+        assertEquals(0, rejected.headerBytesRead)
+        assertEquals(0, server.activeClientConnections)
+        assertTrue(metricEvents.contains(ProxyTrafficMetricsEvent.ConnectionAccepted))
+        assertTrue(metricEvents.contains(ProxyTrafficMetricsEvent.ConnectionRejected))
+        assertTrue(metricEvents.any { it is ProxyTrafficMetricsEvent.BytesSent && it.bytes > 0 })
+        assertTrue(metricEvents.contains(ProxyTrafficMetricsEvent.ConnectionClosed))
+    }
+
+    @Test
+    fun `header read idle timeout records partial header bytes received`() {
+        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
+            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+        ).listener
+        val server = ProxyBoundClientConnectionHandler(
+            exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
+        )
+        val metricEvents = CopyOnWriteArrayList<ProxyTrafficMetricsEvent>()
+        val partialHeader = "GET http://example.com/ HTTP/1.1\r\nHost: example.com"
+        val serverFailure = AtomicReference<Throwable?>()
+
+        listener.use {
+            Socket(LOOPBACK_HOST, listener.listenPort).use { client ->
+                client.soTimeout = CLIENT_TEST_READ_TIMEOUT_MILLIS
+                val serverThread = thread(start = true) {
+                    serverFailure.capture {
+                        server.handleNext(
+                            listener = listener,
+                            config = config,
+                            clientHeaderReadIdleTimeoutMillis = 50,
+                            recordMetricEvent = { metricEvents.add(it) },
+                        )
+                    }
+                }
+
+                client.getOutputStream().write(partialHeader.toByteArray(Charsets.US_ASCII))
+                client.getOutputStream().flush()
+                assertEquals(
+                    "HTTP/1.1 408 Request Timeout",
+                    BufferedReader(InputStreamReader(client.getInputStream(), Charsets.US_ASCII)).readLine(),
+                )
+
+                serverThread.join(1_000)
+                assertTrue(!serverThread.isAlive, "server handler should finish after the idle timeout response")
+                serverFailure.get()?.let { throw it }
+            }
+        }
+
+        assertTrue(metricEvents.contains(ProxyTrafficMetricsEvent.BytesReceived(partialHeader.length.toLong())))
+        assertEquals(0, server.activeClientConnections)
+    }
+
     private fun exchangeHandler(
         managementHandler: ManagementApiHandler,
     ): ProxyClientStreamExchangeHandler =
@@ -276,5 +369,6 @@ class ProxyBoundClientConnectionHandlerTest {
     private companion object {
         const val LOOPBACK_HOST = "127.0.0.1"
         const val MANAGEMENT_TOKEN = "management-token"
+        const val CLIENT_TEST_READ_TIMEOUT_MILLIS = 1_000
     }
 }

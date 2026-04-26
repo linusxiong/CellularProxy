@@ -26,6 +26,7 @@ class ProxyBoundClientConnectionHandler(
     fun handleNext(
         listener: BoundProxyServerSocket,
         config: ProxyIngressPreflightConfig,
+        clientHeaderReadIdleTimeoutMillis: Int = DEFAULT_BOUND_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS,
         httpBufferSize: Int = DEFAULT_BOUND_HTTP_BUFFER_BYTES,
         maxOriginResponseHeaderBytes: Int = DEFAULT_BOUND_ORIGIN_RESPONSE_HEADER_BYTES,
         maxResponseChunkHeaderBytes: Int = DEFAULT_BOUND_RESPONSE_CHUNK_HEADER_BYTES,
@@ -33,7 +34,10 @@ class ProxyBoundClientConnectionHandler(
         connectRelayBufferSize: Int = DEFAULT_BOUND_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
     ): ProxyBoundClientConnectionHandlingResult {
-        val client = listener.accept()
+        require(clientHeaderReadIdleTimeoutMillis > 0) {
+            "Client header-read idle timeout must be positive"
+        }
+        val client = listener.accept(headerReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis)
         val activeConnectionsBeforeAdmission = activeConnectionCount.getAndIncrement()
         ProxyTrafficMetricsEvent.ConnectionAccepted.recordSafely(recordMetricEvent)
         return try {
@@ -74,6 +78,7 @@ private fun ProxyTrafficMetricsEvent.recordSafely(recordMetricEvent: (ProxyTraff
     }
 }
 
+private const val DEFAULT_BOUND_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS = 60_000
 private const val DEFAULT_BOUND_HTTP_BUFFER_BYTES = 8 * 1024
 private const val DEFAULT_BOUND_ORIGIN_RESPONSE_HEADER_BYTES = 16 * 1024
 private const val DEFAULT_BOUND_RESPONSE_CHUNK_HEADER_BYTES = 8 * 1024

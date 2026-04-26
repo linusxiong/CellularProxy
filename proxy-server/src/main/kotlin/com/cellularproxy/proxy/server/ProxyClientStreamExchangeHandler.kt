@@ -26,6 +26,7 @@ data class ProxyClientStreamConnection(
     val output: OutputStream,
     private val shutdownInputAction: () -> Unit = { input.close() },
     private val shutdownOutputAction: () -> Unit = { output.close() },
+    private val setReadTimeoutMillisAction: (Int) -> Unit = {},
 ) : Closeable {
     fun toConnectTunnelClientConnection(): ConnectTunnelClientConnection =
         ConnectTunnelClientConnection(
@@ -34,6 +35,10 @@ data class ProxyClientStreamConnection(
             shutdownInputAction = shutdownInputAction,
             shutdownOutputAction = shutdownOutputAction,
         )
+
+    fun clearReadTimeout() {
+        setReadTimeoutMillisAction(NO_READ_TIMEOUT)
+    }
 
     override fun close() {
         var failure: Throwable? = null
@@ -132,6 +137,7 @@ class ProxyClientStreamExchangeHandler(
 
             return when (preflight) {
                 is ProxyIngressStreamPreflightDecision.Accepted -> {
+                    client.clearReadTimeout()
                     ProxyClientStreamExchangeMetrics.acceptedStartedEvents(preflight.headerBytesRead)
                         .recordSafely(recordMetricEvent)
                     var completed = false
@@ -245,6 +251,7 @@ private const val DEFAULT_ORIGIN_RESPONSE_HEADER_BYTES = 16 * 1024
 private const val DEFAULT_RESPONSE_CHUNK_HEADER_BYTES = 8 * 1024
 private const val DEFAULT_RESPONSE_TRAILER_BYTES = 16 * 1024
 private const val DEFAULT_CONNECT_RELAY_BUFFER_BYTES = 8 * 1024
+private const val NO_READ_TIMEOUT = 0
 
 private fun List<ProxyTrafficMetricsEvent>.recordSafely(recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit) {
     forEach { event -> event.recordSafely(recordMetricEvent) }

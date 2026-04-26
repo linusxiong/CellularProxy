@@ -7,6 +7,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
+import java.net.Socket
 import java.net.SocketException
 import java.net.UnknownHostException
 
@@ -22,14 +23,24 @@ class BoundProxyServerSocket internal constructor(
     val listenPort: Int
         get() = serverSocket.localPort
 
-    fun accept(): ProxyClientStreamConnection {
+    fun accept(
+        headerReadIdleTimeoutMillis: Int = DEFAULT_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS,
+    ): ProxyClientStreamConnection {
+        require(headerReadIdleTimeoutMillis > 0) { "Client header-read idle timeout must be positive" }
         val socket = serverSocket.accept()
-        return ProxyClientStreamConnection(
-            input = socket.getInputStream(),
-            output = socket.getOutputStream(),
-            shutdownInputAction = { socket.shutdownInput() },
-            shutdownOutputAction = { socket.shutdownOutput() },
-        )
+        return try {
+            socket.soTimeout = headerReadIdleTimeoutMillis
+            ProxyClientStreamConnection(
+                input = socket.getInputStream(),
+                output = socket.getOutputStream(),
+                shutdownInputAction = { socket.shutdownInput() },
+                shutdownOutputAction = { socket.shutdownOutput() },
+                setReadTimeoutMillisAction = { timeoutMillis -> socket.soTimeout = timeoutMillis },
+            )
+        } catch (throwable: Throwable) {
+            socket.closeQuietly()
+            throw throwable
+        }
     }
 
     override fun close() {
@@ -95,6 +106,7 @@ object ProxyServerSocketBinder {
 
 private val TCP_PORT_RANGE = 1..65_535
 private const val DEFAULT_SERVER_SOCKET_BACKLOG = 50
+private const val DEFAULT_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS = 60_000
 private const val BROAD_LISTEN_HOST = "0.0.0.0"
 
 private fun String.isSupportedNumericIpv4Address(): Boolean {
@@ -141,5 +153,13 @@ private fun ServerSocket.closeQuietly() {
         close()
     } catch (_: Exception) {
         // Binding already failed; startup error classification should remain stable.
+    }
+}
+
+private fun Socket.closeQuietly() {
+    try {
+        close()
+    } catch (_: Exception) {
+        // Socket setup already failed; preserve the original setup failure.
     }
 }

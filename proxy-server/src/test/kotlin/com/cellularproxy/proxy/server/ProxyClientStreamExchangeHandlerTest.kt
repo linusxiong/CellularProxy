@@ -274,6 +274,51 @@ class ProxyClientStreamExchangeHandlerTest {
     }
 
     @Test
+    fun `clears header read timeout after accepting request before forwarding body`() {
+        val request = (
+            "POST http://origin.example/upload HTTP/1.1\r\n" +
+                "Host: origin.example\r\n" +
+                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                "Content-Length: 4\r\n" +
+                "\r\n" +
+                "BODY"
+            ).toByteArray(Charsets.US_ASCII)
+        val input = ByteArrayInputStream(request)
+        val output = ByteArrayOutputStream()
+        val timeoutValues = mutableListOf<Int>()
+        val originOutput = ByteArrayOutputStream()
+        val httpConnector = RecordingHttpConnector(
+            OutboundHttpOriginOpenResult.Connected(
+                OutboundHttpOriginConnection(
+                    input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                    output = originOutput,
+                    host = "origin.example",
+                    port = 80,
+                ),
+            ),
+        )
+
+        val result = handler(
+            httpConnector = httpConnector,
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = ThrowingManagementHandler(),
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = input,
+                output = output,
+                setReadTimeoutMillisAction = { timeoutValues.add(it) },
+            ),
+        )
+
+        val handled = assertIs<ProxyClientStreamExchangeHandlingResult.HttpProxyHandled>(result)
+        assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(handled.result)
+        assertEquals(listOf(0), timeoutValues)
+        assertContains(originOutput.toString(Charsets.UTF_8), "\r\n\r\nBODY")
+    }
+
+    @Test
     fun `rejects invalid HTTP tunables before consuming client bytes or opening origin`() {
         val request = (
             "GET http://origin.example/resource HTTP/1.1\r\n" +
