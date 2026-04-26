@@ -38,6 +38,9 @@ class ProxyBoundClientConnectionHandler(
     val activeClientConnections: Long
         get() = activeConnectionCount.get()
 
+    val activeProxyExchanges: Long
+        get() = exchangeHandler.activeProxyExchanges
+
     fun handleNext(
         listener: BoundProxyServerSocket,
         config: ProxyIngressPreflightConfig,

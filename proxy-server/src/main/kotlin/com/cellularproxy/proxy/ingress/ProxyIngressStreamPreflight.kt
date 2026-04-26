@@ -44,20 +44,22 @@ object ProxyIngressStreamPreflight {
         activeConnections: Long,
         input: InputStream,
     ): ProxyIngressStreamPreflightDecision {
-        when (
-            val decision = ConnectionLimitAdmissionPolicy.evaluate(
-                config = config.connectionLimit,
-                activeConnections = activeConnections,
-            )
-        ) {
-            is ConnectionLimitAdmissionDecision.Accepted -> Unit
-            is ConnectionLimitAdmissionDecision.Rejected -> {
-                val failure = ProxyServerFailure.ConnectionLimit(decision.reason)
-                return rejected(
-                    failure = failure,
-                    requiresAuditLog = false,
-                    headerBytesRead = 0,
+        if (!config.proxyRequestsPaused) {
+            when (
+                val decision = ConnectionLimitAdmissionPolicy.evaluate(
+                    config = config.connectionLimit,
+                    activeConnections = activeConnections,
                 )
+            ) {
+                is ConnectionLimitAdmissionDecision.Accepted -> Unit
+                is ConnectionLimitAdmissionDecision.Rejected -> {
+                    val failure = ProxyServerFailure.ConnectionLimit(decision.reason)
+                    return rejected(
+                        failure = failure,
+                        requiresAuditLog = false,
+                        headerBytesRead = 0,
+                    )
+                }
             }
         }
 

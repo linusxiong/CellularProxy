@@ -9,6 +9,7 @@ import com.cellularproxy.shared.proxy.ProxyServiceStopStateMachine
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionResult
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.rotation.RotationEvent
 import java.io.Closeable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
@@ -53,11 +54,19 @@ class RunningProxyServerRuntime internal constructor(
     initialStatus: ProxyServiceStatus,
     private val acceptLoop: ProxyBoundServerAcceptLoop,
     private val acceptLoopResult: Future<ProxyBoundServerAcceptLoopResult>,
+    private val connectionHandler: ProxyBoundClientConnectionHandler,
+    private val requestPauseController: ProxyRotationRequestPauseController,
 ) : Closeable {
     private val statusReference = AtomicReference(initialStatus)
 
     val status: ProxyServiceStatus
         get() = statusReference.get()
+
+    val activeProxyExchanges: Long
+        get() = connectionHandler.activeProxyExchanges
+
+    val proxyRequestsPaused: Boolean
+        get() = requestPauseController.proxyRequestsPaused
 
     init {
         require(initialStatus.state == ProxyServiceState.Running) {
@@ -84,6 +93,12 @@ class RunningProxyServerRuntime internal constructor(
             }
         }
     }
+
+    fun pauseProxyRequests(): RotationEvent.NewRequestsPaused =
+        requestPauseController.pauseProxyRequests()
+
+    fun resumeProxyRequests(): RotationEvent.ProxyRequestsResumed =
+        requestPauseController.resumeProxyRequests()
 
     fun awaitStopped(timeoutMillis: Long): ProxyServerRuntimeStopResult {
         require(timeoutMillis > 0) { "Runtime stop timeout must be positive" }
@@ -169,7 +184,7 @@ object ProxyServerRuntime {
             is ProxyServerRuntimeStartupResult.Started ->
                 launchAcceptLoop(
                     startup = startup,
-                    ingressConfig = ingressConfig,
+                    requestPauseController = ProxyRotationRequestPauseController(ingressConfig),
                     connectionHandler = connectionHandler,
                     workerExecutor = workerExecutor,
                     queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
@@ -187,7 +202,7 @@ object ProxyServerRuntime {
 
     private fun launchAcceptLoop(
         startup: ProxyServerRuntimeStartupResult.Started,
-        ingressConfig: ProxyIngressPreflightConfig,
+        requestPauseController: ProxyRotationRequestPauseController,
         connectionHandler: ProxyBoundClientConnectionHandler,
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
@@ -210,7 +225,7 @@ object ProxyServerRuntime {
                 try {
                     acceptLoop.run(
                         listener = startup.listener,
-                        config = ingressConfig,
+                        configProvider = requestPauseController::currentConfig,
                         clientHeaderReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis,
                         httpBufferSize = httpBufferSize,
                         maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
@@ -241,6 +256,8 @@ object ProxyServerRuntime {
                 initialStatus = startup.status,
                 acceptLoop = acceptLoop,
                 acceptLoopResult = future,
+                connectionHandler = connectionHandler,
+                requestPauseController = requestPauseController,
             ),
         )
     }

@@ -19,6 +19,7 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
@@ -309,6 +310,164 @@ class ProxyBoundServerAcceptLoopTest {
     }
 
     @Test
+    fun `queued worker samples latest preflight config before handling client`() {
+        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
+            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+        ).listener
+        val blockingManagementHandler = BlockingManagementHandler()
+        val workerExecutor = ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            LinkedBlockingQueue(),
+        )
+        val queuedTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val connectionHandler = ProxyBoundClientConnectionHandler(
+            exchangeHandler = exchangeHandler(managementHandler = blockingManagementHandler),
+        )
+        val acceptLoop = ProxyBoundServerAcceptLoop(
+            connectionHandler = connectionHandler,
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedTimeoutExecutor,
+        )
+        val dynamicConfig = config.copy(
+            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
+        )
+        val currentConfig = AtomicReference(dynamicConfig)
+        val loopResult = AtomicReference<ProxyBoundServerAcceptLoopResult?>()
+        val loopFailure = AtomicReference<Throwable?>()
+
+        val loopThread = thread(start = true) {
+            loopFailure.capture {
+                loopResult.set(
+                    acceptLoop.run(
+                        listener = listener,
+                        configProvider = { currentConfig.get() },
+                        clientHeaderReadIdleTimeoutMillis = 1_000,
+                    ),
+                )
+            }
+        }
+
+        try {
+            val firstClient = Socket(LOOPBACK_HOST, listener.listenPort)
+            val firstClientFailure = AtomicReference<Throwable?>()
+            val firstClientThread = thread(start = true) {
+                firstClientFailure.capture {
+                    firstClient.use { socket ->
+                        socket.getOutputStream().write(managementRequestBytes())
+                        socket.getOutputStream().flush()
+                        assertEquals(
+                            "HTTP/1.1 202 Accepted",
+                            BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.US_ASCII)).readLine(),
+                        )
+                    }
+                }
+            }
+
+            assertTrue(blockingManagementHandler.awaitStarted(), "first request should occupy the only worker")
+
+            val queuedClient = Socket(LOOPBACK_HOST, listener.listenPort)
+            queuedClient.soTimeout = CLIENT_TEST_READ_TIMEOUT_MILLIS
+            queuedClient.getOutputStream().write(managementRequestBytes())
+            queuedClient.getOutputStream().flush()
+            assertTrue(
+                connectionHandler.awaitActiveClientConnections(2),
+                "second accepted socket should be queued before config changes",
+            )
+
+            currentConfig.set(
+                dynamicConfig.copy(
+                    requestAdmission = dynamicConfig.requestAdmission.copy(
+                        managementApiToken = "rotated-management-token",
+                    ),
+                ),
+            )
+            blockingManagementHandler.release()
+
+            assertEquals(
+                "HTTP/1.1 401 Unauthorized",
+                BufferedReader(InputStreamReader(queuedClient.getInputStream(), Charsets.US_ASCII)).readLine(),
+            )
+            queuedClient.close()
+
+            acceptLoop.stop(listener)
+            loopThread.join(1_000)
+            firstClientThread.join(1_000)
+            assertTrue(!loopThread.isAlive, "accept loop should exit after stop")
+            assertTrue(!firstClientThread.isAlive, "first client should finish after release")
+            loopFailure.get()?.let { throw it }
+            firstClientFailure.get()?.let { throw it }
+            assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(loopResult.get())
+            assertTrue(connectionHandler.awaitActiveClientConnections(0), "all reservations should be released")
+        } finally {
+            acceptLoop.stop(listener)
+            blockingManagementHandler.release()
+            workerExecutor.shutdownNow()
+            queuedTimeoutExecutor.shutdownNow()
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS), "worker executor should stop")
+            assertTrue(queuedTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS), "timeout executor should stop")
+        }
+    }
+
+    @Test
+    fun `queued worker releases reservation and closes client when config provider fails`() {
+        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
+            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+        ).listener
+        val workerExecutor = Executors.newSingleThreadExecutor()
+        val queuedTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val connectionHandler = ProxyBoundClientConnectionHandler(
+            exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
+        )
+        val acceptLoop = ProxyBoundServerAcceptLoop(
+            connectionHandler = connectionHandler,
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedTimeoutExecutor,
+        )
+        val loopResult = AtomicReference<ProxyBoundServerAcceptLoopResult?>()
+        val loopFailure = AtomicReference<Throwable?>()
+
+        val loopThread = thread(start = true) {
+            loopFailure.capture {
+                loopResult.set(
+                    acceptLoop.run(
+                        listener = listener,
+                        configProvider = { throw IllegalStateException("config unavailable") },
+                    ),
+                )
+            }
+        }
+
+        try {
+            Socket(LOOPBACK_HOST, listener.listenPort).use { client ->
+                client.soTimeout = CLIENT_TEST_READ_TIMEOUT_MILLIS
+                client.getOutputStream().write(managementRequestBytes())
+                client.getOutputStream().flush()
+
+                assertTrue(
+                    connectionHandler.awaitActiveClientConnections(0),
+                    "failed config provider should release the accepted socket reservation",
+                )
+                assertTrue(client.readFailsOrEnds(), "client should observe the server-side close")
+            }
+
+            acceptLoop.stop(listener)
+            loopThread.join(1_000)
+            assertTrue(!loopThread.isAlive, "accept loop should exit after stop")
+            loopFailure.get()?.let { throw it }
+            assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(loopResult.get())
+        } finally {
+            acceptLoop.stop(listener)
+            workerExecutor.shutdownNow()
+            queuedTimeoutExecutor.shutdownNow()
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS), "worker executor should stop")
+            assertTrue(queuedTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS), "timeout executor should stop")
+        }
+    }
+
+    @Test
     fun `stop unblocks accept loop before any client connects`() {
         val listener = assertIs<ProxyServerSocketBindResult.Bound>(
             ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
@@ -461,6 +620,13 @@ class ProxyBoundServerAcceptLoopTest {
         }
         return false
     }
+
+    private fun Socket.readFailsOrEnds(): Boolean =
+        try {
+            getInputStream().read() == -1
+        } catch (_: SocketException) {
+            true
+        }
 
     private companion object {
         const val LOOPBACK_HOST = "127.0.0.1"

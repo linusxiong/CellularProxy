@@ -74,6 +74,27 @@ class ProxyIngressStreamPreflightTest {
     }
 
     @Test
+    fun `allows management stream requests while paused even when proxy connection capacity is full`() {
+        val headerBlock = "GET /api/status HTTP/1.1\r\n" +
+            "Authorization: Bearer management-token\r\n" +
+            "\r\n"
+        val input = ByteArrayInputStream(headerBlock.toByteArray(Charsets.US_ASCII))
+
+        val decision = ProxyIngressStreamPreflight.evaluate(
+            config = config.copy(proxyRequestsPaused = true),
+            activeConnections = 2,
+            input = input,
+        )
+
+        val accepted = assertIs<ProxyIngressStreamPreflightDecision.Accepted>(decision)
+        val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
+        assertEquals("/api/status", request.originTarget)
+        assertEquals(headerBlock.length, accepted.headerBytesRead)
+        assertEquals(3L, accepted.activeConnectionsAfterAdmission)
+        assertFalse(accepted.requiresAuditLog)
+    }
+
+    @Test
     fun `maps incomplete stream header blocks to safe bad request responses`() {
         val input = ByteArrayInputStream("GET http://example.com/ HTTP/1.1\r\nHost: example.com".toByteArray(Charsets.US_ASCII))
 

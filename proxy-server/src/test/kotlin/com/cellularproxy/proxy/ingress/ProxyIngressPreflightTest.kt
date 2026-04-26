@@ -195,6 +195,24 @@ class ProxyIngressPreflightTest {
     }
 
     @Test
+    fun `allows management requests while paused even when proxy connection capacity is full`() {
+        val decision = ProxyIngressPreflight.evaluate(
+            config = config.copy(proxyRequestsPaused = true),
+            activeConnections = 2,
+            headerBlock = "GET /api/status HTTP/1.1\r\n" +
+                "Authorization: Bearer management-token\r\n" +
+                "\r\n",
+        )
+
+        val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
+        val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
+        assertEquals(HttpMethod.Get, request.method)
+        assertEquals("/api/status", request.originTarget)
+        assertEquals(3L, accepted.activeConnectionsAfterAdmission)
+        assertFalse(accepted.requiresAuditLog)
+    }
+
+    @Test
     fun `marks rejected management authorization attempts for audit logging`() {
         val decision = ProxyIngressPreflight.evaluate(
             config = config,

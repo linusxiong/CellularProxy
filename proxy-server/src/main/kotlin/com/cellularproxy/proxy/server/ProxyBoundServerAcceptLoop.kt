@@ -51,6 +51,29 @@ class ProxyBoundServerAcceptLoop(
         maxResponseTrailerBytes: Int = DEFAULT_ACCEPT_LOOP_RESPONSE_TRAILER_BYTES,
         connectRelayBufferSize: Int = DEFAULT_ACCEPT_LOOP_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+    ): ProxyBoundServerAcceptLoopResult =
+        run(
+            listener = listener,
+            configProvider = { config },
+            clientHeaderReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis,
+            httpBufferSize = httpBufferSize,
+            maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+            maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+            maxResponseTrailerBytes = maxResponseTrailerBytes,
+            connectRelayBufferSize = connectRelayBufferSize,
+            recordMetricEvent = recordMetricEvent,
+        )
+
+    fun run(
+        listener: BoundProxyServerSocket,
+        configProvider: () -> ProxyIngressPreflightConfig,
+        clientHeaderReadIdleTimeoutMillis: Int = DEFAULT_ACCEPT_LOOP_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS,
+        httpBufferSize: Int = DEFAULT_ACCEPT_LOOP_HTTP_BUFFER_BYTES,
+        maxOriginResponseHeaderBytes: Int = DEFAULT_ACCEPT_LOOP_ORIGIN_RESPONSE_HEADER_BYTES,
+        maxResponseChunkHeaderBytes: Int = DEFAULT_ACCEPT_LOOP_RESPONSE_CHUNK_HEADER_BYTES,
+        maxResponseTrailerBytes: Int = DEFAULT_ACCEPT_LOOP_RESPONSE_TRAILER_BYTES,
+        connectRelayBufferSize: Int = DEFAULT_ACCEPT_LOOP_CONNECT_RELAY_BUFFER_BYTES,
+        recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
     ): ProxyBoundServerAcceptLoopResult {
         require(clientHeaderReadIdleTimeoutMillis > 0) {
             "Client header-read idle timeout must be positive"
@@ -100,9 +123,16 @@ class ProxyBoundServerAcceptLoop(
                 workerExecutor.execute {
                     if (queueClaimed.compareAndSet(false, true)) {
                         queuedTimeout.cancel(false)
+                        val currentConfig = try {
+                            configProvider()
+                        } catch (_: Exception) {
+                            reservation.release()
+                            client.closeQuietly()
+                            return@execute
+                        }
                         connectionHandler.handleReserved(
                             reservation = reservation,
-                            config = config,
+                            config = currentConfig,
                             httpBufferSize = httpBufferSize,
                             maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
                             maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,

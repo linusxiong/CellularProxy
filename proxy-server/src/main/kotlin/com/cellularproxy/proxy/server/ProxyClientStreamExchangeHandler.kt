@@ -112,6 +112,9 @@ class ProxyClientStreamExchangeHandler(
     private val connectHandler = ConnectTunnelOutboundExchangeHandler(connectConnector)
     private val managementHandler = ManagementApiStreamExchangeHandler(managementHandler)
 
+    val activeProxyExchanges: Long
+        get() = proxyActivityTracker.activeProxyExchanges
+
     fun handle(
         config: ProxyIngressPreflightConfig,
         activeConnections: Long,

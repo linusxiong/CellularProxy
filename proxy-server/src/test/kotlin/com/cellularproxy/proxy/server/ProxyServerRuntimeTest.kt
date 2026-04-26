@@ -10,18 +10,23 @@ import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.management.ManagementApiHandler
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
+import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionDisposition
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyStartupError
+import com.cellularproxy.shared.rotation.RotationEvent
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.Collections
 import java.util.concurrent.AbstractExecutorService
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -175,6 +180,94 @@ class ProxyServerRuntimeTest {
     }
 
     @Test
+    fun `running runtime exposes active proxy exchange count from connection handler`() {
+        val backingSocket = ServerSocket(0)
+        val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val tracker = ProxyTrafficActivityTracker()
+        val connectionHandler = connectionHandler(proxyActivityTracker = tracker)
+        val activeProxyExchange = tracker.begin(
+            ParsedProxyRequest.HttpProxy(
+                method = "GET",
+                host = "origin.example",
+                port = 80,
+                originTarget = "/resource",
+            ),
+        )
+        val runtime = RunningProxyServerRuntime(
+            listener = listener,
+            initialStatus = ProxyServiceStatus.running(
+                listenHost = LOOPBACK_HOST,
+                listenPort = listener.listenPort,
+                configuredRoute = RouteTarget.Automatic,
+                boundRoute = wifiRoute(),
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            ),
+            acceptLoop = ProxyBoundServerAcceptLoop(
+                connectionHandler = connectionHandler,
+                workerExecutor = RecordingExecutorService(),
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            ),
+            acceptLoopResult = CompletableFuture.completedFuture(ProxyBoundServerAcceptLoopResult.Stopped(0)),
+            connectionHandler = connectionHandler,
+            requestPauseController = ProxyRotationRequestPauseController(ingressConfig()),
+        )
+
+        try {
+            assertEquals(1, runtime.activeProxyExchanges)
+            activeProxyExchange.finish()
+            assertEquals(0, runtime.activeProxyExchanges)
+        } finally {
+            activeProxyExchange.finish()
+            runtime.stop()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `running runtime exposes rotation proxy request pause and resume controls`() {
+        val backingSocket = ServerSocket(0)
+        val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val connectionHandler = connectionHandler()
+        val runtime = RunningProxyServerRuntime(
+            listener = listener,
+            initialStatus = ProxyServiceStatus.running(
+                listenHost = LOOPBACK_HOST,
+                listenPort = listener.listenPort,
+                configuredRoute = RouteTarget.Automatic,
+                boundRoute = wifiRoute(),
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            ),
+            acceptLoop = ProxyBoundServerAcceptLoop(
+                connectionHandler = connectionHandler,
+                workerExecutor = RecordingExecutorService(),
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            ),
+            acceptLoopResult = CompletableFuture.completedFuture(ProxyBoundServerAcceptLoopResult.Stopped(0)),
+            connectionHandler = connectionHandler,
+            requestPauseController = ProxyRotationRequestPauseController(ingressConfig()),
+        )
+
+        try {
+            assertFalse(runtime.proxyRequestsPaused)
+
+            assertEquals(RotationEvent.NewRequestsPaused, runtime.pauseProxyRequests())
+            assertTrue(runtime.proxyRequestsPaused)
+
+            assertEquals(RotationEvent.ProxyRequestsResumed, runtime.resumeProxyRequests())
+            assertFalse(runtime.proxyRequestsPaused)
+        } finally {
+            runtime.stop()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun `accept loop launch rejection closes bound listener`() {
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
@@ -291,7 +384,9 @@ class ProxyServerRuntimeTest {
             ),
         )
 
-    private fun connectionHandler(): ProxyBoundClientConnectionHandler =
+    private fun connectionHandler(
+        proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
+    ): ProxyBoundClientConnectionHandler =
         ProxyBoundClientConnectionHandler(
             exchangeHandler = ProxyClientStreamExchangeHandler(
                 httpConnector = {
@@ -308,6 +403,7 @@ class ProxyServerRuntimeTest {
                     override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
                         ManagementApiResponse.json(statusCode = 200, body = "{}")
                 },
+                proxyActivityTracker = proxyActivityTracker,
             ),
         )
 

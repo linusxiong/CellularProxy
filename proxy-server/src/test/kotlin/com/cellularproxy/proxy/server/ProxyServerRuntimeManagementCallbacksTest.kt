@@ -22,6 +22,7 @@ import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationSessionController
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
@@ -161,6 +162,64 @@ class ProxyServerRuntimeManagementCallbacksTest {
             assertEquals(cloudflareStop, callbacks.cloudflareStop())
             assertEquals(mobileRotation, callbacks.rotateMobileData())
             assertEquals(airplaneRotation, callbacks.rotateAirplaneMode())
+        } finally {
+            running.stop()
+            assertIs<ProxyServerRuntimeStopResult.Finished>(running.awaitStopped(timeoutMillis = 1_000))
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `runtime management callbacks can start rotations through a shared session controller`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val backingSocket = ServerSocket(0)
+        val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
+        val running = startRuntime(
+            listener = listener,
+            acceptLoopExecutor = acceptLoopExecutor,
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+        )
+
+        try {
+            val rotationSession = RotationSessionController()
+            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
+                runtime = running,
+                networks = { emptyList() },
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotationSession = rotationSession,
+            )
+
+            val mobileStart = callbacks.rotateMobileData()
+            val duplicateAirplaneStart = callbacks.rotateAirplaneMode()
+
+            assertEquals(RotationTransitionDisposition.Accepted, mobileStart.disposition)
+            assertEquals(RotationState.CheckingCooldown, mobileStart.status.state)
+            assertEquals(RotationOperation.MobileData, mobileStart.status.operation)
+            assertEquals(mobileStart.status, rotationSession.currentStatus)
+            assertEquals(RotationTransitionDisposition.Duplicate, duplicateAirplaneStart.disposition)
+            assertEquals(mobileStart.status, duplicateAirplaneStart.status)
+            assertEquals(mobileStart.status, rotationSession.currentStatus)
         } finally {
             running.stop()
             assertIs<ProxyServerRuntimeStopResult.Finished>(running.awaitStopped(timeoutMillis = 1_000))

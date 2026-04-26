@@ -5,6 +5,7 @@ import com.cellularproxy.proxy.admission.ProxyRequestAdmissionConfig
 import com.cellularproxy.proxy.errors.ProxyServerFailure
 import com.cellularproxy.proxy.forwarding.OutboundConnectTunnelConnector
 import com.cellularproxy.proxy.forwarding.OutboundConnectTunnelOpenResult
+import com.cellularproxy.proxy.forwarding.OutboundHttpOriginConnection
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginConnector
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginOpenResult
 import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
@@ -15,7 +16,10 @@ import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
@@ -24,6 +28,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -201,6 +206,66 @@ class ProxyBoundClientConnectionHandlerTest {
     }
 
     @Test
+    fun `active proxy exchange count tracks admitted HTTP traffic separately from socket reservations`() {
+        lateinit var server: ProxyBoundClientConnectionHandler
+        val originBodyReadStarted = CountDownLatch(1)
+        val releaseOriginBody = CountDownLatch(1)
+        val serverResult = AtomicReference<ProxyBoundClientConnectionHandlingResult?>()
+        val serverFailure = AtomicReference<Throwable?>()
+        val httpConnector = OutboundHttpOriginConnector { request ->
+            OutboundHttpOriginOpenResult.Connected(
+                OutboundHttpOriginConnection(
+                    input = BlockingHttpResponseBodyInputStream(
+                        bodyReadStarted = originBodyReadStarted,
+                        releaseBody = releaseOriginBody,
+                    ),
+                    output = ByteArrayOutputStream(),
+                    host = request.host,
+                    port = request.port,
+                ),
+            )
+        }
+        server = ProxyBoundClientConnectionHandler(
+            exchangeHandler = ProxyClientStreamExchangeHandler(
+                httpConnector = httpConnector,
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+            ),
+        )
+        val clientOutput = ByteArrayOutputStream()
+
+        val serverThread = thread(start = true) {
+            serverFailure.capture {
+                serverResult.set(
+                    server.handleAccepted(
+                        client = ProxyClientStreamConnection(
+                            input = ByteArrayInputStream(httpProxyRequestBytes()),
+                            output = clientOutput,
+                        ),
+                        config = config,
+                    ),
+                )
+            }
+        }
+
+        assertTrue(originBodyReadStarted.await(1, TimeUnit.SECONDS), "HTTP forwarding should reach response body")
+        assertEquals(1, server.activeProxyExchanges)
+        assertEquals(1, server.activeClientConnections)
+
+        releaseOriginBody.countDown()
+        serverThread.join(1_000)
+        assertTrue(!serverThread.isAlive, "server handler should finish after origin body release")
+        serverFailure.get()?.let { throw it }
+        assertIs<ProxyClientStreamExchangeHandlingResult.HttpProxyHandled>(
+            serverResult.get()?.exchange ?: error("server result should be recorded"),
+        )
+        assertContains(clientOutput.toString(Charsets.UTF_8), "HTTP/1.1 200 OK")
+        assertContains(clientOutput.toString(Charsets.UTF_8), "BODY")
+        assertEquals(0, server.activeProxyExchanges)
+        assertEquals(0, server.activeClientConnections)
+    }
+
+    @Test
     fun `header read idle timeout emits safe response and releases active connection`() {
         val listener = assertIs<ProxyServerSocketBindResult.Bound>(
             ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
@@ -310,6 +375,13 @@ class ProxyBoundClientConnectionHandlerTest {
                 "\r\n"
             ).toByteArray(Charsets.US_ASCII)
 
+    private fun httpProxyRequestBytes(): ByteArray =
+        (
+            "GET http://origin.example/resource HTTP/1.1\r\n" +
+                "Host: origin.example\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+
     private class BlockingManagementHandler : ManagementApiHandler {
         private val started = CountDownLatch(1)
         private val released = CountDownLatch(1)
@@ -324,6 +396,56 @@ class ProxyBoundClientConnectionHandlerTest {
 
         fun release() {
             released.countDown()
+        }
+    }
+
+    private class BlockingHttpResponseBodyInputStream(
+        private val bodyReadStarted: CountDownLatch,
+        private val releaseBody: CountDownLatch,
+    ) : InputStream() {
+        private val bytes = (
+            "HTTP/1.1 200 OK\r\n" +
+                "Content-Length: 4\r\n" +
+                "\r\n" +
+                "BODY"
+            ).toByteArray(Charsets.US_ASCII)
+        private val bodyStartIndex = bytes.size - 4
+        private var index = 0
+        private var released = false
+
+        override fun read(): Int {
+            awaitBodyReleaseIfNeeded()
+            return if (index < bytes.size) {
+                bytes[index++].toInt() and BYTE_MASK
+            } else {
+                END_OF_STREAM
+            }
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            require(offset >= 0 && length >= 0 && length <= buffer.size - offset) {
+                "Invalid buffer range"
+            }
+            if (length == 0) {
+                return 0
+            }
+            awaitBodyReleaseIfNeeded()
+            if (index >= bytes.size) {
+                return END_OF_STREAM
+            }
+
+            val count = minOf(length, bytes.size - index)
+            bytes.copyInto(buffer, offset, index, index + count)
+            index += count
+            return count
+        }
+
+        private fun awaitBodyReleaseIfNeeded() {
+            if (!released && index >= bodyStartIndex) {
+                bodyReadStarted.countDown()
+                assertTrue(releaseBody.await(1, TimeUnit.SECONDS), "origin response body should be released")
+                released = true
+            }
         }
     }
 
@@ -370,5 +492,7 @@ class ProxyBoundClientConnectionHandlerTest {
         const val LOOPBACK_HOST = "127.0.0.1"
         const val MANAGEMENT_TOKEN = "management-token"
         const val CLIENT_TEST_READ_TIMEOUT_MILLIS = 1_000
+        const val BYTE_MASK = 0xff
+        const val END_OF_STREAM = -1
     }
 }
