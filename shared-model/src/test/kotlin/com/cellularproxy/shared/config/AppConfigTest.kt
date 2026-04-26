@@ -15,6 +15,7 @@ class AppConfigTest {
         assertEquals("0.0.0.0", config.proxy.listenHost)
         assertEquals(8080, config.proxy.listenPort)
         assertTrue(config.proxy.authEnabled)
+        assertEquals(64, config.proxy.maxConcurrentConnections)
         assertEquals(RouteTarget.Automatic, config.network.defaultRoutePolicy)
         assertFalse(config.rotation.strictIpChangeRequired)
         assertEquals(3.seconds, config.rotation.mobileDataOffDelay)
@@ -67,6 +68,29 @@ class AppConfigTest {
         assertTrue(maxPort.validate().isValid)
         assertContains(lowPort.validate().errors, ConfigValidationError.InvalidListenPort)
         assertContains(highPort.validate().errors, ConfigValidationError.InvalidListenPort)
+    }
+
+    @Test
+    fun `maximum concurrent connections must be positive`() {
+        val oneConnection = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = 1)
+        )
+        val zeroConnections = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = 0)
+        )
+        val negativeConnections = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = -1)
+        )
+
+        assertTrue(oneConnection.validate().isValid)
+        assertContains(
+            zeroConnections.validate().errors,
+            ConfigValidationError.InvalidMaxConcurrentConnections,
+        )
+        assertContains(
+            negativeConnections.validate().errors,
+            ConfigValidationError.InvalidMaxConcurrentConnections,
+        )
     }
 
     @Test

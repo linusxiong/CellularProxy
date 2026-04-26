@@ -17,6 +17,9 @@ data class AppConfig(
             if (proxy.listenPort !in TCP_PORT_RANGE) {
                 add(ConfigValidationError.InvalidListenPort)
             }
+            if (proxy.maxConcurrentConnections <= 0) {
+                add(ConfigValidationError.InvalidMaxConcurrentConnections)
+            }
             if (cloudflare.enabled && !cloudflare.tunnelTokenPresent) {
                 add(ConfigValidationError.MissingCloudflareTunnelToken)
             }
@@ -39,6 +42,7 @@ data class ProxyConfig(
     val listenHost: String = "0.0.0.0",
     val listenPort: Int = 8080,
     val authEnabled: Boolean = true,
+    val maxConcurrentConnections: Int = 64,
 ) {
     val hasHighSecurityRisk: Boolean
         get() = !authEnabled && listenHost == BROAD_LISTEN_HOST
@@ -77,6 +81,7 @@ data class ConfigValidationResult(
 enum class ConfigValidationError {
     InvalidListenHost,
     InvalidListenPort,
+    InvalidMaxConcurrentConnections,
     MissingCloudflareTunnelToken,
 }
 

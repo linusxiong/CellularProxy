@@ -101,6 +101,7 @@ private fun ConfigValidationError.toStartupError(): ProxyStartupError =
     when (this) {
         ConfigValidationError.InvalidListenHost -> ProxyStartupError.InvalidListenAddress
         ConfigValidationError.InvalidListenPort -> ProxyStartupError.InvalidListenPort
+        ConfigValidationError.InvalidMaxConcurrentConnections -> ProxyStartupError.InvalidMaxConcurrentConnections
         ConfigValidationError.MissingCloudflareTunnelToken -> ProxyStartupError.MissingCloudflareTunnelToken
     }
 

@@ -72,7 +72,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult = ::ignoredRotationTransition,
         rotateAirplaneMode: () -> RotationTransitionResult = ::ignoredRotationTransition,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
@@ -108,7 +108,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult = ::ignoredRotationTransition,
         rotateAirplaneMode: () -> RotationTransitionResult = ::ignoredRotationTransition,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =

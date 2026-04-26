@@ -10,15 +10,19 @@ import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyBoundClientConnectionHandler
 import com.cellularproxy.proxy.server.ProxyClientStreamExchangeHandler
 import com.cellularproxy.proxy.server.ProxyServerRuntime
+import com.cellularproxy.proxy.server.ProxyServerRuntimeResult
 import com.cellularproxy.proxy.server.ProxyServerRuntimeManagementCallbacks
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
+import com.cellularproxy.proxy.server.ProxyServerRuntimeStartupResult
 import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceStartupDecision
+import com.cellularproxy.shared.proxy.ProxyServiceStartupPolicy
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
 import java.util.concurrent.Executor
@@ -35,7 +39,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
@@ -74,7 +78,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
@@ -119,7 +123,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
@@ -166,7 +170,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
@@ -207,21 +211,44 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
         installRuntimeManagementHandler: (RunningProxyServerRuntime) -> Closeable? = { null },
     ): ProxyServerForegroundRuntimeLifecycle =
         ProxyServerForegroundRuntimeLifecycle(
-            startRuntime = {
+            startRuntime = startRuntime@{
                 val runtimeConfig = plainConfig.reconcileCloudflareTokenPresence(sensitiveConfig)
+                val effectiveRuntimeConfig = runtimeConfig.copy(
+                    proxy = runtimeConfig.proxy.copy(
+                        maxConcurrentConnections = maxConcurrentConnections,
+                    ),
+                )
+                val startupNetworks = observedNetworks()
+                when (
+                    val startup = ProxyServiceStartupPolicy.evaluate(
+                        config = effectiveRuntimeConfig,
+                        managementApiTokenPresent = true,
+                        observedNetworks = startupNetworks,
+                    )
+                ) {
+                    is ProxyServiceStartupDecision.Failed ->
+                        return@startRuntime ProxyServerRuntimeResult.StartupFailed(
+                            ProxyServerRuntimeStartupResult.Failed(
+                                startupError = startup.startupError,
+                                status = startup.status,
+                            ),
+                        )
+
+                    is ProxyServiceStartupDecision.Ready -> Unit
+                }
                 ProxyServerRuntime.start(
-                    config = runtimeConfig,
+                    config = effectiveRuntimeConfig,
                     managementApiTokenPresent = true,
-                    observedNetworks = observedNetworks(),
+                    observedNetworks = startupNetworks,
                     ingressConfig = ProxyRuntimeIngressConfigFactory.from(
-                        plainConfig = runtimeConfig,
+                        plainConfig = effectiveRuntimeConfig,
                         sensitiveConfig = sensitiveConfig,
                         maxConcurrentConnections = maxConcurrentConnections,
                     ),

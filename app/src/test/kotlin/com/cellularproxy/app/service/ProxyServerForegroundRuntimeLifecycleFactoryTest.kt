@@ -191,6 +191,85 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
     }
 
     @Test
+    fun `created lifecycle maps invalid maximum concurrent connections to startup failure before binding`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        var attemptedBind = false
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig().copy(
+                proxy = loopbackAppConfig().proxy.copy(maxConcurrentConnections = 0),
+            ),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            connectionHandler = connectionHandler(),
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            bindListener = { _: String, _: Int, _: Int ->
+                attemptedBind = true
+                error("invalid maximum concurrent connections must fail before binding")
+            },
+        )
+
+        try {
+            val failure = assertFailsWith<ProxyServerForegroundRuntimeStartException> {
+                lifecycle.startProxyRuntime()
+            }
+
+            assertEquals(ProxyStartupError.InvalidMaxConcurrentConnections, failure.startupError)
+            assertEquals(false, attemptedBind)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `created lifecycle maps invalid override maximum concurrent connections to startup failure before binding`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        var attemptedBind = false
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig(),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            connectionHandler = connectionHandler(),
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            maxConcurrentConnections = 0,
+            bindListener = { _: String, _: Int, _: Int ->
+                attemptedBind = true
+                error("invalid maximum concurrent connections override must fail before binding")
+            },
+        )
+
+        try {
+            val failure = assertFailsWith<ProxyServerForegroundRuntimeStartException> {
+                lifecycle.startProxyRuntime()
+            }
+
+            assertEquals(ProxyStartupError.InvalidMaxConcurrentConnections, failure.startupError)
+            assertEquals(false, attemptedBind)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun `created lifecycle starts when enabled cloudflare token exists despite stale absent metadata`() {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()

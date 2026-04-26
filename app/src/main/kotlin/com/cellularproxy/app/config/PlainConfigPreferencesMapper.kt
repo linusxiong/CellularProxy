@@ -20,6 +20,7 @@ object PlainConfigPreferenceKeys {
     val proxyListenHost = stringPreferencesKey("proxy.listenHost")
     val proxyListenPort = intPreferencesKey("proxy.listenPort")
     val proxyAuthEnabled = booleanPreferencesKey("proxy.authEnabled")
+    val proxyMaxConcurrentConnections = intPreferencesKey("proxy.maxConcurrentConnections")
     val defaultRoutePolicy = stringPreferencesKey("network.defaultRoutePolicy")
     val strictIpChangeRequired = booleanPreferencesKey("rotation.strictIpChangeRequired")
     val mobileDataOffDelay = longPreferencesKey("rotation.mobileDataOffDelay")
@@ -42,6 +43,7 @@ object PlainConfigPreferencesMapper {
             PlainConfigPreferenceKeys.proxyListenHost to config.proxy.listenHost,
             PlainConfigPreferenceKeys.proxyListenPort to config.proxy.listenPort,
             PlainConfigPreferenceKeys.proxyAuthEnabled to config.proxy.authEnabled,
+            PlainConfigPreferenceKeys.proxyMaxConcurrentConnections to config.proxy.maxConcurrentConnections,
             PlainConfigPreferenceKeys.defaultRoutePolicy to config.network.defaultRoutePolicy.name,
             PlainConfigPreferenceKeys.strictIpChangeRequired to config.rotation.strictIpChangeRequired,
             PlainConfigPreferenceKeys.mobileDataOffDelay to config.rotation.mobileDataOffDelay.inWholeMilliseconds,
@@ -68,6 +70,9 @@ object PlainConfigPreferencesMapper {
                     ?: defaults.proxy.listenPort,
                 authEnabled = preferences[PlainConfigPreferenceKeys.proxyAuthEnabled]
                     ?: defaults.proxy.authEnabled,
+                maxConcurrentConnections = preferences[PlainConfigPreferenceKeys.proxyMaxConcurrentConnections]
+                    ?.takeIf { it > 0 }
+                    ?: defaults.proxy.maxConcurrentConnections,
             ),
             network = NetworkConfig(
                 defaultRoutePolicy = preferences[PlainConfigPreferenceKeys.defaultRoutePolicy]

@@ -94,6 +94,18 @@ class ManagementApiReadOnlyResponsesTest {
     }
 
     @Test
+    fun `status response includes invalid maximum concurrent connections startup error`() {
+        val response = ManagementApiReadOnlyResponses.status(
+            ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidMaxConcurrentConnections),
+        )
+
+        assertEquals(
+            true,
+            response.body.contains(""""startupError":"invalid_max_concurrent_connections""""),
+        )
+    }
+
+    @Test
     fun `networks response preserves order and renders routeable network descriptors`() {
         val response = ManagementApiReadOnlyResponses.networks(
             listOf(

@@ -40,7 +40,7 @@ object ProxyServerForegroundRuntimeInstaller {
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = INSTALLER_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
@@ -67,7 +67,8 @@ object ProxyServerForegroundRuntimeInstaller {
                     workerExecutor = workerExecutor,
                     queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
                     acceptLoopExecutor = acceptLoopExecutor,
-                    maxConcurrentConnections = maxConcurrentConnections,
+                    maxConcurrentConnections = maxConcurrentConnections
+                        ?: bootstrapResult.plainConfig.proxy.maxConcurrentConnections,
                     outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
                     recordMetricEvent = recordMetricEvent,
                     bindListener = bindListener,

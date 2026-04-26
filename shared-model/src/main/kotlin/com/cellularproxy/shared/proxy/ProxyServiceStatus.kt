@@ -123,6 +123,7 @@ data class ProxyTrafficMetrics(
 enum class ProxyStartupError {
     InvalidListenAddress,
     InvalidListenPort,
+    InvalidMaxConcurrentConnections,
     PortAlreadyInUse,
     MissingManagementApiToken,
     UnavailableSelectedRoute,

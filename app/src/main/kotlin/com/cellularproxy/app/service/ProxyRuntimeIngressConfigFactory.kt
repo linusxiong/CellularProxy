@@ -11,7 +11,7 @@ object ProxyRuntimeIngressConfigFactory {
     fun from(
         plainConfig: AppConfig,
         sensitiveConfig: SensitiveConfig,
-        maxConcurrentConnections: Int = DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
     ): ProxyIngressPreflightConfig =
         ProxyIngressPreflightConfig(
             connectionLimit = ConnectionLimitAdmissionConfig(

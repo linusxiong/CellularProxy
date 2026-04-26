@@ -6,14 +6,25 @@ import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.proxy.ProxyCredential
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 data class ProxySettingsFormState(
     val listenHost: String,
     val listenPort: String,
     val authEnabled: Boolean,
+    val maxConcurrentConnections: String = "64",
     val route: RouteTarget,
+    val strictIpChangeRequired: Boolean = false,
+    val mobileDataOffDelaySeconds: String = "3",
+    val networkReturnTimeoutSeconds: String = "60",
+    val cooldownSeconds: String = "180",
     val proxyUsername: String = "",
     val proxyPassword: String = "",
+    val managementApiToken: String = "",
+    val cloudflareEnabled: Boolean = false,
+    val cloudflareTunnelToken: String = "",
+    val cloudflareHostnameLabel: String = "",
 ) {
     fun toAppConfig(base: AppConfig): ProxySettingsFormResult {
         return toSettings(
@@ -28,18 +39,29 @@ data class ProxySettingsFormState(
     ): ProxySettingsFormResult {
         val normalizedPort = listenPort.trim()
         val parsedPort = normalizedPort.toStrictPortOrNull()
-        val candidate = base.copy(
+        val parsedMaxConcurrentConnections = maxConcurrentConnections.trim().toStrictPositiveIntOrNull()
+        val parsedMobileDataOffDelay = mobileDataOffDelaySeconds.trim().toStrictPositiveSecondsDurationOrNull()
+        val parsedNetworkReturnTimeout = networkReturnTimeoutSeconds.trim().toStrictPositiveSecondsDurationOrNull()
+        val parsedCooldown = cooldownSeconds.trim().toStrictPositiveSecondsDurationOrNull()
+        val proxyAndRouteCandidate = base.copy(
             proxy = ProxyConfig(
                 listenHost = listenHost.trim(),
                 listenPort = parsedPort ?: INVALID_PORT_SENTINEL,
                 authEnabled = authEnabled,
+                maxConcurrentConnections = parsedMaxConcurrentConnections ?: INVALID_POSITIVE_INT_SENTINEL,
             ),
             network = base.network.copy(
                 defaultRoutePolicy = route,
             ),
+            rotation = base.rotation.copy(
+                strictIpChangeRequired = strictIpChangeRequired,
+                mobileDataOffDelay = parsedMobileDataOffDelay ?: base.rotation.mobileDataOffDelay,
+                networkReturnTimeout = parsedNetworkReturnTimeout ?: base.rotation.networkReturnTimeout,
+                cooldown = parsedCooldown ?: base.rotation.cooldown,
+            ),
         )
         val errors = buildList {
-            if (candidate.validate().errors.contains(ConfigValidationError.InvalidListenHost)) {
+            if (proxyAndRouteCandidate.validate().errors.contains(ConfigValidationError.InvalidListenHost)) {
                 add(ConfigValidationError.InvalidListenHost)
             }
             if (parsedPort == null) {
@@ -49,20 +71,73 @@ data class ProxySettingsFormState(
         if (errors.isNotEmpty()) {
             return ProxySettingsFormResult.Invalid(errors)
         }
+        if (parsedMaxConcurrentConnections == null) {
+            return ProxySettingsFormResult.Invalid(
+                errors = emptyList(),
+                invalidMaxConcurrentConnections = true,
+            )
+        }
+        if (
+            parsedMobileDataOffDelay == null ||
+            parsedNetworkReturnTimeout == null ||
+            parsedCooldown == null
+        ) {
+            return ProxySettingsFormResult.Invalid(
+                errors = emptyList(),
+                invalidRotationTiming = true,
+            )
+        }
 
         val updatedSensitiveConfig = sensitiveConfig?.withProxyCredentialEdit(
             username = proxyUsername,
             password = proxyPassword,
-        ) ?: ProxyCredentialEditResult.Valid(null)
+        )?.withManagementApiTokenEdit(managementApiToken)
+            ?.withCloudflareTunnelTokenEdit(cloudflareTunnelToken)
+            ?: SensitiveConfigEditResult.Valid(null)
         when (updatedSensitiveConfig) {
-            ProxyCredentialEditResult.Invalid -> {
+            SensitiveConfigEditResult.InvalidProxyCredential -> {
                 return ProxySettingsFormResult.Invalid(
                     errors = emptyList(),
                     invalidProxyCredential = true,
                 )
             }
-            is ProxyCredentialEditResult.Valid -> Unit
+            SensitiveConfigEditResult.InvalidManagementApiToken -> {
+                return ProxySettingsFormResult.Invalid(
+                    errors = emptyList(),
+                    invalidManagementApiToken = true,
+                )
+            }
+            SensitiveConfigEditResult.InvalidCloudflareTunnelToken -> {
+                return ProxySettingsFormResult.Invalid(
+                    errors = emptyList(),
+                    invalidCloudflareTunnelToken = true,
+                )
+            }
+            is SensitiveConfigEditResult.Valid -> Unit
         }
+        val appliesSensitiveEdits = sensitiveConfig != null
+        val tunnelTokenPresent = if (appliesSensitiveEdits) {
+            updatedSensitiveConfig.value?.cloudflareTunnelToken?.isNotBlank() == true
+        } else {
+            base.cloudflare.tunnelTokenPresent
+        }
+        if (appliesSensitiveEdits && cloudflareEnabled && !tunnelTokenPresent) {
+            return ProxySettingsFormResult.Invalid(
+                errors = emptyList(),
+                invalidCloudflareTunnelToken = true,
+            )
+        }
+        val candidate = proxyAndRouteCandidate.copy(
+            cloudflare = if (appliesSensitiveEdits) {
+                base.cloudflare.copy(
+                    enabled = cloudflareEnabled,
+                    tunnelTokenPresent = tunnelTokenPresent,
+                    managementHostnameLabel = cloudflareHostnameLabel.trim().takeIf(String::isNotEmpty),
+                )
+            } else {
+                base.cloudflare
+            },
+        )
 
         val warnings = buildSet {
             if (candidate.proxy.hasHighSecurityRisk) {
@@ -82,7 +157,14 @@ data class ProxySettingsFormState(
                 listenHost = config.proxy.listenHost,
                 listenPort = config.proxy.listenPort.toString(),
                 authEnabled = config.proxy.authEnabled,
+                maxConcurrentConnections = config.proxy.maxConcurrentConnections.toString(),
                 route = config.network.defaultRoutePolicy,
+                strictIpChangeRequired = config.rotation.strictIpChangeRequired,
+                mobileDataOffDelaySeconds = config.rotation.mobileDataOffDelay.inWholeSeconds.toString(),
+                networkReturnTimeoutSeconds = config.rotation.networkReturnTimeout.inWholeSeconds.toString(),
+                cooldownSeconds = config.rotation.cooldown.inWholeSeconds.toString(),
+                cloudflareEnabled = config.cloudflare.enabled,
+                cloudflareHostnameLabel = config.cloudflare.managementHostnameLabel.orEmpty(),
             )
     }
 }
@@ -97,6 +179,10 @@ sealed interface ProxySettingsFormResult {
     data class Invalid(
         val errors: List<ConfigValidationError>,
         val invalidProxyCredential: Boolean = false,
+        val invalidManagementApiToken: Boolean = false,
+        val invalidCloudflareTunnelToken: Boolean = false,
+        val invalidMaxConcurrentConnections: Boolean = false,
+        val invalidRotationTiming: Boolean = false,
     ) : ProxySettingsFormResult
 }
 
@@ -117,6 +203,10 @@ class ProxySettingsFormController(
                 return ProxySettingsSaveResult.Invalid(
                     errors = plainResult.errors,
                     invalidProxyCredential = plainResult.invalidProxyCredential,
+                    invalidManagementApiToken = plainResult.invalidManagementApiToken,
+                    invalidCloudflareTunnelToken = plainResult.invalidCloudflareTunnelToken,
+                    invalidMaxConcurrentConnections = plainResult.invalidMaxConcurrentConnections,
+                    invalidRotationTiming = plainResult.invalidRotationTiming,
                 )
             }
             is ProxySettingsFormResult.Valid -> Unit
@@ -125,6 +215,18 @@ class ProxySettingsFormController(
             return ProxySettingsSaveResult.Invalid(
                 errors = emptyList(),
                 invalidProxyCredential = true,
+            )
+        }
+        if (form.hasInvalidManagementApiTokenEdit()) {
+            return ProxySettingsSaveResult.Invalid(
+                errors = emptyList(),
+                invalidManagementApiToken = true,
+            )
+        }
+        if (form.hasInvalidCloudflareTunnelTokenEdit()) {
+            return ProxySettingsSaveResult.Invalid(
+                errors = emptyList(),
+                invalidCloudflareTunnelToken = true,
             )
         }
 
@@ -136,6 +238,10 @@ class ProxySettingsFormController(
             is ProxySettingsFormResult.Invalid -> ProxySettingsSaveResult.Invalid(
                 errors = result.errors,
                 invalidProxyCredential = result.invalidProxyCredential,
+                invalidManagementApiToken = result.invalidManagementApiToken,
+                invalidCloudflareTunnelToken = result.invalidCloudflareTunnelToken,
+                invalidMaxConcurrentConnections = result.invalidMaxConcurrentConnections,
+                invalidRotationTiming = result.invalidRotationTiming,
             )
             is ProxySettingsFormResult.Valid -> {
                 result.sensitiveConfig?.let { sensitiveConfig ->
@@ -163,23 +269,29 @@ sealed interface ProxySettingsSaveResult {
     data class Invalid(
         val errors: List<ConfigValidationError>,
         val invalidProxyCredential: Boolean = false,
+        val invalidManagementApiToken: Boolean = false,
+        val invalidCloudflareTunnelToken: Boolean = false,
+        val invalidMaxConcurrentConnections: Boolean = false,
+        val invalidRotationTiming: Boolean = false,
     ) : ProxySettingsSaveResult
 }
 
-private sealed interface ProxyCredentialEditResult {
-    data class Valid(val value: SensitiveConfig?) : ProxyCredentialEditResult
-    data object Invalid : ProxyCredentialEditResult
+private sealed interface SensitiveConfigEditResult {
+    data class Valid(val value: SensitiveConfig?) : SensitiveConfigEditResult
+    data object InvalidProxyCredential : SensitiveConfigEditResult
+    data object InvalidManagementApiToken : SensitiveConfigEditResult
+    data object InvalidCloudflareTunnelToken : SensitiveConfigEditResult
 }
 
 private fun SensitiveConfig.withProxyCredentialEdit(
     username: String,
     password: String,
-): ProxyCredentialEditResult {
+): SensitiveConfigEditResult {
     if (username.isEmpty() && password.isEmpty()) {
-        return ProxyCredentialEditResult.Valid(this)
+        return SensitiveConfigEditResult.Valid(this)
     }
     if (username.isEmpty() || password.isEmpty()) {
-        return ProxyCredentialEditResult.Invalid
+        return SensitiveConfigEditResult.InvalidProxyCredential
     }
 
     val credential = runCatching {
@@ -187,12 +299,50 @@ private fun SensitiveConfig.withProxyCredentialEdit(
             username = username,
             password = password,
         )
-    }.getOrNull() ?: return ProxyCredentialEditResult.Invalid
+    }.getOrNull() ?: return SensitiveConfigEditResult.InvalidProxyCredential
 
-    return ProxyCredentialEditResult.Valid(
+    return SensitiveConfigEditResult.Valid(
         copy(proxyCredential = credential),
     )
 }
+
+private fun SensitiveConfigEditResult.withManagementApiTokenEdit(
+    managementApiToken: String,
+): SensitiveConfigEditResult =
+    when (this) {
+        SensitiveConfigEditResult.InvalidProxyCredential,
+        SensitiveConfigEditResult.InvalidManagementApiToken,
+        SensitiveConfigEditResult.InvalidCloudflareTunnelToken,
+        -> this
+        is SensitiveConfigEditResult.Valid -> {
+            if (managementApiToken.isEmpty()) {
+                this
+            } else if (managementApiToken.isBlank() || managementApiToken != managementApiToken.trim()) {
+                SensitiveConfigEditResult.InvalidManagementApiToken
+            } else {
+                SensitiveConfigEditResult.Valid(value?.copy(managementApiToken = managementApiToken))
+            }
+        }
+    }
+
+private fun SensitiveConfigEditResult.withCloudflareTunnelTokenEdit(
+    cloudflareTunnelToken: String,
+): SensitiveConfigEditResult =
+    when (this) {
+        SensitiveConfigEditResult.InvalidProxyCredential,
+        SensitiveConfigEditResult.InvalidManagementApiToken,
+        SensitiveConfigEditResult.InvalidCloudflareTunnelToken,
+        -> this
+        is SensitiveConfigEditResult.Valid -> {
+            if (cloudflareTunnelToken.isEmpty()) {
+                this
+            } else if (cloudflareTunnelToken.isBlank() || cloudflareTunnelToken != cloudflareTunnelToken.trim()) {
+                SensitiveConfigEditResult.InvalidCloudflareTunnelToken
+            } else {
+                SensitiveConfigEditResult.Valid(value?.copy(cloudflareTunnelToken = cloudflareTunnelToken))
+            }
+        }
+    }
 
 private fun ProxySettingsFormState.hasInvalidProxyCredentialEdit(): Boolean {
     if (proxyUsername.isEmpty() && proxyPassword.isEmpty()) {
@@ -210,6 +360,14 @@ private fun ProxySettingsFormState.hasInvalidProxyCredentialEdit(): Boolean {
     }.isFailure
 }
 
+private fun ProxySettingsFormState.hasInvalidManagementApiTokenEdit(): Boolean =
+    managementApiToken.isNotEmpty() &&
+        (managementApiToken.isBlank() || managementApiToken != managementApiToken.trim())
+
+private fun ProxySettingsFormState.hasInvalidCloudflareTunnelTokenEdit(): Boolean =
+    cloudflareTunnelToken.isNotEmpty() &&
+        (cloudflareTunnelToken.isBlank() || cloudflareTunnelToken != cloudflareTunnelToken.trim())
+
 private fun String.toStrictPortOrNull(): Int? {
     if (isEmpty() || any { it !in '0'..'9' }) {
         return null
@@ -218,5 +376,24 @@ private fun String.toStrictPortOrNull(): Int? {
     return toIntOrNull()?.takeIf { it in TCP_PORT_RANGE }
 }
 
+private fun String.toStrictPositiveIntOrNull(): Int? {
+    if (isEmpty() || any { it !in '0'..'9' }) {
+        return null
+    }
+
+    return toIntOrNull()?.takeIf { it > 0 }
+}
+
+private fun String.toStrictPositiveSecondsDurationOrNull(): Duration? {
+    if (isEmpty() || any { it !in '0'..'9' }) {
+        return null
+    }
+
+    return toLongOrNull()
+        ?.takeIf { it > 0 }
+        ?.seconds
+}
+
 private val TCP_PORT_RANGE = 1..65_535
 private const val INVALID_PORT_SENTINEL = 0
+private const val INVALID_POSITIVE_INT_SENTINEL = 0

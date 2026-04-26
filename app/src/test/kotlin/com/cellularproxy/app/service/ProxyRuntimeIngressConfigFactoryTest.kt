@@ -105,6 +105,25 @@ class ProxyRuntimeIngressConfigFactoryTest {
     }
 
     @Test
+    fun `composed ingress config uses persisted maximum concurrent connection limit by default`() {
+        val config = ProxyRuntimeIngressConfigFactory.from(
+            plainConfig = AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = 1),
+            ),
+            sensitiveConfig = sensitiveConfig,
+        )
+
+        val rejected = ProxyIngressPreflight.evaluate(
+            config = config,
+            activeConnections = 1,
+            headerBlock = proxyRequest(proxyAuthorization = basicProxyAuthorization("proxy-user", "proxy-password")),
+        )
+
+        assertIs<ProxyIngressPreflightDecision.Rejected>(rejected)
+        assertIs<ProxyServerFailure.ConnectionLimit>(rejected.failure)
+    }
+
+    @Test
     fun `composed ingress config rejects invalid connection limits`() {
         assertFailsWith<IllegalArgumentException> {
             ProxyRuntimeIngressConfigFactory.from(

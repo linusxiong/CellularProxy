@@ -182,6 +182,7 @@ private fun ProxyStartupError.apiValue(): String =
     when (this) {
         ProxyStartupError.InvalidListenAddress -> "invalid_listen_address"
         ProxyStartupError.InvalidListenPort -> "invalid_listen_port"
+        ProxyStartupError.InvalidMaxConcurrentConnections -> "invalid_max_concurrent_connections"
         ProxyStartupError.PortAlreadyInUse -> "port_already_in_use"
         ProxyStartupError.MissingManagementApiToken -> "missing_management_api_token"
         ProxyStartupError.UnavailableSelectedRoute -> "unavailable_selected_route"

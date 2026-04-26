@@ -21,6 +21,7 @@ class PlainConfigPreferencesMapperTest {
                 listenHost = "127.0.0.1",
                 listenPort = 8_888,
                 authEnabled = false,
+                maxConcurrentConnections = 12,
             ),
             network = NetworkConfig(defaultRoutePolicy = RouteTarget.Cellular),
             rotation = RotationConfig(
@@ -72,11 +73,13 @@ class PlainConfigPreferencesMapperTest {
             preferencesOf(
                 PlainConfigPreferenceKeys.proxyListenHost to "example.com",
                 PlainConfigPreferenceKeys.proxyListenPort to 65_536,
+                PlainConfigPreferenceKeys.proxyMaxConcurrentConnections to 0,
             ),
         )
 
         assertEquals("0.0.0.0", restored.proxy.listenHost)
         assertEquals(8080, restored.proxy.listenPort)
+        assertEquals(64, restored.proxy.maxConcurrentConnections)
     }
 
     @Test
@@ -97,6 +100,7 @@ class PlainConfigPreferencesMapperTest {
                 PlainConfigPreferenceKeys.proxyListenHost,
                 PlainConfigPreferenceKeys.proxyListenPort,
                 PlainConfigPreferenceKeys.proxyAuthEnabled,
+                PlainConfigPreferenceKeys.proxyMaxConcurrentConnections,
                 PlainConfigPreferenceKeys.defaultRoutePolicy,
                 PlainConfigPreferenceKeys.strictIpChangeRequired,
                 PlainConfigPreferenceKeys.mobileDataOffDelay,

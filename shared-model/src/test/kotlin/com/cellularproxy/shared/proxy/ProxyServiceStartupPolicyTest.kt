@@ -44,6 +44,9 @@ class ProxyServiceStartupPolicyTest {
         val invalidPort = AppConfig.default().copy(
             proxy = AppConfig.default().proxy.copy(listenPort = 0),
         )
+        val invalidMaxConcurrentConnections = AppConfig.default().copy(
+            proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = 0),
+        )
         val missingCloudflareToken = AppConfig.default().copy(
             cloudflare = AppConfig.default().cloudflare.copy(enabled = true, tunnelTokenPresent = false),
         )
@@ -55,6 +58,10 @@ class ProxyServiceStartupPolicyTest {
         assertStartupFailure(
             config = invalidPort,
             expected = ProxyStartupError.InvalidListenPort,
+        )
+        assertStartupFailure(
+            config = invalidMaxConcurrentConnections,
+            expected = ProxyStartupError.InvalidMaxConcurrentConnections,
         )
         assertStartupFailure(
             config = missingCloudflareToken,

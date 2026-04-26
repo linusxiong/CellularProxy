@@ -128,6 +128,14 @@ class CellularProxyActivity : Activity() {
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).withTopMargin(spacing),
             )
+            val maxConcurrentConnectionsInput = addLabeledTextInput(
+                label = getString(R.string.settings_max_concurrent_connections),
+                value = initialSettings.maxConcurrentConnections,
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER
+                isEnabled = false
+            }
             val proxyUsernameInput = addLabeledTextInput(
                 label = getString(R.string.settings_proxy_username),
                 value = "",
@@ -141,6 +149,75 @@ class CellularProxyActivity : Activity() {
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 isEnabled = false
             }
+            val managementApiTokenInput = addLabeledTextInput(
+                label = getString(R.string.settings_management_api_token),
+                value = "",
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                isEnabled = false
+            }
+            val strictIpChangeRequiredInput = CheckBox(context).apply {
+                text = getString(R.string.settings_strict_ip_change_required)
+                isChecked = initialSettings.strictIpChangeRequired
+                isEnabled = false
+            }
+            addView(
+                strictIpChangeRequiredInput,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).withTopMargin(spacing),
+            )
+            val mobileDataOffDelayInput = addLabeledTextInput(
+                label = getString(R.string.settings_mobile_data_off_delay_seconds),
+                value = initialSettings.mobileDataOffDelaySeconds,
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER
+                isEnabled = false
+            }
+            val networkReturnTimeoutInput = addLabeledTextInput(
+                label = getString(R.string.settings_network_return_timeout_seconds),
+                value = initialSettings.networkReturnTimeoutSeconds,
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER
+                isEnabled = false
+            }
+            val cooldownInput = addLabeledTextInput(
+                label = getString(R.string.settings_rotation_cooldown_seconds),
+                value = initialSettings.cooldownSeconds,
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER
+                isEnabled = false
+            }
+            val cloudflareEnabledInput = CheckBox(context).apply {
+                text = getString(R.string.settings_cloudflare_enabled)
+                isChecked = initialSettings.cloudflareEnabled
+                isEnabled = false
+            }
+            addView(
+                cloudflareEnabledInput,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).withTopMargin(spacing),
+            )
+            val cloudflareTunnelTokenInput = addLabeledTextInput(
+                label = getString(R.string.settings_cloudflare_tunnel_token),
+                value = "",
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                isEnabled = false
+            }
+            val cloudflareHostnameLabelInput = addLabeledTextInput(
+                label = getString(R.string.settings_cloudflare_hostname_label),
+                value = initialSettings.cloudflareHostnameLabel,
+                topMargin = spacing,
+            ).apply { isEnabled = false }
             val routeInput = addRouteSpinner(
                 selectedRoute = initialSettings.route,
                 topMargin = spacing,
@@ -154,8 +231,17 @@ class CellularProxyActivity : Activity() {
                         listenHostInput = listenHostInput,
                         listenPortInput = listenPortInput,
                         proxyAuthInput = proxyAuthInput,
+                        maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
                         proxyUsernameInput = proxyUsernameInput,
                         proxyPasswordInput = proxyPasswordInput,
+                        managementApiTokenInput = managementApiTokenInput,
+                        strictIpChangeRequiredInput = strictIpChangeRequiredInput,
+                        mobileDataOffDelayInput = mobileDataOffDelayInput,
+                        networkReturnTimeoutInput = networkReturnTimeoutInput,
+                        cooldownInput = cooldownInput,
+                        cloudflareEnabledInput = cloudflareEnabledInput,
+                        cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
+                        cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
                         routeInput = routeInput,
                         saveButton = this,
                         startButton = null,
@@ -179,8 +265,17 @@ class CellularProxyActivity : Activity() {
                         listenHostInput = listenHostInput,
                         listenPortInput = listenPortInput,
                         proxyAuthInput = proxyAuthInput,
+                        maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
                         proxyUsernameInput = proxyUsernameInput,
                         proxyPasswordInput = proxyPasswordInput,
+                        managementApiTokenInput = managementApiTokenInput,
+                        strictIpChangeRequiredInput = strictIpChangeRequiredInput,
+                        mobileDataOffDelayInput = mobileDataOffDelayInput,
+                        networkReturnTimeoutInput = networkReturnTimeoutInput,
+                        cooldownInput = cooldownInput,
+                        cloudflareEnabledInput = cloudflareEnabledInput,
+                        cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
+                        cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
                         routeInput = routeInput,
                         saveButton = saveButton,
                         startButton = this,
@@ -213,8 +308,17 @@ class CellularProxyActivity : Activity() {
                 listenHostInput = listenHostInput,
                 listenPortInput = listenPortInput,
                 proxyAuthInput = proxyAuthInput,
+                maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
                 proxyUsernameInput = proxyUsernameInput,
                 proxyPasswordInput = proxyPasswordInput,
+                managementApiTokenInput = managementApiTokenInput,
+                strictIpChangeRequiredInput = strictIpChangeRequiredInput,
+                mobileDataOffDelayInput = mobileDataOffDelayInput,
+                networkReturnTimeoutInput = networkReturnTimeoutInput,
+                cooldownInput = cooldownInput,
+                cloudflareEnabledInput = cloudflareEnabledInput,
+                cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
+                cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
                 routeInput = routeInput,
                 saveButton = saveButton,
                 startButton = startButton,
@@ -292,8 +396,17 @@ class CellularProxyActivity : Activity() {
         listenHostInput: EditText,
         listenPortInput: EditText,
         proxyAuthInput: CheckBox,
+        maxConcurrentConnectionsInput: EditText,
         proxyUsernameInput: EditText,
         proxyPasswordInput: EditText,
+        managementApiTokenInput: EditText,
+        strictIpChangeRequiredInput: CheckBox,
+        mobileDataOffDelayInput: EditText,
+        networkReturnTimeoutInput: EditText,
+        cooldownInput: EditText,
+        cloudflareEnabledInput: CheckBox,
+        cloudflareTunnelTokenInput: EditText,
+        cloudflareHostnameLabelInput: EditText,
         routeInput: Spinner,
         saveButton: Button,
         startButton: Button,
@@ -311,12 +424,28 @@ class CellularProxyActivity : Activity() {
                 listenHostInput.setText(loaded.listenHost)
                 listenPortInput.setText(loaded.listenPort)
                 proxyAuthInput.isChecked = loaded.authEnabled
+                maxConcurrentConnectionsInput.setText(loaded.maxConcurrentConnections)
+                strictIpChangeRequiredInput.isChecked = loaded.strictIpChangeRequired
+                mobileDataOffDelayInput.setText(loaded.mobileDataOffDelaySeconds)
+                networkReturnTimeoutInput.setText(loaded.networkReturnTimeoutSeconds)
+                cooldownInput.setText(loaded.cooldownSeconds)
+                cloudflareEnabledInput.isChecked = loaded.cloudflareEnabled
+                cloudflareHostnameLabelInput.setText(loaded.cloudflareHostnameLabel)
                 routeInput.setSelection(RouteTarget.entries.indexOf(loaded.route).coerceAtLeast(0))
                 listenHostInput.isEnabled = true
                 listenPortInput.isEnabled = true
                 proxyAuthInput.isEnabled = true
+                maxConcurrentConnectionsInput.isEnabled = true
                 proxyUsernameInput.isEnabled = true
                 proxyPasswordInput.isEnabled = true
+                managementApiTokenInput.isEnabled = true
+                strictIpChangeRequiredInput.isEnabled = true
+                mobileDataOffDelayInput.isEnabled = true
+                networkReturnTimeoutInput.isEnabled = true
+                cooldownInput.isEnabled = true
+                cloudflareEnabledInput.isEnabled = true
+                cloudflareTunnelTokenInput.isEnabled = true
+                cloudflareHostnameLabelInput.isEnabled = true
                 routeInput.isEnabled = true
                 saveButton.isEnabled = true
                 startButton.isEnabled = true
@@ -329,8 +458,17 @@ class CellularProxyActivity : Activity() {
         listenHostInput: EditText,
         listenPortInput: EditText,
         proxyAuthInput: CheckBox,
+        maxConcurrentConnectionsInput: EditText,
         proxyUsernameInput: EditText,
         proxyPasswordInput: EditText,
+        managementApiTokenInput: EditText,
+        strictIpChangeRequiredInput: CheckBox,
+        mobileDataOffDelayInput: EditText,
+        networkReturnTimeoutInput: EditText,
+        cooldownInput: EditText,
+        cloudflareEnabledInput: CheckBox,
+        cloudflareTunnelTokenInput: EditText,
+        cloudflareHostnameLabelInput: EditText,
         routeInput: Spinner,
         saveButton: Button,
         startButton: Button?,
@@ -343,9 +481,18 @@ class CellularProxyActivity : Activity() {
             listenHost = listenHostInput.text.toString(),
             listenPort = listenPortInput.text.toString(),
             authEnabled = proxyAuthInput.isChecked,
+            maxConcurrentConnections = maxConcurrentConnectionsInput.text.toString(),
             route = route,
             proxyUsername = proxyUsernameInput.text.toString(),
             proxyPassword = proxyPasswordInput.text.toString(),
+            managementApiToken = managementApiTokenInput.text.toString(),
+            strictIpChangeRequired = strictIpChangeRequiredInput.isChecked,
+            mobileDataOffDelaySeconds = mobileDataOffDelayInput.text.toString(),
+            networkReturnTimeoutSeconds = networkReturnTimeoutInput.text.toString(),
+            cooldownSeconds = cooldownInput.text.toString(),
+            cloudflareEnabled = cloudflareEnabledInput.isChecked,
+            cloudflareTunnelToken = cloudflareTunnelTokenInput.text.toString(),
+            cloudflareHostnameLabel = cloudflareHostnameLabelInput.text.toString(),
         )
         settingsWorker.execute {
             val controller = ProxySettingsFormController(
@@ -365,6 +512,8 @@ class CellularProxyActivity : Activity() {
                                 result = saveResult,
                                 proxyUsernameInput = proxyUsernameInput,
                                 proxyPasswordInput = proxyPasswordInput,
+                                managementApiTokenInput = managementApiTokenInput,
+                                cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
                                 saveButton = saveButton,
                                 startButton = startButton,
                                 startAfterSave = startAfterSave,
@@ -388,16 +537,21 @@ class CellularProxyActivity : Activity() {
         result: ProxySettingsSaveResult,
         proxyUsernameInput: EditText,
         proxyPasswordInput: EditText,
+        managementApiTokenInput: EditText,
+        cloudflareTunnelTokenInput: EditText,
         saveButton: Button,
         startButton: Button?,
         startAfterSave: Boolean,
     ) {
         when (result) {
             is ProxySettingsSaveResult.Invalid -> {
-                val message = if (result.invalidProxyCredential) {
-                    getString(R.string.settings_invalid_proxy_credential)
-                } else {
-                    getString(R.string.settings_invalid)
+                val message = when {
+                    result.invalidProxyCredential -> getString(R.string.settings_invalid_proxy_credential)
+                    result.invalidManagementApiToken -> getString(R.string.settings_invalid_management_api_token)
+                    result.invalidCloudflareTunnelToken -> getString(R.string.settings_invalid_cloudflare_tunnel_token)
+                    result.invalidMaxConcurrentConnections -> getString(R.string.settings_invalid_max_concurrent_connections)
+                    result.invalidRotationTiming -> getString(R.string.settings_invalid_rotation_timing)
+                    else -> getString(R.string.settings_invalid)
                 }
                 Toast.makeText(
                     this,
@@ -421,6 +575,8 @@ class CellularProxyActivity : Activity() {
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                 proxyUsernameInput.setText("")
                 proxyPasswordInput.setText("")
+                managementApiTokenInput.setText("")
+                cloudflareTunnelTokenInput.setText("")
                 if (startAfterSave) {
                     startForegroundService(commandIntent(ForegroundServiceActions.START_PROXY))
                 }
