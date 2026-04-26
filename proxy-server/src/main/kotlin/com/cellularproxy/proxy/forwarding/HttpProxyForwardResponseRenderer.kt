@@ -1,10 +1,66 @@
 package com.cellularproxy.proxy.forwarding
 
+import com.cellularproxy.proxy.protocol.ParsedHttpResponse
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.util.Collections
 import java.util.Locale
+
+class ForwardedHttpResponseHead(
+    val statusCode: Int,
+    val reasonPhrase: String,
+    headers: Map<String, List<String>>,
+) {
+    val headers: Map<String, List<String>>
+
+    init {
+        require(statusCode in HTTP_STATUS_CODE_RANGE) { "HTTP status code must be in 100..599" }
+        require(reasonPhrase.isSafeSingleLine()) { "Reason phrase must not contain control characters" }
+
+        val copiedHeaders = headers.validatedHeaderSnapshot()
+        val contentLengthValues = copiedHeaders.caseInsensitiveHeaderValues(CONTENT_LENGTH_HEADER)
+        val transferEncodingValues = copiedHeaders.caseInsensitiveHeaderValues(TRANSFER_ENCODING_HEADER)
+        if (statusCode.forbidsResponseBody()) {
+            require(transferEncodingValues.isEmpty()) {
+                "Response status $statusCode must not contain Transfer-Encoding"
+            }
+            require(statusCode == NOT_MODIFIED_STATUS || contentLengthValues.isEmpty()) {
+                "Response status $statusCode must not contain Content-Length"
+            }
+        }
+        require(contentLengthValues.size <= 1) {
+            "Forwarded response heads must not contain duplicate Content-Length headers"
+        }
+        require(contentLengthValues.isEmpty() || transferEncodingValues.isEmpty()) {
+            "Forwarded response heads must not contain both Content-Length and Transfer-Encoding"
+        }
+        contentLengthValues.singleOrNull()?.let { contentLength ->
+            require(contentLength.isDecimalDigits()) {
+                "Content-Length must be a non-negative decimal value"
+            }
+            require(contentLength.toLongOrNull() != null) {
+                "Content-Length must fit in a signed 64-bit integer"
+            }
+        }
+        if (transferEncodingValues.isNotEmpty()) {
+            require(transferEncodingValues.isSupportedChunkedTransferEncoding()) {
+                "Only chunked Transfer-Encoding is supported for forwarded response heads"
+            }
+        }
+
+        this.headers = copiedHeaders
+    }
+
+    fun toHttpString(): String =
+        headerString()
+
+    fun toByteArray(): ByteArray =
+        headerString().toByteArray(Charsets.UTF_8)
+
+    private fun headerString(): String =
+        renderHttpResponseHead(statusCode, reasonPhrase, headers)
+}
 
 class ForwardedHttpResponse(
     val statusCode: Int,
@@ -21,24 +77,7 @@ class ForwardedHttpResponse(
         require(statusCode in HTTP_STATUS_CODE_RANGE) { "HTTP status code must be in 100..599" }
         require(reasonPhrase.isSafeSingleLine()) { "Reason phrase must not contain control characters" }
 
-        val copiedHeaders = linkedMapOf<String, List<String>>()
-        headers.forEach { (name, values) ->
-            require(name.isHttpToken()) { "Header name must be a valid HTTP token" }
-            require(values.isNotEmpty()) { "Header values must not be empty" }
-            copiedHeaders[name] = Collections.unmodifiableList(
-                values.map { value ->
-                    require(value.none(Char::isDisallowedHeaderValueControl)) {
-                        "Header value must not contain control characters"
-                    }
-                    value
-                },
-            )
-        }
-
-        val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
-        require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
-            "HTTP header names must not contain case-variant duplicates"
-        }
+        val copiedHeaders = headers.validatedHeaderSnapshot()
 
         val bodyCopy = body.copyOf()
         require(!statusCode.forbidsResponseBody() || bodyCopy.isEmpty()) {
@@ -49,6 +88,14 @@ class ForwardedHttpResponse(
         val transferEncodingValues = copiedHeaders.caseInsensitiveHeaderValues(TRANSFER_ENCODING_HEADER)
         require(contentLengthValues.size <= 1) {
             "Forwarded responses must not contain duplicate Content-Length headers"
+        }
+        if (statusCode.forbidsResponseBody()) {
+            require(transferEncodingValues.isEmpty()) {
+                "Response status $statusCode must not contain Transfer-Encoding"
+            }
+            require(statusCode == NOT_MODIFIED_STATUS || contentLengthValues.isEmpty()) {
+                "Response status $statusCode must not contain Content-Length"
+            }
         }
         require(contentLengthValues.isEmpty() || transferEncodingValues.isEmpty()) {
             "Forwarded responses must not contain both Content-Length and Transfer-Encoding"
@@ -66,6 +113,9 @@ class ForwardedHttpResponse(
         } else if (contentLength != null) {
             require(contentLength.isDecimalDigits()) {
                 "Content-Length must be a non-negative decimal value"
+            }
+            require(contentLength.toLongOrNull() != null) {
+                "Content-Length must fit in a signed 64-bit integer"
             }
         } else if (transferEncodingValues.isNotEmpty()) {
             require(transferEncodingValues.isSupportedChunkedTransferEncoding()) {
@@ -91,47 +141,76 @@ class ForwardedHttpResponse(
         headerString().toByteArray(Charsets.UTF_8) + bodyBytes
 
     private fun headerString(): String =
-        buildString {
-            append("HTTP/1.1 ")
-            append(statusCode)
-            append(' ')
-            append(reasonPhrase)
-            append(CRLF)
-            headers.forEach { (name, values) ->
-                values.forEach { value ->
-                    append(name).append(": ").append(value).append(CRLF)
-                }
-            }
-            append(CRLF)
-        }
+        renderHttpResponseHead(statusCode, reasonPhrase, headers)
 }
 
 object HttpProxyForwardResponseRenderer {
+    fun renderHead(response: ParsedHttpResponse): ForwardedHttpResponseHead =
+        renderHead(
+            statusCode = response.statusCode,
+            reasonPhrase = response.reasonPhrase,
+            headers = response.headers,
+        )
+
+    fun renderHead(
+        statusCode: Int,
+        reasonPhrase: String,
+        headers: Map<String, List<String>>,
+    ): ForwardedHttpResponseHead =
+        ForwardedHttpResponseHead(
+            statusCode = statusCode,
+            reasonPhrase = reasonPhrase,
+            headers = sanitizeResponseHeaders(statusCode, headers),
+        )
+
     fun render(
         statusCode: Int,
         reasonPhrase: String,
         headers: Map<String, List<String>>,
         body: ByteArray = EMPTY_BODY,
     ): ForwardedHttpResponse {
+        return ForwardedHttpResponse(
+            statusCode = statusCode,
+            reasonPhrase = reasonPhrase,
+            headers = sanitizeResponseHeaders(statusCode, headers),
+            body = body,
+        )
+    }
+
+    private fun sanitizeResponseHeaders(
+        statusCode: Int,
+        headers: Map<String, List<String>>,
+    ): Map<String, List<String>> {
         val connectionNominatedHeaderNames = headers.connectionNominatedHeaderNames()
         require(TRANSFER_ENCODING_HEADER !in connectionNominatedHeaderNames) {
             "Connection-nominated Transfer-Encoding responses are not supported"
         }
 
         val headersToStrip = HOP_BY_HOP_RESPONSE_HEADERS + connectionNominatedHeaderNames
+        val hasTransferEncoding = headers.caseInsensitiveHeaderValues(TRANSFER_ENCODING_HEADER).isNotEmpty()
         val outboundHeaders = linkedMapOf<String, List<String>>()
         headers.forEach { (headerName, values) ->
-            if (headerName.lowercase(Locale.US) !in headersToStrip) {
-                outboundHeaders[headerName] = values
+            val normalizedHeaderName = headerName.lowercase(Locale.US)
+            val stripForNoBodyStatus =
+                statusCode.forbidsResponseBody() &&
+                    (
+                        normalizedHeaderName == TRANSFER_ENCODING_HEADER ||
+                            (statusCode != NOT_MODIFIED_STATUS && normalizedHeaderName == CONTENT_LENGTH_HEADER)
+                        )
+            val stripAmbiguousContentLength =
+                !statusCode.forbidsResponseBody() &&
+                    hasTransferEncoding &&
+                    normalizedHeaderName == CONTENT_LENGTH_HEADER
+
+            if (
+                normalizedHeaderName !in headersToStrip &&
+                !stripForNoBodyStatus &&
+                !stripAmbiguousContentLength
+            ) {
+                outboundHeaders[headerName] = headerName.canonicalizedResponseHeaderValues(values)
             }
         }
-
-        return ForwardedHttpResponse(
-            statusCode = statusCode,
-            reasonPhrase = reasonPhrase,
-            headers = outboundHeaders,
-            body = body,
-        )
+        return outboundHeaders
     }
 
     private fun Map<String, List<String>>.connectionNominatedHeaderNames(): Set<String> =
@@ -143,6 +222,59 @@ object HttpProxyForwardResponseRenderer {
             .filter { option -> option.isHttpToken() }
             .toSet()
 }
+
+private fun String.canonicalizedResponseHeaderValues(values: List<String>): List<String> =
+    if (lowercase(Locale.US) == CONTENT_LENGTH_HEADER) {
+        val uniqueContentLengths = values.toSet()
+        require(uniqueContentLengths.size == 1) {
+            "Forwarded response heads must not contain ambiguous Content-Length values"
+        }
+        listOf(uniqueContentLengths.single())
+    } else {
+        values
+    }
+
+private fun Map<String, List<String>>.validatedHeaderSnapshot(): Map<String, List<String>> {
+    val copiedHeaders = linkedMapOf<String, List<String>>()
+    forEach { (name, values) ->
+        require(name.isHttpToken()) { "Header name must be a valid HTTP token" }
+        require(values.isNotEmpty()) { "Header values must not be empty" }
+        copiedHeaders[name] = Collections.unmodifiableList(
+            values.map { value ->
+                require(value.none(Char::isDisallowedHeaderValueControl)) {
+                    "Header value must not contain control characters"
+                }
+                value
+            },
+        )
+    }
+
+    val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
+    require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
+        "HTTP header names must not contain case-variant duplicates"
+    }
+
+    return Collections.unmodifiableMap(copiedHeaders)
+}
+
+private fun renderHttpResponseHead(
+    statusCode: Int,
+    reasonPhrase: String,
+    headers: Map<String, List<String>>,
+): String =
+    buildString {
+        append("HTTP/1.1 ")
+        append(statusCode)
+        append(' ')
+        append(reasonPhrase)
+        append(CRLF)
+        headers.forEach { (name, values) ->
+            values.forEach { value ->
+                append(name).append(": ").append(value).append(CRLF)
+            }
+        }
+        append(CRLF)
+    }
 
 private fun String.isSafeSingleLine(): Boolean =
     none(Char::isISOControl)
