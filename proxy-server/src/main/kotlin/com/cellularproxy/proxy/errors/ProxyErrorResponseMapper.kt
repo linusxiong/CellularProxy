@@ -29,6 +29,7 @@ sealed interface ProxyServerFailure {
     ) : ProxyServerFailure
 
     data object SelectedRouteUnavailable : ProxyServerFailure
+    data object ProxyRequestsPaused : ProxyServerFailure
     data object DnsResolutionFailed : ProxyServerFailure
     data object OutboundConnectionFailed : ProxyServerFailure
     data object OutboundConnectionTimeout : ProxyServerFailure
@@ -106,6 +107,8 @@ object ProxyErrorResponseMapper {
             is ProxyServerFailure.ConnectionLimit ->
                 emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
             ProxyServerFailure.SelectedRouteUnavailable ->
+                emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
+            ProxyServerFailure.ProxyRequestsPaused ->
                 emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
             ProxyServerFailure.DnsResolutionFailed ->
                 emit(statusCode = 502, reasonPhrase = "Bad Gateway", body = "Bad gateway\n")

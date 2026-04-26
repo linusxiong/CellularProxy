@@ -71,7 +71,7 @@ class ProxyErrorResponseMapperTest {
     }
 
     @Test
-    fun `maps capacity and selected-route failures to service unavailable responses`() {
+    fun `maps capacity selected-route and paused-proxy failures to service unavailable responses`() {
         val capacity = assertEmitted(
             ProxyErrorResponseMapper.map(
                 ProxyServerFailure.ConnectionLimit(
@@ -83,11 +83,16 @@ class ProxyErrorResponseMapperTest {
             ),
         )
         val route = assertEmitted(ProxyErrorResponseMapper.map(ProxyServerFailure.SelectedRouteUnavailable))
+        val paused = assertEmitted(ProxyErrorResponseMapper.map(ProxyServerFailure.ProxyRequestsPaused))
 
         assertEquals(503, capacity.statusCode)
         assertEquals("Service Unavailable", capacity.reasonPhrase)
         assertEquals(503, route.statusCode)
         assertEquals("Service Unavailable", route.reasonPhrase)
+        assertEquals(503, paused.statusCode)
+        assertEquals("Service Unavailable", paused.reasonPhrase)
+        assertEquals("Service unavailable\n", paused.body)
+        assertEquals("close", paused.headers["Connection"])
     }
 
     @Test

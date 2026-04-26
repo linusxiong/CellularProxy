@@ -18,6 +18,7 @@ import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 data class ProxyIngressPreflightConfig(
     val connectionLimit: ConnectionLimitAdmissionConfig,
     val requestAdmission: ProxyRequestAdmissionConfig,
+    val proxyRequestsPaused: Boolean = false,
     val maxHeaderBytes: Int = DEFAULT_MAX_HEADER_BYTES,
 ) {
     init {
@@ -88,12 +89,20 @@ object ProxyIngressPreflight {
                 request = parsed,
             )
         ) {
-            is ProxyRequestAdmissionDecision.Accepted ->
+            is ProxyRequestAdmissionDecision.Accepted -> {
+                if (config.proxyRequestsPaused && decision.request.isProxyTraffic()) {
+                    return rejected(
+                        failure = ProxyServerFailure.ProxyRequestsPaused,
+                        requiresAuditLog = false,
+                    )
+                }
+
                 ProxyIngressPreflightDecision.Accepted(
                     httpRequest = parsed,
                     activeConnectionsAfterAdmission = capacity.activeConnectionsAfterAdmission,
                     requiresAuditLog = decision.requiresAuditLog,
                 )
+            }
             is ProxyRequestAdmissionDecision.Rejected -> {
                 val failure = ProxyServerFailure.Admission(decision.reason)
                 rejected(
@@ -114,5 +123,13 @@ object ProxyIngressPreflight {
             requiresAuditLog = requiresAuditLog,
         )
 }
+
+private fun ParsedProxyRequest.isProxyTraffic(): Boolean =
+    when (this) {
+        is ParsedProxyRequest.HttpProxy,
+        is ParsedProxyRequest.ConnectTunnel,
+        -> true
+        is ParsedProxyRequest.Management -> false
+    }
 
 private const val DEFAULT_MAX_HEADER_BYTES = 16 * 1024

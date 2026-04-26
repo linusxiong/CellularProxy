@@ -125,6 +125,76 @@ class ProxyIngressPreflightTest {
     }
 
     @Test
+    fun `rejects authenticated HTTP proxy requests while proxy requests are paused`() {
+        val decision = ProxyIngressPreflight.evaluate(
+            config = config.copy(proxyRequestsPaused = true),
+            activeConnections = 0,
+            headerBlock = "GET http://example.com/resource HTTP/1.1\r\n" +
+                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                "\r\n",
+        )
+
+        val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
+        assertEquals(ProxyServerFailure.ProxyRequestsPaused, rejected.failure)
+        assertEquals(503, assertIs<ProxyErrorResponseDecision.Emit>(rejected.response).response.statusCode)
+        assertFalse(rejected.requiresAuditLog)
+    }
+
+    @Test
+    fun `rejects authenticated CONNECT requests while proxy requests are paused`() {
+        val decision = ProxyIngressPreflight.evaluate(
+            config = config.copy(proxyRequestsPaused = true),
+            activeConnections = 0,
+            headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n" +
+                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                "\r\n",
+        )
+
+        val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
+        assertEquals(ProxyServerFailure.ProxyRequestsPaused, rejected.failure)
+        assertEquals(503, assertIs<ProxyErrorResponseDecision.Emit>(rejected.response).response.statusCode)
+        assertFalse(rejected.requiresAuditLog)
+    }
+
+    @Test
+    fun `keeps proxy authentication rejection ahead of paused proxy rejection`() {
+        val decision = ProxyIngressPreflight.evaluate(
+            config = config.copy(proxyRequestsPaused = true),
+            activeConnections = 0,
+            headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
+        )
+
+        val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
+        val failure = assertIs<ProxyServerFailure.Admission>(rejected.failure)
+        assertEquals(
+            ProxyAuthenticationRejectionReason.MissingAuthorization,
+            assertIs<ProxyRequestAdmissionRejectionReason.ProxyAuthentication>(
+                failure.reason,
+            ).reason,
+        )
+        assertEquals(407, assertIs<ProxyErrorResponseDecision.Emit>(rejected.response).response.statusCode)
+        assertFalse(rejected.requiresAuditLog)
+    }
+
+    @Test
+    fun `allows management requests while proxy requests are paused`() {
+        val decision = ProxyIngressPreflight.evaluate(
+            config = config.copy(proxyRequestsPaused = true),
+            activeConnections = 0,
+            headerBlock = "GET /api/status HTTP/1.1\r\n" +
+                "Authorization: Bearer management-token\r\n" +
+                "\r\n",
+        )
+
+        val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
+        val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
+        assertEquals(HttpMethod.Get, request.method)
+        assertEquals("/api/status", request.originTarget)
+        assertEquals(1L, accepted.activeConnectionsAfterAdmission)
+        assertFalse(accepted.requiresAuditLog)
+    }
+
+    @Test
     fun `marks rejected management authorization attempts for audit logging`() {
         val decision = ProxyIngressPreflight.evaluate(
             config = config,
