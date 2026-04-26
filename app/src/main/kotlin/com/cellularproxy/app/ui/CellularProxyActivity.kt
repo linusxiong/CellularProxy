@@ -3,6 +3,7 @@ package com.cellularproxy.app.ui
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
@@ -16,6 +17,10 @@ import android.widget.TextView
 import android.widget.Toast
 import com.cellularproxy.app.R
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
+import com.cellularproxy.app.config.SecureRandomSensitiveConfigGenerator
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
+import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
 import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
 import com.cellularproxy.shared.config.AppConfig
@@ -27,6 +32,12 @@ import kotlinx.coroutines.runBlocking
 class CellularProxyActivity : Activity() {
     private val settingsRepository by lazy {
         CellularProxyPlainConfigStore.repository(this)
+    }
+    private val sensitiveRepository by lazy {
+        SensitiveConfigRepositoryFactory.create(this)
+    }
+    private val sensitiveConfigGenerator by lazy {
+        SecureRandomSensitiveConfigGenerator()
     }
     private val settingsWorker: ExecutorService = Executors.newSingleThreadExecutor()
     @Volatile
@@ -117,6 +128,19 @@ class CellularProxyActivity : Activity() {
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).withTopMargin(spacing),
             )
+            val proxyUsernameInput = addLabeledTextInput(
+                label = getString(R.string.settings_proxy_username),
+                value = "",
+                topMargin = spacing,
+            ).apply { isEnabled = false }
+            val proxyPasswordInput = addLabeledTextInput(
+                label = getString(R.string.settings_proxy_password),
+                value = "",
+                topMargin = spacing,
+            ).apply {
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                isEnabled = false
+            }
             val routeInput = addRouteSpinner(
                 selectedRoute = initialSettings.route,
                 topMargin = spacing,
@@ -130,6 +154,8 @@ class CellularProxyActivity : Activity() {
                         listenHostInput = listenHostInput,
                         listenPortInput = listenPortInput,
                         proxyAuthInput = proxyAuthInput,
+                        proxyUsernameInput = proxyUsernameInput,
+                        proxyPasswordInput = proxyPasswordInput,
                         routeInput = routeInput,
                         saveButton = this,
                         startButton = null,
@@ -153,6 +179,8 @@ class CellularProxyActivity : Activity() {
                         listenHostInput = listenHostInput,
                         listenPortInput = listenPortInput,
                         proxyAuthInput = proxyAuthInput,
+                        proxyUsernameInput = proxyUsernameInput,
+                        proxyPasswordInput = proxyPasswordInput,
                         routeInput = routeInput,
                         saveButton = saveButton,
                         startButton = this,
@@ -185,6 +213,8 @@ class CellularProxyActivity : Activity() {
                 listenHostInput = listenHostInput,
                 listenPortInput = listenPortInput,
                 proxyAuthInput = proxyAuthInput,
+                proxyUsernameInput = proxyUsernameInput,
+                proxyPasswordInput = proxyPasswordInput,
                 routeInput = routeInput,
                 saveButton = saveButton,
                 startButton = startButton,
@@ -262,6 +292,8 @@ class CellularProxyActivity : Activity() {
         listenHostInput: EditText,
         listenPortInput: EditText,
         proxyAuthInput: CheckBox,
+        proxyUsernameInput: EditText,
+        proxyPasswordInput: EditText,
         routeInput: Spinner,
         saveButton: Button,
         startButton: Button,
@@ -283,6 +315,8 @@ class CellularProxyActivity : Activity() {
                 listenHostInput.isEnabled = true
                 listenPortInput.isEnabled = true
                 proxyAuthInput.isEnabled = true
+                proxyUsernameInput.isEnabled = true
+                proxyPasswordInput.isEnabled = true
                 routeInput.isEnabled = true
                 saveButton.isEnabled = true
                 startButton.isEnabled = true
@@ -295,6 +329,8 @@ class CellularProxyActivity : Activity() {
         listenHostInput: EditText,
         listenPortInput: EditText,
         proxyAuthInput: CheckBox,
+        proxyUsernameInput: EditText,
+        proxyPasswordInput: EditText,
         routeInput: Spinner,
         saveButton: Button,
         startButton: Button?,
@@ -308,11 +344,15 @@ class CellularProxyActivity : Activity() {
             listenPort = listenPortInput.text.toString(),
             authEnabled = proxyAuthInput.isChecked,
             route = route,
+            proxyUsername = proxyUsernameInput.text.toString(),
+            proxyPassword = proxyPasswordInput.text.toString(),
         )
         settingsWorker.execute {
             val controller = ProxySettingsFormController(
                 loadConfig = { runBlocking { settingsRepository.load() } },
                 saveConfig = { config -> runBlocking { settingsRepository.save(config) } },
+                loadSensitiveConfig = { loadOrCreateSensitiveConfig() },
+                saveSensitiveConfig = sensitiveRepository::save,
             )
             val result = runCatching {
                 controller.save(form)
@@ -323,6 +363,8 @@ class CellularProxyActivity : Activity() {
                             handleSettingsSaveResult(
                                 endpointLabel = endpointLabel,
                                 result = saveResult,
+                                proxyUsernameInput = proxyUsernameInput,
+                                proxyPasswordInput = proxyPasswordInput,
                                 saveButton = saveButton,
                                 startButton = startButton,
                                 startAfterSave = startAfterSave,
@@ -344,15 +386,22 @@ class CellularProxyActivity : Activity() {
     private fun handleSettingsSaveResult(
         endpointLabel: TextView,
         result: ProxySettingsSaveResult,
+        proxyUsernameInput: EditText,
+        proxyPasswordInput: EditText,
         saveButton: Button,
         startButton: Button?,
         startAfterSave: Boolean,
     ) {
         when (result) {
             is ProxySettingsSaveResult.Invalid -> {
+                val message = if (result.invalidProxyCredential) {
+                    getString(R.string.settings_invalid_proxy_credential)
+                } else {
+                    getString(R.string.settings_invalid)
+                }
                 Toast.makeText(
                     this,
-                    getString(R.string.settings_invalid),
+                    message,
                     Toast.LENGTH_SHORT,
                 ).show()
                 saveButton.isEnabled = true
@@ -370,6 +419,8 @@ class CellularProxyActivity : Activity() {
                     getString(R.string.settings_saved)
                 }
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                proxyUsernameInput.setText("")
+                proxyPasswordInput.setText("")
                 if (startAfterSave) {
                     startForegroundService(commandIntent(ForegroundServiceActions.START_PROXY))
                 }
@@ -378,6 +429,15 @@ class CellularProxyActivity : Activity() {
             }
         }
     }
+
+    private fun loadOrCreateSensitiveConfig(): SensitiveConfig =
+        when (val result = sensitiveRepository.load()) {
+            is SensitiveConfigLoadResult.Loaded -> result.config
+            SensitiveConfigLoadResult.MissingRequiredSecrets -> sensitiveConfigGenerator
+                .generateDefaultSensitiveConfig()
+                .also(sensitiveRepository::save)
+            is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
+        }
 
     private fun commandIntent(action: String): Intent =
         Intent(this, CellularProxyForegroundService::class.java).setAction(action)

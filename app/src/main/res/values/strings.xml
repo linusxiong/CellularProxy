@@ -6,12 +6,15 @@
     <string name="settings_listen_host">Listen host</string>
     <string name="settings_listen_port">Listen port</string>
     <string name="settings_proxy_auth_enabled">Require proxy authentication</string>
+    <string name="settings_proxy_username">Proxy username (leave both credential fields blank to keep current)</string>
+    <string name="settings_proxy_password">Proxy password (leave both credential fields blank to keep current)</string>
     <string name="settings_route_policy">Outbound route</string>
     <string name="settings_save">Save settings</string>
     <string name="settings_saved">Settings saved</string>
     <string name="settings_saved_with_broad_auth_warning">Settings saved. Authentication is off on a broad listener.</string>
     <string name="settings_save_failed">Settings could not be saved.</string>
     <string name="settings_invalid">Use a valid listen IP address and TCP port.</string>
+    <string name="settings_invalid_proxy_credential">Enter both proxy username and password, and do not use a colon in the username.</string>
     <string name="dashboard_start_proxy">Start proxy</string>
     <string name="dashboard_stop_proxy">Stop proxy</string>
     <string name="notification_channel_proxy_service">Proxy service</string>
