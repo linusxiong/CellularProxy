@@ -118,6 +118,48 @@ class ProxyClientStreamExchangeHandlerTest {
     }
 
     @Test
+    fun `tracks admitted plain HTTP proxy exchange only while forwarding runs`() {
+        val request = (
+            "GET http://origin.example/resource HTTP/1.1\r\n" +
+                "Host: origin.example\r\n" +
+                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val input = ByteArrayInputStream(request)
+        val output = ByteArrayOutputStream()
+        val tracker = ProxyTrafficActivityTracker()
+        val observedActiveProxyExchanges = mutableListOf<Long>()
+        val httpConnector = RecordingHttpConnector(
+            OutboundHttpOriginOpenResult.Connected(
+                OutboundHttpOriginConnection(
+                    input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                    output = ByteArrayOutputStream(),
+                    host = "origin.example",
+                    port = 80,
+                ),
+            ),
+            onOpen = {
+                observedActiveProxyExchanges += tracker.activeProxyExchanges
+            },
+        )
+
+        val result = handler(
+            httpConnector = httpConnector,
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = ThrowingManagementHandler(),
+            proxyActivityTracker = tracker,
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(input = input, output = output),
+        )
+
+        assertIs<ProxyClientStreamExchangeHandlingResult.HttpProxyHandled>(result)
+        assertEquals(listOf(1L), observedActiveProxyExchanges)
+        assertEquals(0, tracker.activeProxyExchanges)
+    }
+
+    @Test
     fun `dispatches admitted management streams to management handler`() {
         val request = (
             "POST /api/service/stop HTTP/1.1\r\n" +
@@ -161,6 +203,64 @@ class ProxyClientStreamExchangeHandlerTest {
             ),
             metricEvents,
         )
+    }
+
+    @Test
+    fun `does not track management exchanges as active proxy traffic`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val output = ByteArrayOutputStream()
+        val tracker = ProxyTrafficActivityTracker()
+        val observedActiveProxyExchanges = mutableListOf<Long>()
+        val managementHandler = RecordingManagementHandler(
+            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            onHandle = {
+                observedActiveProxyExchanges += tracker.activeProxyExchanges
+            },
+        )
+
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = managementHandler,
+            proxyActivityTracker = tracker,
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream(request),
+                output = output,
+            ),
+        )
+
+        assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
+        assertEquals(listOf(0L), observedActiveProxyExchanges)
+        assertEquals(0, tracker.activeProxyExchanges)
+    }
+
+    @Test
+    fun `does not track preflight rejections as active proxy traffic`() {
+        val tracker = ProxyTrafficActivityTracker()
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = ThrowingManagementHandler(),
+            proxyActivityTracker = tracker,
+        ).handle(
+            config = config,
+            activeConnections = 2,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream("not consumed".toByteArray(Charsets.US_ASCII)),
+                output = ByteArrayOutputStream(),
+            ),
+        )
+
+        assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result)
+        assertEquals(0, tracker.activeProxyExchanges)
     }
 
     @Test
@@ -402,11 +502,13 @@ class ProxyClientStreamExchangeHandlerTest {
         httpConnector: OutboundHttpOriginConnector,
         connectConnector: OutboundConnectTunnelConnector,
         managementHandler: ManagementApiHandler,
+        proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
     ): ProxyClientStreamExchangeHandler =
         ProxyClientStreamExchangeHandler(
             httpConnector = httpConnector,
             connectConnector = connectConnector,
             managementHandler = managementHandler,
+            proxyActivityTracker = proxyActivityTracker,
         )
 
     private fun validProxyAuthorization(): String {
@@ -416,11 +518,13 @@ class ProxyClientStreamExchangeHandlerTest {
 
     private class RecordingHttpConnector(
         private val result: OutboundHttpOriginOpenResult,
+        private val onOpen: () -> Unit = {},
     ) : OutboundHttpOriginConnector {
         val openedOrigins = mutableListOf<Pair<String, Int>>()
 
         override fun open(request: ParsedProxyRequest.HttpProxy): OutboundHttpOriginOpenResult {
             openedOrigins += request.host to request.port
+            onOpen()
             return result
         }
     }
@@ -438,11 +542,13 @@ class ProxyClientStreamExchangeHandlerTest {
 
     private class RecordingManagementHandler(
         private val response: ManagementApiResponse,
+        private val onHandle: () -> Unit = {},
     ) : ManagementApiHandler {
         val operations = mutableListOf<ManagementApiOperation>()
 
         override fun handle(operation: ManagementApiOperation): ManagementApiResponse {
             operations += operation
+            onHandle()
             return response
         }
     }

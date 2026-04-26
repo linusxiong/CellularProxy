@@ -106,6 +106,7 @@ class ProxyClientStreamExchangeHandler(
     httpConnector: OutboundHttpOriginConnector,
     connectConnector: OutboundConnectTunnelConnector,
     managementHandler: ManagementApiHandler,
+    private val proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
 ) {
     private val httpHandler = HttpProxyOutboundExchangeHandler(httpConnector)
     private val connectHandler = ConnectTunnelOutboundExchangeHandler(connectConnector)
@@ -140,6 +141,7 @@ class ProxyClientStreamExchangeHandler(
                     client.clearReadTimeout()
                     ProxyClientStreamExchangeMetrics.acceptedStartedEvents(preflight.headerBytesRead)
                         .recordSafely(recordMetricEvent)
+                    val proxyActivity = proxyActivityTracker.begin(preflight.request)
                     var completed = false
                     try {
                         val result = handleAccepted(
@@ -156,6 +158,7 @@ class ProxyClientStreamExchangeHandler(
                         completed = true
                         result
                     } finally {
+                        proxyActivity.finish()
                         if (!completed) {
                             ProxyClientStreamExchangeMetrics.acceptedClosedEvent().recordSafely(recordMetricEvent)
                         }
