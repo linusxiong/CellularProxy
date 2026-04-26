@@ -19,3 +19,4 @@ rootProject.name = "CellularProxy"
 include(":shared-model")
 include(":proxy-server")
 include(":core-network")
+include(":root-control")

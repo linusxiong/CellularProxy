@@ -99,4 +99,20 @@ class RootCommandResultTest {
         assertEquals("enabled", completed.stdout)
         assertEquals("", completed.stderr)
     }
+
+    @Test
+    fun `audit records represent root process start failures with redaction`() {
+        val failed = RootCommandAuditRecord.failedToStart(
+            category = RootCommandCategory.RootAvailabilityCheck,
+            reason = "process failed for management-token",
+            secrets = LogRedactionSecrets(managementApiToken = "management-token"),
+        )
+
+        assertEquals(RootCommandAuditPhase.Completed, failed.phase)
+        assertEquals(RootCommandCategory.RootAvailabilityCheck, failed.category)
+        assertEquals(RootCommandOutcome.Failure, failed.outcome)
+        assertNull(failed.exitCode)
+        assertEquals("", failed.stdout)
+        assertEquals("process failed for [REDACTED]", failed.stderr)
+    }
 }

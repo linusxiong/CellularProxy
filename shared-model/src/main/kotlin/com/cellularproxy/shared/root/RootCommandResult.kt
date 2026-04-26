@@ -84,6 +84,22 @@ class RootCommandAuditRecord private constructor(
             stdout = result.stdout,
             stderr = result.stderr,
         )
+
+        fun failedToStart(
+            category: RootCommandCategory,
+            reason: String,
+            secrets: LogRedactionSecrets = LogRedactionSecrets(),
+        ): RootCommandAuditRecord {
+            require(reason.isNotBlank()) { "Root command start failure reason must not be blank" }
+            return RootCommandAuditRecord(
+                phase = RootCommandAuditPhase.Completed,
+                category = category,
+                outcome = RootCommandOutcome.Failure,
+                exitCode = null,
+                stdout = "",
+                stderr = LogRedactor.redact(reason, secrets),
+            )
+        }
     }
 }
 
