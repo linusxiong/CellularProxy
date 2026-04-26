@@ -114,6 +114,40 @@ sealed interface ConnectTunnelOutboundExchangeHandlingResult {
     ) : ConnectTunnelOutboundExchangeHandlingResult
 }
 
+sealed interface ConnectTunnelOutboundExchangeRelayHandlingResult {
+    data class Relayed(
+        val host: String,
+        val port: Int,
+        val responseBytesWritten: Int,
+        val relayResult: ConnectTunnelBidirectionalRelayResult,
+    ) : ConnectTunnelOutboundExchangeRelayHandlingResult {
+        init {
+            require(host.isNotBlank()) { "Relayed tunnel host must not be blank" }
+            require(port in VALID_CONNECT_TUNNEL_PORT_RANGE) { "Relayed tunnel port must be in range 1..65535" }
+            require(responseBytesWritten >= 0) { "Response bytes written must be non-negative" }
+        }
+    }
+
+    data class ConnectionFailed(
+        val failure: ProxyServerFailure,
+        val errorResponseBytesWritten: Int,
+    ) : ConnectTunnelOutboundExchangeRelayHandlingResult {
+        init {
+            require(
+                failure == ProxyServerFailure.SelectedRouteUnavailable ||
+                    failure == ProxyServerFailure.DnsResolutionFailed ||
+                    failure == ProxyServerFailure.OutboundConnectionFailed ||
+                    failure == ProxyServerFailure.OutboundConnectionTimeout,
+            ) { "Connection failures must use an outbound connection failure category" }
+            require(errorResponseBytesWritten >= 0) { "Error response bytes written must be non-negative" }
+        }
+    }
+
+    data class UnsupportedAcceptedRequest(
+        val reason: ConnectTunnelOutboundExchangeUnsupportedReason,
+    ) : ConnectTunnelOutboundExchangeRelayHandlingResult
+}
+
 enum class ConnectTunnelOutboundExchangeUnsupportedReason {
     NotConnectTunnelRequest,
 }
@@ -141,6 +175,51 @@ class ConnectTunnelOutboundExchangeHandler(
                     failure = openResult.reason.toProxyServerFailure(),
                     clientOutput = clientOutput,
                 )
+        }
+    }
+
+    fun handleAndRelay(
+        accepted: ProxyIngressStreamPreflightDecision.Accepted,
+        client: ConnectTunnelClientConnection,
+        relayBufferSize: Int = DEFAULT_TUNNEL_RELAY_BUFFER_BYTES,
+    ): ConnectTunnelOutboundExchangeRelayHandlingResult {
+        require(relayBufferSize > 0) { "Relay buffer size must be positive" }
+
+        val request = accepted.request as? ParsedProxyRequest.ConnectTunnel
+            ?: return ConnectTunnelOutboundExchangeRelayHandlingResult.UnsupportedAcceptedRequest(
+                ConnectTunnelOutboundExchangeUnsupportedReason.NotConnectTunnelRequest,
+            )
+
+        return when (val openResult = connector.open(request)) {
+            is OutboundConnectTunnelOpenResult.Connected -> {
+                val established = establishTunnel(
+                    connection = openResult.connection,
+                    clientOutput = client.output,
+                )
+                val relayResult = ConnectTunnelBidirectionalRelay.relay(
+                    client = client,
+                    origin = established.connection,
+                    bufferSize = relayBufferSize,
+                )
+
+                ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed(
+                    host = established.host,
+                    port = established.port,
+                    responseBytesWritten = established.responseBytesWritten,
+                    relayResult = relayResult,
+                )
+            }
+            is OutboundConnectTunnelOpenResult.Failed -> {
+                val failed = writeMappedFailure(
+                    failure = openResult.reason.toProxyServerFailure(),
+                    clientOutput = client.output,
+                )
+
+                ConnectTunnelOutboundExchangeRelayHandlingResult.ConnectionFailed(
+                    failure = failed.failure,
+                    errorResponseBytesWritten = failed.errorResponseBytesWritten,
+                )
+            }
         }
     }
 
