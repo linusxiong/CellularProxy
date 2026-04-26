@@ -18,10 +18,20 @@ data class OutboundConnectTunnelConnection(
     val output: OutputStream,
     val host: String,
     val port: Int,
+    private val shutdownInputAction: () -> Unit = { input.close() },
+    private val shutdownOutputAction: () -> Unit = { output.close() },
 ) : Closeable {
     init {
         require(host.isNotBlank()) { "Tunnel origin host must not be blank" }
         require(port in VALID_CONNECT_TUNNEL_PORT_RANGE) { "Tunnel origin port must be in range 1..65535" }
+    }
+
+    fun shutdownInput() {
+        shutdownInputAction()
+    }
+
+    fun shutdownOutput() {
+        shutdownOutputAction()
     }
 
     override fun close() {
