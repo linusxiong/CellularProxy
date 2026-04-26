@@ -4,6 +4,9 @@ import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceStopEvent
+import com.cellularproxy.shared.proxy.ProxyServiceStopStateMachine
+import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionResult
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import java.io.Closeable
@@ -15,6 +18,7 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicReference
 
 sealed interface ProxyServerRuntimeResult {
     data class StartupFailed(
@@ -46,26 +50,49 @@ sealed interface ProxyServerRuntimeStopResult {
 
 class RunningProxyServerRuntime internal constructor(
     internal val listener: BoundProxyServerSocket,
-    val status: ProxyServiceStatus,
+    initialStatus: ProxyServiceStatus,
     private val acceptLoop: ProxyBoundServerAcceptLoop,
     private val acceptLoopResult: Future<ProxyBoundServerAcceptLoopResult>,
 ) : Closeable {
+    private val statusReference = AtomicReference(initialStatus)
+
+    val status: ProxyServiceStatus
+        get() = statusReference.get()
+
     init {
-        require(status.state == ProxyServiceState.Running) {
+        require(initialStatus.state == ProxyServiceState.Running) {
             "Running proxy runtime requires a running service status"
         }
     }
 
     fun stop() {
-        acceptLoop.stop(listener)
+        requestStop()
+    }
+
+    fun requestStop(): ProxyServiceStopTransitionResult {
+        while (true) {
+            val current = statusReference.get()
+            val result = ProxyServiceStopStateMachine.transition(
+                current = current,
+                event = ProxyServiceStopEvent.StopRequested,
+            )
+            if (statusReference.compareAndSet(current, result.status)) {
+                if (result.accepted) {
+                    acceptLoop.stop(listener)
+                }
+                return result
+            }
+        }
     }
 
     fun awaitStopped(timeoutMillis: Long): ProxyServerRuntimeStopResult {
         require(timeoutMillis > 0) { "Runtime stop timeout must be positive" }
         return try {
-            ProxyServerRuntimeStopResult.Finished(
-                acceptLoopResult.get(timeoutMillis, TimeUnit.MILLISECONDS),
-            )
+            val result = acceptLoopResult.get(timeoutMillis, TimeUnit.MILLISECONDS)
+            if (result is ProxyBoundServerAcceptLoopResult.Stopped) {
+                markStopped()
+            }
+            ProxyServerRuntimeStopResult.Finished(result)
         } catch (_: TimeoutException) {
             ProxyServerRuntimeStopResult.TimedOut
         } catch (_: InterruptedException) {
@@ -82,6 +109,19 @@ class RunningProxyServerRuntime internal constructor(
 
     override fun close() {
         stop()
+    }
+
+    private fun markStopped() {
+        while (true) {
+            val current = statusReference.get()
+            if (current.state == ProxyServiceState.Stopped) {
+                return
+            }
+            val stopped = current.copy(state = ProxyServiceState.Stopped)
+            if (statusReference.compareAndSet(current, stopped)) {
+                return
+            }
+        }
     }
 }
 
@@ -198,7 +238,7 @@ object ProxyServerRuntime {
         return ProxyServerRuntimeResult.Running(
             RunningProxyServerRuntime(
                 listener = startup.listener,
-                status = startup.status,
+                initialStatus = startup.status,
                 acceptLoop = acceptLoop,
                 acceptLoopResult = future,
             ),

@@ -15,6 +15,7 @@ import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionDisposition
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import java.net.ServerSocket
@@ -110,6 +111,58 @@ class ProxyServerRuntimeTest {
                 assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(stopped.result).acceptedClientConnections,
             )
             assertTrue(running.listener.isClosed)
+        } finally {
+            running.stop()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `runtime stop request applies service stop transition and records stopped status`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val backingSocket = ServerSocket(0)
+        val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
+
+        val running = assertIs<ProxyServerRuntimeResult.Running>(
+            ProxyServerRuntime.start(
+                config = AppConfig.default().copy(
+                    proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                ),
+                managementApiTokenPresent = true,
+                observedNetworks = listOf(wifiRoute()),
+                ingressConfig = ingressConfig(),
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
+            ),
+        ).runtime
+
+        try {
+            val acceptedStop = running.requestStop()
+
+            assertEquals(ProxyServiceStopTransitionDisposition.Accepted, acceptedStop.disposition)
+            assertEquals(ProxyServiceState.Stopping, acceptedStop.status.state)
+            assertEquals(ProxyServiceState.Stopping, running.status.state)
+            assertTrue(running.listener.isClosed)
+
+            val duplicateStop = running.requestStop()
+            assertEquals(ProxyServiceStopTransitionDisposition.Duplicate, duplicateStop.disposition)
+            assertEquals(ProxyServiceState.Stopping, duplicateStop.status.state)
+
+            val stopped = assertIs<ProxyServerRuntimeStopResult.Finished>(
+                running.awaitStopped(timeoutMillis = 1_000),
+            )
+            assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(stopped.result)
+            assertEquals(ProxyServiceState.Stopped, running.status.state)
         } finally {
             running.stop()
             acceptLoopExecutor.shutdownNow()
