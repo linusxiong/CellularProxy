@@ -68,7 +68,7 @@ object ProxyServerSocketBinder {
         return bindSocket(listenHost = listenHost, listenPort = listenPort, backlog = backlog)
     }
 
-    internal fun bindEphemeral(
+    fun bindEphemeral(
         listenHost: String,
         backlog: Int = DEFAULT_SERVER_SOCKET_BACKLOG,
     ): ProxyServerSocketBindResult {

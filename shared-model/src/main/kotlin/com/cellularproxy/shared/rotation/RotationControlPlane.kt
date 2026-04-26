@@ -25,6 +25,7 @@ class RotationControlPlane(
         sessionController = sessionController,
         terminalTimestampTracker = terminalTimestampTracker,
     )
+    private var transitionGeneration: Long = 0
 
     @get:Synchronized
     val currentStatus: RotationStatus
@@ -39,38 +40,53 @@ class RotationControlPlane(
         operation: RotationOperation,
         nowElapsedMillis: Long,
         cooldown: Duration,
-    ): RotationStartGateResult =
-        startGate.requestStart(
+    ): RotationStartGateResult {
+        val result = startGate.requestStart(
             operation = operation,
             nowElapsedMillis = nowElapsedMillis,
             cooldown = cooldown,
         )
+        if (result.startTransition.accepted) {
+            transitionGeneration += 1
+        }
+        return result
+    }
 
     @Synchronized
     fun applyProgress(
         event: RotationEvent,
         nowElapsedMillis: Long,
-    ): RotationProgressGateResult =
-        progressGate.apply(
+    ): RotationProgressGateResult {
+        val result = progressGate.apply(
             event = event,
             nowElapsedMillis = nowElapsedMillis,
         )
+        if (result.transition.accepted) {
+            transitionGeneration += 1
+        }
+        return result
+    }
 
     @Synchronized
     fun snapshot(): RotationControlPlaneSnapshot =
         RotationControlPlaneSnapshot(
             status = sessionController.currentStatus,
             lastTerminalElapsedMillis = terminalTimestampTracker.lastTerminalElapsedMillis,
+            transitionGeneration = transitionGeneration,
         )
 }
 
 data class RotationControlPlaneSnapshot(
     val status: RotationStatus,
     val lastTerminalElapsedMillis: Long?,
+    val transitionGeneration: Long = 0,
 ) {
     init {
         require(lastTerminalElapsedMillis == null || lastTerminalElapsedMillis >= 0) {
             "Last terminal rotation elapsed millis must not be negative"
+        }
+        require(transitionGeneration >= 0) {
+            "Rotation transition generation must not be negative"
         }
         require(!status.requiresRecordedTerminalTimestamp() || lastTerminalElapsedMillis != null) {
             "Terminal rotation status requires a recorded terminal timestamp"

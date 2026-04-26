@@ -190,6 +190,7 @@ private fun com.cellularproxy.shared.management.HttpMethod.httpToken(): String =
     when (this) {
         com.cellularproxy.shared.management.HttpMethod.Get -> "GET"
         com.cellularproxy.shared.management.HttpMethod.Post -> "POST"
+        com.cellularproxy.shared.management.HttpMethod.Connect -> "CONNECT"
     }
 
 private fun String.isHttpToken(): Boolean =

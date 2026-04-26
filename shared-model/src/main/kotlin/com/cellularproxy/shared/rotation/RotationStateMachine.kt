@@ -133,6 +133,7 @@ sealed interface RotationEvent {
     data object NewRequestsPaused : RotationEvent
     data object ConnectionsDrained : RotationEvent
     data class RootCommandCompleted(val result: RootCommandResult) : RotationEvent
+    data class RootCommandFailedToStart(val category: RootCommandCategory) : RotationEvent
     data object ToggleDelayElapsed : RotationEvent
     data object NetworkReturned : RotationEvent
     data object NetworkReturnTimedOut : RotationEvent
@@ -253,6 +254,12 @@ object RotationStateMachine {
                     }
                 }
             }
+            is RotationEvent.RootCommandFailedToStart ->
+                if (event.category == disableCommandCategory()) {
+                    resumingFailure(RotationFailureReason.RootCommandFailed)
+                } else {
+                    null
+                }
             else -> null
         }
 
@@ -277,6 +284,12 @@ object RotationStateMachine {
                     }
                 }
             }
+            is RotationEvent.RootCommandFailedToStart ->
+                if (event.category == enableCommandCategory()) {
+                    resumingFailure(RotationFailureReason.RootCommandFailed)
+                } else {
+                    null
+                }
             else -> null
         }
 

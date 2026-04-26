@@ -244,6 +244,16 @@ class RotationStateMachineTest {
             ),
         )
         assertFailureAfterResume(
+            expected = RotationFailureReason.RootCommandFailed,
+            RotationEvent.StartRequested(RotationOperation.MobileData),
+            RotationEvent.CooldownPassed,
+            RotationEvent.RootAvailable,
+            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+            RotationEvent.NewRequestsPaused,
+            RotationEvent.ConnectionsDrained,
+            RotationEvent.RootCommandFailedToStart(RootCommandCategory.MobileDataDisable),
+        )
+        assertFailureAfterResume(
             expected = RotationFailureReason.NetworkReturnTimedOut,
             RotationEvent.StartRequested(RotationOperation.MobileData),
             RotationEvent.CooldownPassed,
@@ -287,9 +297,15 @@ class RotationStateMachineTest {
             status = runningDisable,
             event = RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
         )
+        val ignoredFailedToStart = RotationStateMachine.transition(
+            status = runningDisable,
+            event = RotationEvent.RootCommandFailedToStart(RootCommandCategory.MobileDataEnable),
+        )
 
         assertEquals(RotationTransitionDisposition.Ignored, ignored.disposition)
         assertEquals(runningDisable, ignored.status)
+        assertEquals(RotationTransitionDisposition.Ignored, ignoredFailedToStart.disposition)
+        assertEquals(runningDisable, ignoredFailedToStart.status)
     }
 
     @Test

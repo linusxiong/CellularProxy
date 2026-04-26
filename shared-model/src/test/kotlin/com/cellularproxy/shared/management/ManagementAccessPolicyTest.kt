@@ -145,6 +145,7 @@ class ManagementAccessPolicyTest {
     fun `cloudflare ingress rejects non-GET health bare api and similar prefixes`() {
         val rejected = listOf(
             ManagementIngressRequest.OriginForm(HttpMethod.Post, "/health"),
+            ManagementIngressRequest.OriginForm(HttpMethod.Connect, "/api/status"),
             ManagementIngressRequest.OriginForm(HttpMethod.Get, "/api"),
             ManagementIngressRequest.OriginForm(HttpMethod.Get, "/apiary/status"),
             ManagementIngressRequest.OriginForm(HttpMethod.Get, "/"),
@@ -169,5 +170,19 @@ class ManagementAccessPolicyTest {
                 ManagementIngressRequest.ConnectAuthority("example.com:443"),
             ),
         )
+    }
+
+    @Test
+    fun `cloudflare ingress request diagnostics do not expose sensitive rejected targets`() {
+        val explicitProxy = ManagementIngressRequest.ExplicitProxyForm(
+            "http://user:pass@example.com/api/status?token=secret",
+        )
+        val connect = ManagementIngressRequest.ConnectAuthority("example.com:443")
+
+        val rendered = "$explicitProxy $connect"
+
+        assertFalse(rendered.contains("user:pass"), "Diagnostics must not include credentials")
+        assertFalse(rendered.contains("token=secret"), "Diagnostics must not include query tokens")
+        assertFalse(rendered.contains("example.com:443"), "Diagnostics must not include CONNECT authorities")
     }
 }

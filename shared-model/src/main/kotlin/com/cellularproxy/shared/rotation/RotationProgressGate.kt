@@ -49,6 +49,7 @@ private fun RotationEvent.requiresStartGate(): Boolean =
         RotationEvent.NewRequestsPaused,
         RotationEvent.ConnectionsDrained,
         is RotationEvent.RootCommandCompleted,
+        is RotationEvent.RootCommandFailedToStart,
         RotationEvent.ToggleDelayElapsed,
         RotationEvent.NetworkReturned,
         RotationEvent.NetworkReturnTimedOut,

@@ -109,8 +109,9 @@ data class RotationRootCommandResult(
         }
     }
 
-    fun toRotationEvent(): RotationEvent.RootCommandCompleted? =
+    fun toRotationEvent(): RotationEvent =
         execution?.let { RotationEvent.RootCommandCompleted(it.result) }
+            ?: RotationEvent.RootCommandFailedToStart(expectedCategory)
 
     private val expectedCategory: RootCommandCategory
         get() = when (operation) {

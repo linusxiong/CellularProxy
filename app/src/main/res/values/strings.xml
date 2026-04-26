@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">CellularProxy</string>
+    <string name="dashboard_title">CellularProxy</string>
+    <string name="dashboard_summary">Foreground HTTP proxy service</string>
+    <string name="dashboard_default_endpoint">Default endpoint: 0.0.0.0:8080</string>
+    <string name="dashboard_start_proxy">Start proxy</string>
+    <string name="dashboard_stop_proxy">Stop proxy</string>
+    <string name="notification_channel_proxy_service">Proxy service</string>
+    <string name="notification_channel_proxy_service_description">Status updates for the CellularProxy foreground service.</string>
+</resources>

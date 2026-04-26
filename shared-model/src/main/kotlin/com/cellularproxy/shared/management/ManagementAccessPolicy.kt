@@ -3,6 +3,7 @@ package com.cellularproxy.shared.management
 enum class HttpMethod {
     Get,
     Post,
+    Connect,
 }
 
 data class ManagementAccessDecision(
@@ -15,7 +16,8 @@ object ManagementAccessPolicy {
     fun evaluate(method: HttpMethod, originTarget: String): ManagementAccessDecision {
         val path = originTarget.pathComponent()
         val isPublicHealth = method == HttpMethod.Get && path == HEALTH_PATH
-        val isApiPath = path.startsWith(API_PREFIX)
+        val isApiMethod = method == HttpMethod.Get || method == HttpMethod.Post
+        val isApiPath = isApiMethod && path.startsWith(API_PREFIX)
         val requiresAuditLog = method to path in HIGH_IMPACT_ENDPOINTS
         val isManagementRequest = isPublicHealth || isApiPath
 
@@ -33,9 +35,22 @@ enum class CloudflareIngressDecision {
 }
 
 sealed interface ManagementIngressRequest {
-    data class OriginForm(val method: HttpMethod, val path: String) : ManagementIngressRequest
-    data class ExplicitProxyForm(val target: String) : ManagementIngressRequest
-    data class ConnectAuthority(val authority: String) : ManagementIngressRequest
+    data class OriginForm(val method: HttpMethod, val path: String) : ManagementIngressRequest {
+        override fun toString(): String =
+            "OriginForm(method=$method, path=<redacted>)"
+    }
+
+    data class ExplicitProxyForm(val target: String) : ManagementIngressRequest {
+        override fun toString(): String =
+            "ExplicitProxyForm(target=<redacted>)"
+    }
+
+    data class ConnectAuthority(val authority: String) : ManagementIngressRequest {
+        override fun toString(): String =
+            "ConnectAuthority(authority=<redacted>)"
+    }
+
+    data object MalformedTarget : ManagementIngressRequest
 }
 
 object CloudflareManagementIngressPolicy {
@@ -45,6 +60,7 @@ object CloudflareManagementIngressPolicy {
                 ManagementAccessPolicy.evaluate(request.method, request.path).isManagementRequest
             is ManagementIngressRequest.ExplicitProxyForm,
             is ManagementIngressRequest.ConnectAuthority,
+            ManagementIngressRequest.MalformedTarget,
             -> false
         }
 

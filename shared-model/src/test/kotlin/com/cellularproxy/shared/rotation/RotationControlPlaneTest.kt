@@ -138,6 +138,30 @@ class RotationControlPlaneTest {
 
         assertEquals(RotationStatus.idle(), snapshot.status)
         assertEquals(5_000, snapshot.lastTerminalElapsedMillis)
+        assertEquals(0, snapshot.transitionGeneration)
+    }
+
+    @Test
+    fun `snapshot transition generation increments only after accepted mutations`() {
+        val controlPlane = RotationControlPlane()
+
+        val initialSnapshot = controlPlane.snapshot()
+        controlPlane.requestStart(
+            operation = RotationOperation.MobileData,
+            nowElapsedMillis = 1_000,
+            cooldown = 60.seconds,
+        )
+        val activeSnapshot = controlPlane.snapshot()
+        controlPlane.requestStart(
+            operation = RotationOperation.MobileData,
+            nowElapsedMillis = 2_000,
+            cooldown = 60.seconds,
+        )
+        val duplicateSnapshot = controlPlane.snapshot()
+
+        assertEquals(0, initialSnapshot.transitionGeneration)
+        assertEquals(1, activeSnapshot.transitionGeneration)
+        assertEquals(activeSnapshot.transitionGeneration, duplicateSnapshot.transitionGeneration)
     }
 
     @Test
@@ -179,6 +203,14 @@ class RotationControlPlaneTest {
                     failureReason = RotationFailureReason.RootUnavailable,
                 ),
                 lastTerminalElapsedMillis = null,
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            RotationControlPlaneSnapshot(
+                status = RotationStatus.idle(),
+                lastTerminalElapsedMillis = null,
+                transitionGeneration = -1,
             )
         }
 

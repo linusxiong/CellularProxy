@@ -131,7 +131,7 @@ class RotationRootCommandControllerTest {
     }
 
     @Test
-    fun `process execution failure does not expose a rotation event`() {
+    fun `process execution failure exposes failed to start rotation event`() {
         val controller = RotationRootCommandController(
             mobileDataController = MobileDataRootController(
                 RootCommandExecutor(
@@ -157,7 +157,10 @@ class RotationRootCommandControllerTest {
         assertFalse(result.succeeded)
         assertEquals(RotationRootCommandFailure.ProcessExecutionFailed, result.failureReason)
         assertNull(result.execution)
-        assertNull(result.toRotationEvent())
+        assertEquals(
+            RotationEvent.RootCommandFailedToStart(RootCommandCategory.MobileDataDisable),
+            result.toRotationEvent(),
+        )
     }
 
     @Test

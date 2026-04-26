@@ -4,9 +4,11 @@ import com.cellularproxy.proxy.management.ManagementApiCallbacks
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.rotation.RotationControlPlane
 import com.cellularproxy.shared.rotation.RotationOperation
-import com.cellularproxy.shared.rotation.RotationSessionController
+import com.cellularproxy.shared.rotation.RotationStartGateResult
 import com.cellularproxy.shared.rotation.RotationTransitionResult
+import kotlin.time.Duration
 
 object ProxyServerRuntimeManagementCallbacks {
     fun create(
@@ -16,7 +18,9 @@ object ProxyServerRuntimeManagementCallbacks {
         cloudflareStatus: () -> CloudflareTunnelStatus,
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
-        rotationSession: RotationSessionController,
+        rotationControlPlane: RotationControlPlane,
+        nowElapsedMillis: () -> Long,
+        rotationCooldown: Duration,
     ): ManagementApiCallbacks =
         create(
             runtime = runtime,
@@ -25,8 +29,20 @@ object ProxyServerRuntimeManagementCallbacks {
             cloudflareStatus = cloudflareStatus,
             cloudflareStart = cloudflareStart,
             cloudflareStop = cloudflareStop,
-            rotateMobileData = { rotationSession.requestStart(RotationOperation.MobileData) },
-            rotateAirplaneMode = { rotationSession.requestStart(RotationOperation.AirplaneMode) },
+            rotateMobileData = {
+                rotationControlPlane.requestStart(
+                    operation = RotationOperation.MobileData,
+                    nowElapsedMillis = nowElapsedMillis(),
+                    cooldown = rotationCooldown,
+                ).toManagementTransition()
+            },
+            rotateAirplaneMode = {
+                rotationControlPlane.requestStart(
+                    operation = RotationOperation.AirplaneMode,
+                    nowElapsedMillis = nowElapsedMillis(),
+                    cooldown = rotationCooldown,
+                ).toManagementTransition()
+            },
         )
 
     fun create(
@@ -57,3 +73,6 @@ object ProxyServerRuntimeManagementCallbacks {
             serviceStop = { runtime.requestStop() },
         )
 }
+
+private fun RotationStartGateResult.toManagementTransition(): RotationTransitionResult =
+    cooldownTransition ?: startTransition
