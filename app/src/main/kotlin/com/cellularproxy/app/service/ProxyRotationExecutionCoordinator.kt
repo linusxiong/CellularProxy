@@ -152,6 +152,12 @@ class ProxyRotationExecutionCoordinator(
         nowElapsedMillis = nowElapsedMillis(),
     )
 
+    fun advanceEnableCommand(): RotationTransitionResult = continueWithEnableRootCommandCoordinatorIfConfigured(
+        commandTransition = controlPlane.currentStatus.asIgnoredTransition(),
+        nowElapsedMillis = nowElapsedMillis(),
+        redactionSecrets = rootCommandCoordinator?.let { secrets() },
+    )
+
     private suspend fun rotate(operation: RotationOperation): RotationTransitionResult {
         val now = nowElapsedMillis()
         val redactionSecrets = secrets()
@@ -401,6 +407,33 @@ class ProxyRotationExecutionCoordinator(
             }
 
         return delayTransition
+    }
+
+    private fun continueWithEnableRootCommandCoordinatorIfConfigured(
+        commandTransition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+        redactionSecrets: LogRedactionSecrets?,
+    ): RotationTransitionResult {
+        val coordinator = rootCommandCoordinator ?: return commandTransition
+        if (commandTransition.status.state != RotationState.RunningEnableCommand) {
+            return commandTransition
+        }
+
+        return when (
+            val commandResult =
+                coordinator.runCurrentCommand(
+                    timeoutMillis = requireNotNull(rootCommandTimeoutMillis),
+                    nowElapsedMillis = nowElapsedMillis,
+                    secrets = requireNotNull(redactionSecrets),
+                )
+        ) {
+            is RotationRootCommandAdvanceResult.Applied ->
+                continueWithResumeIfNeeded(commandResult.progress.transition, nowElapsedMillis())
+            is RotationRootCommandAdvanceResult.NoAction ->
+                continueWithResumeIfNeeded(commandResult.snapshot.status.asIgnoredTransition(), nowElapsedMillis)
+            is RotationRootCommandAdvanceResult.Stale ->
+                continueWithResumeIfNeeded(commandResult.snapshot.status.asIgnoredTransition(), nowElapsedMillis)
+        }
     }
 
     private fun continueWithResumeIfNeeded(

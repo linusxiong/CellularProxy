@@ -537,6 +537,163 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `enable root command continuation advances rotation to network return boundary`() {
+        var now = 12_000L
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        val enableBoundary = coordinator.advanceToggleDelay()
+        val waitingForNetwork = coordinator.advanceEnableCommand()
+
+        assertEquals(RotationState.RunningEnableCommand, enableBoundary.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, waitingForNetwork.disposition)
+        assertEquals(RotationState.WaitingForNetworkReturn, waitingForNetwork.status.state)
+        assertEquals("198.51.100.10", waitingForNetwork.status.oldPublicIp)
+        assertEquals(waitingForNetwork.status, controlPlane.currentStatus)
+        assertTrue(pauseActions.proxyRequestsPaused)
+        assertEquals(
+            listOf(
+                RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000),
+                RotationRootCommandCall(RootShellCommands.mobileDataEnable(), 4_000),
+            ),
+            rootCommandCalls,
+        )
+    }
+
+    @Test
+    fun `failed enable root command resumes proxy requests and fails the rotation`() {
+        var now = 12_000L
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) { command ->
+                        if (command == RootShellCommands.mobileDataEnable()) {
+                            RootCommandProcessResult.Completed(exitCode = 1, stdout = "", stderr = "failed")
+                        } else {
+                            RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                        }
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        coordinator.advanceToggleDelay()
+        val failed = coordinator.advanceEnableCommand()
+
+        assertEquals(RotationTransitionDisposition.Accepted, failed.disposition)
+        assertEquals(RotationState.Failed, failed.status.state)
+        assertEquals(RotationFailureReason.RootCommandFailed, failed.status.failureReason)
+        assertEquals(failed.status, controlPlane.currentStatus)
+        assertEquals(15_000, controlPlane.lastTerminalElapsedMillis)
+        assertTrue(!pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(1, pauseActions.resumeCalls)
+        assertEquals(
+            listOf(
+                RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000),
+                RotationRootCommandCall(RootShellCommands.mobileDataEnable(), 4_000),
+            ),
+            rootCommandCalls,
+        )
+    }
+
+    @Test
+    fun `failed enable root command records terminal time after command completes`() {
+        var now = 12_000L
+        val controlPlane = RotationControlPlane()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = RecordingPauseActions(),
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) { command ->
+                        if (command == RootShellCommands.mobileDataEnable()) {
+                            now = 19_000
+                            RootCommandProcessResult.Completed(exitCode = 1, stdout = "", stderr = "failed")
+                        } else {
+                            RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                        }
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        coordinator.advanceToggleDelay()
+        val failed = coordinator.advanceEnableCommand()
+
+        assertEquals(RotationState.Failed, failed.status.state)
+        assertEquals(19_000, controlPlane.lastTerminalElapsedMillis)
+    }
+
+    @Test
     fun `toggle delay continuation can advance an already waiting rotation`() {
         var now = 15_000L
         val waitingStatus =
