@@ -174,6 +174,23 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns specifically when selected route is unavailable at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.UnavailableSelectedRoute,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.SelectedRouteUnavailable),
+            model.warnings,
+        )
+    }
+
+    @Test
     fun `model shows root operations disabled before reporting runtime root availability`() {
         val model =
             DashboardStatusModel.from(

@@ -142,4 +142,23 @@ class NotificationStatusModelTest {
         assertFalse(model.isOngoing)
         assertFalse(model.stopActionEnabled)
     }
+
+    @Test
+    fun `notification warns specifically when selected route is unavailable at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.UnavailableSelectedRoute,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.SelectedRouteUnavailable),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Selected route is unavailable", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
 }

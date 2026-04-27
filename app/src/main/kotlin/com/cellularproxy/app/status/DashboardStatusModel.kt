@@ -74,6 +74,9 @@ data class DashboardStatusModel(
                 if (config.root.operationsEnabled && status.rootAvailability == RootAvailabilityStatus.Unavailable) {
                     add(DashboardWarning.RootUnavailable)
                 }
+                if (status.startupError == ProxyStartupError.UnavailableSelectedRoute) {
+                    add(DashboardWarning.SelectedRouteUnavailable)
+                }
                 if (status.startupError != null) {
                     add(DashboardWarning.StartupFailed)
                 }
@@ -143,6 +146,7 @@ enum class DashboardWarning {
     BroadUnauthenticatedProxy,
     CloudflareFailed,
     RootUnavailable,
+    SelectedRouteUnavailable,
     StartupFailed,
 }
 

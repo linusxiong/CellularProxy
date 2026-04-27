@@ -205,5 +205,6 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.BroadUnauthenticatedProxy -> "Broad unauthenticated proxy listener"
     DashboardWarning.CloudflareFailed -> "Cloudflare tunnel failed"
     DashboardWarning.RootUnavailable -> "Root access is unavailable"
+    DashboardWarning.SelectedRouteUnavailable -> "Selected route is unavailable"
     DashboardWarning.StartupFailed -> "Proxy startup failed"
 }

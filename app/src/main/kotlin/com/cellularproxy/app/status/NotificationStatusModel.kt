@@ -79,6 +79,7 @@ enum class NotificationWarning(
     BroadUnauthenticatedProxy("Proxy authentication is off on a broad listener"),
     CloudflareFailed("Cloudflare tunnel failed"),
     RootUnavailable("Root access is unavailable"),
+    SelectedRouteUnavailable("Selected route is unavailable"),
 }
 
 private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState = when (this) {
@@ -126,6 +127,7 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
         DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
         DashboardWarning.RootUnavailable -> NotificationWarning.RootUnavailable
+        DashboardWarning.SelectedRouteUnavailable -> NotificationWarning.SelectedRouteUnavailable
         DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
     }
 }
@@ -137,6 +139,7 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.BroadUnauthenticatedProxy,
         NotificationWarning.CloudflareFailed,
         NotificationWarning.RootUnavailable,
+        NotificationWarning.SelectedRouteUnavailable,
     ).filter { it in this }
         .joinToString(" | ") { it.message }
 }
