@@ -70,6 +70,7 @@ internal data class DiagnosticsScreenState(
     val overallStatus: String,
     val completionSummary: String,
     val items: List<DiagnosticsScreenItem>,
+    val copyableSummary: String,
 ) {
     companion object {
         fun from(model: DiagnosticsResultModel): DiagnosticsScreenState {
@@ -82,10 +83,12 @@ internal data class DiagnosticsScreenState(
                     completedCount == model.results.size -> DiagnosticResultStatus.Passed.label
                     else -> DiagnosticResultStatus.NotRun.label
                 }
+            val items = model.results.map(DiagnosticResultItem::toScreenItem)
             return DiagnosticsScreenState(
                 overallStatus = overallStatus,
                 completionSummary = "$completedCount of ${model.results.size} checks complete",
-                items = model.results.map(DiagnosticResultItem::toScreenItem),
+                items = items,
+                copyableSummary = items.joinToString(separator = "\n", transform = DiagnosticsScreenItem::summaryLine),
             )
         }
     }
@@ -98,7 +101,21 @@ internal data class DiagnosticsScreenItem(
     val duration: String,
     val errorCategory: String,
     val details: String,
-)
+) {
+    fun summaryLine(): String {
+        val metadata =
+            listOfNotNull(
+                duration
+                    .takeIf { it != "Not run" }
+                    ?.removeSuffix(" ms")
+                    ?.let { "in ${it}ms" },
+                errorCategory.takeIf { it != "None" }?.let { "($it)" },
+            ).joinToString(separator = " ")
+        val detailSuffix = details.takeIf { it != "None" }?.let { " - $it" }.orEmpty()
+        return listOf(label, listOf(status, metadata).filter(String::isNotBlank).joinToString(separator = " "))
+            .joinToString(separator = ": ") + detailSuffix
+    }
+}
 
 @Composable
 private fun DiagnosticsActionRow(

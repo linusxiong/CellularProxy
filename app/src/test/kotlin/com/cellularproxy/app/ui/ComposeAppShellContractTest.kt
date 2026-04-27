@@ -618,6 +618,36 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `diagnostics screen state derives copyable summary from redacted items`() {
+        val state =
+            DiagnosticsScreenState.from(
+                model =
+                    DiagnosticsResultModel(
+                        results =
+                            listOf(
+                                DiagnosticResultItem(
+                                    type = DiagnosticCheckType.CloudflareManagementApi,
+                                    label = "Cloudflare management API",
+                                    status = DiagnosticResultStatus.Failed,
+                                    durationMillis = 85,
+                                    errorCategory = "Authorization: Bearer secret-token",
+                                    details = "https://example.test/status?token=secret-token",
+                                ),
+                            ),
+                        copyableSummary = "unsafe stale summary with secret-token",
+                    ),
+            )
+
+        assertEquals(
+            "Cloudflare management API: failed in 85ms (Authorization: [REDACTED]) - https://example.test/status?[REDACTED]",
+            state.copyableSummary,
+            "Diagnostics copy summary must be derived from redacted screen items, not the caller-provided model summary.",
+        )
+        assertFalse(state.copyableSummary.contains("secret-token"))
+        assertFalse(state.copyableSummary.contains("unsafe stale summary"))
+    }
+
+    @Test
     fun `logs audit route renders dedicated review screen`() {
         val shellSource =
             repoRoot()
