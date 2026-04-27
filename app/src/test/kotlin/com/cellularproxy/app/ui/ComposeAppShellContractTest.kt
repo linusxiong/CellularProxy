@@ -901,6 +901,53 @@ class ComposeAppShellContractTest {
         assertFalse(exportBundle.text.contains("Runtime started"))
     }
 
+    @Test
+    fun `logs audit screen state applies row limit after filtering and sorting`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "newest-warning",
+                            category = LogsAuditScreenCategory.ProxyServer,
+                            severity = LogsAuditScreenSeverity.Warning,
+                            occurredAtEpochMillis = 300,
+                            title = "Proxy warning",
+                            detail = "Excluded by severity",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "old-failed",
+                            category = LogsAuditScreenCategory.ProxyServer,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 100,
+                            title = "Old failure",
+                            detail = "Included but outside row limit",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "new-failed",
+                            category = LogsAuditScreenCategory.ProxyServer,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "New failure",
+                            detail = "Included by severity and limit",
+                        ),
+                    ),
+                filter =
+                    LogsAuditScreenFilter(
+                        severity = LogsAuditScreenSeverity.Failed,
+                    ),
+                maxRows = 1,
+            )
+
+        assertEquals("1 of 3 records", state.resultSummary)
+        assertEquals(listOf("new-failed"), state.rows.map(LogsAuditScreenRow::id))
+        assertTrue(state.copyableFilteredSummary.contains("New failure"))
+        assertFalse(
+            state.copyableFilteredSummary.contains("Old failure"),
+            "Rows outside the post-filter limit must not appear in copy summaries.",
+        )
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory

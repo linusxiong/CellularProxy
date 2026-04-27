@@ -97,13 +97,16 @@ internal class LogsAuditScreenState private constructor(
             secrets: LogRedactionSecrets = LogRedactionSecrets(),
             exportSupported: Boolean = false,
             exportGeneratedAtEpochMillis: Long = 0,
+            maxRows: Int? = null,
         ): LogsAuditScreenState {
             require(exportGeneratedAtEpochMillis >= 0) { "Export timestamp must be non-negative." }
+            require(maxRows == null || maxRows > 0) { "Maximum row count must be positive." }
             val filteredRows =
                 rows
                     .map { row -> row.toScreenRow(secrets) }
                     .filter { row -> filter.matches(row) }
                     .sortedByDescending(LogsAuditScreenRow::occurredAtEpochMillis)
+                    .let { sortedRows -> maxRows?.let(sortedRows::take) ?: sortedRows }
             val copyableFilteredSummary =
                 filteredRows.joinToString(
                     separator = "\n\n",
