@@ -1,6 +1,5 @@
 package com.cellularproxy.app.ui
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
@@ -11,10 +10,11 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import com.cellularproxy.app.R
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
 import com.cellularproxy.app.config.SecureRandomSensitiveConfigGenerator
@@ -29,7 +29,7 @@ import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class CellularProxyActivity : Activity() {
+class CellularProxyActivity : ComponentActivity() {
     private val settingsRepository by lazy {
         CellularProxyPlainConfigStore.repository(this)
     }
@@ -46,11 +46,9 @@ class CellularProxyActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(
-            ScrollView(this).apply {
-                addView(createContentView())
-            },
-        )
+        setContent {
+            CellularProxyApp()
+        }
     }
 
     override fun onDestroy() {
@@ -651,15 +649,14 @@ class CellularProxyActivity : Activity() {
         }
     }
 
-    private fun loadOrCreateSensitiveConfig(): SensitiveConfig =
-        when (val result = sensitiveRepository.load()) {
-            is SensitiveConfigLoadResult.Loaded -> result.config
-            SensitiveConfigLoadResult.MissingRequiredSecrets ->
-                sensitiveConfigGenerator
-                    .generateDefaultSensitiveConfig()
-                    .also(sensitiveRepository::save)
-            is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
-        }
+    private fun loadOrCreateSensitiveConfig(): SensitiveConfig = when (val result = sensitiveRepository.load()) {
+        is SensitiveConfigLoadResult.Loaded -> result.config
+        SensitiveConfigLoadResult.MissingRequiredSecrets ->
+            sensitiveConfigGenerator
+                .generateDefaultSensitiveConfig()
+                .also(sensitiveRepository::save)
+        is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
+    }
 
     private fun commandIntent(action: String): Intent = Intent(this, CellularProxyForegroundService::class.java).setAction(action)
 
@@ -672,10 +669,9 @@ class CellularProxyActivity : Activity() {
     }
 }
 
-private fun LinearLayout.LayoutParams.withTopMargin(topMarginPx: Int): LinearLayout.LayoutParams =
-    apply {
-        topMargin = topMarginPx
-    }
+private fun LinearLayout.LayoutParams.withTopMargin(topMarginPx: Int): LinearLayout.LayoutParams = apply {
+    topMargin = topMarginPx
+}
 
 private val RouteTarget.displayLabel: String
     get() =
