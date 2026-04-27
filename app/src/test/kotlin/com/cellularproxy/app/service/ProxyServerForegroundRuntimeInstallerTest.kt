@@ -16,6 +16,7 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
@@ -76,6 +77,7 @@ class ProxyServerForegroundRuntimeInstallerTest {
                     RotationStatus.idle(),
                 )
             },
+            rootAvailability = { RootAvailabilityStatus.Available },
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -94,6 +96,7 @@ class ProxyServerForegroundRuntimeInstallerTest {
             assertEquals(200, statusResponse.statusCode)
             assertContains(statusResponse.body, """"state":"running"""")
             assertContains(statusResponse.body, """"publicIp":"203.0.113.42"""")
+            assertContains(statusResponse.body, """"root":{"operationsEnabled":false,"availability":"unknown"}""")
 
             installed.registration.close()
             assertSame(
@@ -150,6 +153,7 @@ class ProxyServerForegroundRuntimeInstallerTest {
                         RotationStatus.idle(),
                     )
                 },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
                 workerExecutor = workerExecutor,
                 queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
                 acceptLoopExecutor = acceptLoopExecutor,

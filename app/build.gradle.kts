@@ -31,6 +31,7 @@ dependencies {
     implementation(project(":shared-model"))
     implementation(project(":core-network"))
     implementation(project(":proxy-server"))
+    implementation(project(":root-control"))
     implementation(project(":cloudflare-tunnel"))
     implementation("androidx.datastore:datastore-preferences:1.1.7")
 

@@ -25,6 +25,7 @@ import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyStartupError
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
@@ -556,6 +557,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                         RotationStatus.idle(),
                     )
                 },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
                 workerExecutor = workerExecutor,
                 queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
                 acceptLoopExecutor = acceptLoopExecutor,
@@ -646,6 +648,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                     RotationStatus.idle(),
                 )
             },
+            rootAvailability = { RootAvailabilityStatus.Unknown },
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -723,6 +726,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                     RotationStatus.idle(),
                 )
             },
+            rootAvailability = { RootAvailabilityStatus.Unknown },
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -800,6 +804,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                 )
             },
             rootOperationsEnabled = { rootOperationsEnabled },
+            rootAvailability = { RootAvailabilityStatus.Unknown },
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -827,6 +832,81 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             assertContains(disabledResponse.body, """"disposition":"rejected"""")
             assertContains(disabledResponse.body, """"failureReason":"root_operations_disabled"""")
             assertEquals(1, mobileDataRotationCalls)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `created lifecycle rechecks root availability for running runtime management status`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        var rootAvailability = RootAvailabilityStatus.Unavailable
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig().copy(
+                root = AppConfig.default().root.copy(operationsEnabled = true),
+            ),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            socketProvider = RecordingUnavailableBoundSocketProvider,
+            managementHandlerReference = managementReference,
+            publicIp = { null },
+            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+            cloudflareStart = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            cloudflareStop = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            rotateMobileData = {
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rotateAirplaneMode = {
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rootAvailability = { rootAvailability },
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            bindListener = { listenHost: String, _: Int, backlog: Int ->
+                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+            },
+        )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            assertContains(
+                managementReference.handle(ManagementApiOperation.Status).body,
+                """"root":{"operationsEnabled":true,"availability":"unavailable"}""",
+            )
+
+            rootAvailability = RootAvailabilityStatus.Available
+
+            assertContains(
+                managementReference.handle(ManagementApiOperation.Status).body,
+                """"root":{"operationsEnabled":true,"availability":"available"}""",
+            )
         } finally {
             lifecycle.close()
             acceptLoopExecutor.shutdownNow()
@@ -880,6 +960,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                     RotationStatus.idle(),
                 )
             },
+            rootAvailability = { RootAvailabilityStatus.Available },
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -943,6 +1024,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                     RotationStatus.idle(),
                 )
             },
+            rootAvailability = { RootAvailabilityStatus.Unknown },
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,

@@ -4,6 +4,7 @@ import com.cellularproxy.proxy.management.ManagementApiCallbacks
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationControlPlane
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
@@ -26,6 +27,7 @@ object ProxyServerRuntimeManagementCallbacks {
         nowElapsedMillis: () -> Long,
         rotationCooldown: Duration,
         rootOperationsEnabled: () -> Boolean,
+        rootAvailability: () -> RootAvailabilityStatus,
     ): ManagementApiCallbacks =
         create(
             runtime = runtime,
@@ -35,6 +37,7 @@ object ProxyServerRuntimeManagementCallbacks {
             cloudflareStart = cloudflareStart,
             cloudflareStop = cloudflareStop,
             rootOperationsEnabled = rootOperationsEnabled,
+            rootAvailability = rootAvailability,
             rotateMobileData = {
                 requestRotationIfRootEnabled(
                     operation = RotationOperation.MobileData,
@@ -65,13 +68,20 @@ object ProxyServerRuntimeManagementCallbacks {
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rootOperationsEnabled: () -> Boolean,
+        rootAvailability: () -> RootAvailabilityStatus,
     ): ManagementApiCallbacks =
         ManagementApiCallbacks(
             healthStatus = { runtime.status },
             status = {
+                val rootOperationsAreEnabled = rootOperationsEnabled()
                 runtime.status.copy(
                     publicIp = publicIp(),
                     cloudflare = cloudflareStatus(),
+                    rootAvailability = if (rootOperationsAreEnabled) {
+                        rootAvailability()
+                    } else {
+                        RootAvailabilityStatus.Unknown
+                    },
                 )
             },
             rootOperationsEnabled = rootOperationsEnabled,

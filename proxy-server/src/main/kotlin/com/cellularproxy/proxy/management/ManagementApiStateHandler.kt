@@ -6,6 +6,7 @@ import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionResult
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 
 data class ManagementApiCallbacks(
@@ -31,11 +32,7 @@ class ManagementApiStateHandler(
             ManagementApiOperation.Health ->
                 ManagementApiReadOnlyResponses.health(callbacks.healthStatus())
             ManagementApiOperation.Status ->
-                ManagementApiReadOnlyResponses.status(
-                    status = callbacks.status(),
-                    secrets = secrets,
-                    rootOperationsEnabled = callbacks.rootOperationsEnabled(),
-                )
+                renderStatus()
             ManagementApiOperation.Networks ->
                 ManagementApiReadOnlyResponses.networks(callbacks.networks())
             ManagementApiOperation.PublicIp ->
@@ -53,4 +50,20 @@ class ManagementApiStateHandler(
             ManagementApiOperation.ServiceStop ->
                 ManagementApiServiceStopActionResponses.transition(callbacks.serviceStop())
         }
+
+    private fun renderStatus(): ManagementApiResponse {
+        val rootOperationsEnabled = callbacks.rootOperationsEnabled()
+        val status = callbacks.status().let { currentStatus ->
+            if (rootOperationsEnabled) {
+                currentStatus
+            } else {
+                currentStatus.copy(rootAvailability = RootAvailabilityStatus.Unknown)
+            }
+        }
+        return ManagementApiReadOnlyResponses.status(
+            status = status,
+            secrets = secrets,
+            rootOperationsEnabled = rootOperationsEnabled,
+        )
+    }
 }

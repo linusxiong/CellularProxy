@@ -23,6 +23,7 @@ import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStartupDecision
 import com.cellularproxy.shared.proxy.ProxyServiceStartupPolicy
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationStatus
@@ -81,6 +82,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
+        rootAvailability: () -> RootAvailabilityStatus,
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
@@ -106,6 +108,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             rotateMobileData = rotateMobileData,
             rotateAirplaneMode = rotateAirplaneMode,
             rootOperationsEnabled = rootOperationsEnabled,
+            rootAvailability = rootAvailability,
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -128,6 +131,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
+        rootAvailability: () -> RootAvailabilityStatus,
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
@@ -169,6 +173,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                             cloudflareStart = cloudflareStart,
                             cloudflareStop = cloudflareStop,
                             rootOperationsEnabled = rootOperationsEnabled,
+                            rootAvailability = rootAvailability,
                             rotateMobileData = rotateMobileDataIfRootEnabled,
                             rotateAirplaneMode = rotateAirplaneModeIfRootEnabled,
                         ),

@@ -12,6 +12,7 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionDisposition
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionResult
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
@@ -52,7 +53,25 @@ class ManagementApiStateHandlerTest {
             ),
             response,
         )
-        callbacks.assertCalls("status", "rootOperationsEnabled")
+        callbacks.assertCalls("rootOperationsEnabled", "status")
+    }
+
+    @Test
+    fun `status suppresses root availability when root operations are disabled`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus().copy(rootAvailability = RootAvailabilityStatus.Available)
+        callbacks.rootOperationsEnabledResult = false
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            ManagementApiReadOnlyResponses.status(
+                status = callbacks.statusResult.copy(rootAvailability = RootAvailabilityStatus.Unknown),
+                rootOperationsEnabled = false,
+            ).body,
+            response.body,
+        )
+        callbacks.assertCalls("rootOperationsEnabled", "status")
     }
 
     @Test

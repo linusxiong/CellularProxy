@@ -11,10 +11,14 @@ import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
+import com.cellularproxy.root.BlockingRootCommandProcessExecutor
+import com.cellularproxy.root.RootAvailabilityChecker
+import com.cellularproxy.root.RootCommandExecutor
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
@@ -52,13 +56,15 @@ object CellularProxyRuntimeCompositionInstaller {
             ).loadOrCreate()
         }
         val routeMonitor = AndroidNetworkRouteMonitor.create(appContext)
+        val rootOperationsEnabled = { runBlocking { plainRepository.load().root.operationsEnabled } }
         return install(
             bootstrapResult = bootstrapResult,
             observedNetworks = routeMonitor::observedNetworks,
             routeMonitor = routeMonitor,
             socketConnector = AndroidBoundNetworkSocketConnector.create(appContext),
             executorResources = RuntimeCompositionExecutorResources.create(),
-            rootOperationsEnabled = { runBlocking { plainRepository.load().root.operationsEnabled } },
+            rootOperationsEnabled = rootOperationsEnabled,
+            rootAvailability = createRootAvailabilityProvider(rootOperationsEnabled),
         )
     }
 
@@ -77,6 +83,7 @@ object CellularProxyRuntimeCompositionInstaller {
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
+        rootAvailability: () -> RootAvailabilityStatus = ::unknownRootAvailability,
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
@@ -96,6 +103,7 @@ object CellularProxyRuntimeCompositionInstaller {
             rotateMobileData = rotateMobileData,
             rotateAirplaneMode = rotateAirplaneMode,
             rootOperationsEnabled = rootOperationsEnabled,
+            rootAvailability = rootAvailability,
             maxConcurrentConnections = maxConcurrentConnections,
             outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
             recordMetricEvent = recordMetricEvent,
@@ -117,6 +125,7 @@ object CellularProxyRuntimeCompositionInstaller {
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
+        rootAvailability: () -> RootAvailabilityStatus,
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
@@ -135,6 +144,7 @@ object CellularProxyRuntimeCompositionInstaller {
                 rotateMobileData = rotateMobileData,
                 rotateAirplaneMode = rotateAirplaneMode,
                 rootOperationsEnabled = rootOperationsEnabled,
+                rootAvailability = rootAvailability,
                 workerExecutor = executorResources.workerExecutor,
                 queuedClientTimeoutExecutor = executorResources.queuedClientTimeoutExecutor,
                 acceptLoopExecutor = executorResources.acceptLoopExecutor,
@@ -235,4 +245,22 @@ private fun ignoredRotationTransition(): RotationTransitionResult =
         status = RotationStatus.idle(),
     )
 
+private fun createRootAvailabilityProvider(
+    rootOperationsEnabled: () -> Boolean,
+): () -> RootAvailabilityStatus {
+    val checker = RootAvailabilityChecker(
+        RootCommandExecutor(BlockingRootCommandProcessExecutor()),
+    )
+    return {
+        if (rootOperationsEnabled()) {
+            checker.check(ROOT_AVAILABILITY_CHECK_TIMEOUT_MILLIS).status
+        } else {
+            RootAvailabilityStatus.Unknown
+        }
+    }
+}
+
+private fun unknownRootAvailability(): RootAvailabilityStatus = RootAvailabilityStatus.Unknown
+
 private const val COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L
+private const val ROOT_AVAILABILITY_CHECK_TIMEOUT_MILLIS = 2_000L

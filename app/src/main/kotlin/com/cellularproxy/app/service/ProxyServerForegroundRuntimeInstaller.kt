@@ -9,6 +9,7 @@ import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
 import java.util.concurrent.Executor
@@ -40,6 +41,7 @@ object ProxyServerForegroundRuntimeInstaller {
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
+        rootAvailability: () -> RootAvailabilityStatus,
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
@@ -68,6 +70,7 @@ object ProxyServerForegroundRuntimeInstaller {
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
                     rootOperationsEnabled = rootOperationsEnabled,
+                    rootAvailability = rootAvailability,
                     workerExecutor = workerExecutor,
                     queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
                     acceptLoopExecutor = acceptLoopExecutor,
