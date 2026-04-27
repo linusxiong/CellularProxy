@@ -1,9 +1,12 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.config.AppConfig
 import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -273,6 +276,92 @@ class ComposeAppShellContractTest {
         assertTrue(
             settingsSource.contains("KeyboardType.Password"),
             "Secret settings fields must use password keyboard semantics, not only visual masking.",
+        )
+    }
+
+    @Test
+    fun `cloudflare route renders dedicated tunnel management screen`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val cloudflareSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyCloudflareScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("CellularProxyCloudflareScreen()"),
+            "Cloudflare route must render the dedicated tunnel management screen instead of the generic placeholder.",
+        )
+        assertTrue(
+            !shellSource.contains("composable(Cloudflare.route) {\n            CellularProxyDestinationPlaceholder(Cloudflare)"),
+            "Cloudflare route must not use the generic destination placeholder.",
+        )
+
+        listOf(
+            "Tunnel enabled",
+            "Tunnel token",
+            "Tunnel lifecycle",
+            "Management hostname",
+            "Last connection error",
+            "Edge sessions",
+            "Management API round trip",
+            "Start tunnel",
+            "Stop tunnel",
+            "Reconnect tunnel",
+            "Test management tunnel",
+            "Copy diagnostics",
+        ).forEach { label ->
+            assertTrue(
+                cloudflareSource.contains(label),
+                "Cloudflare screen must expose `$label`.",
+            )
+        }
+        assertTrue(
+            cloudflareSource.contains("actionsEnabled: Boolean = false"),
+            "Cloudflare route actions must be disabled by default until runtime handlers are wired.",
+        )
+    }
+
+    @Test
+    fun `cloudflare screen state redacts unsafe connection error details`() {
+        val state =
+            CloudflareScreenState.from(
+                config = AppConfig.default(),
+                tunnelStatus =
+                    CloudflareTunnelStatus.failed(
+                        "Authorization: Bearer tunnel-secret\nhttps://example.com/api?token=tunnel-secret",
+                    ),
+            )
+
+        assertFalse(
+            state.lastConnectionError.contains("Bearer tunnel-secret"),
+            "Cloudflare failure details must not expose authorization header values.",
+        )
+        assertFalse(
+            state.lastConnectionError.contains("token=tunnel-secret"),
+            "Cloudflare failure details must not expose URL query secrets.",
+        )
+        assertTrue(
+            state.lastConnectionError.contains("[REDACTED]"),
+            "Cloudflare failure details should preserve useful context with sensitive values redacted.",
+        )
+    }
+
+    @Test
+    fun `cloudflare screen state can represent invalid tunnel token status`() {
+        val state =
+            CloudflareScreenState.from(
+                config = AppConfig.default(),
+                tunnelStatus = CloudflareTunnelStatus.failed("invalid tunnel token"),
+                tokenStatus = CloudflareTokenStatus.Invalid,
+            )
+
+        assertEquals(
+            "Invalid",
+            state.tokenStatus,
+            "Cloudflare token status must distinguish invalid tokens from present tokens.",
         )
     }
 
