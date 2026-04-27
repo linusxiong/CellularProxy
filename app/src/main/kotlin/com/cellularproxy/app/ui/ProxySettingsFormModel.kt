@@ -19,6 +19,7 @@ data class ProxySettingsFormState(
     val mobileDataOffDelaySeconds: String = "3",
     val networkReturnTimeoutSeconds: String = "60",
     val cooldownSeconds: String = "180",
+    val rootOperationsEnabled: Boolean = false,
     val proxyUsername: String = "",
     val proxyPassword: String = "",
     val managementApiToken: String = "",
@@ -58,6 +59,9 @@ data class ProxySettingsFormState(
                 mobileDataOffDelay = parsedMobileDataOffDelay ?: base.rotation.mobileDataOffDelay,
                 networkReturnTimeout = parsedNetworkReturnTimeout ?: base.rotation.networkReturnTimeout,
                 cooldown = parsedCooldown ?: base.rotation.cooldown,
+            ),
+            root = base.root.copy(
+                operationsEnabled = rootOperationsEnabled,
             ),
         )
         val errors = buildList {
@@ -163,6 +167,7 @@ data class ProxySettingsFormState(
                 mobileDataOffDelaySeconds = config.rotation.mobileDataOffDelay.inWholeSeconds.toString(),
                 networkReturnTimeoutSeconds = config.rotation.networkReturnTimeout.inWholeSeconds.toString(),
                 cooldownSeconds = config.rotation.cooldown.inWholeSeconds.toString(),
+                rootOperationsEnabled = config.root.operationsEnabled,
                 cloudflareEnabled = config.cloudflare.enabled,
                 cloudflareHostnameLabel = config.cloudflare.managementHostnameLabel.orEmpty(),
             )

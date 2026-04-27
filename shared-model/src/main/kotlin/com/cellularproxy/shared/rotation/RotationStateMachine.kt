@@ -120,6 +120,7 @@ enum class RotationFailureReason {
     NetworkReturnTimedOut,
     NewPublicIpProbeFailed,
     StrictIpChangeRequired,
+    RootOperationsDisabled,
 }
 
 sealed interface RotationEvent {
@@ -157,6 +158,7 @@ enum class RotationTransitionDisposition {
     Accepted,
     Duplicate,
     Ignored,
+    Rejected,
 }
 
 object RotationStateMachine {

@@ -5,6 +5,7 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.NetworkConfig
 import com.cellularproxy.shared.config.ProxyConfig
+import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RotationConfig
 import com.cellularproxy.shared.config.RouteTarget
 import kotlin.test.Test
@@ -29,6 +30,9 @@ class PlainConfigPreferencesMapperTest {
                 mobileDataOffDelay = 5.seconds,
                 networkReturnTimeout = 75.seconds,
                 cooldown = 240.seconds,
+            ),
+            root = RootConfig(
+                operationsEnabled = true,
             ),
             cloudflare = CloudflareConfig(
                 enabled = true,
@@ -106,6 +110,7 @@ class PlainConfigPreferencesMapperTest {
                 PlainConfigPreferenceKeys.mobileDataOffDelay,
                 PlainConfigPreferenceKeys.networkReturnTimeout,
                 PlainConfigPreferenceKeys.cooldown,
+                PlainConfigPreferenceKeys.rootOperationsEnabled,
                 PlainConfigPreferenceKeys.cloudflareEnabled,
                 PlainConfigPreferenceKeys.cloudflareTunnelTokenPresent,
                 PlainConfigPreferenceKeys.cloudflareManagementHostnameLabel,

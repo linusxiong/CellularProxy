@@ -23,6 +23,11 @@ import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStartupDecision
 import com.cellularproxy.shared.proxy.ProxyServiceStartupPolicy
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationStatus
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
 import java.util.concurrent.Executor
@@ -75,6 +80,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
@@ -99,6 +105,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             cloudflareStop = cloudflareStop,
             rotateMobileData = rotateMobileData,
             rotateAirplaneMode = rotateAirplaneMode,
+            rootOperationsEnabled = rootOperationsEnabled,
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -120,6 +127,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
@@ -143,6 +151,14 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             recordMetricEvent = recordMetricEvent,
             bindListener = bindListener,
             installRuntimeManagementHandler = { runtime ->
+                val rotateMobileDataIfRootEnabled = rotateMobileData.guardRootOperations(
+                    rootOperationsEnabled = rootOperationsEnabled,
+                    operation = RotationOperation.MobileData,
+                )
+                val rotateAirplaneModeIfRootEnabled = rotateAirplaneMode.guardRootOperations(
+                    rootOperationsEnabled = rootOperationsEnabled,
+                    operation = RotationOperation.AirplaneMode,
+                )
                 managementHandlerReference.install(
                     ManagementApiStateHandler(
                         callbacks = ProxyServerRuntimeManagementCallbacks.create(
@@ -152,8 +168,9 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                             cloudflareStatus = cloudflareStatus,
                             cloudflareStart = cloudflareStart,
                             cloudflareStop = cloudflareStop,
-                            rotateMobileData = rotateMobileData,
-                            rotateAirplaneMode = rotateAirplaneMode,
+                            rootOperationsEnabled = rootOperationsEnabled,
+                            rotateMobileData = rotateMobileDataIfRootEnabled,
+                            rotateAirplaneMode = rotateAirplaneModeIfRootEnabled,
                         ),
                         secrets = sensitiveConfig.logRedactionSecrets(),
                     ),
@@ -278,6 +295,30 @@ private fun SensitiveConfig.logRedactionSecrets(): LogRedactionSecrets =
         managementApiToken = managementApiToken,
         proxyCredential = proxyCredential.canonicalBasicPayload(),
         cloudflareTunnelToken = cloudflareTunnelToken,
+    )
+
+private fun (() -> RotationTransitionResult).guardRootOperations(
+    rootOperationsEnabled: () -> Boolean,
+    operation: RotationOperation,
+): () -> RotationTransitionResult =
+    {
+        if (rootOperationsEnabled()) {
+            this()
+        } else {
+            rootOperationsDisabledRotationTransition(operation)
+        }
+    }
+
+private fun rootOperationsDisabledRotationTransition(
+    operation: RotationOperation,
+): RotationTransitionResult =
+    RotationTransitionResult(
+        disposition = RotationTransitionDisposition.Rejected,
+        status = RotationStatus(
+            state = RotationState.Failed,
+            operation = operation,
+            failureReason = RotationFailureReason.RootOperationsDisabled,
+        ),
     )
 
 private const val DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L

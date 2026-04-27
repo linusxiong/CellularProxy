@@ -60,6 +60,7 @@ class ManagementApiReadOnlyResponsesTest {
                     bytesSent = 99,
                 ),
             ),
+            rootOperationsEnabled = true,
             secrets = LogRedactionSecrets(managementApiToken = "raw-token"),
         )
 
@@ -69,7 +70,7 @@ class ManagementApiReadOnlyResponsesTest {
                 """"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8080,"configuredRoute":"cellular","boundRoute":{"id":"cell-1","category":"cellular","displayName":"Carrier LTE","available":true},"publicIp":"198.51.100.23","highSecurityRisk":true,"startupError":null},""" +
                 """"metrics":{"activeConnections":2,"totalConnections":5,"rejectedConnections":1,"bytesReceived":42,"bytesSent":99},""" +
                 """"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"edge rejected Authorization: [REDACTED]"},""" +
-                """"root":{"availability":"available"}""" +
+                """"root":{"operationsEnabled":true,"availability":"available"}""" +
                 "}",
             response.body,
         )
@@ -77,9 +78,23 @@ class ManagementApiReadOnlyResponsesTest {
     }
 
     @Test
+    fun `status response distinguishes disabled root operations from runtime root availability`() {
+        val response = ManagementApiReadOnlyResponses.status(
+            status = ProxyServiceStatus.stopped(rootAvailability = RootAvailabilityStatus.Available),
+            rootOperationsEnabled = false,
+        )
+
+        assertEquals(
+            true,
+            response.body.contains(""""root":{"operationsEnabled":false,"availability":"available"}"""),
+        )
+    }
+
+    @Test
     fun `status response includes failed startup error`() {
         val response = ManagementApiReadOnlyResponses.status(
-            ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+            status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+            rootOperationsEnabled = false,
         )
 
         assertEquals(
@@ -87,7 +102,7 @@ class ManagementApiReadOnlyResponsesTest {
                 """"service":{"state":"failed","listenHost":null,"listenPort":null,"configuredRoute":"automatic","boundRoute":null,"publicIp":null,"highSecurityRisk":false,"startupError":"port_already_in_use"},""" +
                 """"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},""" +
                 """"cloudflare":{"state":"disabled","remoteManagementAvailable":false,"failureReason":null},""" +
-                """"root":{"availability":"unknown"}""" +
+                """"root":{"operationsEnabled":false,"availability":"unknown"}""" +
                 "}",
             response.body,
         )
@@ -96,7 +111,8 @@ class ManagementApiReadOnlyResponsesTest {
     @Test
     fun `status response includes invalid maximum concurrent connections startup error`() {
         val response = ManagementApiReadOnlyResponses.status(
-            ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidMaxConcurrentConnections),
+            status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidMaxConcurrentConnections),
+            rootOperationsEnabled = false,
         )
 
         assertEquals(

@@ -11,6 +11,7 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.NetworkConfig
 import com.cellularproxy.shared.config.ProxyConfig
+import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RotationConfig
 import com.cellularproxy.shared.config.RouteTarget
 import kotlin.time.Duration
@@ -26,6 +27,7 @@ object PlainConfigPreferenceKeys {
     val mobileDataOffDelay = longPreferencesKey("rotation.mobileDataOffDelay")
     val networkReturnTimeout = longPreferencesKey("rotation.networkReturnTimeout")
     val cooldown = longPreferencesKey("rotation.cooldown")
+    val rootOperationsEnabled = booleanPreferencesKey("root.operationsEnabled")
     val cloudflareEnabled = booleanPreferencesKey("cloudflare.enabled")
     val cloudflareTunnelTokenPresent = booleanPreferencesKey("cloudflare.tunnelTokenPresent")
     val cloudflareManagementHostnameLabel = stringPreferencesKey("cloudflare.managementHostnameLabel")
@@ -49,6 +51,7 @@ object PlainConfigPreferencesMapper {
             PlainConfigPreferenceKeys.mobileDataOffDelay to config.rotation.mobileDataOffDelay.inWholeMilliseconds,
             PlainConfigPreferenceKeys.networkReturnTimeout to config.rotation.networkReturnTimeout.inWholeMilliseconds,
             PlainConfigPreferenceKeys.cooldown to config.rotation.cooldown.inWholeMilliseconds,
+            PlainConfigPreferenceKeys.rootOperationsEnabled to config.root.operationsEnabled,
             PlainConfigPreferenceKeys.cloudflareEnabled to config.cloudflare.enabled,
             PlainConfigPreferenceKeys.cloudflareTunnelTokenPresent to config.cloudflare.tunnelTokenPresent,
         )
@@ -88,6 +91,10 @@ object PlainConfigPreferencesMapper {
                     .toPositiveDurationOrDefault(defaults.rotation.networkReturnTimeout),
                 cooldown = preferences[PlainConfigPreferenceKeys.cooldown]
                     .toPositiveDurationOrDefault(defaults.rotation.cooldown),
+            ),
+            root = RootConfig(
+                operationsEnabled = preferences[PlainConfigPreferenceKeys.rootOperationsEnabled]
+                    ?: defaults.root.operationsEnabled,
             ),
             cloudflare = CloudflareConfig(
                 enabled = preferences[PlainConfigPreferenceKeys.cloudflareEnabled]

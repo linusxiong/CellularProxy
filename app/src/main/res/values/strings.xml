@@ -14,6 +14,7 @@
     <string name="settings_mobile_data_off_delay_seconds">Mobile data off delay (seconds)</string>
     <string name="settings_network_return_timeout_seconds">Network return timeout (seconds)</string>
     <string name="settings_rotation_cooldown_seconds">Rotation cooldown (seconds)</string>
+    <string name="settings_root_operations_enabled">Enable root operations for rotation and restart</string>
     <string name="settings_cloudflare_enabled">Enable Cloudflare management tunnel</string>
     <string name="settings_cloudflare_tunnel_token">Cloudflare tunnel token (leave blank to keep current)</string>
     <string name="settings_cloudflare_hostname_label">Cloudflare hostname label (optional)</string>

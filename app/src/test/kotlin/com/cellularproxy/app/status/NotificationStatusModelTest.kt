@@ -4,6 +4,7 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
@@ -19,7 +20,9 @@ class NotificationStatusModelTest {
     @Test
     fun `running notification shows route endpoint metrics and stop action`() {
         val model = NotificationStatusModel.from(
-            config = AppConfig.default(),
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = true),
+            ),
             status = ProxyServiceStatus.running(
                 listenHost = "0.0.0.0",
                 listenPort = 8080,
@@ -52,6 +55,20 @@ class NotificationStatusModelTest {
         assertTrue(model.isOngoing)
         assertTrue(model.stopActionEnabled)
         assertEquals(emptySet(), model.warnings)
+    }
+
+    @Test
+    fun `notification shows root disabled when root operations are not opted in`() {
+        val model = NotificationStatusModel.from(
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = false),
+            ),
+            status = ProxyServiceStatus.stopped(
+                rootAvailability = RootAvailabilityStatus.Available,
+            ),
+        )
+
+        assertEquals("IP unknown | Cloudflare disabled | Root disabled", model.detailText)
     }
 
     @Test
@@ -99,7 +116,7 @@ class NotificationStatusModelTest {
         assertEquals(NotificationServiceState.Failed, model.serviceState)
         assertEquals("CellularProxy failed", model.title)
         assertEquals("0.0.0.0:8080 | Automatic | 0 active", model.contentText)
-        assertEquals("IP unknown | Cloudflare failed | Root unknown", model.detailText)
+        assertEquals("IP unknown | Cloudflare failed | Root disabled", model.detailText)
         assertEquals(
             setOf(NotificationWarning.StartupFailed, NotificationWarning.CloudflareFailed),
             model.warnings,

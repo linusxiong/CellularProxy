@@ -107,6 +107,7 @@ private val DashboardCloudflareState.label: String
 
 private val DashboardRootState.label: String
     get() = when (this) {
+        DashboardRootState.Disabled -> "disabled"
         DashboardRootState.Unknown -> "unknown"
         DashboardRootState.Available -> "available"
         DashboardRootState.Unavailable -> "unavailable"

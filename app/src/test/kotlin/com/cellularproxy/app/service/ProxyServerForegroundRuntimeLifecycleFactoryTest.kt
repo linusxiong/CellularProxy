@@ -680,6 +680,232 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
     }
 
     @Test
+    fun `created lifecycle blocks root rotation callbacks when root operations are disabled`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        var mobileDataRotationCalls = 0
+        var airplaneModeRotationCalls = 0
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig().copy(
+                root = AppConfig.default().root.copy(operationsEnabled = false),
+            ),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            socketProvider = RecordingUnavailableBoundSocketProvider,
+            managementHandlerReference = managementReference,
+            publicIp = { null },
+            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+            cloudflareStart = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            cloudflareStop = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            rotateMobileData = {
+                mobileDataRotationCalls += 1
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Accepted,
+                    RotationStatus.idle(),
+                )
+            },
+            rotateAirplaneMode = {
+                airplaneModeRotationCalls += 1
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Accepted,
+                    RotationStatus.idle(),
+                )
+            },
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            bindListener = { listenHost: String, _: Int, backlog: Int ->
+                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+            },
+        )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            val mobileResponse = managementReference.handle(ManagementApiOperation.RotateMobileData)
+            val airplaneResponse = managementReference.handle(ManagementApiOperation.RotateAirplaneMode)
+
+            assertEquals(409, mobileResponse.statusCode)
+            assertEquals(409, airplaneResponse.statusCode)
+            assertContains(mobileResponse.body, """"disposition":"rejected"""")
+            assertContains(airplaneResponse.body, """"disposition":"rejected"""")
+            assertContains(mobileResponse.body, """"failureReason":"root_operations_disabled"""")
+            assertContains(airplaneResponse.body, """"failureReason":"root_operations_disabled"""")
+            assertEquals(0, mobileDataRotationCalls)
+            assertEquals(0, airplaneModeRotationCalls)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `created lifecycle rechecks root operation opt-in for running runtime management requests`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        var rootOperationsEnabled = true
+        var mobileDataRotationCalls = 0
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig().copy(
+                root = AppConfig.default().root.copy(operationsEnabled = true),
+            ),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            socketProvider = RecordingUnavailableBoundSocketProvider,
+            managementHandlerReference = managementReference,
+            publicIp = { null },
+            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+            cloudflareStart = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            cloudflareStop = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            rotateMobileData = {
+                mobileDataRotationCalls += 1
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rotateAirplaneMode = {
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rootOperationsEnabled = { rootOperationsEnabled },
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            bindListener = { listenHost: String, _: Int, backlog: Int ->
+                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+            },
+        )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            assertContains(
+                managementReference.handle(ManagementApiOperation.Status).body,
+                """"root":{"operationsEnabled":true,"availability":"unknown"}""",
+            )
+            assertEquals(409, managementReference.handle(ManagementApiOperation.RotateMobileData).statusCode)
+            rootOperationsEnabled = false
+            assertContains(
+                managementReference.handle(ManagementApiOperation.Status).body,
+                """"root":{"operationsEnabled":false,"availability":"unknown"}""",
+            )
+            val disabledResponse = managementReference.handle(ManagementApiOperation.RotateMobileData)
+
+            assertEquals(409, disabledResponse.statusCode)
+            assertContains(disabledResponse.body, """"disposition":"rejected"""")
+            assertContains(disabledResponse.body, """"failureReason":"root_operations_disabled"""")
+            assertEquals(1, mobileDataRotationCalls)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `created lifecycle allows root rotation callbacks when root operations are enabled`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        var mobileDataRotationCalls = 0
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig().copy(
+                root = AppConfig.default().root.copy(operationsEnabled = true),
+            ),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            socketProvider = RecordingUnavailableBoundSocketProvider,
+            managementHandlerReference = managementReference,
+            publicIp = { null },
+            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+            cloudflareStart = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            cloudflareStop = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.disabled(),
+                )
+            },
+            rotateMobileData = {
+                mobileDataRotationCalls += 1
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rotateAirplaneMode = {
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            bindListener = { listenHost: String, _: Int, backlog: Int ->
+                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+            },
+        )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            managementReference.handle(ManagementApiOperation.RotateMobileData)
+
+            assertEquals(1, mobileDataRotationCalls)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun `created lifecycle unregisters runtime-backed management handler on close`() {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()

@@ -40,11 +40,19 @@ class ManagementApiStateHandlerTest {
         val expectedStatus = runningStatus()
         val secrets = LogRedactionSecrets(managementApiToken = "status-secret")
         callbacks.statusResult = expectedStatus
+        callbacks.rootOperationsEnabledResult = true
 
         val response = callbacks.handler(secrets).handle(ManagementApiOperation.Status)
 
-        assertSameResponse(ManagementApiReadOnlyResponses.status(expectedStatus, secrets), response)
-        callbacks.assertCalls("status")
+        assertSameResponse(
+            ManagementApiReadOnlyResponses.status(
+                status = expectedStatus,
+                rootOperationsEnabled = true,
+                secrets = secrets,
+            ),
+            response,
+        )
+        callbacks.assertCalls("status", "rootOperationsEnabled")
     }
 
     @Test
@@ -209,6 +217,7 @@ class ManagementApiStateHandlerTest {
         var statusResult: ProxyServiceStatus = stoppedStatus()
         var networksResult: List<NetworkDescriptor> = emptyList()
         var publicIpResult: String? = null
+        var rootOperationsEnabledResult: Boolean = false
         var cloudflareStatusResult: CloudflareTunnelStatus = CloudflareTunnelStatus.disabled()
         var cloudflareStartResult: CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
             CloudflareTunnelTransitionDisposition.Ignored,
@@ -244,6 +253,7 @@ class ManagementApiStateHandlerTest {
                     rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
                     rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
                     serviceStop = { record("serviceStop", serviceStopResult) },
+                    rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
                 ),
                 secrets = secrets,
             )

@@ -42,6 +42,7 @@ class ProxySettingsFormControllerTest {
                 mobileDataOffDelaySeconds = "8",
                 networkReturnTimeoutSeconds = "95",
                 cooldownSeconds = "240",
+                rootOperationsEnabled = true,
             ),
         )
 
@@ -55,6 +56,7 @@ class ProxySettingsFormControllerTest {
         assertEquals(8.seconds, saved.config.rotation.mobileDataOffDelay)
         assertEquals(95.seconds, saved.config.rotation.networkReturnTimeout)
         assertEquals(240.seconds, saved.config.rotation.cooldown)
+        assertEquals(true, saved.config.root.operationsEnabled)
         assertEquals(original.cloudflare, saved.config.cloudflare)
         assertEquals(listOf(saved.config), savedConfigs)
     }

@@ -42,6 +42,7 @@ class ProxySettingsFormModelTest {
         assertEquals("7", form.mobileDataOffDelaySeconds)
         assertEquals("90", form.networkReturnTimeoutSeconds)
         assertEquals("300", form.cooldownSeconds)
+        assertEquals(false, form.rootOperationsEnabled)
     }
 
     @Test
@@ -159,6 +160,7 @@ class ProxySettingsFormModelTest {
             mobileDataOffDelaySeconds = " 11 ",
             networkReturnTimeoutSeconds = "120",
             cooldownSeconds = "360",
+            rootOperationsEnabled = true,
         ).toAppConfig(base = base)
 
         val saved = result as ProxySettingsFormResult.Valid
@@ -166,6 +168,7 @@ class ProxySettingsFormModelTest {
         assertEquals(11.seconds, saved.config.rotation.mobileDataOffDelay)
         assertEquals(120.seconds, saved.config.rotation.networkReturnTimeout)
         assertEquals(360.seconds, saved.config.rotation.cooldown)
+        assertEquals(true, saved.config.root.operationsEnabled)
     }
 
     @Test

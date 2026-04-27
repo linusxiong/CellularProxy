@@ -83,6 +83,7 @@ class ProxyServerRuntimeManagementCallbacksTest {
                         RotationStatus.idle(),
                     )
                 },
+                rootOperationsEnabled = { false },
             )
 
             assertEquals(ProxyServiceState.Running, callbacks.healthStatus().state)
@@ -153,6 +154,7 @@ class ProxyServerRuntimeManagementCallbacksTest {
                 cloudflareStop = { cloudflareStop },
                 rotateMobileData = { mobileRotation },
                 rotateAirplaneMode = { airplaneRotation },
+                rootOperationsEnabled = { true },
             )
 
             assertEquals(listOf(network), callbacks.networks())
@@ -164,6 +166,79 @@ class ProxyServerRuntimeManagementCallbacksTest {
             assertEquals(cloudflareStop, callbacks.cloudflareStop())
             assertEquals(mobileRotation, callbacks.rotateMobileData())
             assertEquals(airplaneRotation, callbacks.rotateAirplaneMode())
+            assertEquals(true, callbacks.rootOperationsEnabled())
+        } finally {
+            running.stop()
+            assertIs<ProxyServerRuntimeStopResult.Finished>(running.awaitStopped(timeoutMillis = 1_000))
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `runtime management callbacks block supplied rotation callbacks when root operations are disabled`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val backingSocket = ServerSocket(0)
+        val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
+        val running = startRuntime(
+            listener = listener,
+            acceptLoopExecutor = acceptLoopExecutor,
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+        )
+
+        try {
+            var mobileDataRotationCalls = 0
+            var airplaneModeRotationCalls = 0
+            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
+                runtime = running,
+                networks = { emptyList() },
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    mobileDataRotationCalls += 1
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Accepted,
+                        RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
+                    )
+                },
+                rotateAirplaneMode = {
+                    airplaneModeRotationCalls += 1
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Accepted,
+                        RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
+                    )
+                },
+                rootOperationsEnabled = { false },
+            )
+
+            val mobileStart = callbacks.rotateMobileData()
+            val airplaneStart = callbacks.rotateAirplaneMode()
+
+            assertEquals(0, mobileDataRotationCalls)
+            assertEquals(0, airplaneModeRotationCalls)
+            assertEquals(RotationTransitionDisposition.Rejected, mobileStart.disposition)
+            assertEquals(RotationFailureReason.RootOperationsDisabled, mobileStart.status.failureReason)
+            assertEquals(RotationTransitionDisposition.Rejected, airplaneStart.disposition)
+            assertEquals(RotationFailureReason.RootOperationsDisabled, airplaneStart.status.failureReason)
         } finally {
             running.stop()
             assertIs<ProxyServerRuntimeStopResult.Finished>(running.awaitStopped(timeoutMillis = 1_000))
@@ -212,6 +287,7 @@ class ProxyServerRuntimeManagementCallbacksTest {
                 rotationControlPlane = controlPlane,
                 nowElapsedMillis = { 10_000 },
                 rotationCooldown = 180.seconds,
+                rootOperationsEnabled = { true },
             )
 
             val mobileStart = callbacks.rotateMobileData()
@@ -224,6 +300,70 @@ class ProxyServerRuntimeManagementCallbacksTest {
             assertEquals(RotationTransitionDisposition.Duplicate, duplicateAirplaneStart.disposition)
             assertEquals(mobileStart.status, duplicateAirplaneStart.status)
             assertEquals(mobileStart.status, controlPlane.currentStatus)
+            assertEquals(true, callbacks.rootOperationsEnabled())
+        } finally {
+            running.stop()
+            assertIs<ProxyServerRuntimeStopResult.Finished>(running.awaitStopped(timeoutMillis = 1_000))
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `runtime management callbacks block shared control plane rotations when root operations are disabled`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val backingSocket = ServerSocket(0)
+        val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
+        val running = startRuntime(
+            listener = listener,
+            acceptLoopExecutor = acceptLoopExecutor,
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+        )
+
+        try {
+            val controlPlane = RotationControlPlane()
+            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
+                runtime = running,
+                networks = { emptyList() },
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotationControlPlane = controlPlane,
+                nowElapsedMillis = { 10_000 },
+                rotationCooldown = 180.seconds,
+                rootOperationsEnabled = { false },
+            )
+
+            val mobileStart = callbacks.rotateMobileData()
+            val airplaneStart = callbacks.rotateAirplaneMode()
+
+            assertEquals(false, callbacks.rootOperationsEnabled())
+            assertEquals(RotationTransitionDisposition.Rejected, mobileStart.disposition)
+            assertEquals(RotationState.Failed, mobileStart.status.state)
+            assertEquals(RotationOperation.MobileData, mobileStart.status.operation)
+            assertEquals(RotationFailureReason.RootOperationsDisabled, mobileStart.status.failureReason)
+            assertEquals(RotationTransitionDisposition.Rejected, airplaneStart.disposition)
+            assertEquals(RotationOperation.AirplaneMode, airplaneStart.status.operation)
+            assertEquals(RotationFailureReason.RootOperationsDisabled, airplaneStart.status.failureReason)
+            assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
         } finally {
             running.stop()
             assertIs<ProxyServerRuntimeStopResult.Finished>(running.awaitStopped(timeoutMillis = 1_000))
@@ -272,6 +412,7 @@ class ProxyServerRuntimeManagementCallbacksTest {
                 rotationControlPlane = controlPlane,
                 nowElapsedMillis = { 10_100 },
                 rotationCooldown = 180.seconds,
+                rootOperationsEnabled = { true },
             )
 
             val mobileStart = callbacks.rotateMobileData()

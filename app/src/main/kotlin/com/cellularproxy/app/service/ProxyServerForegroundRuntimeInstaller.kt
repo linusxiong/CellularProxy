@@ -37,6 +37,9 @@ object ProxyServerForegroundRuntimeInstaller {
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        rootOperationsEnabled: () -> Boolean = {
+            (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
+        },
         workerExecutor: Executor,
         queuedClientTimeoutExecutor: ScheduledExecutorService,
         acceptLoopExecutor: ExecutorService,
@@ -64,6 +67,7 @@ object ProxyServerForegroundRuntimeInstaller {
                     cloudflareStop = cloudflareStop,
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
+                    rootOperationsEnabled = rootOperationsEnabled,
                     workerExecutor = workerExecutor,
                     queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
                     acceptLoopExecutor = acceptLoopExecutor,

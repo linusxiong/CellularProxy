@@ -66,6 +66,26 @@ class ManagementApiRotationActionResponsesTest {
     }
 
     @Test
+    fun `rejected rotation transition renders conflict response`() {
+        val response = ManagementApiRotationActionResponses.transition(
+            RotationTransitionResult(
+                disposition = RotationTransitionDisposition.Rejected,
+                status = RotationStatus(
+                    state = RotationState.Failed,
+                    operation = RotationOperation.MobileData,
+                    failureReason = RotationFailureReason.RootOperationsDisabled,
+                ),
+            ),
+        )
+
+        assertEquals(409, response.statusCode)
+        assertEquals(
+            """{"accepted":false,"disposition":"rejected","rotation":{"state":"failed","operation":"mobile_data","oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":"root_operations_disabled"}}""",
+            response.body,
+        )
+    }
+
+    @Test
     fun `completed rotation transition renders public ip change result`() {
         val response = ManagementApiRotationActionResponses.transition(
             RotationTransitionResult(
@@ -101,6 +121,26 @@ class ManagementApiRotationActionResponsesTest {
 
         assertEquals(
             """{"accepted":true,"disposition":"accepted","rotation":{"state":"failed","operation":"airplane_mode","oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":"root_command_timed_out"}}""",
+            response.body,
+        )
+    }
+
+    @Test
+    fun `root disabled rotation rejection renders structured failure reason`() {
+        val response = ManagementApiRotationActionResponses.transition(
+            RotationTransitionResult(
+                disposition = RotationTransitionDisposition.Rejected,
+                status = RotationStatus(
+                    state = RotationState.Failed,
+                    operation = RotationOperation.MobileData,
+                    failureReason = RotationFailureReason.RootOperationsDisabled,
+                ),
+            ),
+        )
+
+        assertEquals(409, response.statusCode)
+        assertEquals(
+            """{"accepted":false,"disposition":"rejected","rotation":{"state":"failed","operation":"mobile_data","oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":"root_operations_disabled"}}""",
             response.body,
         )
     }

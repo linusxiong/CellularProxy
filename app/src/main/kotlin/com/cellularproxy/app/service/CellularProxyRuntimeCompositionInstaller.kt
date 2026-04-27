@@ -44,9 +44,10 @@ class CellularProxyRuntimeCompositionInstallation internal constructor(
 object CellularProxyRuntimeCompositionInstaller {
     fun install(context: Context): CellularProxyRuntimeCompositionInstallation {
         val appContext = context.applicationContext
+        val plainRepository = CellularProxyPlainConfigStore.repository(appContext)
         val bootstrapResult = runBlocking {
             AppConfigBootstrapper(
-                plainRepository = CellularProxyPlainConfigStore.repository(appContext),
+                plainRepository = plainRepository,
                 sensitiveRepository = SensitiveConfigRepositoryFactory.create(appContext),
             ).loadOrCreate()
         }
@@ -57,6 +58,7 @@ object CellularProxyRuntimeCompositionInstaller {
             routeMonitor = routeMonitor,
             socketConnector = AndroidBoundNetworkSocketConnector.create(appContext),
             executorResources = RuntimeCompositionExecutorResources.create(),
+            rootOperationsEnabled = { runBlocking { plainRepository.load().root.operationsEnabled } },
         )
     }
 
@@ -72,6 +74,9 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult = ::ignoredRotationTransition,
         rotateAirplaneMode: () -> RotationTransitionResult = ::ignoredRotationTransition,
+        rootOperationsEnabled: () -> Boolean = {
+            (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
+        },
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
@@ -90,6 +95,7 @@ object CellularProxyRuntimeCompositionInstaller {
             cloudflareStop = cloudflareStop,
             rotateMobileData = rotateMobileData,
             rotateAirplaneMode = rotateAirplaneMode,
+            rootOperationsEnabled = rootOperationsEnabled,
             maxConcurrentConnections = maxConcurrentConnections,
             outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
             recordMetricEvent = recordMetricEvent,
@@ -108,6 +114,9 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult = ::ignoredRotationTransition,
         rotateAirplaneMode: () -> RotationTransitionResult = ::ignoredRotationTransition,
+        rootOperationsEnabled: () -> Boolean = {
+            (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
+        },
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
@@ -125,6 +134,7 @@ object CellularProxyRuntimeCompositionInstaller {
                 cloudflareStop = cloudflareStop,
                 rotateMobileData = rotateMobileData,
                 rotateAirplaneMode = rotateAirplaneMode,
+                rootOperationsEnabled = rootOperationsEnabled,
                 workerExecutor = executorResources.workerExecutor,
                 queuedClientTimeoutExecutor = executorResources.queuedClientTimeoutExecutor,
                 acceptLoopExecutor = executorResources.acceptLoopExecutor,

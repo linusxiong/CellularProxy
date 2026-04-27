@@ -4,6 +4,7 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
@@ -34,14 +35,16 @@ class DashboardStatusModelTest {
         assertEquals(0, model.rejectedConnections)
         assertEquals(DashboardCloudflareState.Disabled, model.cloudflare.state)
         assertFalse(model.cloudflare.remoteManagementAvailable)
-        assertEquals(DashboardRootState.Unknown, model.root)
+        assertEquals(DashboardRootState.Disabled, model.root)
         assertEquals(emptySet(), model.warnings)
     }
 
     @Test
     fun `running service model prefers runtime endpoint route public ip and metrics`() {
         val model = DashboardStatusModel.from(
-            config = AppConfig.default(),
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = true),
+            ),
             status = ProxyServiceStatus.running(
                 listenHost = "127.0.0.1",
                 listenPort = 8181,
@@ -128,12 +131,56 @@ class DashboardStatusModelTest {
     @Test
     fun `model exposes explicit no-root state for dashboard display`() {
         val model = DashboardStatusModel.from(
-            config = AppConfig.default(),
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = true),
+            ),
             status = ProxyServiceStatus.stopped(
                 rootAvailability = RootAvailabilityStatus.Unavailable,
             ),
         )
 
         assertEquals(DashboardRootState.Unavailable, model.root)
+    }
+
+    @Test
+    fun `model shows root operations disabled before reporting runtime root availability`() {
+        val model = DashboardStatusModel.from(
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = false),
+            ),
+            status = ProxyServiceStatus.stopped(
+                rootAvailability = RootAvailabilityStatus.Available,
+            ),
+        )
+
+        assertEquals(DashboardRootState.Disabled, model.root)
+    }
+
+    @Test
+    fun `model shows root availability when root operations are enabled`() {
+        val model = DashboardStatusModel.from(
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = true),
+            ),
+            status = ProxyServiceStatus.stopped(
+                rootAvailability = RootAvailabilityStatus.Available,
+            ),
+        )
+
+        assertEquals(DashboardRootState.Available, model.root)
+    }
+
+    @Test
+    fun `model shows unknown root availability when root operations are enabled and runtime is unknown`() {
+        val model = DashboardStatusModel.from(
+            config = AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = true),
+            ),
+            status = ProxyServiceStatus.stopped(
+                rootAvailability = RootAvailabilityStatus.Unknown,
+            ),
+        )
+
+        assertEquals(DashboardRootState.Unknown, model.root)
     }
 }

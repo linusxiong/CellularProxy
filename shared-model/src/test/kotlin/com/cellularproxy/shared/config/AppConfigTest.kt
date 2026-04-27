@@ -21,6 +21,7 @@ class AppConfigTest {
         assertEquals(3.seconds, config.rotation.mobileDataOffDelay)
         assertEquals(60.seconds, config.rotation.networkReturnTimeout)
         assertEquals(180.seconds, config.rotation.cooldown)
+        assertFalse(config.root.operationsEnabled)
         assertFalse(config.cloudflare.enabled)
         assertEquals(null, config.cloudflare.managementHostnameLabel)
     }

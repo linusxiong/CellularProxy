@@ -19,6 +19,7 @@ data class ManagementApiCallbacks(
     val rotateMobileData: () -> RotationTransitionResult,
     val rotateAirplaneMode: () -> RotationTransitionResult,
     val serviceStop: () -> ProxyServiceStopTransitionResult,
+    val rootOperationsEnabled: () -> Boolean,
 )
 
 class ManagementApiStateHandler(
@@ -30,7 +31,11 @@ class ManagementApiStateHandler(
             ManagementApiOperation.Health ->
                 ManagementApiReadOnlyResponses.health(callbacks.healthStatus())
             ManagementApiOperation.Status ->
-                ManagementApiReadOnlyResponses.status(callbacks.status(), secrets)
+                ManagementApiReadOnlyResponses.status(
+                    status = callbacks.status(),
+                    secrets = secrets,
+                    rootOperationsEnabled = callbacks.rootOperationsEnabled(),
+                )
             ManagementApiOperation.Networks ->
                 ManagementApiReadOnlyResponses.networks(callbacks.networks())
             ManagementApiOperation.PublicIp ->

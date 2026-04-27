@@ -8,6 +8,7 @@ data class AppConfig(
     val network: NetworkConfig,
     val rotation: RotationConfig,
     val cloudflare: CloudflareConfig,
+    val root: RootConfig = RootConfig(),
 ) {
     fun validate(): ConfigValidationResult {
         val errors = buildList {
@@ -34,6 +35,7 @@ data class AppConfig(
             network = NetworkConfig(),
             rotation = RotationConfig(),
             cloudflare = CloudflareConfig(),
+            root = RootConfig(),
         )
     }
 }
@@ -57,6 +59,10 @@ data class RotationConfig(
     val mobileDataOffDelay: Duration = 3.seconds,
     val networkReturnTimeout: Duration = 60.seconds,
     val cooldown: Duration = 180.seconds,
+)
+
+data class RootConfig(
+    val operationsEnabled: Boolean = false,
 )
 
 data class CloudflareConfig(

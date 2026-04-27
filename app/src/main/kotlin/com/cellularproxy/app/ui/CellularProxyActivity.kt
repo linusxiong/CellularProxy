@@ -193,6 +193,18 @@ class CellularProxyActivity : Activity() {
                 inputType = InputType.TYPE_CLASS_NUMBER
                 isEnabled = false
             }
+            val rootOperationsEnabledInput = CheckBox(context).apply {
+                text = getString(R.string.settings_root_operations_enabled)
+                isChecked = initialSettings.rootOperationsEnabled
+                isEnabled = false
+            }
+            addView(
+                rootOperationsEnabledInput,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).withTopMargin(spacing),
+            )
             val cloudflareEnabledInput = CheckBox(context).apply {
                 text = getString(R.string.settings_cloudflare_enabled)
                 isChecked = initialSettings.cloudflareEnabled
@@ -239,6 +251,7 @@ class CellularProxyActivity : Activity() {
                         mobileDataOffDelayInput = mobileDataOffDelayInput,
                         networkReturnTimeoutInput = networkReturnTimeoutInput,
                         cooldownInput = cooldownInput,
+                        rootOperationsEnabledInput = rootOperationsEnabledInput,
                         cloudflareEnabledInput = cloudflareEnabledInput,
                         cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
                         cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
@@ -273,6 +286,7 @@ class CellularProxyActivity : Activity() {
                         mobileDataOffDelayInput = mobileDataOffDelayInput,
                         networkReturnTimeoutInput = networkReturnTimeoutInput,
                         cooldownInput = cooldownInput,
+                        rootOperationsEnabledInput = rootOperationsEnabledInput,
                         cloudflareEnabledInput = cloudflareEnabledInput,
                         cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
                         cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
@@ -316,6 +330,7 @@ class CellularProxyActivity : Activity() {
                 mobileDataOffDelayInput = mobileDataOffDelayInput,
                 networkReturnTimeoutInput = networkReturnTimeoutInput,
                 cooldownInput = cooldownInput,
+                rootOperationsEnabledInput = rootOperationsEnabledInput,
                 cloudflareEnabledInput = cloudflareEnabledInput,
                 cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
                 cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
@@ -404,6 +419,7 @@ class CellularProxyActivity : Activity() {
         mobileDataOffDelayInput: EditText,
         networkReturnTimeoutInput: EditText,
         cooldownInput: EditText,
+        rootOperationsEnabledInput: CheckBox,
         cloudflareEnabledInput: CheckBox,
         cloudflareTunnelTokenInput: EditText,
         cloudflareHostnameLabelInput: EditText,
@@ -429,6 +445,7 @@ class CellularProxyActivity : Activity() {
                 mobileDataOffDelayInput.setText(loaded.mobileDataOffDelaySeconds)
                 networkReturnTimeoutInput.setText(loaded.networkReturnTimeoutSeconds)
                 cooldownInput.setText(loaded.cooldownSeconds)
+                rootOperationsEnabledInput.isChecked = loaded.rootOperationsEnabled
                 cloudflareEnabledInput.isChecked = loaded.cloudflareEnabled
                 cloudflareHostnameLabelInput.setText(loaded.cloudflareHostnameLabel)
                 routeInput.setSelection(RouteTarget.entries.indexOf(loaded.route).coerceAtLeast(0))
@@ -443,6 +460,7 @@ class CellularProxyActivity : Activity() {
                 mobileDataOffDelayInput.isEnabled = true
                 networkReturnTimeoutInput.isEnabled = true
                 cooldownInput.isEnabled = true
+                rootOperationsEnabledInput.isEnabled = true
                 cloudflareEnabledInput.isEnabled = true
                 cloudflareTunnelTokenInput.isEnabled = true
                 cloudflareHostnameLabelInput.isEnabled = true
@@ -466,6 +484,7 @@ class CellularProxyActivity : Activity() {
         mobileDataOffDelayInput: EditText,
         networkReturnTimeoutInput: EditText,
         cooldownInput: EditText,
+        rootOperationsEnabledInput: CheckBox,
         cloudflareEnabledInput: CheckBox,
         cloudflareTunnelTokenInput: EditText,
         cloudflareHostnameLabelInput: EditText,
@@ -490,6 +509,7 @@ class CellularProxyActivity : Activity() {
             mobileDataOffDelaySeconds = mobileDataOffDelayInput.text.toString(),
             networkReturnTimeoutSeconds = networkReturnTimeoutInput.text.toString(),
             cooldownSeconds = cooldownInput.text.toString(),
+            rootOperationsEnabled = rootOperationsEnabledInput.isChecked,
             cloudflareEnabled = cloudflareEnabledInput.isChecked,
             cloudflareTunnelToken = cloudflareTunnelTokenInput.text.toString(),
             cloudflareHostnameLabel = cloudflareHostnameLabelInput.text.toString(),

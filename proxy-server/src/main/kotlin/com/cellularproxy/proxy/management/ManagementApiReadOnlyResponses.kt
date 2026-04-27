@@ -21,6 +21,7 @@ object ManagementApiReadOnlyResponses {
 
     fun status(
         status: ProxyServiceStatus,
+        rootOperationsEnabled: Boolean,
         secrets: LogRedactionSecrets = LogRedactionSecrets(),
     ): ManagementApiResponse =
         ManagementApiResponse.json(
@@ -36,7 +37,10 @@ object ManagementApiReadOnlyResponses {
                 append(""""cloudflare":""")
                 append(status.cloudflare.managementApiJson(secrets))
                 append(',')
-                append(""""root":{"availability":""")
+                append(""""root":{"operationsEnabled":""")
+                append(rootOperationsEnabled)
+                append(',')
+                append(""""availability":""")
                 append(status.rootAvailability.apiValue().jsonString())
                 append("}}")
             },

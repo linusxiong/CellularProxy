@@ -44,7 +44,7 @@ data class DashboardStatusModel(
                 bytesReceived = status.metrics.bytesReceived,
                 bytesSent = status.metrics.bytesSent,
                 cloudflare = cloudflare,
-                root = status.rootAvailability.toDashboardRootState(),
+                root = rootState(config, status),
                 startupError = status.startupError,
                 warnings = buildWarnings(config, status, cloudflare),
             )
@@ -74,6 +74,16 @@ data class DashboardStatusModel(
                 add(DashboardWarning.StartupFailed)
             }
         }
+
+        private fun rootState(
+            config: AppConfig,
+            status: ProxyServiceStatus,
+        ): DashboardRootState =
+            if (!config.root.operationsEnabled) {
+                DashboardRootState.Disabled
+            } else {
+                status.rootAvailability.toDashboardRootState()
+            }
     }
 }
 
@@ -120,6 +130,7 @@ enum class DashboardCloudflareState {
 }
 
 enum class DashboardRootState {
+    Disabled,
     Unknown,
     Available,
     Unavailable,

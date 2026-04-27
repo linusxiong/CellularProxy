@@ -54,6 +54,7 @@ private fun RotationTransitionDisposition.apiValue(): String =
         RotationTransitionDisposition.Accepted -> "accepted"
         RotationTransitionDisposition.Duplicate -> "duplicate"
         RotationTransitionDisposition.Ignored -> "ignored"
+        RotationTransitionDisposition.Rejected -> "rejected"
     }
 
 private fun RotationState.apiValue(): String =
@@ -90,4 +91,5 @@ private fun RotationFailureReason.apiValue(): String =
         RotationFailureReason.NetworkReturnTimedOut -> "network_return_timed_out"
         RotationFailureReason.NewPublicIpProbeFailed -> "new_public_ip_probe_failed"
         RotationFailureReason.StrictIpChangeRequired -> "strict_ip_change_required"
+        RotationFailureReason.RootOperationsDisabled -> "root_operations_disabled"
     }
