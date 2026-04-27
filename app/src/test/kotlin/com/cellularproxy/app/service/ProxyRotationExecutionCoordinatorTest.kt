@@ -398,6 +398,207 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `toggle delay continuation waits until configured delay elapses`() {
+        var now = 12_000L
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val waitingForDelay = runSuspend { coordinator.rotateMobileData() }
+        now = 14_999
+        val stillWaiting = coordinator.advanceToggleDelay()
+        now = 15_000
+        val elapsed = coordinator.advanceToggleDelay()
+
+        assertEquals(RotationState.WaitingForToggleDelay, waitingForDelay.status.state)
+        assertEquals(RotationTransitionDisposition.Ignored, stillWaiting.disposition)
+        assertEquals(RotationState.WaitingForToggleDelay, stillWaiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, elapsed.disposition)
+        assertEquals(RotationState.RunningEnableCommand, elapsed.status.state)
+        assertEquals("198.51.100.10", elapsed.status.oldPublicIp)
+        assertEquals(elapsed.status, controlPlane.currentStatus)
+        assertEquals(listOf(RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000)), rootCommandCalls)
+    }
+
+    @Test
+    fun `toggle delay starts after disable root command completes`() {
+        var now = 12_000L
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = RecordingPauseActions(),
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        now = 15_000
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val waitingForDelay = runSuspend { coordinator.rotateMobileData() }
+        now = 17_999
+        val stillWaiting = coordinator.advanceToggleDelay()
+        now = 18_000
+        val elapsed = coordinator.advanceToggleDelay()
+
+        assertEquals(RotationState.WaitingForToggleDelay, waitingForDelay.status.state)
+        assertEquals(RotationTransitionDisposition.Ignored, stillWaiting.disposition)
+        assertEquals(RotationState.WaitingForToggleDelay, stillWaiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, elapsed.disposition)
+        assertEquals(RotationState.RunningEnableCommand, elapsed.status.state)
+    }
+
+    @Test
+    fun `root command continuation does not execute enable root command after toggle delay`() {
+        var now = 12_000L
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = RecordingPauseActions(),
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        val enableBoundary = coordinator.advanceToggleDelay()
+        val ignoredEnableCommand = coordinator.advanceRootCommand()
+
+        assertEquals(RotationState.RunningEnableCommand, enableBoundary.status.state)
+        assertEquals(RotationTransitionDisposition.Ignored, ignoredEnableCommand.disposition)
+        assertEquals(RotationState.RunningEnableCommand, ignoredEnableCommand.status.state)
+        assertEquals(ignoredEnableCommand.status, controlPlane.currentStatus)
+        assertEquals(listOf(RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000)), rootCommandCalls)
+    }
+
+    @Test
+    fun `toggle delay continuation can advance an already waiting rotation`() {
+        var now = 15_000L
+        val waitingStatus =
+            RotationStatus(
+                state = RotationState.WaitingForToggleDelay,
+                operation = RotationOperation.MobileData,
+                oldPublicIp = "198.51.100.10",
+            )
+        val controlPlane = RotationControlPlane(initialStatus = waitingStatus)
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                pauseActions = RecordingPauseActions(),
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val stillWaiting = coordinator.advanceToggleDelay()
+        now = 18_000
+        val elapsed = coordinator.advanceToggleDelay()
+
+        assertEquals(RotationTransitionDisposition.Ignored, stillWaiting.disposition)
+        assertEquals(RotationState.WaitingForToggleDelay, stillWaiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, elapsed.disposition)
+        assertEquals(RotationState.RunningEnableCommand, elapsed.status.state)
+        assertEquals(elapsed.status, controlPlane.currentStatus)
+    }
+
+    @Test
+    fun `toggle delay configuration requires root command configuration`() {
+        val controlPlane = RotationControlPlane()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                ProxyRotationExecutionCoordinator(
+                    controlPlane = controlPlane,
+                    rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                    pauseActions = RecordingPauseActions(),
+                    activeProxyExchanges = { 0 },
+                    maxConnectionDrainTime = 30.seconds,
+                    toggleDelay = 3.seconds,
+                    nowElapsedMillis = { 10_000 },
+                    cooldown = 180.seconds,
+                    rootAvailabilityTimeoutMillis = 2_000,
+                )
+            }
+
+        assertEquals("Rotation toggle delay continuation requires root command configuration", failure.message)
+        assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
+    }
+
+    @Test
     fun `failed disable root command resumes proxy requests and fails the rotation`() {
         val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
         val controlPlane = RotationControlPlane()

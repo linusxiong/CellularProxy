@@ -25,6 +25,8 @@ import com.cellularproxy.shared.rotation.RotationEvent
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
+import com.cellularproxy.shared.rotation.RotationToggleDelayAdvanceResult
+import com.cellularproxy.shared.rotation.RotationToggleDelayCoordinator
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import kotlin.coroutines.cancellation.CancellationException
@@ -50,6 +52,7 @@ class ProxyRotationExecutionCoordinator(
     private val maxConnectionDrainTime: Duration? = null,
     rootCommandController: RotationRootCommandController? = null,
     private val rootCommandTimeoutMillis: Long? = null,
+    private val toggleDelay: Duration? = null,
     private val secrets: () -> LogRedactionSecrets = { LogRedactionSecrets() },
 ) {
     private val rootAvailabilityCoordinator =
@@ -85,7 +88,9 @@ class ProxyRotationExecutionCoordinator(
                 controlPlane = controlPlane,
             )
         }
+    private val toggleDelayCoordinator = RotationToggleDelayCoordinator(controlPlane)
     private var drainStartedElapsedMillis: Long? = null
+    private var toggleDelayStartedElapsedMillis: Long? = null
 
     init {
         require(rootAvailabilityTimeoutMillis > 0) {
@@ -115,6 +120,12 @@ class ProxyRotationExecutionCoordinator(
         require(rootCommandTimeoutMillis == null || rootCommandTimeoutMillis > 0) {
             "Rotation root command timeout must be positive"
         }
+        require(toggleDelay == null || rootCommandController != null) {
+            "Rotation toggle delay continuation requires root command configuration"
+        }
+        require(toggleDelay == null || !toggleDelay.isNegative()) {
+            "Rotation toggle delay must not be negative"
+        }
     }
 
     suspend fun rotateMobileData(): RotationTransitionResult = rotate(RotationOperation.MobileData)
@@ -134,6 +145,11 @@ class ProxyRotationExecutionCoordinator(
         commandTransition = controlPlane.currentStatus.asIgnoredTransition(),
         nowElapsedMillis = nowElapsedMillis(),
         redactionSecrets = rootCommandCoordinator?.let { secrets() },
+    )
+
+    fun advanceToggleDelay(): RotationTransitionResult = continueWithToggleDelayCoordinatorIfConfigured(
+        toggleDelayTransition = controlPlane.currentStatus.asIgnoredTransition(),
+        nowElapsedMillis = nowElapsedMillis(),
     )
 
     private suspend fun rotate(operation: RotationOperation): RotationTransitionResult {
@@ -315,10 +331,7 @@ class ProxyRotationExecutionCoordinator(
         redactionSecrets: LogRedactionSecrets?,
     ): RotationTransitionResult {
         val coordinator = rootCommandCoordinator ?: return commandTransition
-        if (
-            commandTransition.status.state != RotationState.RunningDisableCommand &&
-            commandTransition.status.state != RotationState.RunningEnableCommand
-        ) {
+        if (commandTransition.status.state != RotationState.RunningDisableCommand) {
             return commandTransition
         }
 
@@ -331,12 +344,63 @@ class ProxyRotationExecutionCoordinator(
                 )
         ) {
             is RotationRootCommandAdvanceResult.Applied ->
-                continueWithResumeIfNeeded(commandResult.progress.transition, nowElapsedMillis)
+                continueAfterRootCommand(commandResult.progress.transition, nowElapsedMillis())
             is RotationRootCommandAdvanceResult.NoAction ->
                 continueWithResumeIfNeeded(commandResult.snapshot.status.asIgnoredTransition(), nowElapsedMillis)
             is RotationRootCommandAdvanceResult.Stale ->
                 continueWithResumeIfNeeded(commandResult.snapshot.status.asIgnoredTransition(), nowElapsedMillis)
         }
+    }
+
+    private fun continueAfterRootCommand(
+        transition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+    ): RotationTransitionResult = if (transition.status.state == RotationState.WaitingForToggleDelay) {
+        continueWithToggleDelayCoordinatorIfConfigured(transition, nowElapsedMillis)
+    } else {
+        continueWithResumeIfNeeded(transition, nowElapsedMillis)
+    }
+
+    private fun continueWithToggleDelayCoordinatorIfConfigured(
+        toggleDelayTransition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+    ): RotationTransitionResult {
+        val configuredToggleDelay = toggleDelay ?: return toggleDelayTransition
+        val delayTransition =
+            synchronized(controlPlane) {
+                if (toggleDelayTransition.status.state != RotationState.WaitingForToggleDelay) {
+                    toggleDelayStartedElapsedMillis = null
+                    return toggleDelayTransition
+                }
+
+                val delayStarted =
+                    toggleDelayStartedElapsedMillis ?: nowElapsedMillis.also {
+                        toggleDelayStartedElapsedMillis = it
+                    }
+
+                when (
+                    val delayResult =
+                        toggleDelayCoordinator.advance(
+                            expectedSnapshot = controlPlane.snapshot(),
+                            delayStartedElapsedMillis = delayStarted,
+                            nowElapsedMillis = nowElapsedMillis,
+                            toggleDelay = configuredToggleDelay,
+                        )
+                ) {
+                    is RotationToggleDelayAdvanceResult.Applied -> {
+                        toggleDelayStartedElapsedMillis = null
+                        delayResult.progress.transition
+                    }
+                    is RotationToggleDelayAdvanceResult.Waiting -> toggleDelayTransition
+                    is RotationToggleDelayAdvanceResult.NoAction -> {
+                        toggleDelayStartedElapsedMillis = null
+                        delayResult.snapshot.status.asIgnoredTransition()
+                    }
+                    is RotationToggleDelayAdvanceResult.Stale -> delayResult.actualSnapshot.status.asIgnoredTransition()
+                }
+            }
+
+        return delayTransition
     }
 
     private fun continueWithResumeIfNeeded(
