@@ -176,7 +176,7 @@ private fun CellularProxyNavigationHost(
             CellularProxyDiagnosticsScreen()
         }
         composable(LogsAudit.route) {
-            CellularProxyDestinationPlaceholder(LogsAudit)
+            CellularProxyLogsAuditScreen()
         }
     }
 }

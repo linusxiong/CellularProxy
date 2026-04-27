@@ -7,6 +7,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticRunRecord
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
@@ -571,6 +572,120 @@ class ComposeAppShellContractTest {
 
         assertEquals("Authorization: [REDACTED]", item.errorCategory)
         assertEquals("https://example.test/status?[REDACTED]", item.details)
+    }
+
+    @Test
+    fun `logs audit route renders dedicated review screen`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("CellularProxyLogsAuditScreen()"),
+            "Logs/Audit route must render the dedicated log review screen instead of the generic placeholder.",
+        )
+        assertTrue(
+            !shellSource.contains("composable(LogsAudit.route) {\n            CellularProxyDestinationPlaceholder(LogsAudit)"),
+            "Logs/Audit route must not use the generic destination placeholder.",
+        )
+
+        listOf(
+            "Logs/Audit",
+            "Category",
+            "Severity",
+            "Time window",
+            "Search",
+            "Copy selected record",
+            "Copy filtered summary",
+            "Export redacted bundle",
+            "No log or audit records match the current filters.",
+        ).forEach { label ->
+            assertTrue(
+                logsAuditSource.contains(label),
+                "Logs/Audit screen must expose `$label`.",
+            )
+        }
+        assertTrue(
+            logsAuditSource.contains("actionsEnabled: Boolean = false"),
+            "Logs/Audit route actions must be disabled by default until runtime handlers are wired.",
+        )
+    }
+
+    @Test
+    fun `logs audit screen state filters rows and redacts unsafe text`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "old-info",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 100,
+                            title = "Runtime started",
+                            detail = "Listening on loopback",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "failed-management",
+                            category = LogsAuditScreenCategory.ManagementApi,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "Management failed with plain-secret-token",
+                            detail = "Authorization: Bearer secret-token\nhttps://example.test/api/status?token=secret-token",
+                        ),
+                    ),
+                selectedRowId = "failed-management",
+                secrets =
+                    LogRedactionSecrets(
+                        managementApiToken = "plain-secret-token",
+                    ),
+                filter =
+                    LogsAuditScreenFilter(
+                        category = LogsAuditScreenCategory.ManagementApi,
+                        severity = LogsAuditScreenSeverity.Failed,
+                        fromEpochMillis = 150,
+                        toEpochMillis = 250,
+                        search = "authorization",
+                    ),
+            )
+
+        assertEquals("1 of 2 records", state.resultSummary)
+        assertEquals("failed-management", state.selectedRow?.id)
+        assertEquals(
+            listOf(LogsAuditScreenAction.CopySelectedRecord, LogsAuditScreenAction.CopyFilteredSummary),
+            state.availableActions,
+        )
+        val row = state.rows.single()
+        assertFalse(
+            row.title.contains("plain-secret-token"),
+            "Logs/Audit row title must redact caller-provided sensitive tokens.",
+        )
+        assertFalse(
+            row.detail.contains("secret-token"),
+            "Logs/Audit row detail must redact query secrets.",
+        )
+    }
+
+    @Test
+    fun `logs audit screen state redacts unsafe search display text`() {
+        val state =
+            LogsAuditScreenState.from(
+                filter =
+                    LogsAuditScreenFilter(
+                        search = "Authorization: Bearer secret-token",
+                    ),
+            )
+
+        assertEquals(
+            "Authorization: [REDACTED]",
+            state.searchDisplayText,
+            "Logs/Audit filter summary must not echo raw search secrets.",
+        )
     }
 
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
