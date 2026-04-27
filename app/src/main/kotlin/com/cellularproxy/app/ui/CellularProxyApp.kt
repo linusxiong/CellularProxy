@@ -3,13 +3,17 @@
 package com.cellularproxy.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -17,8 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -36,51 +40,64 @@ fun CellularProxyApp() {
     val navController = rememberNavController()
 
     MaterialTheme {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text("CellularProxy")
-                    },
-                )
-            },
-            bottomBar = {
-                CellularProxyNavigationBar(navController)
-            },
-        ) { contentPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = CellularProxyNavigationDestination.Dashboard.route,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(contentPadding),
-            ) {
-                composable(Dashboard.route) {
-                    CellularProxyDestinationPlaceholder(Dashboard)
-                }
-                composable(Settings.route) {
-                    CellularProxyDestinationPlaceholder(Settings)
-                }
-                composable(Cloudflare.route) {
-                    CellularProxyDestinationPlaceholder(Cloudflare)
-                }
-                composable(Rotation.route) {
-                    CellularProxyDestinationPlaceholder(Rotation)
-                }
-                composable(Diagnostics.route) {
-                    CellularProxyDestinationPlaceholder(Diagnostics)
-                }
-                composable(LogsAudit.route) {
-                    CellularProxyDestinationPlaceholder(LogsAudit)
+        BoxWithConstraints {
+            val navigationChrome = cellularProxyNavigationChromeFor(maxWidth.value.toInt())
+            val useNavigationRail = navigationChrome == CellularProxyNavigationChrome.NavigationRail
+
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text("CellularProxy")
+                        },
+                    )
+                },
+                bottomBar = {
+                    if (!useNavigationRail) {
+                        CellularProxyNavigationBar(navController)
+                    }
+                },
+            ) { contentPadding ->
+                if (useNavigationRail) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(contentPadding),
+                    ) {
+                        CellularProxyNavigationRail(navController)
+                        CellularProxyNavigationHost(
+                            navController = navController,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                } else {
+                    CellularProxyNavigationHost(
+                        navController = navController,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(contentPadding),
+                    )
                 }
             }
         }
     }
 }
 
+internal enum class CellularProxyNavigationChrome {
+    BottomBar,
+    NavigationRail,
+}
+
+internal fun cellularProxyNavigationChromeFor(availableWidthDp: Int) = if (availableWidthDp >= 600) {
+    CellularProxyNavigationChrome.NavigationRail
+} else {
+    CellularProxyNavigationChrome.BottomBar
+}
+
 @Composable
-private fun CellularProxyNavigationBar(navController: NavController) {
+private fun CellularProxyNavigationBar(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
@@ -102,6 +119,64 @@ private fun CellularProxyNavigationBar(navController: NavController) {
                 },
                 icon = {},
             )
+        }
+    }
+}
+
+@Composable
+private fun CellularProxyNavigationRail(navController: NavHostController) {
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+
+    NavigationRail {
+        CellularProxyNavigationDestination.entries.forEach { destination ->
+            NavigationRailItem(
+                selected = currentRoute == destination.route,
+                onClick = {
+                    navController.navigate(destination.route) {
+                        launchSingleTop = true
+                        restoreState = true
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                    }
+                },
+                label = {
+                    Text(destination.label)
+                },
+                icon = {},
+            )
+        }
+    }
+}
+
+@Composable
+private fun CellularProxyNavigationHost(
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = CellularProxyNavigationDestination.Dashboard.route,
+        modifier = modifier,
+    ) {
+        composable(Dashboard.route) {
+            CellularProxyDestinationPlaceholder(Dashboard)
+        }
+        composable(Settings.route) {
+            CellularProxyDestinationPlaceholder(Settings)
+        }
+        composable(Cloudflare.route) {
+            CellularProxyDestinationPlaceholder(Cloudflare)
+        }
+        composable(Rotation.route) {
+            CellularProxyDestinationPlaceholder(Rotation)
+        }
+        composable(Diagnostics.route) {
+            CellularProxyDestinationPlaceholder(Diagnostics)
+        }
+        composable(LogsAudit.route) {
+            CellularProxyDestinationPlaceholder(LogsAudit)
         }
     }
 }

@@ -132,6 +132,47 @@ class ComposeAppShellContractTest {
         )
     }
 
+    @Test
+    fun `app shell adapts top level navigation chrome for wide screens`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertEquals(
+            CellularProxyNavigationChrome.BottomBar,
+            cellularProxyNavigationChromeFor(599),
+            "Compact screens should keep bottom navigation.",
+        )
+        assertEquals(
+            CellularProxyNavigationChrome.NavigationRail,
+            cellularProxyNavigationChromeFor(600),
+            "Medium-width screens should switch to navigation rail.",
+        )
+        assertEquals(
+            CellularProxyNavigationChrome.NavigationRail,
+            cellularProxyNavigationChromeFor(840),
+            "Expanded screens should keep navigation rail.",
+        )
+
+        assertTrue(
+            shellSource.contains("BoxWithConstraints"),
+            "Compose shell must inspect available width for adaptive navigation chrome.",
+        )
+        assertTrue(
+            shellSource.contains("NavigationRail"),
+            "Wide screens must use a navigation rail instead of only a phone bottom bar.",
+        )
+        assertTrue(
+            shellSource.contains("cellularProxyNavigationChromeFor(maxWidth.value.toInt())"),
+            "Compose shell must use the tested adaptive navigation breakpoint helper.",
+        )
+        assertTrue(
+            shellSource.contains("CellularProxyNavigationRail(navController)"),
+            "Wide layout must render the same top-level destinations through a navigation rail.",
+        )
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory
