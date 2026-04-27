@@ -2,6 +2,7 @@
 
 package com.cellularproxy.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import com.cellularproxy.shared.logging.LogRedactor
 internal fun CellularProxyLogsAuditScreen(
     state: LogsAuditScreenState = LogsAuditScreenState.from(),
     actionsEnabled: Boolean = false,
+    onSelectRecord: (String) -> Unit = {},
     onCopySelectedRecord: () -> Unit = {},
     onCopyFilteredSummary: () -> Unit = {},
     onExportRedactedBundle: () -> Unit = {},
@@ -59,7 +61,11 @@ internal fun CellularProxyLogsAuditScreen(
             )
         } else {
             state.rows.forEach { row ->
-                LogsAuditRow(row)
+                LogsAuditRow(
+                    row = row,
+                    actionsEnabled = actionsEnabled,
+                    onSelectRecord = onSelectRecord,
+                )
             }
         }
     }
@@ -299,9 +305,19 @@ private fun LogsAuditActionRow(
 }
 
 @Composable
-private fun LogsAuditRow(row: LogsAuditScreenRow) {
+private fun LogsAuditRow(
+    row: LogsAuditScreenRow,
+    actionsEnabled: Boolean,
+    onSelectRecord: (String) -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(
+                    enabled = actionsEnabled,
+                    onClick = { onSelectRecord(row.id) },
+                ),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(

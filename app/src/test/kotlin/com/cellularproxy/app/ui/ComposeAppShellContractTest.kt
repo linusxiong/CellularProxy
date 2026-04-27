@@ -1380,6 +1380,23 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `logs audit screen exposes row selection callback`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains("onSelectRecord: (String) -> Unit = {}"),
+            "Logs/Audit screen must expose a selected-record callback for row selection.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onSelectRecord(row.id)"),
+            "Logs/Audit row controls must dispatch the selected row id.",
+        )
+    }
+
+    @Test
     fun `logs audit screen state redacts unsafe search display text`() {
         val state =
             LogsAuditScreenState.from(
