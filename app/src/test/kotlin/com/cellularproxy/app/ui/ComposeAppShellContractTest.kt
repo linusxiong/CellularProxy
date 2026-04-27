@@ -91,6 +91,47 @@ class ComposeAppShellContractTest {
         }
     }
 
+    @Test
+    fun `app shell exposes top level navigation controls`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("NavigationBar"),
+            "Compose shell must expose top-level navigation controls.",
+        )
+        assertTrue(
+            shellSource.contains("NavigationBarItem"),
+            "Top-level navigation controls must render one item per destination.",
+        )
+        assertTrue(
+            shellSource.contains("currentBackStackEntryAsState"),
+            "Top-level navigation controls must track the currently selected route.",
+        )
+        assertTrue(
+            shellSource.contains("navController.navigate(destination.route)"),
+            "Top-level navigation items must navigate to their destination route.",
+        )
+        assertTrue(
+            shellSource.contains("launchSingleTop = true"),
+            "Top-level navigation should avoid stacking duplicate destination copies.",
+        )
+        assertTrue(
+            shellSource.contains("popUpTo(navController.graph.findStartDestination().id)"),
+            "Top-level navigation should pop to the graph start destination instead of stacking tab history.",
+        )
+        assertTrue(
+            shellSource.contains("saveState = true"),
+            "Top-level navigation should save destination state when switching tabs.",
+        )
+        assertTrue(
+            shellSource.contains("restoreState = true"),
+            "Top-level navigation should restore destination state when returning to a tab.",
+        )
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory
