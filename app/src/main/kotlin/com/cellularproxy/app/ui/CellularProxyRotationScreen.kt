@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.shared.config.AppConfig
@@ -39,6 +45,67 @@ internal fun CellularProxyRotationScreen(
     onRotateAirplaneMode: () -> Unit = {},
     onCopyDiagnostics: () -> Unit = {},
 ) {
+    var pendingConfirmationAction by remember { mutableStateOf<RotationScreenAction?>(null) }
+
+    fun performAction(action: RotationScreenAction) {
+        when (action) {
+            RotationScreenAction.CheckRoot -> onCheckRoot()
+            RotationScreenAction.ProbeCurrentPublicIp -> onProbeCurrentPublicIp()
+            RotationScreenAction.RotateMobileData -> onRotateMobileData()
+            RotationScreenAction.RotateAirplaneMode -> onRotateAirplaneMode()
+            RotationScreenAction.CopyDiagnostics -> onCopyDiagnostics()
+        }
+    }
+
+    fun requestAction(action: RotationScreenAction) {
+        when (rotationActionDispatchMode(action)) {
+            RotationActionDispatchMode.Immediate -> performAction(action)
+            RotationActionDispatchMode.ConfirmFirst -> pendingConfirmationAction = action
+        }
+    }
+
+    pendingConfirmationAction?.let { action ->
+        val canConfirm =
+            rotationActionCanDispatch(
+                action = action,
+                actionsEnabled = actionsEnabled,
+                availableActions = state.availableActions,
+            )
+        AlertDialog(
+            onDismissRequest = {
+                pendingConfirmationAction = null
+            },
+            title = {
+                Text(action.confirmationTitle ?: "Confirm rotation action")
+            },
+            text = {
+                Text("Confirm this high-impact root rotation action.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingConfirmationAction = null
+                        if (canConfirm) {
+                            performAction(action)
+                        }
+                    },
+                    enabled = canConfirm,
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingConfirmationAction = null
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     Column(
         modifier =
             Modifier
@@ -55,11 +122,7 @@ internal fun CellularProxyRotationScreen(
         RotationActionRow(
             actionsEnabled = actionsEnabled,
             availableActions = state.availableActions,
-            onCheckRoot = onCheckRoot,
-            onProbeCurrentPublicIp = onProbeCurrentPublicIp,
-            onRotateMobileData = onRotateMobileData,
-            onRotateAirplaneMode = onRotateAirplaneMode,
-            onCopyDiagnostics = onCopyDiagnostics,
+            onAction = ::requestAction,
         )
 
         RotationSection("Root And Cooldown") {
@@ -164,51 +227,99 @@ internal enum class RotationScreenAction(
     val requiresConfirmation: Boolean = confirmationTitle != null
 }
 
+internal enum class RotationActionDispatchMode {
+    Immediate,
+    ConfirmFirst,
+}
+
+internal fun rotationActionDispatchMode(action: RotationScreenAction): RotationActionDispatchMode = if (action.requiresConfirmation) {
+    RotationActionDispatchMode.ConfirmFirst
+} else {
+    RotationActionDispatchMode.Immediate
+}
+
+internal fun rotationActionCanDispatch(
+    action: RotationScreenAction,
+    actionsEnabled: Boolean,
+    availableActions: List<RotationScreenAction>,
+): Boolean = actionsEnabled && action in availableActions
+
 @Composable
 private fun RotationActionRow(
     actionsEnabled: Boolean,
     availableActions: List<RotationScreenAction>,
-    onCheckRoot: () -> Unit,
-    onProbeCurrentPublicIp: () -> Unit,
-    onRotateMobileData: () -> Unit,
-    onRotateAirplaneMode: () -> Unit,
-    onCopyDiagnostics: () -> Unit,
+    onAction: (RotationScreenAction) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedButton(
-            onClick = onCheckRoot,
-            enabled = actionsEnabled && RotationScreenAction.CheckRoot in availableActions,
+            onClick = {
+                onAction(RotationScreenAction.CheckRoot)
+            },
+            enabled =
+                rotationActionCanDispatch(
+                    action = RotationScreenAction.CheckRoot,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Check root")
         }
         OutlinedButton(
-            onClick = onProbeCurrentPublicIp,
-            enabled = actionsEnabled && RotationScreenAction.ProbeCurrentPublicIp in availableActions,
+            onClick = {
+                onAction(RotationScreenAction.ProbeCurrentPublicIp)
+            },
+            enabled =
+                rotationActionCanDispatch(
+                    action = RotationScreenAction.ProbeCurrentPublicIp,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Probe current public IP")
         }
         Button(
-            onClick = onRotateMobileData,
-            enabled = actionsEnabled && RotationScreenAction.RotateMobileData in availableActions,
+            onClick = {
+                onAction(RotationScreenAction.RotateMobileData)
+            },
+            enabled =
+                rotationActionCanDispatch(
+                    action = RotationScreenAction.RotateMobileData,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Rotate mobile data")
         }
         OutlinedButton(
-            onClick = onRotateAirplaneMode,
-            enabled = actionsEnabled && RotationScreenAction.RotateAirplaneMode in availableActions,
+            onClick = {
+                onAction(RotationScreenAction.RotateAirplaneMode)
+            },
+            enabled =
+                rotationActionCanDispatch(
+                    action = RotationScreenAction.RotateAirplaneMode,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Rotate airplane mode")
         }
         OutlinedButton(
-            onClick = onCopyDiagnostics,
-            enabled = actionsEnabled && RotationScreenAction.CopyDiagnostics in availableActions,
+            onClick = {
+                onAction(RotationScreenAction.CopyDiagnostics)
+            },
+            enabled =
+                rotationActionCanDispatch(
+                    action = RotationScreenAction.CopyDiagnostics,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy diagnostics")

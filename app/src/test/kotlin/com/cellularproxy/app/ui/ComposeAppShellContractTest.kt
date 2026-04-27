@@ -992,6 +992,68 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `rotation high impact actions require confirmation before dispatch`() {
+        val rotationSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyRotationScreen.kt")
+                .readText()
+
+        assertEquals(
+            RotationActionDispatchMode.Immediate,
+            rotationActionDispatchMode(RotationScreenAction.CheckRoot),
+        )
+        assertEquals(
+            RotationActionDispatchMode.Immediate,
+            rotationActionDispatchMode(RotationScreenAction.ProbeCurrentPublicIp),
+        )
+        assertEquals(
+            RotationActionDispatchMode.ConfirmFirst,
+            rotationActionDispatchMode(RotationScreenAction.RotateMobileData),
+        )
+        assertEquals(
+            RotationActionDispatchMode.ConfirmFirst,
+            rotationActionDispatchMode(RotationScreenAction.RotateAirplaneMode),
+        )
+        assertEquals(
+            RotationActionDispatchMode.Immediate,
+            rotationActionDispatchMode(RotationScreenAction.CopyDiagnostics),
+        )
+        assertTrue(
+            rotationSource.contains("AlertDialog"),
+            "Rotation high-impact actions must show a confirmation dialog before invoking callbacks.",
+        )
+        assertTrue(
+            rotationSource.contains("pendingConfirmationAction"),
+            "Rotation screen must remember the action awaiting confirmation instead of dispatching it directly.",
+        )
+    }
+
+    @Test
+    fun `rotation confirmation dispatch rechecks current availability`() {
+        assertTrue(
+            rotationActionCanDispatch(
+                action = RotationScreenAction.RotateMobileData,
+                actionsEnabled = true,
+                availableActions = listOf(RotationScreenAction.RotateMobileData),
+            ),
+        )
+        assertFalse(
+            rotationActionCanDispatch(
+                action = RotationScreenAction.RotateMobileData,
+                actionsEnabled = false,
+                availableActions = listOf(RotationScreenAction.RotateMobileData),
+            ),
+        )
+        assertFalse(
+            rotationActionCanDispatch(
+                action = RotationScreenAction.RotateMobileData,
+                actionsEnabled = true,
+                availableActions = listOf(RotationScreenAction.CheckRoot),
+            ),
+        )
+    }
+
+    @Test
     fun `diagnostics route renders dedicated diagnostics screen`() {
         val shellSource =
             repoRoot()
