@@ -217,6 +217,65 @@ class ComposeAppShellContractTest {
         }
     }
 
+    @Test
+    fun `settings route renders dedicated configuration screen`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val settingsSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxySettingsScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("CellularProxySettingsRoute()"),
+            "Settings route must render the dedicated configuration route instead of the generic placeholder.",
+        )
+        assertTrue(
+            !shellSource.contains("composable(Settings.route) {\n            CellularProxyDestinationPlaceholder(Settings)"),
+            "Settings route must not use the generic destination placeholder.",
+        )
+
+        listOf(
+            "Listen host",
+            "Listen port",
+            "Proxy authentication",
+            "Max concurrent connections",
+            "Default route",
+            "Strict IP change",
+            "Mobile data off delay",
+            "Network return timeout",
+            "Rotation cooldown",
+            "Root operations",
+            "Proxy username",
+            "Proxy password",
+            "Management API token",
+            "Cloudflare enabled",
+            "Cloudflare tunnel token",
+            "Cloudflare hostname",
+            "Leave secret fields blank to keep current values.",
+            "Save settings",
+        ).forEach { label ->
+            assertTrue(
+                settingsSource.contains(label),
+                "Settings screen must expose `$label`.",
+            )
+        }
+        assertTrue(
+            settingsSource.contains("mutableStateOf(ProxySettingsFormState.from(AppConfig.default()))"),
+            "Settings route must own editable form state until ViewModel/storage wiring is added.",
+        )
+        assertTrue(
+            settingsSource.contains("onFormChange = { updatedForm -> form = updatedForm }"),
+            "Settings route must update rendered form state after field edits.",
+        )
+        assertTrue(
+            settingsSource.contains("KeyboardType.Password"),
+            "Secret settings fields must use password keyboard semantics, not only visual masking.",
+        )
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory

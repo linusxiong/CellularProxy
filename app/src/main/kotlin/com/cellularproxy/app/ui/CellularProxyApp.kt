@@ -164,7 +164,7 @@ private fun CellularProxyNavigationHost(
             CellularProxyDashboardScreen()
         }
         composable(Settings.route) {
-            CellularProxyDestinationPlaceholder(Settings)
+            CellularProxySettingsRoute()
         }
         composable(Cloudflare.route) {
             CellularProxyDestinationPlaceholder(Cloudflare)
