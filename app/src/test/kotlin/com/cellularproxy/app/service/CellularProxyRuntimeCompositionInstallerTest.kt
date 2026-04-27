@@ -14,6 +14,7 @@ import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.root.RootCommandAuditPhase
 import com.cellularproxy.shared.root.RootCommandAuditRecord
+import com.cellularproxy.shared.root.RootCommandCategory
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
@@ -207,7 +208,7 @@ class CellularProxyRuntimeCompositionInstallerTest {
     }
 
     @Test
-    fun `default production rotation callbacks reject when execution is not wired`() {
+    fun `default production rotation handler checks root availability before rotation work`() {
         val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
         val executors =
             RuntimeCompositionExecutorResources(
@@ -215,6 +216,7 @@ class CellularProxyRuntimeCompositionInstallerTest {
                 queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
                 acceptLoopExecutor = Executors.newSingleThreadExecutor(),
             )
+        val auditRecords = mutableListOf<RootCommandAuditRecord>()
         val installation =
             CellularProxyRuntimeCompositionInstaller.installForTesting(
                 bootstrapResult = readyBootstrap(),
@@ -223,6 +225,15 @@ class CellularProxyRuntimeCompositionInstallerTest {
                 socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
                 executorResources = executors,
                 rootOperationsEnabled = { true },
+                rootCommandProcessExecutor = { _, _ ->
+                    com.cellularproxy.root.RootCommandProcessResult.Completed(
+                        exitCode = 0,
+                        stdout = "2000",
+                        stderr = "",
+                    )
+                },
+                recordRootAudit = auditRecords::add,
+                nowElapsedMillis = { 0L },
                 bindListener = { listenHost: String, _: Int, backlog: Int ->
                     ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
                 },
@@ -237,19 +248,19 @@ class CellularProxyRuntimeCompositionInstallerTest {
             ForegroundProxyRuntimeLifecycleRegistry.foregroundProxyRuntimeLifecycle.startProxyRuntime()
 
             val mobileData = installed.managementHandlerReference.handle(ManagementApiOperation.RotateMobileData)
-            val airplaneMode = installed.managementHandlerReference.handle(ManagementApiOperation.RotateAirplaneMode)
 
-            assertEquals(409, mobileData.statusCode)
-            assertContains(mobileData.body, """"disposition":"rejected"""")
+            assertEquals(202, mobileData.statusCode)
+            assertContains(mobileData.body, """"disposition":"accepted"""")
             assertContains(mobileData.body, """"state":"failed"""")
             assertContains(mobileData.body, """"operation":"mobile_data"""")
-            assertContains(mobileData.body, """"failureReason":"execution_unavailable"""")
-
-            assertEquals(409, airplaneMode.statusCode)
-            assertContains(airplaneMode.body, """"disposition":"rejected"""")
-            assertContains(airplaneMode.body, """"state":"failed"""")
-            assertContains(airplaneMode.body, """"operation":"airplane_mode"""")
-            assertContains(airplaneMode.body, """"failureReason":"execution_unavailable"""")
+            assertContains(mobileData.body, """"failureReason":"root_unavailable"""")
+            assertEquals(
+                listOf(
+                    RootCommandCategory.RootAvailabilityCheck,
+                    RootCommandCategory.RootAvailabilityCheck,
+                ),
+                auditRecords.map { it.category },
+            )
         } finally {
             installation.close()
             assertTerminates(executors.workerExecutor)
