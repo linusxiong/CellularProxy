@@ -254,6 +254,97 @@ internal enum class LogsAuditScreenAction {
     ExportRedactedBundle,
 }
 
+internal class LogsAuditScreenController(
+    private val rows: List<LogsAuditScreenInputRow> = emptyList(),
+    private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val exportSupported: Boolean = false,
+    private val exportGeneratedAtEpochMillis: Long = 0,
+    private val maxRows: Int? = null,
+) {
+    private val pendingEffects = mutableListOf<LogsAuditScreenEffect>()
+    var state: LogsAuditScreenState = buildState()
+        private set
+
+    fun handle(event: LogsAuditScreenEvent) {
+        when (event) {
+            LogsAuditScreenEvent.CopyFilteredSummary -> {
+                if (LogsAuditScreenAction.CopyFilteredSummary in state.availableActions) {
+                    pendingEffects.add(LogsAuditScreenEffect.CopyText(state.copyableFilteredSummary))
+                }
+            }
+            LogsAuditScreenEvent.CopySelectedRecord -> {
+                state.copyableSelectedRecord?.let { copyText ->
+                    pendingEffects.add(LogsAuditScreenEffect.CopyText(copyText))
+                }
+            }
+            LogsAuditScreenEvent.ExportRedactedBundle -> {
+                state.exportBundle?.let { bundle ->
+                    pendingEffects.add(LogsAuditScreenEffect.ExportBundle(bundle))
+                }
+            }
+            is LogsAuditScreenEvent.SelectRecord -> {
+                state = buildState(filter = state.filter, selectedRowId = event.rowId)
+            }
+            LogsAuditScreenEvent.ClearSelection -> {
+                state = buildState(filter = state.filter)
+            }
+            is LogsAuditScreenEvent.UpdateFilter -> {
+                state = buildState(filter = event.filter, selectedRowId = state.selectedRow?.id)
+                if (state.selectedRow == null) {
+                    state = buildState(filter = event.filter)
+                }
+            }
+        }
+    }
+
+    fun consumeEffects(): List<LogsAuditScreenEffect> {
+        val effects = pendingEffects.toList()
+        pendingEffects.clear()
+        return effects
+    }
+
+    private fun buildState(
+        filter: LogsAuditScreenFilter = LogsAuditScreenFilter(),
+        selectedRowId: String? = null,
+    ): LogsAuditScreenState = LogsAuditScreenState.from(
+        rows = rows,
+        selectedRowId = selectedRowId,
+        filter = filter,
+        secrets = secrets,
+        exportSupported = exportSupported,
+        exportGeneratedAtEpochMillis = exportGeneratedAtEpochMillis,
+        maxRows = maxRows,
+    )
+}
+
+internal sealed interface LogsAuditScreenEvent {
+    data class SelectRecord(
+        val rowId: String,
+    ) : LogsAuditScreenEvent
+
+    data class UpdateFilter(
+        val filter: LogsAuditScreenFilter,
+    ) : LogsAuditScreenEvent
+
+    data object ClearSelection : LogsAuditScreenEvent
+
+    data object CopySelectedRecord : LogsAuditScreenEvent
+
+    data object CopyFilteredSummary : LogsAuditScreenEvent
+
+    data object ExportRedactedBundle : LogsAuditScreenEvent
+}
+
+internal sealed interface LogsAuditScreenEffect {
+    data class CopyText(
+        val text: String,
+    ) : LogsAuditScreenEffect
+
+    data class ExportBundle(
+        val bundle: LogsAuditScreenExportBundle,
+    ) : LogsAuditScreenEffect
+}
+
 @Composable
 private fun LogsAuditFilterSummary(state: LogsAuditScreenState) {
     val filter = state.filter
