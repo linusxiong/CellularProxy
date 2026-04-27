@@ -161,4 +161,23 @@ class NotificationStatusModelTest {
         assertEquals("Service startup failed | Selected route is unavailable", model.warningText)
         assertEquals(NotificationPriority.Warning, model.priority)
     }
+
+    @Test
+    fun `notification warns specifically when Cloudflare is enabled but tunnel token is missing at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingCloudflareTunnelToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.CloudflareTokenMissing),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Cloudflare tunnel token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
 }

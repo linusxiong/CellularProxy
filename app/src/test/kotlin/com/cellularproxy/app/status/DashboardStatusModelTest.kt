@@ -191,6 +191,23 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns specifically when Cloudflare is enabled but tunnel token is missing at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingCloudflareTunnelToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.CloudflareTokenMissing),
+            model.warnings,
+        )
+    }
+
+    @Test
     fun `model shows root operations disabled before reporting runtime root availability`() {
         val model =
             DashboardStatusModel.from(

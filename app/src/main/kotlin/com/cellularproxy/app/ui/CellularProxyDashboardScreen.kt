@@ -206,5 +206,6 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.CloudflareFailed -> "Cloudflare tunnel failed"
     DashboardWarning.RootUnavailable -> "Root access is unavailable"
     DashboardWarning.SelectedRouteUnavailable -> "Selected route is unavailable"
+    DashboardWarning.CloudflareTokenMissing -> "Cloudflare tunnel token is missing"
     DashboardWarning.StartupFailed -> "Proxy startup failed"
 }
