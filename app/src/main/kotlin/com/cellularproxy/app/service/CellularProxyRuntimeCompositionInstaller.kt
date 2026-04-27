@@ -2,6 +2,7 @@ package com.cellularproxy.app.service
 
 import android.content.Context
 import android.util.Log
+import com.cellularproxy.app.audit.CellularProxyManagementAuditStore
 import com.cellularproxy.app.audit.CellularProxyRootAuditStore
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.AppConfigBootstrapper
@@ -62,6 +63,7 @@ object CellularProxyRuntimeCompositionInstaller {
         val routeMonitor = AndroidNetworkRouteMonitor.create(appContext)
         val rootOperationsEnabled = { runBlocking { plainRepository.load().root.operationsEnabled } }
         val rootAuditLog = CellularProxyRootAuditStore.rootCommandAuditLog(appContext)
+        val managementAuditLog = CellularProxyManagementAuditStore.managementApiAuditLog(appContext)
         return install(
             bootstrapResult = bootstrapResult,
             observedNetworks = routeMonitor::observedNetworks,
@@ -75,6 +77,9 @@ object CellularProxyRuntimeCompositionInstaller {
                     recordRootAudit = rootAuditLog::record,
                     reportRootAuditFailure = ::logRootAuditFailure,
                 ),
+            ),
+            recordManagementAudit = nonFatalManagementAuditRecorder(
+                recordManagementAudit = managementAuditLog::record,
             ),
         )
     }
@@ -98,6 +103,7 @@ object CellularProxyRuntimeCompositionInstaller {
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (com.cellularproxy.app.audit.ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): CellularProxyRuntimeCompositionInstallation =
@@ -118,6 +124,7 @@ object CellularProxyRuntimeCompositionInstaller {
             maxConcurrentConnections = maxConcurrentConnections,
             outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
             recordMetricEvent = recordMetricEvent,
+            recordManagementAudit = recordManagementAudit,
             bindListener = bindListener,
         )
 
@@ -140,6 +147,7 @@ object CellularProxyRuntimeCompositionInstaller {
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (com.cellularproxy.app.audit.ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): CellularProxyRuntimeCompositionInstallation {
@@ -162,6 +170,7 @@ object CellularProxyRuntimeCompositionInstaller {
                 maxConcurrentConnections = maxConcurrentConnections,
                 outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
                 recordMetricEvent = recordMetricEvent,
+                recordManagementAudit = recordManagementAudit,
                 bindListener = bindListener,
             )
         } catch (throwable: Throwable) {

@@ -13,6 +13,8 @@ import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflight
 import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import com.cellularproxy.proxy.management.ManagementApiHandler
+import com.cellularproxy.proxy.management.ManagementApiStreamAuditEvent
+import com.cellularproxy.proxy.management.ManagementApiStreamAuditOutcome
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandler
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandlingResult
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
@@ -107,10 +109,14 @@ class ProxyClientStreamExchangeHandler(
     connectConnector: OutboundConnectTunnelConnector,
     managementHandler: ManagementApiHandler,
     private val proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
+    private val recordManagementAudit: (ManagementApiStreamAuditEvent) -> Unit = {},
 ) {
     private val httpHandler = HttpProxyOutboundExchangeHandler(httpConnector)
     private val connectHandler = ConnectTunnelOutboundExchangeHandler(connectConnector)
-    private val managementHandler = ManagementApiStreamExchangeHandler(managementHandler)
+    private val managementHandler = ManagementApiStreamExchangeHandler(
+        handler = managementHandler,
+        recordManagementAudit = recordManagementAudit,
+    )
 
     val activeProxyExchanges: Long
         get() = proxyActivityTracker.activeProxyExchanges
@@ -168,11 +174,14 @@ class ProxyClientStreamExchangeHandler(
                     }
                 }
                 is ProxyIngressStreamPreflightDecision.Rejected ->
-                    writePreflightRejection(preflight, client.output)
-                        .also { rejected ->
-                            ProxyClientStreamExchangeMetrics.eventsFor(rejected)
-                                .recordSafely(recordMetricEvent)
-                        }
+                    run {
+                        recordRejectedManagementAuditIfNeeded(preflight)
+                        writePreflightRejection(preflight, client.output)
+                            .also { rejected ->
+                                ProxyClientStreamExchangeMetrics.eventsFor(rejected)
+                                    .recordSafely(recordMetricEvent)
+                            }
+                    }
             }
         } finally {
             client.closeAfterExchange()
@@ -249,6 +258,32 @@ class ProxyClientStreamExchangeHandler(
             requiresAuditLog = rejected.requiresAuditLog,
             headerBytesRead = rejected.headerBytesRead,
         )
+    }
+
+    private fun recordRejectedManagementAuditIfNeeded(preflight: ProxyIngressStreamPreflightDecision.Rejected) {
+        if (!preflight.requiresAuditLog) {
+            return
+        }
+        val statusCode = when (val response = preflight.response) {
+            is ProxyErrorResponseDecision.Emit -> response.response.statusCode
+            ProxyErrorResponseDecision.Suppress -> return
+        }
+        recordManagementAuditSafely(
+            ManagementApiStreamAuditEvent(
+                operation = null,
+                outcome = ManagementApiStreamAuditOutcome.AuthorizationRejected,
+                statusCode = statusCode,
+                disposition = null,
+            ),
+        )
+    }
+
+    private fun recordManagementAuditSafely(event: ManagementApiStreamAuditEvent) {
+        try {
+            recordManagementAudit(event)
+        } catch (_: Exception) {
+            // Audit sink failures must not replace proxy handling outcomes.
+        }
     }
 }
 

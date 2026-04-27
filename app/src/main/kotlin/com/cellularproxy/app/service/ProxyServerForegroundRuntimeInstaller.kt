@@ -1,5 +1,6 @@
 package com.cellularproxy.app.service
 
+import com.cellularproxy.app.audit.ManagementApiAuditRecord
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.network.BoundNetworkSocketConnector
@@ -48,6 +49,7 @@ object ProxyServerForegroundRuntimeInstaller {
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = INSTALLER_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): ProxyServerForegroundRuntimeInstallResult =
@@ -78,6 +80,7 @@ object ProxyServerForegroundRuntimeInstaller {
                         ?: bootstrapResult.plainConfig.proxy.maxConcurrentConnections,
                     outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
                     recordMetricEvent = recordMetricEvent,
+                    recordManagementAudit = recordManagementAudit,
                     bindListener = bindListener,
                 )
                 ProxyServerForegroundRuntimeInstallResult.Installed(

@@ -1,6 +1,8 @@
 package com.cellularproxy.app.service
 
 import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.audit.ManagementApiAuditOutcome
+import com.cellularproxy.app.audit.ManagementApiAuditRecord
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
@@ -11,6 +13,7 @@ import com.cellularproxy.proxy.forwarding.OutboundHttpOriginOpenFailure
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginOpenResult
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
+import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
 import com.cellularproxy.proxy.server.BoundProxyServerSocket
 import com.cellularproxy.proxy.server.ProxyBoundClientConnectionHandler
 import com.cellularproxy.proxy.server.ProxyClientStreamExchangeHandler
@@ -611,6 +614,99 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
     }
 
     @Test
+    fun `created lifecycle records local high impact management audit events`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        val auditRecords = mutableListOf<ManagementApiAuditRecord>()
+        var boundListener: BoundProxyServerSocket? = null
+        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
+            plainConfig = loopbackAppConfig(),
+            sensitiveConfig = sensitiveConfig,
+            observedNetworks = { listOf(wifiRoute()) },
+            socketProvider = RecordingUnavailableBoundSocketProvider,
+            managementHandlerReference = managementReference,
+            publicIp = { null },
+            cloudflareStatus = { CloudflareTunnelStatus.connected() },
+            cloudflareStart = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Duplicate,
+                    CloudflareTunnelStatus.connected(),
+                )
+            },
+            cloudflareStop = {
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Ignored,
+                    CloudflareTunnelStatus.connected(),
+                )
+            },
+            rotateMobileData = {
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rotateAirplaneMode = {
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Ignored,
+                    RotationStatus.idle(),
+                )
+            },
+            rootAvailability = { RootAvailabilityStatus.Unknown },
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            recordManagementAudit = auditRecords::add,
+            bindListener = { listenHost: String, _: Int, backlog: Int ->
+                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                    if (result is ProxyServerSocketBindResult.Bound) {
+                        boundListener = result.listener
+                    }
+                }
+            },
+        )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            val listener = assertNotNull(boundListener)
+            Socket(TEST_LOOPBACK_HOST, listener.listenPort).use { socket ->
+                socket.soTimeout = CLIENT_READ_TIMEOUT_MILLIS
+                socket.getOutputStream().write(authenticatedManagementRequestBytes("POST /api/cloudflare/start HTTP/1.1"))
+                socket.getOutputStream().flush()
+
+                val input = socket.getInputStream()
+                assertContains(
+                    input.readAsciiLine(),
+                    "HTTP/1.1 409 ",
+                )
+                input.readRemainingAscii()
+            }
+
+            assertEquals(
+                listOf(
+                    ManagementApiAuditRecord(
+                        operation = ManagementApiOperation.CloudflareStart,
+                        outcome = ManagementApiAuditOutcome.Responded,
+                        statusCode = 409,
+                        disposition = ManagementApiStreamExchangeDisposition.Routed,
+                    ),
+                ),
+                auditRecords.toList(),
+            )
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun `created lifecycle installs runtime-backed management handler while runtime is running`() {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()
@@ -1110,6 +1206,14 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                 "\r\n"
             ).toByteArray(Charsets.US_ASCII)
     }
+
+    private fun authenticatedManagementRequestBytes(requestLine: String): ByteArray =
+        (
+            "$requestLine\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer management-token\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
 
     private fun wifiRoute(): NetworkDescriptor =
         NetworkDescriptor(

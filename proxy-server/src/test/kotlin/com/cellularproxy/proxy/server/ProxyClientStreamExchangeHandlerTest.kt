@@ -16,8 +16,11 @@ import com.cellularproxy.proxy.forwarding.ConnectTunnelStreamRelayResult
 import com.cellularproxy.proxy.forwarding.ConnectTunnelRelayDirection
 import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.management.ManagementApiHandler
+import com.cellularproxy.proxy.management.ManagementApiHandlerException
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
+import com.cellularproxy.proxy.management.ManagementApiStreamAuditEvent
+import com.cellularproxy.proxy.management.ManagementApiStreamAuditOutcome
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeHandlingResult
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
@@ -26,6 +29,7 @@ import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Base64
@@ -35,6 +39,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ProxyClientStreamExchangeHandlerTest {
@@ -190,6 +195,7 @@ class ProxyClientStreamExchangeHandlerTest {
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
         assertEquals(202, responded.statusCode)
+        assertEquals(ManagementApiOperation.ServiceStop, responded.operation)
         assertTrue(responded.requiresAuditLog)
         assertEquals(ManagementApiStreamExchangeDisposition.Routed, responded.disposition)
         assertEquals(listOf(ManagementApiOperation.ServiceStop), managementHandler.operations)
@@ -202,6 +208,322 @@ class ProxyClientStreamExchangeHandlerTest {
                 ProxyTrafficMetricsEvent.ConnectionClosed,
             ),
             metricEvents,
+        )
+    }
+
+    @Test
+    fun `records local high impact management response audit event`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = RecordingManagementHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            ),
+            recordManagementAudit = auditEvents::add,
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream(request),
+                output = ByteArrayOutputStream(),
+            ),
+        )
+
+        assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = ManagementApiOperation.ServiceStop,
+                    outcome = ManagementApiStreamAuditOutcome.Responded,
+                    statusCode = 202,
+                    disposition = ManagementApiStreamExchangeDisposition.Routed,
+                ),
+            ),
+            auditEvents,
+        )
+    }
+
+    @Test
+    fun `records local high impact route rejection audit event with attempted operation`() {
+        val request = (
+            "POST /api/service/stop?reason=local HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = ThrowingManagementHandler(),
+            recordManagementAudit = auditEvents::add,
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream(request),
+                output = ByteArrayOutputStream(),
+            ),
+        )
+
+        val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
+        val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
+        assertEquals(400, responded.statusCode)
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = ManagementApiOperation.ServiceStop,
+                    outcome = ManagementApiStreamAuditOutcome.RouteRejected,
+                    statusCode = 400,
+                    disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
+                ),
+            ),
+            auditEvents,
+        )
+    }
+
+    @Test
+    fun `records local high impact authorization rejection audit event`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val output = ByteArrayOutputStream()
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = ThrowingManagementHandler(),
+            recordManagementAudit = auditEvents::add,
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream(request),
+                output = output,
+            ),
+        )
+
+        val rejected = assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result)
+        assertEquals(output.size(), rejected.responseBytesWritten)
+        assertContains(output.toString(Charsets.UTF_8), "HTTP/1.1 401 Unauthorized")
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = null,
+                    outcome = ManagementApiStreamAuditOutcome.AuthorizationRejected,
+                    statusCode = 401,
+                    disposition = null,
+                ),
+            ),
+            auditEvents,
+        )
+    }
+
+    @Test
+    fun `records local high impact handler failure audit event before rethrowing`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+        val failure = IOException("runtime unavailable")
+
+        val thrown = assertFailsWith<ManagementApiHandlerException> {
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ManagementApiHandler { throw failure },
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(
+                    input = ByteArrayInputStream(request),
+                    output = ByteArrayOutputStream(),
+                ),
+            )
+        }
+
+        assertSame(failure, thrown.cause)
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = ManagementApiOperation.ServiceStop,
+                    outcome = ManagementApiStreamAuditOutcome.HandlerFailed,
+                    statusCode = null,
+                    disposition = null,
+                ),
+            ),
+            auditEvents,
+        )
+    }
+
+    @Test
+    fun `local management audit recorder failure does not replace command response`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val output = ByteArrayOutputStream()
+
+        val result = handler(
+            httpConnector = ThrowingHttpConnector(),
+            connectConnector = ThrowingConnectConnector(),
+            managementHandler = RecordingManagementHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            ),
+            recordManagementAudit = { throw IllegalStateException("audit unavailable") },
+        ).handle(
+            config = config,
+            activeConnections = 0,
+            client = ProxyClientStreamConnection(
+                input = ByteArrayInputStream(request),
+                output = output,
+            ),
+        )
+
+        val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
+        assertEquals(202, assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result).statusCode)
+        assertContains(output.toString(Charsets.UTF_8), "HTTP/1.1 202 Accepted")
+    }
+
+    @Test
+    fun `records local high impact management response audit before response write failure`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+        val writeFailure = IOException("client disconnected")
+
+        val thrown = assertFailsWith<IOException> {
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = RecordingManagementHandler(
+                    ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+                ),
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(
+                    input = ByteArrayInputStream(request),
+                    output = ThrowingOutputStream(writeFailure),
+                ),
+            )
+        }
+
+        assertSame(writeFailure, thrown)
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = ManagementApiOperation.ServiceStop,
+                    outcome = ManagementApiStreamAuditOutcome.Responded,
+                    statusCode = 202,
+                    disposition = ManagementApiStreamExchangeDisposition.Routed,
+                ),
+            ),
+            auditEvents,
+        )
+    }
+
+    @Test
+    fun `records local high impact route rejection audit before response write failure`() {
+        val request = (
+            "POST /api/service/stop?reason=local HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+        val writeFailure = IOException("client disconnected")
+
+        val thrown = assertFailsWith<IOException> {
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(
+                    input = ByteArrayInputStream(request),
+                    output = ThrowingOutputStream(writeFailure),
+                ),
+            )
+        }
+
+        assertSame(writeFailure, thrown)
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = ManagementApiOperation.ServiceStop,
+                    outcome = ManagementApiStreamAuditOutcome.RouteRejected,
+                    statusCode = 400,
+                    disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
+                ),
+            ),
+            auditEvents,
+        )
+    }
+
+    @Test
+    fun `records local high impact authorization rejection audit before response write failure`() {
+        val request = (
+            "POST /api/service/stop HTTP/1.1\r\n" +
+                "Host: phone.local\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.US_ASCII)
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+        val writeFailure = IOException("client disconnected")
+
+        val thrown = assertFailsWith<IOException> {
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(
+                    input = ByteArrayInputStream(request),
+                    output = ThrowingOutputStream(writeFailure),
+                ),
+            )
+        }
+
+        assertSame(writeFailure, thrown)
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = null,
+                    outcome = ManagementApiStreamAuditOutcome.AuthorizationRejected,
+                    statusCode = 401,
+                    disposition = null,
+                ),
+            ),
+            auditEvents,
         )
     }
 
@@ -503,12 +825,14 @@ class ProxyClientStreamExchangeHandlerTest {
         connectConnector: OutboundConnectTunnelConnector,
         managementHandler: ManagementApiHandler,
         proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
+        recordManagementAudit: (ManagementApiStreamAuditEvent) -> Unit = {},
     ): ProxyClientStreamExchangeHandler =
         ProxyClientStreamExchangeHandler(
             httpConnector = httpConnector,
             connectConnector = connectConnector,
             managementHandler = managementHandler,
             proxyActivityTracker = proxyActivityTracker,
+            recordManagementAudit = recordManagementAudit,
         )
 
     private fun validProxyAuthorization(): String {
@@ -608,6 +932,18 @@ class ProxyClientStreamExchangeHandlerTest {
         }
 
         override fun toString(): String = delegate.toString(Charsets.UTF_8)
+    }
+
+    private class ThrowingOutputStream(
+        private val failure: IOException,
+    ) : OutputStream() {
+        override fun write(value: Int) {
+            throw failure
+        }
+
+        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+            throw failure
+        }
     }
 }
 

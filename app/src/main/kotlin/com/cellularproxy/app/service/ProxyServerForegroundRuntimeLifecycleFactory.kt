@@ -1,11 +1,15 @@
 package com.cellularproxy.app.service
 
+import com.cellularproxy.app.audit.ManagementApiAuditOutcome
+import com.cellularproxy.app.audit.ManagementApiAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketProvider
 import com.cellularproxy.network.RouteBoundSocketProvider
 import com.cellularproxy.proxy.management.ManagementApiHandler
 import com.cellularproxy.proxy.management.ManagementApiStateHandler
+import com.cellularproxy.proxy.management.ManagementApiStreamAuditEvent
+import com.cellularproxy.proxy.management.ManagementApiStreamAuditOutcome
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyBoundClientConnectionHandler
 import com.cellularproxy.proxy.server.ProxyClientStreamExchangeHandler
@@ -48,6 +52,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): ProxyServerForegroundRuntimeLifecycle =
@@ -66,6 +71,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             maxConcurrentConnections = maxConcurrentConnections,
             outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
             recordMetricEvent = recordMetricEvent,
+            recordManagementAudit = recordManagementAudit,
             bindListener = bindListener,
         )
 
@@ -89,6 +95,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): ProxyServerForegroundRuntimeLifecycle =
@@ -115,6 +122,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             maxConcurrentConnections = maxConcurrentConnections,
             outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
             recordMetricEvent = recordMetricEvent,
+            recordManagementAudit = recordManagementAudit,
             bindListener = bindListener,
         )
 
@@ -138,6 +146,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): ProxyServerForegroundRuntimeLifecycle =
@@ -153,6 +162,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             maxConcurrentConnections = maxConcurrentConnections,
             outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
             recordMetricEvent = recordMetricEvent,
+            recordManagementAudit = recordManagementAudit,
             bindListener = bindListener,
             installRuntimeManagementHandler = { runtime ->
                 val rotateMobileDataIfRootEnabled = rotateMobileData.guardRootOperations(
@@ -195,6 +205,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
         outboundConnectTimeoutMillis: Long = DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
+        recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
         installRuntimeManagementHandler: (RunningProxyServerRuntime) -> Closeable? = { null },
@@ -213,6 +224,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                     httpConnector = outboundConnectors.httpConnector,
                     connectConnector = outboundConnectors.connectConnector,
                     managementHandler = managementHandler,
+                    recordManagementAudit = { recordManagementAudit(it.toAppManagementAuditRecord()) },
                 ),
             ),
             workerExecutor = workerExecutor,
@@ -300,6 +312,19 @@ private fun SensitiveConfig.logRedactionSecrets(): LogRedactionSecrets =
         managementApiToken = managementApiToken,
         proxyCredential = proxyCredential.canonicalBasicPayload(),
         cloudflareTunnelToken = cloudflareTunnelToken,
+    )
+
+private fun ManagementApiStreamAuditEvent.toAppManagementAuditRecord(): ManagementApiAuditRecord =
+    ManagementApiAuditRecord(
+        operation = operation,
+        outcome = when (outcome) {
+            ManagementApiStreamAuditOutcome.Responded -> ManagementApiAuditOutcome.Responded
+            ManagementApiStreamAuditOutcome.RouteRejected -> ManagementApiAuditOutcome.RouteRejected
+            ManagementApiStreamAuditOutcome.HandlerFailed -> ManagementApiAuditOutcome.HandlerFailed
+            ManagementApiStreamAuditOutcome.AuthorizationRejected -> ManagementApiAuditOutcome.AuthorizationRejected
+        },
+        statusCode = statusCode,
+        disposition = disposition,
     )
 
 private fun (() -> RotationTransitionResult).guardRootOperations(

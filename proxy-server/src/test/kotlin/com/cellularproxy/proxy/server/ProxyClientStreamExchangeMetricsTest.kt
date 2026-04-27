@@ -193,6 +193,7 @@ class ProxyClientStreamExchangeMetricsTest {
         val result = ProxyClientStreamExchangeHandlingResult.ManagementHandled(
             headerBytesRead = 96,
             result = ManagementApiStreamExchangeHandlingResult.Responded(
+                operation = com.cellularproxy.proxy.management.ManagementApiOperation.ServiceStop,
                 statusCode = 202,
                 responseBytesWritten = 88,
                 requiresAuditLog = true,
