@@ -4,7 +4,6 @@ package com.cellularproxy.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -15,10 +14,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Dashboard
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.LogsAudit
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Rotation
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CellularProxyApp() {
+    val navController = rememberNavController()
+
     MaterialTheme {
         Scaffold(
             topBar = {
@@ -29,27 +39,52 @@ fun CellularProxyApp() {
                 )
             },
         ) { contentPadding ->
-            CellularProxyAppContent(contentPadding)
+            NavHost(
+                navController = navController,
+                startDestination = CellularProxyNavigationDestination.Dashboard.route,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding),
+            ) {
+                composable(Dashboard.route) {
+                    CellularProxyDestinationPlaceholder(Dashboard)
+                }
+                composable(Settings.route) {
+                    CellularProxyDestinationPlaceholder(Settings)
+                }
+                composable(Cloudflare.route) {
+                    CellularProxyDestinationPlaceholder(Cloudflare)
+                }
+                composable(Rotation.route) {
+                    CellularProxyDestinationPlaceholder(Rotation)
+                }
+                composable(Diagnostics.route) {
+                    CellularProxyDestinationPlaceholder(Diagnostics)
+                }
+                composable(LogsAudit.route) {
+                    CellularProxyDestinationPlaceholder(LogsAudit)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun CellularProxyAppContent(contentPadding: PaddingValues) {
+private fun CellularProxyDestinationPlaceholder(destination: CellularProxyNavigationDestination) {
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(contentPadding)
                 .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Operator console",
+            text = destination.label,
             style = MaterialTheme.typography.headlineSmall,
         )
         Text(
-            text = "Dashboard, settings, Cloudflare, rotation, diagnostics, and logs will be wired here.",
+            text = "${destination.label} console will be wired here.",
             style = MaterialTheme.typography.bodyMedium,
         )
     }

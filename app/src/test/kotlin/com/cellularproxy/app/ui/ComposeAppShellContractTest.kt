@@ -3,6 +3,7 @@ package com.cellularproxy.app.ui
 import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -52,6 +53,42 @@ class ComposeAppShellContractTest {
         )
         assertTrue(shellSource.contains("Scaffold"), "Compose app shell must provide the operator console scaffold.")
         assertTrue(shellSource.contains("CellularProxy"), "Compose app shell must render the product name.")
+    }
+
+    @Test
+    fun `app shell declares and routes all top level operator destinations`() {
+        val destinations =
+            CellularProxyNavigationDestination.entries
+                .map { destination -> destination.route to destination.label }
+
+        assertEquals(
+            listOf(
+                "dashboard" to "Dashboard",
+                "settings" to "Settings",
+                "cloudflare" to "Cloudflare",
+                "rotation" to "Rotation",
+                "diagnostics" to "Diagnostics",
+                "logs-audit" to "Logs/Audit",
+            ),
+            destinations,
+        )
+
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(shellSource.contains("NavHost"), "Compose shell must own a top-level navigation graph.")
+        assertTrue(
+            shellSource.contains("CellularProxyNavigationDestination.Dashboard.route"),
+            "Dashboard must be the navigation graph start destination.",
+        )
+        CellularProxyNavigationDestination.entries.forEach { destination ->
+            assertTrue(
+                shellSource.contains("composable(${destination.name}.route)"),
+                "Missing route wiring for ${destination.label}.",
+            )
+        }
     }
 
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
