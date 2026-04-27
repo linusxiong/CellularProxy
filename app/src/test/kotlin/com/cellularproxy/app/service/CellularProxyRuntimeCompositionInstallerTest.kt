@@ -10,6 +10,8 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
+import com.cellularproxy.shared.root.RootCommandAuditPhase
+import com.cellularproxy.shared.root.RootCommandAuditRecord
 import java.io.Closeable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -140,6 +142,51 @@ class CellularProxyRuntimeCompositionInstallerTest {
         assertTerminates(executors.workerExecutor)
         assertTerminates(executors.queuedClientTimeoutExecutor)
         assertTerminates(executors.acceptLoopExecutor)
+    }
+
+    @Test
+    fun `production root availability provider emits root command audit records when root operations are enabled`() {
+        val auditRecords = mutableListOf<RootCommandAuditRecord>()
+        val provider = createRootAvailabilityProvider(
+            rootOperationsEnabled = { true },
+            processExecutor = { _, _ ->
+                com.cellularproxy.root.RootCommandProcessResult.Completed(
+                    exitCode = 0,
+                    stdout = "0",
+                    stderr = "",
+                )
+            },
+            recordRootAudit = auditRecords::add,
+        )
+
+        assertEquals(com.cellularproxy.shared.root.RootAvailabilityStatus.Available, provider())
+        assertEquals(
+            listOf(RootCommandAuditPhase.Started, RootCommandAuditPhase.Completed),
+            auditRecords.map { it.phase },
+        )
+    }
+
+    @Test
+    fun `production root audit sink failure does not break root availability and reports failure`() {
+        val failures = mutableListOf<Throwable>()
+        val provider = createRootAvailabilityProvider(
+            rootOperationsEnabled = { true },
+            processExecutor = { _, _ ->
+                com.cellularproxy.root.RootCommandProcessResult.Completed(
+                    exitCode = 0,
+                    stdout = "0",
+                    stderr = "",
+                )
+            },
+            recordRootAudit = nonFatalRootAuditRecorder(
+                recordRootAudit = { throw java.io.IOException("audit disk full") },
+                reportRootAuditFailure = failures::add,
+            ),
+        )
+
+        assertEquals(com.cellularproxy.shared.root.RootAvailabilityStatus.Available, provider())
+        assertEquals(2, failures.size)
+        assertTrue(failures.all { it is java.io.IOException })
     }
 
     private fun readyBootstrap(): AppConfigBootstrapResult.Ready =

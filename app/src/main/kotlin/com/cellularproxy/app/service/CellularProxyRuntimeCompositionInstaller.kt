@@ -1,6 +1,8 @@
 package com.cellularproxy.app.service
 
 import android.content.Context
+import android.util.Log
+import com.cellularproxy.app.audit.CellularProxyRootAuditStore
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.AppConfigBootstrapper
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
@@ -14,10 +16,12 @@ import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.root.BlockingRootCommandProcessExecutor
 import com.cellularproxy.root.RootAvailabilityChecker
 import com.cellularproxy.root.RootCommandExecutor
+import com.cellularproxy.root.RootCommandProcessExecutor
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
@@ -57,6 +61,7 @@ object CellularProxyRuntimeCompositionInstaller {
         }
         val routeMonitor = AndroidNetworkRouteMonitor.create(appContext)
         val rootOperationsEnabled = { runBlocking { plainRepository.load().root.operationsEnabled } }
+        val rootAuditLog = CellularProxyRootAuditStore.rootCommandAuditLog(appContext)
         return install(
             bootstrapResult = bootstrapResult,
             observedNetworks = routeMonitor::observedNetworks,
@@ -64,7 +69,13 @@ object CellularProxyRuntimeCompositionInstaller {
             socketConnector = AndroidBoundNetworkSocketConnector.create(appContext),
             executorResources = RuntimeCompositionExecutorResources.create(),
             rootOperationsEnabled = rootOperationsEnabled,
-            rootAvailability = createRootAvailabilityProvider(rootOperationsEnabled),
+            rootAvailability = createRootAvailabilityProvider(
+                rootOperationsEnabled = rootOperationsEnabled,
+                recordRootAudit = nonFatalRootAuditRecorder(
+                    recordRootAudit = rootAuditLog::record,
+                    reportRootAuditFailure = ::logRootAuditFailure,
+                ),
+            ),
         )
     }
 
@@ -245,11 +256,16 @@ private fun ignoredRotationTransition(): RotationTransitionResult =
         status = RotationStatus.idle(),
     )
 
-private fun createRootAvailabilityProvider(
+internal fun createRootAvailabilityProvider(
     rootOperationsEnabled: () -> Boolean,
+    processExecutor: RootCommandProcessExecutor = BlockingRootCommandProcessExecutor(),
+    recordRootAudit: (RootCommandAuditRecord) -> Unit = {},
 ): () -> RootAvailabilityStatus {
     val checker = RootAvailabilityChecker(
-        RootCommandExecutor(BlockingRootCommandProcessExecutor()),
+        RootCommandExecutor(
+            processExecutor = processExecutor,
+            recordAudit = recordRootAudit,
+        ),
     )
     return {
         if (rootOperationsEnabled()) {
@@ -260,7 +276,24 @@ private fun createRootAvailabilityProvider(
     }
 }
 
+internal fun nonFatalRootAuditRecorder(
+    recordRootAudit: (RootCommandAuditRecord) -> Unit,
+    reportRootAuditFailure: (Exception) -> Unit = ::logRootAuditFailure,
+): (RootCommandAuditRecord) -> Unit =
+    { auditRecord ->
+        try {
+            recordRootAudit(auditRecord)
+        } catch (exception: Exception) {
+            reportRootAuditFailure(exception)
+        }
+    }
+
 private fun unknownRootAvailability(): RootAvailabilityStatus = RootAvailabilityStatus.Unknown
+
+private fun logRootAuditFailure(exception: Exception) {
+    Log.w(ROOT_AUDIT_LOG_TAG, "Failed to persist root command audit record", exception)
+}
 
 private const val COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L
 private const val ROOT_AVAILABILITY_CHECK_TIMEOUT_MILLIS = 2_000L
+private const val ROOT_AUDIT_LOG_TAG = "CellularProxyAudit"
