@@ -731,6 +731,57 @@ class ComposeAppShellContractTest {
         )
     }
 
+    @Test
+    fun `logs audit screen state derives redacted copy summary and export bundle from filtered rows`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "included",
+                            category = LogsAuditScreenCategory.CloudflareTunnel,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "Tunnel failed for secret-token",
+                            detail = "Authorization: Bearer secret-token\nhttps://example.test/api/status?token=secret-token",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "excluded",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 100,
+                            title = "Runtime started",
+                            detail = "No issue",
+                        ),
+                    ),
+                filter =
+                    LogsAuditScreenFilter(
+                        severity = LogsAuditScreenSeverity.Failed,
+                    ),
+                secrets =
+                    LogRedactionSecrets(
+                        cloudflareTunnelToken = "secret-token",
+                    ),
+                exportSupported = true,
+                exportGeneratedAtEpochMillis = 300,
+            )
+
+        assertEquals(
+            "Cloudflare tunnel | Failed | 200 | Tunnel failed for [REDACTED]\nAuthorization: [REDACTED]\nhttps://example.test/api/status?[REDACTED]",
+            state.copyableFilteredSummary,
+        )
+        assertEquals(LogsAuditScreenAction.ExportRedactedBundle, state.availableActions.last())
+        val exportBundle = assertNotNull(state.exportBundle)
+        assertEquals("cellularproxy-logs-audit-300.txt", exportBundle.fileName)
+        assertEquals("text/plain", exportBundle.mediaType)
+        assertEquals(300, exportBundle.generatedAtEpochMillis)
+        assertEquals(1, exportBundle.rowCount)
+        assertTrue(exportBundle.text.contains("Rows: 1"))
+        assertTrue(exportBundle.text.contains("Cloudflare tunnel | Failed | 200 | Tunnel failed for [REDACTED]"))
+        assertFalse(exportBundle.text.contains("secret-token"))
+        assertFalse(exportBundle.text.contains("Runtime started"))
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory

@@ -72,6 +72,8 @@ internal class LogsAuditScreenState private constructor(
     val totalRowCount: Int,
     val exportSupported: Boolean,
     val searchDisplayText: String,
+    val copyableFilteredSummary: String,
+    val exportBundle: LogsAuditScreenExportBundle?,
 ) {
     val resultSummary: String = "${rows.size} of $totalRowCount records"
     val availableActions: List<LogsAuditScreenAction> =
@@ -94,12 +96,19 @@ internal class LogsAuditScreenState private constructor(
             filter: LogsAuditScreenFilter = LogsAuditScreenFilter(),
             secrets: LogRedactionSecrets = LogRedactionSecrets(),
             exportSupported: Boolean = false,
+            exportGeneratedAtEpochMillis: Long = 0,
         ): LogsAuditScreenState {
+            require(exportGeneratedAtEpochMillis >= 0) { "Export timestamp must be non-negative." }
             val filteredRows =
                 rows
                     .map { row -> row.toScreenRow(secrets) }
                     .filter { row -> filter.matches(row) }
                     .sortedByDescending(LogsAuditScreenRow::occurredAtEpochMillis)
+            val copyableFilteredSummary =
+                filteredRows.joinToString(
+                    separator = "\n\n",
+                    transform = LogsAuditScreenRow::copyText,
+                )
             return LogsAuditScreenState(
                 rows = filteredRows,
                 selectedRow = filteredRows.firstOrNull { row -> row.id == selectedRowId },
@@ -107,6 +116,16 @@ internal class LogsAuditScreenState private constructor(
                 totalRowCount = rows.size,
                 exportSupported = exportSupported,
                 searchDisplayText = LogRedactor.redact(filter.search, secrets),
+                copyableFilteredSummary = copyableFilteredSummary,
+                exportBundle =
+                    if (exportSupported && filteredRows.isNotEmpty()) {
+                        LogsAuditScreenExportBundle.from(
+                            generatedAtEpochMillis = exportGeneratedAtEpochMillis,
+                            rows = filteredRows,
+                        )
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -134,7 +153,39 @@ internal data class LogsAuditScreenRow(
     val title: String,
     val detail: String,
 ) {
-    val copyText: String = "$title\n$detail"
+    val copyText: String = "${category.label} | ${severity.label} | $occurredAtEpochMillis | $title\n$detail"
+}
+
+internal data class LogsAuditScreenExportBundle(
+    val fileName: String,
+    val mediaType: String,
+    val generatedAtEpochMillis: Long,
+    val rowCount: Int,
+    val text: String,
+) {
+    companion object {
+        fun from(
+            generatedAtEpochMillis: Long,
+            rows: List<LogsAuditScreenRow>,
+        ): LogsAuditScreenExportBundle {
+            require(generatedAtEpochMillis >= 0) { "Export timestamp must be non-negative." }
+            val body = rows.joinToString(separator = "\n\n", transform = LogsAuditScreenRow::copyText)
+            return LogsAuditScreenExportBundle(
+                fileName = "cellularproxy-logs-audit-$generatedAtEpochMillis.txt",
+                mediaType = "text/plain",
+                generatedAtEpochMillis = generatedAtEpochMillis,
+                rowCount = rows.size,
+                text =
+                    listOf(
+                        "CellularProxy Logs/Audit Export",
+                        "Generated: $generatedAtEpochMillis",
+                        "Rows: ${rows.size}",
+                        "",
+                        body,
+                    ).joinToString(separator = "\n"),
+            )
+        }
+    }
 }
 
 internal data class LogsAuditScreenFilter(
