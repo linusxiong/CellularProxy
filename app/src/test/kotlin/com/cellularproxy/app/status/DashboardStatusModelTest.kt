@@ -134,7 +134,28 @@ class DashboardStatusModelTest {
         assertEquals(DashboardCloudflareState.Failed, model.cloudflare.state)
         assertEquals("Cloudflare tunnel failed", model.cloudflare.failureReason)
         assertEquals(
-            setOf(DashboardWarning.StartupFailed, DashboardWarning.CloudflareFailed),
+            setOf(
+                DashboardWarning.StartupFailed,
+                DashboardWarning.CloudflareFailed,
+                DashboardWarning.PortAlreadyInUse,
+            ),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns specifically when proxy port is already in use at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.PortAlreadyInUse,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.PortAlreadyInUse),
             model.warnings,
         )
     }

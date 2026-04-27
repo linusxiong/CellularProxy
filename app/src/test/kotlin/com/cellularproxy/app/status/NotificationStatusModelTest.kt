@@ -133,14 +133,40 @@ class NotificationStatusModelTest {
         assertEquals("0.0.0.0:8080 | Automatic | 0 active", model.contentText)
         assertEquals("IP unknown | Cloudflare failed | Root disabled", model.detailText)
         assertEquals(
-            setOf(NotificationWarning.StartupFailed, NotificationWarning.CloudflareFailed),
+            setOf(
+                NotificationWarning.StartupFailed,
+                NotificationWarning.CloudflareFailed,
+                NotificationWarning.PortAlreadyInUse,
+            ),
             model.warnings,
         )
-        assertEquals("Service startup failed | Cloudflare tunnel failed", model.warningText)
+        assertEquals(
+            "Service startup failed | Cloudflare tunnel failed | Proxy port is already in use",
+            model.warningText,
+        )
         assertFalse(model.warningText.orEmpty().contains("secret-token"))
         assertEquals(NotificationPriority.Warning, model.priority)
         assertFalse(model.isOngoing)
         assertFalse(model.stopActionEnabled)
+    }
+
+    @Test
+    fun `notification warns specifically when proxy port is already in use at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.PortAlreadyInUse,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.PortAlreadyInUse),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Proxy port is already in use", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
     }
 
     @Test
