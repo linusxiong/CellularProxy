@@ -5,13 +5,18 @@ import com.cellularproxy.network.PublicIpProbeFailure
 import com.cellularproxy.network.PublicIpProbeResult
 import com.cellularproxy.network.PublicIpProbeRunner
 import com.cellularproxy.proxy.server.ProxyRotationPauseActions
+import com.cellularproxy.root.AirplaneModeRootController
+import com.cellularproxy.root.MobileDataRootController
 import com.cellularproxy.root.RootAvailabilityCheckFailure
 import com.cellularproxy.root.RootAvailabilityCheckResult
 import com.cellularproxy.root.RootAvailabilityChecker
 import com.cellularproxy.root.RootCommandExecutor
 import com.cellularproxy.root.RootCommandProcessExecutor
 import com.cellularproxy.root.RootCommandProcessResult
+import com.cellularproxy.root.RootShellCommand
+import com.cellularproxy.root.RootShellCommands
 import com.cellularproxy.root.RotationRootAvailabilityProbe
+import com.cellularproxy.root.RotationRootCommandController
 import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
@@ -349,6 +354,142 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `drained rotation can run configured disable root command and wait for toggle delay`() {
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                nowElapsedMillis = { 12_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val result = runSuspend { coordinator.rotateMobileData() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        assertEquals(RotationState.WaitingForToggleDelay, result.status.state)
+        assertEquals(RotationOperation.MobileData, result.status.operation)
+        assertEquals("198.51.100.10", result.status.oldPublicIp)
+        assertEquals(result.status, controlPlane.currentStatus)
+        assertEquals(listOf(RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000)), rootCommandCalls)
+        assertTrue(pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(0, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `failed disable root command resumes proxy requests and fails the rotation`() {
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        RootCommandProcessResult.Completed(exitCode = 1, stdout = "", stderr = "failed")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                nowElapsedMillis = { 12_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val result = runSuspend { coordinator.rotateMobileData() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        assertEquals(RotationState.Failed, result.status.state)
+        assertEquals(RotationFailureReason.RootCommandFailed, result.status.failureReason)
+        assertEquals(result.status, controlPlane.currentStatus)
+        assertEquals(12_000, controlPlane.lastTerminalElapsedMillis)
+        assertEquals(listOf(RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000)), rootCommandCalls)
+        assertTrue(!pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(1, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `stale disable root command failure still resumes proxy requests`() {
+        val rootCommandCalls = mutableListOf<RotationRootCommandCall>()
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(rootCommandCalls) {
+                        controlPlane.applyProgress(
+                            event = RotationEvent.RootCommandFailedToStart(RootShellCommands.mobileDataDisable().category),
+                            nowElapsedMillis = 11_999,
+                        )
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                nowElapsedMillis = { 12_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val result = runSuspend { coordinator.rotateMobileData() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        assertEquals(RotationState.Failed, result.status.state)
+        assertEquals(RotationFailureReason.RootCommandFailed, result.status.failureReason)
+        assertEquals(result.status, controlPlane.currentStatus)
+        assertEquals(12_000, controlPlane.lastTerminalElapsedMillis)
+        assertEquals(listOf(RotationRootCommandCall(RootShellCommands.mobileDataDisable(), 4_000)), rootCommandCalls)
+        assertTrue(!pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(1, pauseActions.resumeCalls)
+    }
+
+    @Test
     fun `old public ip probe failure fails active rotation closed`() {
         val publicIpRunner =
             RecordingPublicIpProbeRunner(
@@ -612,6 +753,31 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `root command configuration requires connection drain configuration`() {
+        val controlPlane = RotationControlPlane()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                ProxyRotationExecutionCoordinator(
+                    controlPlane = controlPlane,
+                    rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                    pauseActions = RecordingPauseActions(),
+                    rootCommandController =
+                        rotationRootCommandController(mutableListOf()) {
+                            RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                        },
+                    rootCommandTimeoutMillis = 4_000,
+                    nowElapsedMillis = { 10_000 },
+                    cooldown = 180.seconds,
+                    rootAvailabilityTimeoutMillis = 2_000,
+                )
+            }
+
+        assertEquals("Rotation root command execution requires connection drain configuration", failure.message)
+        assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
+    }
+
+    @Test
     fun `secret provider failure is rejected before rotation can start`() {
         val controlPlane = RotationControlPlane()
         val coordinator =
@@ -762,6 +928,11 @@ private data class PublicIpProbeCall(
     val endpoint: PublicIpProbeEndpoint,
 )
 
+private data class RotationRootCommandCall(
+    val command: RootShellCommand,
+    val timeoutMillis: Long,
+)
+
 private class RecordingPauseActions : ProxyRotationPauseActions {
     var proxyRequestsPaused = false
         private set
@@ -817,6 +988,24 @@ private fun rootAvailableCheckResult(): RootAvailabilityCheckResult = RootAvaila
             },
     ),
 ).check(timeoutMillis = 1_000)
+
+private fun rotationRootCommandController(
+    calls: MutableList<RotationRootCommandCall>,
+    processResult: (RootShellCommand) -> RootCommandProcessResult,
+): RotationRootCommandController {
+    val executor =
+        RootCommandExecutor(
+            processExecutor =
+                RootCommandProcessExecutor { command, timeoutMillis ->
+                    calls += RotationRootCommandCall(command, timeoutMillis)
+                    processResult(command)
+                },
+        )
+    return RotationRootCommandController(
+        mobileDataController = MobileDataRootController(executor),
+        airplaneModeController = AirplaneModeRootController(executor),
+    )
+}
 
 private fun <T> runSuspend(block: suspend () -> T): T {
     var result: Result<T>? = null
