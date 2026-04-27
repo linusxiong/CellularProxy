@@ -5,6 +5,9 @@ import com.cellularproxy.network.PublicIpProbeRunner
 import com.cellularproxy.network.RotationPublicIpProbeAdvanceResult
 import com.cellularproxy.network.RotationPublicIpProbeController
 import com.cellularproxy.network.RotationPublicIpProbeCoordinator
+import com.cellularproxy.proxy.server.ProxyRotationPauseActions
+import com.cellularproxy.proxy.server.ProxyRotationPauseAdvanceResult
+import com.cellularproxy.proxy.server.ProxyRotationPauseCoordinator
 import com.cellularproxy.root.RotationRootAvailabilityAdvanceResult
 import com.cellularproxy.root.RotationRootAvailabilityController
 import com.cellularproxy.root.RotationRootAvailabilityCoordinator
@@ -35,6 +38,7 @@ class ProxyRotationExecutionCoordinator(
     publicIpProbeRunner: PublicIpProbeRunner? = null,
     private val route: RouteTarget = RouteTarget.Automatic,
     private val publicIpProbeEndpoint: PublicIpProbeEndpoint? = null,
+    pauseActions: ProxyRotationPauseActions? = null,
     private val secrets: () -> LogRedactionSecrets = { LogRedactionSecrets() },
 ) {
     private val rootAvailabilityCoordinator =
@@ -46,6 +50,13 @@ class ProxyRotationExecutionCoordinator(
         publicIpProbeRunner?.let { runner ->
             RotationPublicIpProbeCoordinator(
                 probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+        }
+    private val pauseCoordinator =
+        pauseActions?.let { actions ->
+            ProxyRotationPauseCoordinator(
+                pauseController = actions,
                 controlPlane = controlPlane,
             )
         }
@@ -157,11 +168,30 @@ class ProxyRotationExecutionCoordinator(
             }
 
         return when (probeResult) {
-            is RotationPublicIpProbeAdvanceResult.Applied -> probeResult.progress.transition
+            is RotationPublicIpProbeAdvanceResult.Applied ->
+                continueWithPauseCoordinatorIfConfigured(
+                    oldPublicIpTransition = probeResult.progress.transition,
+                    nowElapsedMillis = nowElapsedMillis,
+                )
             is RotationPublicIpProbeAdvanceResult.NoAction ->
                 probeResult.snapshot.status.asIgnoredTransition()
             is RotationPublicIpProbeAdvanceResult.Stale ->
                 probeResult.actualSnapshot.status.asIgnoredTransition()
+        }
+    }
+
+    private fun continueWithPauseCoordinatorIfConfigured(
+        oldPublicIpTransition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+    ): RotationTransitionResult {
+        val coordinator = pauseCoordinator ?: return oldPublicIpTransition
+        if (oldPublicIpTransition.status.state != RotationState.PausingNewRequests) {
+            return oldPublicIpTransition
+        }
+
+        return when (val pauseResult = coordinator.advance(nowElapsedMillis)) {
+            is ProxyRotationPauseAdvanceResult.Applied -> pauseResult.progress.transition
+            is ProxyRotationPauseAdvanceResult.NoAction -> pauseResult.snapshot.status.asIgnoredTransition()
         }
     }
 }
