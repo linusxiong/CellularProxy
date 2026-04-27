@@ -173,7 +173,7 @@ private fun CellularProxyNavigationHost(
             CellularProxyRotationScreen()
         }
         composable(Diagnostics.route) {
-            CellularProxyDestinationPlaceholder(Diagnostics)
+            CellularProxyDiagnosticsScreen()
         }
         composable(LogsAudit.route) {
             CellularProxyDestinationPlaceholder(LogsAudit)

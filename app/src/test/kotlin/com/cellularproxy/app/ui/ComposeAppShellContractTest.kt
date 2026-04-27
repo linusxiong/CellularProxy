@@ -1,5 +1,10 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.diagnostics.DiagnosticCheckType
+import com.cellularproxy.app.diagnostics.DiagnosticResultItem
+import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
+import com.cellularproxy.app.diagnostics.DiagnosticRunRecord
+import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.root.RootAvailabilityStatus
@@ -14,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 class ComposeAppShellContractTest {
     @Test
@@ -454,6 +460,117 @@ class ComposeAppShellContractTest {
         assertEquals("Failed: RootUnavailable", failedState.lastRotationResult)
         assertEquals("Unavailable", failedState.oldPublicIp)
         assertEquals("Unavailable", failedState.newPublicIp)
+    }
+
+    @Test
+    fun `diagnostics route renders dedicated diagnostics screen`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val diagnosticsSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDiagnosticsScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("CellularProxyDiagnosticsScreen()"),
+            "Diagnostics route must render the dedicated diagnostics screen instead of the generic placeholder.",
+        )
+        assertTrue(
+            !shellSource.contains("composable(Diagnostics.route) {\n            CellularProxyDestinationPlaceholder(Diagnostics)"),
+            "Diagnostics route must not use the generic destination placeholder.",
+        )
+
+        listOf(
+            "Diagnostics",
+            "Run all checks",
+            "Copy summary",
+            "Duration",
+            "Error category",
+            "Details",
+        ).forEach { label ->
+            assertTrue(
+                diagnosticsSource.contains(label),
+                "Diagnostics screen must expose `$label`.",
+            )
+        }
+        assertEquals(
+            DiagnosticCheckType.entries.map(DiagnosticCheckType::label),
+            DiagnosticsScreenState.from(DiagnosticsResultModel.empty()).items.map(DiagnosticsScreenItem::label),
+            "Diagnostics screen state must expose every registered diagnostic check label.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("actionsEnabled: Boolean = false"),
+            "Diagnostics route actions must be disabled by default until runtime handlers are wired.",
+        )
+    }
+
+    @Test
+    fun `diagnostics screen state summarizes status duration and failures`() {
+        val state =
+            DiagnosticsScreenState.from(
+                model =
+                    DiagnosticsResultModel.from(
+                        completed =
+                            listOf(
+                                DiagnosticRunRecord(
+                                    type = DiagnosticCheckType.RootAvailability,
+                                    status = DiagnosticResultStatus.Passed,
+                                    duration = 12.milliseconds,
+                                    details = "Root shell available",
+                                ),
+                                DiagnosticRunRecord(
+                                    type = DiagnosticCheckType.CloudflareManagementApi,
+                                    status = DiagnosticResultStatus.Failed,
+                                    duration = 85.milliseconds,
+                                    errorCategory = "Authorization: Bearer secret-token",
+                                    details = "https://example.test/status?token=secret-token",
+                                ),
+                            ),
+                    ),
+            )
+
+        assertEquals("2 of 7 checks complete", state.completionSummary)
+        assertEquals("failed", state.overallStatus)
+        val rootItem = state.items.first { it.label == "Root availability" }
+        val cloudflareManagementItem = state.items.first { it.label == "Cloudflare management API" }
+
+        assertEquals("12 ms", rootItem.duration)
+        assertEquals("Root shell available", rootItem.details)
+        assertFalse(
+            cloudflareManagementItem.errorCategory.contains("secret-token"),
+            "Diagnostics failure category must stay redacted in UI state.",
+        )
+        assertFalse(
+            cloudflareManagementItem.details.contains("token=secret-token"),
+            "Diagnostics details must stay redacted in UI state.",
+        )
+    }
+
+    @Test
+    fun `diagnostics screen state redacts manually constructed result items`() {
+        val state =
+            DiagnosticsScreenState.from(
+                model =
+                    DiagnosticsResultModel(
+                        results =
+                            listOf(
+                                DiagnosticResultItem(
+                                    type = DiagnosticCheckType.LocalManagementApi,
+                                    label = "Local management API",
+                                    status = DiagnosticResultStatus.Failed,
+                                    errorCategory = "Authorization: Bearer secret-token",
+                                    details = "https://example.test/status?token=secret-token",
+                                ),
+                            ),
+                        copyableSummary = "unsafe stale summary",
+                    ),
+            )
+        val item = state.items.single()
+
+        assertEquals("Authorization: [REDACTED]", item.errorCategory)
+        assertEquals("https://example.test/status?[REDACTED]", item.details)
     }
 
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
