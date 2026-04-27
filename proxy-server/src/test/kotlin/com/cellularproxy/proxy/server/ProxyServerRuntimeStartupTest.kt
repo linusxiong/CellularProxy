@@ -18,21 +18,23 @@ class ProxyServerRuntimeStartupTest {
     @Test
     fun `startup preflight failure returns failed status without binding listener`() {
         var bindCalled = false
-        val invalidConfig = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(listenHost = "localhost"),
-        )
+        val invalidConfig =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(listenHost = "localhost"),
+            )
 
-        val failed = assertIs<ProxyServerRuntimeStartupResult.Failed>(
-            ProxyServerRuntimeStartup.start(
-                config = invalidConfig,
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifiRoute()),
-                bindListener = { _, _, _ ->
-                    bindCalled = true
-                    error("invalid startup must not attempt listener binding")
-                },
-            ),
-        )
+        val failed =
+            assertIs<ProxyServerRuntimeStartupResult.Failed>(
+                ProxyServerRuntimeStartup.start(
+                    config = invalidConfig,
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifiRoute()),
+                    bindListener = { _, _, _ ->
+                        bindCalled = true
+                        error("invalid startup must not attempt listener binding")
+                    },
+                ),
+            )
 
         assertFalse(bindCalled)
         assertEquals(ProxyStartupError.InvalidListenAddress, failed.startupError)
@@ -42,25 +44,27 @@ class ProxyServerRuntimeStartupTest {
 
     @Test
     fun `bind failure returns structured failed startup status`() {
-        val config = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
-            network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.WiFi),
-        )
+        val config =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.WiFi),
+            )
 
-        val failed = assertIs<ProxyServerRuntimeStartupResult.Failed>(
-            ProxyServerRuntimeStartup.start(
-                config = config,
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifiRoute()),
-                bindListener = { host, port, backlog ->
-                    assertEquals(LOOPBACK_HOST, host)
-                    assertEquals(8081, port)
-                    assertEquals(25, backlog)
-                    ProxyServerSocketBindResult.Failed(ProxyStartupError.PortAlreadyInUse)
-                },
-                backlog = 25,
-            ),
-        )
+        val failed =
+            assertIs<ProxyServerRuntimeStartupResult.Failed>(
+                ProxyServerRuntimeStartup.start(
+                    config = config,
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifiRoute()),
+                    bindListener = { host, port, backlog ->
+                        assertEquals(LOOPBACK_HOST, host)
+                        assertEquals(8081, port)
+                        assertEquals(25, backlog)
+                        ProxyServerSocketBindResult.Failed(ProxyStartupError.PortAlreadyInUse)
+                    },
+                    backlog = 25,
+                ),
+            )
 
         assertEquals(ProxyStartupError.PortAlreadyInUse, failed.startupError)
         assertEquals(ProxyServiceState.Failed, failed.status.state)
@@ -73,20 +77,22 @@ class ProxyServerRuntimeStartupTest {
         val wifi = wifiRoute()
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val config = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
-            network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.WiFi),
-        )
+        val config =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.WiFi),
+            )
 
         try {
-            val started = assertIs<ProxyServerRuntimeStartupResult.Started>(
-                ProxyServerRuntimeStartup.start(
-                    config = config,
-                    managementApiTokenPresent = true,
-                    observedNetworks = listOf(wifi),
-                    bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
-                ),
-            )
+            val started =
+                assertIs<ProxyServerRuntimeStartupResult.Started>(
+                    ProxyServerRuntimeStartup.start(
+                        config = config,
+                        managementApiTokenPresent = true,
+                        observedNetworks = listOf(wifi),
+                        bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
+                    ),
+                )
 
             assertTrue(started.listener === listener)
             assertEquals(ProxyServiceState.Running, started.status.state)
@@ -107,19 +113,21 @@ class ProxyServerRuntimeStartupTest {
         val wifi = wifiRoute()
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, BROAD_HOST)
-        val config = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(authEnabled = false),
-        )
+        val config =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(authEnabled = false),
+            )
 
         try {
-            val started = assertIs<ProxyServerRuntimeStartupResult.Started>(
-                ProxyServerRuntimeStartup.start(
-                    config = config,
-                    managementApiTokenPresent = true,
-                    observedNetworks = listOf(wifi),
-                    bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
-                ),
-            )
+            val started =
+                assertIs<ProxyServerRuntimeStartupResult.Started>(
+                    ProxyServerRuntimeStartup.start(
+                        config = config,
+                        managementApiTokenPresent = true,
+                        observedNetworks = listOf(wifi),
+                        bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
+                    ),
+                )
 
             assertEquals(BROAD_HOST, started.status.listenHost)
             assertTrue(started.status.hasHighSecurityRisk)

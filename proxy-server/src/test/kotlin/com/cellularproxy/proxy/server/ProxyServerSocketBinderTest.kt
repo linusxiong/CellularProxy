@@ -16,28 +16,31 @@ import kotlin.test.assertTrue
 class ProxyServerSocketBinderTest {
     @Test
     fun `binds supported listen address and accepts client stream connection`() {
-        val bound = assertIs<ProxyServerSocketBindResult.Bound>(
-            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
-        )
+        val bound =
+            assertIs<ProxyServerSocketBindResult.Bound>(
+                ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+            )
 
         bound.listener.use { listener ->
             assertEquals(LOOPBACK_HOST, listener.listenHost)
             assertTrue(listener.listenPort in 1..65_535)
 
             val clientFailure = AtomicReference<Throwable?>()
-            val client = thread(start = true) {
-                try {
-                    Socket(LOOPBACK_HOST, listener.listenPort).use { socket ->
-                        socket.getOutputStream().write("ping\n".toByteArray(Charsets.US_ASCII))
-                        socket.shutdownOutput()
-                        val response = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.US_ASCII))
-                            .readLine()
-                        assertEquals("pong", response)
+            val client =
+                thread(start = true) {
+                    try {
+                        Socket(LOOPBACK_HOST, listener.listenPort).use { socket ->
+                            socket.getOutputStream().write("ping\n".toByteArray(Charsets.US_ASCII))
+                            socket.shutdownOutput()
+                            val response =
+                                BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.US_ASCII))
+                                    .readLine()
+                            assertEquals("pong", response)
+                        }
+                    } catch (throwable: Throwable) {
+                        clientFailure.set(throwable)
                     }
-                } catch (throwable: Throwable) {
-                    clientFailure.set(throwable)
                 }
-            }
 
             listener.accept().use { connection ->
                 val request = BufferedReader(InputStreamReader(connection.input, Charsets.US_ASCII)).readLine()
@@ -61,12 +64,14 @@ class ProxyServerSocketBinderTest {
 
     @Test
     fun `invalid listen port fails before binding`() {
-        val low = assertIs<ProxyServerSocketBindResult.Failed>(
-            ProxyServerSocketBinder.bind(listenHost = LOOPBACK_HOST, listenPort = 0),
-        )
-        val high = assertIs<ProxyServerSocketBindResult.Failed>(
-            ProxyServerSocketBinder.bind(listenHost = LOOPBACK_HOST, listenPort = 65_536),
-        )
+        val low =
+            assertIs<ProxyServerSocketBindResult.Failed>(
+                ProxyServerSocketBinder.bind(listenHost = LOOPBACK_HOST, listenPort = 0),
+            )
+        val high =
+            assertIs<ProxyServerSocketBindResult.Failed>(
+                ProxyServerSocketBinder.bind(listenHost = LOOPBACK_HOST, listenPort = 65_536),
+            )
 
         assertEquals(ProxyStartupError.InvalidListenPort, low.startupError)
         assertEquals(ProxyStartupError.InvalidListenPort, high.startupError)
@@ -75,10 +80,11 @@ class ProxyServerSocketBinderTest {
     @Test
     fun `occupied listen port maps to startup port already in use`() {
         ServerSocket(0, 1, InetAddress.getByName(LOOPBACK_HOST)).use { occupied ->
-            val result = ProxyServerSocketBinder.bind(
-                listenHost = LOOPBACK_HOST,
-                listenPort = occupied.localPort,
-            )
+            val result =
+                ProxyServerSocketBinder.bind(
+                    listenHost = LOOPBACK_HOST,
+                    listenPort = occupied.localPort,
+                )
 
             val failed = assertIs<ProxyServerSocketBindResult.Failed>(result)
             assertEquals(ProxyStartupError.PortAlreadyInUse, failed.startupError)

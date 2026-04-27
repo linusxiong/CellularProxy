@@ -10,8 +10,7 @@ class RotationSessionController(
     val currentStatus: RotationStatus
         get() = status.get()
 
-    fun requestStart(operation: RotationOperation): RotationTransitionResult =
-        apply(RotationEvent.StartRequested(operation))
+    fun requestStart(operation: RotationOperation): RotationTransitionResult = apply(RotationEvent.StartRequested(operation))
 
     fun apply(event: RotationEvent): RotationTransitionResult {
         while (true) {

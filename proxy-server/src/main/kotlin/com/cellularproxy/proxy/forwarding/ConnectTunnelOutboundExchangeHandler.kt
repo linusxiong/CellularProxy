@@ -159,10 +159,11 @@ class ConnectTunnelOutboundExchangeHandler(
         accepted: ProxyIngressStreamPreflightDecision.Accepted,
         clientOutput: OutputStream,
     ): ConnectTunnelOutboundExchangeHandlingResult {
-        val request = accepted.request as? ParsedProxyRequest.ConnectTunnel
-            ?: return ConnectTunnelOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
-                ConnectTunnelOutboundExchangeUnsupportedReason.NotConnectTunnelRequest,
-            )
+        val request =
+            accepted.request as? ParsedProxyRequest.ConnectTunnel
+                ?: return ConnectTunnelOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
+                    ConnectTunnelOutboundExchangeUnsupportedReason.NotConnectTunnelRequest,
+                )
 
         return when (val openResult = connector.open(request)) {
             is OutboundConnectTunnelOpenResult.Connected ->
@@ -185,22 +186,25 @@ class ConnectTunnelOutboundExchangeHandler(
     ): ConnectTunnelOutboundExchangeRelayHandlingResult {
         require(relayBufferSize > 0) { "Relay buffer size must be positive" }
 
-        val request = accepted.request as? ParsedProxyRequest.ConnectTunnel
-            ?: return ConnectTunnelOutboundExchangeRelayHandlingResult.UnsupportedAcceptedRequest(
-                ConnectTunnelOutboundExchangeUnsupportedReason.NotConnectTunnelRequest,
-            )
+        val request =
+            accepted.request as? ParsedProxyRequest.ConnectTunnel
+                ?: return ConnectTunnelOutboundExchangeRelayHandlingResult.UnsupportedAcceptedRequest(
+                    ConnectTunnelOutboundExchangeUnsupportedReason.NotConnectTunnelRequest,
+                )
 
         return when (val openResult = connector.open(request)) {
             is OutboundConnectTunnelOpenResult.Connected -> {
-                val established = establishTunnel(
-                    connection = openResult.connection,
-                    clientOutput = client.output,
-                )
-                val relayResult = ConnectTunnelBidirectionalRelay.relay(
-                    client = client,
-                    origin = established.connection,
-                    bufferSize = relayBufferSize,
-                )
+                val established =
+                    establishTunnel(
+                        connection = openResult.connection,
+                        clientOutput = client.output,
+                    )
+                val relayResult =
+                    ConnectTunnelBidirectionalRelay.relay(
+                        client = client,
+                        origin = established.connection,
+                        bufferSize = relayBufferSize,
+                    )
 
                 ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed(
                     host = established.host,
@@ -210,10 +214,11 @@ class ConnectTunnelOutboundExchangeHandler(
                 )
             }
             is OutboundConnectTunnelOpenResult.Failed -> {
-                val failed = writeMappedFailure(
-                    failure = openResult.reason.toProxyServerFailure(),
-                    clientOutput = client.output,
-                )
+                val failed =
+                    writeMappedFailure(
+                        failure = openResult.reason.toProxyServerFailure(),
+                        clientOutput = client.output,
+                    )
 
                 ConnectTunnelOutboundExchangeRelayHandlingResult.ConnectionFailed(
                     failure = failed.failure,
@@ -253,15 +258,16 @@ class ConnectTunnelOutboundExchangeHandler(
         failure: ProxyServerFailure,
         clientOutput: OutputStream,
     ): ConnectTunnelOutboundExchangeHandlingResult.ConnectionFailed {
-        val bytesWritten = when (val decision = ProxyErrorResponseMapper.map(failure)) {
-            is ProxyErrorResponseDecision.Emit -> {
-                val bytes = decision.response.toByteArray()
-                clientOutput.write(bytes)
-                clientOutput.flush()
-                bytes.size
+        val bytesWritten =
+            when (val decision = ProxyErrorResponseMapper.map(failure)) {
+                is ProxyErrorResponseDecision.Emit -> {
+                    val bytes = decision.response.toByteArray()
+                    clientOutput.write(bytes)
+                    clientOutput.flush()
+                    bytes.size
+                }
+                ProxyErrorResponseDecision.Suppress -> 0
             }
-            ProxyErrorResponseDecision.Suppress -> 0
-        }
 
         return ConnectTunnelOutboundExchangeHandlingResult.ConnectionFailed(
             failure = failure,

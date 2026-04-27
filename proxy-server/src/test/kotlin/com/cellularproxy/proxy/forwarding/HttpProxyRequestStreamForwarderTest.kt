@@ -1,10 +1,10 @@
 package com.cellularproxy.proxy.forwarding
 
+import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import com.cellularproxy.proxy.protocol.HttpBodyStreamCopyResult
 import com.cellularproxy.proxy.protocol.HttpRequestBodyFramingRejectionReason
 import com.cellularproxy.proxy.protocol.ParsedHttpRequest
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
-import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import com.cellularproxy.shared.management.HttpMethod
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -15,23 +15,26 @@ import kotlin.test.assertIs
 class HttpProxyRequestStreamForwarderTest {
     @Test
     fun `forwards sanitized request head without consuming input when request has no body`() {
-        val request = httpProxyRequest(
-            method = "GET",
-            originTarget = "/resource",
-            headers = linkedMapOf(
-                "host" to listOf("attacker.example"),
-                "proxy-authorization" to listOf("Basic secret"),
-                "accept" to listOf("application/json"),
-            ),
-        )
+        val request =
+            httpProxyRequest(
+                method = "GET",
+                originTarget = "/resource",
+                headers =
+                    linkedMapOf(
+                        "host" to listOf("attacker.example"),
+                        "proxy-authorization" to listOf("Basic secret"),
+                        "accept" to listOf("application/json"),
+                    ),
+            )
         val input = ByteArrayInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+            )
 
         assertEquals(
             HttpProxyRequestStreamForwardingResult.Forwarded(
@@ -54,25 +57,28 @@ class HttpProxyRequestStreamForwarderTest {
 
     @Test
     fun `forwards from accepted stream preflight decision without reparsing request headers`() {
-        val request = httpProxyRequest(
-            method = "GET",
-            originTarget = "/resource",
-            headers = linkedMapOf("accept" to listOf("application/json")),
-        )
-        val accepted = ProxyIngressStreamPreflightDecision.Accepted(
-            httpRequest = request,
-            activeConnectionsAfterAdmission = 1,
-            requiresAuditLog = false,
-            headerBytesRead = 128,
-        )
+        val request =
+            httpProxyRequest(
+                method = "GET",
+                originTarget = "/resource",
+                headers = linkedMapOf("accept" to listOf("application/json")),
+            )
+        val accepted =
+            ProxyIngressStreamPreflightDecision.Accepted(
+                httpRequest = request,
+                activeConnectionsAfterAdmission = 1,
+                requiresAuditLog = false,
+                headerBytesRead = 128,
+            )
         val input = ByteArrayInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted,
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted,
+                input = input,
+                output = output,
+            )
 
         assertEquals(
             HttpProxyRequestStreamForwardingResult.Forwarded(
@@ -88,34 +94,38 @@ class HttpProxyRequestStreamForwarderTest {
 
     @Test
     fun `forwards fixed-length request body after sanitized request head`() {
-        val request = httpProxyRequest(
-            method = "POST",
-            originTarget = "/upload",
-            headers = linkedMapOf(
-                "content-length" to listOf("4"),
-                "content-type" to listOf("application/octet-stream"),
-            ),
-        )
+        val request =
+            httpProxyRequest(
+                method = "POST",
+                originTarget = "/upload",
+                headers =
+                    linkedMapOf(
+                        "content-length" to listOf("4"),
+                        "content-type" to listOf("application/octet-stream"),
+                    ),
+            )
         val input = ByteArrayInputStream("bodyNEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(
             HttpProxyRequestStreamForwardingResult.Forwarded(
                 host = "origin.example",
                 port = 80,
-                headerBytesWritten = (
-                    "POST /upload HTTP/1.1\r\n" +
-                        "host: origin.example\r\n" +
-                        "content-length: 4\r\n" +
-                        "content-type: application/octet-stream\r\n" +
-                        "\r\n"
+                headerBytesWritten =
+                    (
+                        "POST /upload HTTP/1.1\r\n" +
+                            "host: origin.example\r\n" +
+                            "content-length: 4\r\n" +
+                            "content-type: application/octet-stream\r\n" +
+                            "\r\n"
                     ).toByteArray(Charsets.UTF_8).size,
                 bodyBytesWritten = 4,
             ),
@@ -129,7 +139,7 @@ class HttpProxyRequestStreamForwarderTest {
                     "content-type: application/octet-stream\r\n" +
                     "\r\n" +
                     "body"
-                ).toByteArray(Charsets.UTF_8).toList(),
+            ).toByteArray(Charsets.UTF_8).toList(),
             output.toByteArray().toList(),
         )
         assertEquals('N'.code, input.read())
@@ -137,23 +147,26 @@ class HttpProxyRequestStreamForwarderTest {
 
     @Test
     fun `rejects unsupported request body framing before writing outbound bytes`() {
-        val request = httpProxyRequest(
-            headers = linkedMapOf("transfer-encoding" to listOf("chunked")),
-        )
+        val request =
+            httpProxyRequest(
+                headers = linkedMapOf("transfer-encoding" to listOf("chunked")),
+            )
         val input = ByteArrayInputStream("4\r\nbody\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+            )
 
         assertEquals(
             HttpProxyRequestStreamForwardingResult.Rejected(
-                reason = HttpProxyRequestStreamForwardingRejectionReason.BodyFramingRejected(
-                    HttpRequestBodyFramingRejectionReason.UnsupportedTransferEncoding,
-                ),
+                reason =
+                    HttpProxyRequestStreamForwardingRejectionReason.BodyFramingRejected(
+                        HttpRequestBodyFramingRejectionReason.UnsupportedTransferEncoding,
+                    ),
             ),
             result,
         )
@@ -163,20 +176,23 @@ class HttpProxyRequestStreamForwarderTest {
 
     @Test
     fun `rejects expect header before writing outbound bytes`() {
-        val request = httpProxyRequest(
-            headers = linkedMapOf(
-                "expect" to listOf("100-continue"),
-                "content-length" to listOf("4"),
-            ),
-        )
+        val request =
+            httpProxyRequest(
+                headers =
+                    linkedMapOf(
+                        "expect" to listOf("100-continue"),
+                        "content-length" to listOf("4"),
+                    ),
+            )
         val input = ByteArrayInputStream("bodyNEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+            )
 
         assertEquals(
             HttpProxyRequestStreamForwardingResult.Rejected(
@@ -190,23 +206,26 @@ class HttpProxyRequestStreamForwarderTest {
 
     @Test
     fun `rejects non-http-proxy requests before writing outbound bytes`() {
-        val request = ParsedHttpRequest(
-            request = ParsedProxyRequest.Management(
-                method = HttpMethod.Get,
-                originTarget = "/health",
-                requiresToken = false,
-                requiresAuditLog = false,
-            ),
-            headers = emptyMap(),
-        )
+        val request =
+            ParsedHttpRequest(
+                request =
+                    ParsedProxyRequest.Management(
+                        method = HttpMethod.Get,
+                        originTarget = "/health",
+                        requiresToken = false,
+                        requiresAuditLog = false,
+                    ),
+                headers = emptyMap(),
+            )
         val input = ByteArrayInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+            )
 
         assertEquals(
             HttpProxyRequestStreamForwardingResult.Rejected(
@@ -224,11 +243,12 @@ class HttpProxyRequestStreamForwarderTest {
         val input = ByteArrayInputStream("bo".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+            )
 
         val failed = assertIs<HttpProxyRequestStreamForwardingResult.BodyCopyFailed>(result)
         assertEquals("origin.example", failed.host)
@@ -250,11 +270,12 @@ class HttpProxyRequestStreamForwarderTest {
         val input = ByteArrayInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted(request),
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted(request),
+                input = input,
+                output = output,
+            )
 
         val forwarded = assertIs<HttpProxyRequestStreamForwardingResult.Forwarded>(result)
         assertEquals(0, forwarded.bodyBytesWritten)
@@ -274,12 +295,13 @@ class HttpProxyRequestStreamForwarderTest {
         headers: Map<String, List<String>> = emptyMap(),
     ): ParsedHttpRequest =
         ParsedHttpRequest(
-            request = ParsedProxyRequest.HttpProxy(
-                method = method,
-                host = "origin.example",
-                port = 80,
-                originTarget = originTarget,
-            ),
+            request =
+                ParsedProxyRequest.HttpProxy(
+                    method = method,
+                    host = "origin.example",
+                    port = 80,
+                    originTarget = originTarget,
+                ),
             headers = headers,
         )
 

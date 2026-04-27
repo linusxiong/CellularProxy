@@ -1,21 +1,22 @@
 package com.cellularproxy.app.service
 
+import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.w3c.dom.Element
 
 class ForegroundServiceManifestContractTest {
     @Test
     fun `manifest declares exported launcher activity`() {
         val manifest = parseManifest()
 
-        val launcher = manifest.activities.singleOrNull {
-            it.name == "com.cellularproxy.app.ui.CellularProxyActivity"
-        }
+        val launcher =
+            manifest.activities.singleOrNull {
+                it.name == "com.cellularproxy.app.ui.CellularProxyActivity"
+            }
         assertNotNull(launcher, "Manifest should declare the CellularProxy launcher activity")
         assertEquals(true, launcher.exported)
         assertTrue(
@@ -56,9 +57,10 @@ class ForegroundServiceManifestContractTest {
             "Foreground status notification needs POST_NOTIFICATIONS on Android 13+",
         )
 
-        val service = manifest.services.singleOrNull {
-            it.name == "com.cellularproxy.app.service.CellularProxyForegroundService"
-        }
+        val service =
+            manifest.services.singleOrNull {
+                it.name == "com.cellularproxy.app.service.CellularProxyForegroundService"
+            }
         assertNotNull(service, "Manifest should declare the CellularProxy foreground service")
         assertEquals(false, service.exported)
         assertEquals("specialUse", service.foregroundServiceType)
@@ -75,55 +77,70 @@ class ForegroundServiceManifestContractTest {
 
     private fun parseManifest(): ManifestContract {
         val manifestFile = File("src/main/AndroidManifest.xml")
-        val document = DocumentBuilderFactory.newInstance()
-            .apply {
-                isIgnoringComments = true
-                isNamespaceAware = true
-            }
-            .newDocumentBuilder()
-            .parse(manifestFile)
+        val document =
+            DocumentBuilderFactory
+                .newInstance()
+                .apply {
+                    isIgnoringComments = true
+                    isNamespaceAware = true
+                }.newDocumentBuilder()
+                .parse(manifestFile)
 
         val root = document.documentElement
-        val usesPermissions = root.childElements("uses-permission")
-            .mapNotNull { it.androidAttribute("name") }
-            .toSet()
-        val services = root.childElements("application")
-            .single()
-            .childElements("service")
-            .map { service ->
-                ServiceContract(
-                    name = service.androidAttribute("name").orEmpty(),
-                    exported = service.androidAttribute("exported")?.toBooleanStrictOrNull(),
-                    foregroundServiceType = service.androidAttribute("foregroundServiceType"),
-                    properties = service.childElements("property")
-                        .map { property ->
-                            ServicePropertyContract(
-                                name = property.androidAttribute("name").orEmpty(),
-                                value = property.androidAttribute("value").orEmpty(),
-                            )
-                        },
-                )
-            }
-        val activities = root.childElements("application")
-            .single()
-            .childElements("activity")
-            .map { activity ->
-                ActivityContract(
-                    name = activity.androidAttribute("name").orEmpty(),
-                    exported = activity.androidAttribute("exported")?.toBooleanStrictOrNull(),
-                    intentFilters = activity.childElements("intent-filter")
-                        .map { intentFilter ->
-                            IntentFilterContract(
-                                actions = intentFilter.childElements("action")
-                                    .mapNotNull { it.androidAttribute("name") }
-                                    .toSet(),
-                                categories = intentFilter.childElements("category")
-                                    .mapNotNull { it.androidAttribute("name") }
-                                    .toSet(),
-                            )
-                        },
-                )
-            }
+        val usesPermissions =
+            root
+                .childElements("uses-permission")
+                .mapNotNull { it.androidAttribute("name") }
+                .toSet()
+        val services =
+            root
+                .childElements("application")
+                .single()
+                .childElements("service")
+                .map { service ->
+                    ServiceContract(
+                        name = service.androidAttribute("name").orEmpty(),
+                        exported = service.androidAttribute("exported")?.toBooleanStrictOrNull(),
+                        foregroundServiceType = service.androidAttribute("foregroundServiceType"),
+                        properties =
+                            service
+                                .childElements("property")
+                                .map { property ->
+                                    ServicePropertyContract(
+                                        name = property.androidAttribute("name").orEmpty(),
+                                        value = property.androidAttribute("value").orEmpty(),
+                                    )
+                                },
+                    )
+                }
+        val activities =
+            root
+                .childElements("application")
+                .single()
+                .childElements("activity")
+                .map { activity ->
+                    ActivityContract(
+                        name = activity.androidAttribute("name").orEmpty(),
+                        exported = activity.androidAttribute("exported")?.toBooleanStrictOrNull(),
+                        intentFilters =
+                            activity
+                                .childElements("intent-filter")
+                                .map { intentFilter ->
+                                    IntentFilterContract(
+                                        actions =
+                                            intentFilter
+                                                .childElements("action")
+                                                .mapNotNull { it.androidAttribute("name") }
+                                                .toSet(),
+                                        categories =
+                                            intentFilter
+                                                .childElements("category")
+                                                .mapNotNull { it.androidAttribute("name") }
+                                                .toSet(),
+                                    )
+                                },
+                    )
+                }
 
         return ManifestContract(
             usesPermissions = usesPermissions,
@@ -174,7 +191,6 @@ private fun Element.childElements(name: String): List<Element> {
     }
 }
 
-private fun Element.androidAttribute(localName: String): String? =
-    getAttributeNS(ANDROID_NAMESPACE, localName).takeIf(String::isNotBlank)
+private fun Element.androidAttribute(localName: String): String? = getAttributeNS(ANDROID_NAMESPACE, localName).takeIf(String::isNotBlank)
 
 private const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"

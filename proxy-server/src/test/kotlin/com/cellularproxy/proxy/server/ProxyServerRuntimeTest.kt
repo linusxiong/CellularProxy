@@ -17,9 +17,9 @@ import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionDisposition
-import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.rotation.RotationEvent
 import java.net.ServerSocket
@@ -27,7 +27,6 @@ import java.net.Socket
 import java.util.Collections
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -44,27 +43,29 @@ class ProxyServerRuntimeTest {
         var bindCalled = false
         val acceptLoopExecutor = RecordingExecutorService()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
-        val invalidConfig = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(listenHost = "localhost"),
-        )
+        val invalidConfig =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(listenHost = "localhost"),
+            )
 
         try {
-            val failed = assertIs<ProxyServerRuntimeResult.StartupFailed>(
-                ProxyServerRuntime.start(
-                    config = invalidConfig,
-                    managementApiTokenPresent = true,
-                    observedNetworks = listOf(wifiRoute()),
-                    ingressConfig = ingressConfig(),
-                    connectionHandler = connectionHandler(),
-                    workerExecutor = RecordingExecutorService(),
-                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                    acceptLoopExecutor = acceptLoopExecutor,
-                    bindListener = { _, _, _ ->
-                        bindCalled = true
-                        error("startup preflight failure must not bind")
-                    },
-                ),
-            )
+            val failed =
+                assertIs<ProxyServerRuntimeResult.StartupFailed>(
+                    ProxyServerRuntime.start(
+                        config = invalidConfig,
+                        managementApiTokenPresent = true,
+                        observedNetworks = listOf(wifiRoute()),
+                        ingressConfig = ingressConfig(),
+                        connectionHandler = connectionHandler(),
+                        workerExecutor = RecordingExecutorService(),
+                        queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                        acceptLoopExecutor = acceptLoopExecutor,
+                        bindListener = { _, _, _ ->
+                            bindCalled = true
+                            error("startup preflight failure must not bind")
+                        },
+                    ),
+                )
 
             assertFalse(bindCalled)
             assertEquals(0, acceptLoopExecutor.executedTasks)
@@ -84,21 +85,23 @@ class ProxyServerRuntimeTest {
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
 
-        val running = assertIs<ProxyServerRuntimeResult.Running>(
-            ProxyServerRuntime.start(
-                config = AppConfig.default().copy(
-                    proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+        val running =
+            assertIs<ProxyServerRuntimeResult.Running>(
+                ProxyServerRuntime.start(
+                    config =
+                        AppConfig.default().copy(
+                            proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                        ),
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifiRoute()),
+                    ingressConfig = ingressConfig(),
+                    connectionHandler = connectionHandler(),
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
                 ),
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifiRoute()),
-                ingressConfig = ingressConfig(),
-                connectionHandler = connectionHandler(),
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
-            ),
-        ).runtime
+            ).runtime
 
         try {
             assertEquals(ProxyServiceState.Running, running.status.state)
@@ -108,9 +111,10 @@ class ProxyServerRuntimeTest {
 
             running.stop()
 
-            val stopped = assertIs<ProxyServerRuntimeStopResult.Finished>(
-                running.awaitStopped(timeoutMillis = 1_000),
-            )
+            val stopped =
+                assertIs<ProxyServerRuntimeStopResult.Finished>(
+                    running.awaitStopped(timeoutMillis = 1_000),
+                )
             assertEquals(
                 0,
                 assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(stopped.result).acceptedClientConnections,
@@ -135,21 +139,23 @@ class ProxyServerRuntimeTest {
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
 
-        val running = assertIs<ProxyServerRuntimeResult.Running>(
-            ProxyServerRuntime.start(
-                config = AppConfig.default().copy(
-                    proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+        val running =
+            assertIs<ProxyServerRuntimeResult.Running>(
+                ProxyServerRuntime.start(
+                    config =
+                        AppConfig.default().copy(
+                            proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                        ),
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifiRoute()),
+                    ingressConfig = ingressConfig(),
+                    connectionHandler = connectionHandler(),
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
                 ),
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifiRoute()),
-                ingressConfig = ingressConfig(),
-                connectionHandler = connectionHandler(),
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
-            ),
-        ).runtime
+            ).runtime
 
         try {
             val acceptedStop = running.requestStop()
@@ -163,9 +169,10 @@ class ProxyServerRuntimeTest {
             assertEquals(ProxyServiceStopTransitionDisposition.Duplicate, duplicateStop.disposition)
             assertEquals(ProxyServiceState.Stopping, duplicateStop.status.state)
 
-            val stopped = assertIs<ProxyServerRuntimeStopResult.Finished>(
-                running.awaitStopped(timeoutMillis = 1_000),
-            )
+            val stopped =
+                assertIs<ProxyServerRuntimeStopResult.Finished>(
+                    running.awaitStopped(timeoutMillis = 1_000),
+                )
             assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(stopped.result)
             assertEquals(ProxyServiceState.Stopped, running.status.state)
         } finally {
@@ -186,33 +193,37 @@ class ProxyServerRuntimeTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val tracker = ProxyTrafficActivityTracker()
         val connectionHandler = connectionHandler(proxyActivityTracker = tracker)
-        val activeProxyExchange = tracker.begin(
-            ParsedProxyRequest.HttpProxy(
-                method = "GET",
-                host = "origin.example",
-                port = 80,
-                originTarget = "/resource",
-            ),
-        )
-        val runtime = RunningProxyServerRuntime(
-            listener = listener,
-            initialStatus = ProxyServiceStatus.running(
-                listenHost = LOOPBACK_HOST,
-                listenPort = listener.listenPort,
-                configuredRoute = RouteTarget.Automatic,
-                boundRoute = wifiRoute(),
-                publicIp = null,
-                hasHighSecurityRisk = false,
-            ),
-            acceptLoop = ProxyBoundServerAcceptLoop(
+        val activeProxyExchange =
+            tracker.begin(
+                ParsedProxyRequest.HttpProxy(
+                    method = "GET",
+                    host = "origin.example",
+                    port = 80,
+                    originTarget = "/resource",
+                ),
+            )
+        val runtime =
+            RunningProxyServerRuntime(
+                listener = listener,
+                initialStatus =
+                    ProxyServiceStatus.running(
+                        listenHost = LOOPBACK_HOST,
+                        listenPort = listener.listenPort,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = wifiRoute(),
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                    ),
+                acceptLoop =
+                    ProxyBoundServerAcceptLoop(
+                        connectionHandler = connectionHandler,
+                        workerExecutor = RecordingExecutorService(),
+                        queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    ),
+                acceptLoopResult = CompletableFuture.completedFuture(ProxyBoundServerAcceptLoopResult.Stopped(0)),
                 connectionHandler = connectionHandler,
-                workerExecutor = RecordingExecutorService(),
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            ),
-            acceptLoopResult = CompletableFuture.completedFuture(ProxyBoundServerAcceptLoopResult.Stopped(0)),
-            connectionHandler = connectionHandler,
-            requestPauseController = ProxyRotationRequestPauseController(ingressConfig()),
-        )
+                requestPauseController = ProxyRotationRequestPauseController(ingressConfig()),
+            )
 
         try {
             assertEquals(1, runtime.activeProxyExchanges)
@@ -232,25 +243,28 @@ class ProxyServerRuntimeTest {
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val connectionHandler = connectionHandler()
-        val runtime = RunningProxyServerRuntime(
-            listener = listener,
-            initialStatus = ProxyServiceStatus.running(
-                listenHost = LOOPBACK_HOST,
-                listenPort = listener.listenPort,
-                configuredRoute = RouteTarget.Automatic,
-                boundRoute = wifiRoute(),
-                publicIp = null,
-                hasHighSecurityRisk = false,
-            ),
-            acceptLoop = ProxyBoundServerAcceptLoop(
+        val runtime =
+            RunningProxyServerRuntime(
+                listener = listener,
+                initialStatus =
+                    ProxyServiceStatus.running(
+                        listenHost = LOOPBACK_HOST,
+                        listenPort = listener.listenPort,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = wifiRoute(),
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                    ),
+                acceptLoop =
+                    ProxyBoundServerAcceptLoop(
+                        connectionHandler = connectionHandler,
+                        workerExecutor = RecordingExecutorService(),
+                        queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    ),
+                acceptLoopResult = CompletableFuture.completedFuture(ProxyBoundServerAcceptLoopResult.Stopped(0)),
                 connectionHandler = connectionHandler,
-                workerExecutor = RecordingExecutorService(),
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            ),
-            acceptLoopResult = CompletableFuture.completedFuture(ProxyBoundServerAcceptLoopResult.Stopped(0)),
-            connectionHandler = connectionHandler,
-            requestPauseController = ProxyRotationRequestPauseController(ingressConfig()),
-        )
+                requestPauseController = ProxyRotationRequestPauseController(ingressConfig()),
+            )
 
         try {
             assertFalse(runtime.proxyRequestsPaused)
@@ -274,21 +288,23 @@ class ProxyServerRuntimeTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
 
         try {
-            val failed = assertIs<ProxyServerRuntimeResult.AcceptLoopLaunchFailed>(
-                ProxyServerRuntime.start(
-                    config = AppConfig.default().copy(
-                        proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+            val failed =
+                assertIs<ProxyServerRuntimeResult.AcceptLoopLaunchFailed>(
+                    ProxyServerRuntime.start(
+                        config =
+                            AppConfig.default().copy(
+                                proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                            ),
+                        managementApiTokenPresent = true,
+                        observedNetworks = listOf(wifiRoute()),
+                        ingressConfig = ingressConfig(),
+                        connectionHandler = connectionHandler(),
+                        workerExecutor = RecordingExecutorService(),
+                        queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                        acceptLoopExecutor = RejectingExecutorService(),
+                        bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
                     ),
-                    managementApiTokenPresent = true,
-                    observedNetworks = listOf(wifiRoute()),
-                    ingressConfig = ingressConfig(),
-                    connectionHandler = connectionHandler(),
-                    workerExecutor = RecordingExecutorService(),
-                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                    acceptLoopExecutor = RejectingExecutorService(),
-                    bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
-                ),
-            )
+                )
 
             assertTrue(listener.isClosed)
             assertEquals("rejected", failed.exception.message)
@@ -306,9 +322,10 @@ class ProxyServerRuntimeTest {
         try {
             kotlin.test.assertFailsWith<IllegalArgumentException> {
                 ProxyServerRuntime.start(
-                    config = AppConfig.default().copy(
-                        proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
-                    ),
+                    config =
+                        AppConfig.default().copy(
+                            proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                        ),
                     managementApiTokenPresent = true,
                     observedNetworks = listOf(wifiRoute()),
                     ingressConfig = ingressConfig(),
@@ -338,27 +355,30 @@ class ProxyServerRuntimeTest {
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
 
-        val running = assertIs<ProxyServerRuntimeResult.Running>(
-            ProxyServerRuntime.start(
-                config = AppConfig.default().copy(
-                    proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+        val running =
+            assertIs<ProxyServerRuntimeResult.Running>(
+                ProxyServerRuntime.start(
+                    config =
+                        AppConfig.default().copy(
+                            proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                        ),
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifiRoute()),
+                    ingressConfig = ingressConfig(),
+                    connectionHandler = connectionHandler(),
+                    workerExecutor = RejectingExecutorService(),
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
                 ),
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifiRoute()),
-                ingressConfig = ingressConfig(),
-                connectionHandler = connectionHandler(),
-                workerExecutor = RejectingExecutorService(),
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
-            ),
-        ).runtime
+            ).runtime
 
         try {
             Socket(LOOPBACK_HOST, listener.listenPort).use {
-                val stopped = assertIs<ProxyServerRuntimeStopResult.Finished>(
-                    running.awaitStopped(timeoutMillis = 1_000),
-                )
+                val stopped =
+                    assertIs<ProxyServerRuntimeStopResult.Finished>(
+                        running.awaitStopped(timeoutMillis = 1_000),
+                    )
                 assertIs<ProxyBoundServerAcceptLoopResult.Failed>(stopped.result)
             }
 
@@ -375,36 +395,40 @@ class ProxyServerRuntimeTest {
     private fun ingressConfig(): ProxyIngressPreflightConfig =
         ProxyIngressPreflightConfig(
             connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
-            requestAdmission = ProxyRequestAdmissionConfig(
-                proxyAuthentication = ProxyAuthenticationConfig(
-                    authEnabled = false,
-                    credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = false,
+                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        ),
+                    managementApiToken = "management-token",
                 ),
-                managementApiToken = "management-token",
-            ),
         )
 
     private fun connectionHandler(
         proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
     ): ProxyBoundClientConnectionHandler =
         ProxyBoundClientConnectionHandler(
-            exchangeHandler = ProxyClientStreamExchangeHandler(
-                httpConnector = {
-                    OutboundHttpOriginOpenResult.Failed(
-                        OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
-                    )
-                },
-                connectConnector = {
-                    OutboundConnectTunnelOpenResult.Failed(
-                        OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
-                    )
-                },
-                managementHandler = object : ManagementApiHandler {
-                    override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-                        ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-                proxyActivityTracker = proxyActivityTracker,
-            ),
+            exchangeHandler =
+                ProxyClientStreamExchangeHandler(
+                    httpConnector = {
+                        OutboundHttpOriginOpenResult.Failed(
+                            OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
+                        )
+                    },
+                    connectConnector = {
+                        OutboundConnectTunnelOpenResult.Failed(
+                            OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
+                        )
+                    },
+                    managementHandler =
+                        object : ManagementApiHandler {
+                            override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
+                                ManagementApiResponse.json(statusCode = 200, body = "{}")
+                        },
+                    proxyActivityTracker = proxyActivityTracker,
+                ),
         )
 
     private fun wifiRoute(): NetworkDescriptor =
@@ -439,13 +463,14 @@ private class RecordingExecutorService : AbstractExecutorService() {
 
     override fun isTerminated(): Boolean = shutdown
 
-    override fun awaitTermination(timeout: Long, unit: TimeUnit): Boolean = true
+    override fun awaitTermination(
+        timeout: Long,
+        unit: TimeUnit,
+    ): Boolean = true
 }
 
 private class RejectingExecutorService : AbstractExecutorService() {
-    override fun execute(command: Runnable) {
-        throw RejectedExecutionException("rejected")
-    }
+    override fun execute(command: Runnable): Unit = throw RejectedExecutionException("rejected")
 
     override fun shutdown() = Unit
 
@@ -455,7 +480,10 @@ private class RejectingExecutorService : AbstractExecutorService() {
 
     override fun isTerminated(): Boolean = false
 
-    override fun awaitTermination(timeout: Long, unit: TimeUnit): Boolean = true
+    override fun awaitTermination(
+        timeout: Long,
+        unit: TimeUnit,
+    ): Boolean = true
 }
 
 private const val LOOPBACK_HOST = "127.0.0.1"

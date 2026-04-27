@@ -10,10 +10,11 @@ import kotlin.test.assertNull
 class RotationStateMachineTest {
     @Test
     fun `start request enters cooldown check for the requested operation`() {
-        val result = RotationStateMachine.transition(
-            status = RotationStatus.idle(),
-            event = RotationEvent.StartRequested(RotationOperation.MobileData),
-        )
+        val result =
+            RotationStateMachine.transition(
+                status = RotationStatus.idle(),
+                event = RotationEvent.StartRequested(RotationOperation.MobileData),
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
         assertEquals(RotationState.CheckingCooldown, result.status.state)
@@ -23,15 +24,18 @@ class RotationStateMachineTest {
 
     @Test
     fun `duplicate start request while rotation is active leaves status unchanged`() {
-        val active = RotationStateMachine.transition(
-            status = RotationStatus.idle(),
-            event = RotationEvent.StartRequested(RotationOperation.AirplaneMode),
-        ).status
+        val active =
+            RotationStateMachine
+                .transition(
+                    status = RotationStatus.idle(),
+                    event = RotationEvent.StartRequested(RotationOperation.AirplaneMode),
+                ).status
 
-        val duplicate = RotationStateMachine.transition(
-            status = active,
-            event = RotationEvent.StartRequested(RotationOperation.MobileData),
-        )
+        val duplicate =
+            RotationStateMachine.transition(
+                status = active,
+                event = RotationEvent.StartRequested(RotationOperation.MobileData),
+            )
 
         assertEquals(RotationTransitionDisposition.Duplicate, duplicate.disposition)
         assertEquals(active, duplicate.status)
@@ -39,20 +43,25 @@ class RotationStateMachineTest {
 
     @Test
     fun `old public ip success pauses new requests before draining connections`() {
-        val probing = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.MobileData),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-        )
+        val probing =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.MobileData),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+            )
 
-        val pausing = RotationStateMachine.transition(
-            status = probing,
-            event = RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-        ).status
-        val draining = RotationStateMachine.transition(
-            status = pausing,
-            event = RotationEvent.NewRequestsPaused,
-        ).status
+        val pausing =
+            RotationStateMachine
+                .transition(
+                    status = probing,
+                    event = RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                ).status
+        val draining =
+            RotationStateMachine
+                .transition(
+                    status = pausing,
+                    event = RotationEvent.NewRequestsPaused,
+                ).status
 
         assertEquals(RotationState.PausingNewRequests, pausing.state)
         assertEquals(RotationState.DrainingConnections, draining.state)
@@ -60,23 +69,24 @@ class RotationStateMachineTest {
 
     @Test
     fun `successful mobile data rotation requires disable delay enable and resume`() {
-        val completed = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.MobileData),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataDisable)),
-            RotationEvent.ToggleDelayElapsed,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
-            RotationEvent.NetworkReturned,
-            RotationEvent.NewPublicIpProbeSucceeded(
-                publicIp = "203.0.113.20",
-                strictIpChangeRequired = true,
-            ),
-            RotationEvent.ProxyRequestsResumed,
-        )
+        val completed =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.MobileData),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataDisable)),
+                RotationEvent.ToggleDelayElapsed,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
+                RotationEvent.NetworkReturned,
+                RotationEvent.NewPublicIpProbeSucceeded(
+                    publicIp = "203.0.113.20",
+                    strictIpChangeRequired = true,
+                ),
+                RotationEvent.ProxyRequestsResumed,
+            )
 
         assertEquals(RotationState.Completed, completed.state)
         assertEquals(RotationOperation.MobileData, completed.operation)
@@ -88,23 +98,24 @@ class RotationStateMachineTest {
 
     @Test
     fun `successful airplane mode rotation requires enable delay disable and resume`() {
-        val completed = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.AirplaneMode),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeEnable)),
-            RotationEvent.ToggleDelayElapsed,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeDisable)),
-            RotationEvent.NetworkReturned,
-            RotationEvent.NewPublicIpProbeSucceeded(
-                publicIp = "203.0.113.20",
-                strictIpChangeRequired = true,
-            ),
-            RotationEvent.ProxyRequestsResumed,
-        )
+        val completed =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.AirplaneMode),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeEnable)),
+                RotationEvent.ToggleDelayElapsed,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeDisable)),
+                RotationEvent.NetworkReturned,
+                RotationEvent.NewPublicIpProbeSucceeded(
+                    publicIp = "203.0.113.20",
+                    strictIpChangeRequired = true,
+                ),
+                RotationEvent.ProxyRequestsResumed,
+            )
 
         assertEquals(RotationState.Completed, completed.state)
         assertEquals(RotationOperation.AirplaneMode, completed.operation)
@@ -112,19 +123,22 @@ class RotationStateMachineTest {
 
     @Test
     fun `first successful root command waits for configured toggle delay before second command`() {
-        val waitingForDelay = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.MobileData),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataDisable)),
-        )
-        val runningEnable = RotationStateMachine.transition(
-            status = waitingForDelay,
-            event = RotationEvent.ToggleDelayElapsed,
-        ).status
+        val waitingForDelay =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.MobileData),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataDisable)),
+            )
+        val runningEnable =
+            RotationStateMachine
+                .transition(
+                    status = waitingForDelay,
+                    event = RotationEvent.ToggleDelayElapsed,
+                ).status
 
         assertEquals(RotationState.WaitingForToggleDelay, waitingForDelay.state)
         assertEquals(RotationState.RunningEnableCommand, runningEnable.state)
@@ -132,26 +146,29 @@ class RotationStateMachineTest {
 
     @Test
     fun `strict ip change failure is recorded only after proxy requests resume`() {
-        val resuming = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.AirplaneMode),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeEnable)),
-            RotationEvent.ToggleDelayElapsed,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeDisable)),
-            RotationEvent.NetworkReturned,
-            RotationEvent.NewPublicIpProbeSucceeded(
-                publicIp = "198.51.100.10",
-                strictIpChangeRequired = true,
-            ),
-        )
-        val failed = RotationStateMachine.transition(
-            status = resuming,
-            event = RotationEvent.ProxyRequestsResumed,
-        ).status
+        val resuming =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.AirplaneMode),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeEnable)),
+                RotationEvent.ToggleDelayElapsed,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.AirplaneModeDisable)),
+                RotationEvent.NetworkReturned,
+                RotationEvent.NewPublicIpProbeSucceeded(
+                    publicIp = "198.51.100.10",
+                    strictIpChangeRequired = true,
+                ),
+            )
+        val failed =
+            RotationStateMachine
+                .transition(
+                    status = resuming,
+                    event = RotationEvent.ProxyRequestsResumed,
+                ).status
 
         assertEquals(RotationState.ResumingProxyRequests, resuming.state)
         assertEquals(RotationState.Failed, failed.state)
@@ -163,23 +180,24 @@ class RotationStateMachineTest {
 
     @Test
     fun `unchanged public ip still completes when strict ip change is disabled`() {
-        val completed = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.MobileData),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("203.0.113.44"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataDisable)),
-            RotationEvent.ToggleDelayElapsed,
-            RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
-            RotationEvent.NetworkReturned,
-            RotationEvent.NewPublicIpProbeSucceeded(
-                publicIp = "203.0.113.44",
-                strictIpChangeRequired = false,
-            ),
-            RotationEvent.ProxyRequestsResumed,
-        )
+        val completed =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.MobileData),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("203.0.113.44"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataDisable)),
+                RotationEvent.ToggleDelayElapsed,
+                RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
+                RotationEvent.NetworkReturned,
+                RotationEvent.NewPublicIpProbeSucceeded(
+                    publicIp = "203.0.113.44",
+                    strictIpChangeRequired = false,
+                ),
+                RotationEvent.ProxyRequestsResumed,
+            )
 
         assertEquals(RotationState.Completed, completed.state)
         assertEquals(false, completed.publicIpChanged)
@@ -284,23 +302,26 @@ class RotationStateMachineTest {
 
     @Test
     fun `wrong command category is ignored for the current operation phase`() {
-        val runningDisable = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.MobileData),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-        )
+        val runningDisable =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.MobileData),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+            )
 
-        val ignored = RotationStateMachine.transition(
-            status = runningDisable,
-            event = RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
-        )
-        val ignoredFailedToStart = RotationStateMachine.transition(
-            status = runningDisable,
-            event = RotationEvent.RootCommandFailedToStart(RootCommandCategory.MobileDataEnable),
-        )
+        val ignored =
+            RotationStateMachine.transition(
+                status = runningDisable,
+                event = RotationEvent.RootCommandCompleted(success(RootCommandCategory.MobileDataEnable)),
+            )
+        val ignoredFailedToStart =
+            RotationStateMachine.transition(
+                status = runningDisable,
+                event = RotationEvent.RootCommandFailedToStart(RootCommandCategory.MobileDataEnable),
+            )
 
         assertEquals(RotationTransitionDisposition.Ignored, ignored.disposition)
         assertEquals(runningDisable, ignored.status)
@@ -384,10 +405,12 @@ class RotationStateMachineTest {
         vararg events: RotationEvent,
     ) {
         val resuming = statusAfter(*events)
-        val failed = RotationStateMachine.transition(
-            status = resuming,
-            event = RotationEvent.ProxyRequestsResumed,
-        ).status
+        val failed =
+            RotationStateMachine
+                .transition(
+                    status = resuming,
+                    event = RotationEvent.ProxyRequestsResumed,
+                ).status
 
         assertEquals(RotationState.ResumingProxyRequests, resuming.state)
         assertEquals(RotationState.Failed, failed.state)

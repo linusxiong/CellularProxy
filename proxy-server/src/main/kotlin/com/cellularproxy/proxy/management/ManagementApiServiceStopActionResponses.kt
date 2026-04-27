@@ -9,18 +9,19 @@ object ManagementApiServiceStopActionResponses {
     fun transition(result: ProxyServiceStopTransitionResult): ManagementApiResponse =
         ManagementApiResponse.json(
             statusCode = if (result.accepted) 202 else 409,
-            body = buildString {
-                append('{')
-                append(""""accepted":""")
-                append(result.accepted)
-                append(',')
-                append(""""disposition":""")
-                append(result.disposition.apiValue().jsonString())
-                append(',')
-                append(""""service":""")
-                append(result.status.serviceStopJson())
-                append('}')
-            },
+            body =
+                buildString {
+                    append('{')
+                    append(""""accepted":""")
+                    append(result.accepted)
+                    append(',')
+                    append(""""disposition":""")
+                    append(result.disposition.apiValue().jsonString())
+                    append(',')
+                    append(""""service":""")
+                    append(result.status.serviceStopJson())
+                    append('}')
+                },
         )
 }
 

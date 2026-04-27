@@ -23,11 +23,9 @@ class ForwardedHttpRequestHead(
         this.headers = copySafeForwardedRequestHeaders(headers)
     }
 
-    fun toHttpString(): String =
-        renderRequestHeaderString(requestLine, headers)
+    fun toHttpString(): String = renderRequestHeaderString(requestLine, headers)
 
-    fun toByteArray(): ByteArray =
-        renderRequestHeaderString(requestLine, headers).toByteArray(Charsets.UTF_8)
+    fun toByteArray(): ByteArray = renderRequestHeaderString(requestLine, headers).toByteArray(Charsets.UTF_8)
 }
 
 class ForwardedHttpRequest(
@@ -65,20 +63,18 @@ class ForwardedHttpRequest(
         this.bodyBytes = bodyCopy
     }
 
-    fun toHttpString(): String =
-        headerString() + bodyBytes.decodeStrictUtf8()
+    fun toHttpString(): String = headerString() + bodyBytes.decodeStrictUtf8()
 
-    fun toByteArray(): ByteArray =
-        headerString().toByteArray(Charsets.UTF_8) + bodyBytes
+    fun toByteArray(): ByteArray = headerString().toByteArray(Charsets.UTF_8) + bodyBytes
 
-    private fun headerString(): String =
-        renderRequestHeaderString(requestLine, headers)
+    private fun headerString(): String = renderRequestHeaderString(requestLine, headers)
 }
 
 object HttpProxyForwardRequestRenderer {
     fun renderHead(request: ParsedHttpRequest): ForwardedHttpRequestHead {
-        val proxyRequest = request.request as? ParsedProxyRequest.HttpProxy
-            ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
+        val proxyRequest =
+            request.request as? ParsedProxyRequest.HttpProxy
+                ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
         require(!request.headers.containsHeader(TRANSFER_ENCODING_HEADER)) {
             "Transfer-Encoding request bodies are not supported by the HTTP forward renderer"
         }
@@ -95,8 +91,9 @@ object HttpProxyForwardRequestRenderer {
         request: ParsedHttpRequest,
         body: ByteArray = EMPTY_BODY,
     ): ForwardedHttpRequest {
-        val proxyRequest = request.request as? ParsedProxyRequest.HttpProxy
-            ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
+        val proxyRequest =
+            request.request as? ParsedProxyRequest.HttpProxy
+                ?: throw IllegalArgumentException("Only plain HTTP proxy requests can be rendered for HTTP forwarding")
         require(!request.headers.containsHeader(TRANSFER_ENCODING_HEADER)) {
             "Transfer-Encoding request bodies are not supported by the HTTP forward renderer"
         }
@@ -110,9 +107,7 @@ object HttpProxyForwardRequestRenderer {
         )
     }
 
-    private fun ParsedHttpRequest.forwardedHeaders(
-        proxyRequest: ParsedProxyRequest.HttpProxy,
-    ): Map<String, List<String>> {
+    private fun ParsedHttpRequest.forwardedHeaders(proxyRequest: ParsedProxyRequest.HttpProxy): Map<String, List<String>> {
         val headersToStrip = HOP_BY_HOP_HEADERS + connectionNominatedHeaderNames()
         val outboundHeaders = linkedMapOf<String, List<String>>("host" to listOf(proxyRequest.forwardHostHeaderValue()))
         headers.forEach { (headerName, values) ->
@@ -123,8 +118,7 @@ object HttpProxyForwardRequestRenderer {
         return outboundHeaders
     }
 
-    private fun ParsedProxyRequest.HttpProxy.forwardHostHeaderValue(): String =
-        if (port == HTTP_DEFAULT_PORT) host else "$host:$port"
+    private fun ParsedProxyRequest.HttpProxy.forwardHostHeaderValue(): String = if (port == HTTP_DEFAULT_PORT) host else "$host:$port"
 
     private fun ParsedHttpRequest.connectionNominatedHeaderNames(): Set<String> =
         headers
@@ -137,31 +131,28 @@ object HttpProxyForwardRequestRenderer {
             .toSet()
 }
 
-private fun String.isSafeSingleLine(): Boolean =
-    isNotEmpty() && none(Char::isISOControl)
+private fun String.isSafeSingleLine(): Boolean = isNotEmpty() && none(Char::isISOControl)
 
-private fun String.isHttpToken(): Boolean =
-    isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-private fun String.isDecimalDigits(): Boolean =
-    isNotEmpty() && all { it in '0'..'9' }
+private fun String.isDecimalDigits(): Boolean = isNotEmpty() && all { it in '0'..'9' }
 
-private fun Char.isDisallowedHeaderValueControl(): Boolean =
-    code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+private fun Char.isDisallowedHeaderValueControl(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 
 private fun copySafeForwardedRequestHeaders(headers: Map<String, List<String>>): Map<String, List<String>> {
     val copiedHeaders = linkedMapOf<String, List<String>>()
     headers.forEach { (name, values) ->
         require(name.isHttpToken()) { "Header name must be a valid HTTP token" }
         require(values.isNotEmpty()) { "Header values must not be empty" }
-        copiedHeaders[name] = Collections.unmodifiableList(
-            values.map { value ->
-                require(value.none(Char::isDisallowedHeaderValueControl)) {
-                    "Header value must not contain control characters"
-                }
-                value
-            },
-        )
+        copiedHeaders[name] =
+            Collections.unmodifiableList(
+                values.map { value ->
+                    require(value.none(Char::isDisallowedHeaderValueControl)) {
+                        "Header value must not contain control characters"
+                    }
+                    value
+                },
+            )
     }
     val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
     require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
@@ -208,8 +199,7 @@ private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String):
         .flatMap { (_, values) -> values }
 }
 
-private fun Map<String, List<String>>.containsHeader(name: String): Boolean =
-    caseInsensitiveHeaderValues(name).isNotEmpty()
+private fun Map<String, List<String>>.containsHeader(name: String): Boolean = caseInsensitiveHeaderValues(name).isNotEmpty()
 
 private fun ByteArray.decodeStrictUtf8(): String =
     try {
@@ -232,21 +222,23 @@ private const val TRANSFER_ENCODING_HEADER = "transfer-encoding"
 private val EMPTY_BODY = ByteArray(0)
 private val VALID_PORT_RANGE = 1..65535
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
-private val HOP_BY_HOP_HEADERS = setOf(
-    "connection",
-    "host",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-authorization",
-    "proxy-connection",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
-)
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).toSet()
+private val HOP_BY_HOP_HEADERS =
+    setOf(
+        "connection",
+        "host",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "proxy-connection",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+    )
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).toSet()

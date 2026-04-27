@@ -12,8 +12,13 @@ import java.net.SocketException
 import java.net.UnknownHostException
 
 sealed interface ProxyServerSocketBindResult {
-    data class Bound(val listener: BoundProxyServerSocket) : ProxyServerSocketBindResult
-    data class Failed(val startupError: ProxyStartupError) : ProxyServerSocketBindResult
+    data class Bound(
+        val listener: BoundProxyServerSocket,
+    ) : ProxyServerSocketBindResult
+
+    data class Failed(
+        val startupError: ProxyStartupError,
+    ) : ProxyServerSocketBindResult
 }
 
 class BoundProxyServerSocket internal constructor(
@@ -26,9 +31,7 @@ class BoundProxyServerSocket internal constructor(
     val isClosed: Boolean
         get() = serverSocket.isClosed
 
-    fun accept(
-        headerReadIdleTimeoutMillis: Int = DEFAULT_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS,
-    ): ProxyClientStreamConnection {
+    fun accept(headerReadIdleTimeoutMillis: Int = DEFAULT_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS): ProxyClientStreamConnection {
         require(headerReadIdleTimeoutMillis > 0) { "Client header-read idle timeout must be positive" }
         val socket = serverSocket.accept()
         return try {

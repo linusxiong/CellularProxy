@@ -62,40 +62,46 @@ object ProxyIngressPreflight {
             )
         }
 
-        val capacity = when (
-            val decision = ConnectionLimitAdmissionPolicy.evaluate(
-                config = config.connectionLimit,
-                activeConnections = activeConnections,
-            )
-        ) {
-            is ConnectionLimitAdmissionDecision.Accepted -> decision
-            is ConnectionLimitAdmissionDecision.Rejected -> {
-                val failure = ProxyServerFailure.ConnectionLimit(decision.reason)
-                return rejected(failure = failure, requiresAuditLog = false)
+        val capacity =
+            when (
+                val decision =
+                    ConnectionLimitAdmissionPolicy.evaluate(
+                        config = config.connectionLimit,
+                        activeConnections = activeConnections,
+                    )
+            ) {
+                is ConnectionLimitAdmissionDecision.Accepted -> decision
+                is ConnectionLimitAdmissionDecision.Rejected -> {
+                    val failure = ProxyServerFailure.ConnectionLimit(decision.reason)
+                    return rejected(failure = failure, requiresAuditLog = false)
+                }
             }
-        }
 
-        val parsed = when (
-            val result = HttpRequestHeaderBlockParser.parse(
-                headerBlock = headerBlock,
-                maxHeaderBytes = config.maxHeaderBytes,
-            )
-        ) {
-            is HttpRequestHeaderBlockParseResult.Accepted -> result.request
-            is HttpRequestHeaderBlockParseResult.Rejected -> {
-                val failure = ProxyServerFailure.HeaderBlockParse(
-                    reason = result.reason,
-                    requestLineRejectionReason = result.requestLineRejectionReason,
-                )
-                return rejected(failure = failure, requiresAuditLog = false)
+        val parsed =
+            when (
+                val result =
+                    HttpRequestHeaderBlockParser.parse(
+                        headerBlock = headerBlock,
+                        maxHeaderBytes = config.maxHeaderBytes,
+                    )
+            ) {
+                is HttpRequestHeaderBlockParseResult.Accepted -> result.request
+                is HttpRequestHeaderBlockParseResult.Rejected -> {
+                    val failure =
+                        ProxyServerFailure.HeaderBlockParse(
+                            reason = result.reason,
+                            requestLineRejectionReason = result.requestLineRejectionReason,
+                        )
+                    return rejected(failure = failure, requiresAuditLog = false)
+                }
             }
-        }
 
         return when (
-            val decision = ProxyRequestAdmissionPolicy.evaluate(
-                config = config.requestAdmission,
-                request = parsed,
-            )
+            val decision =
+                ProxyRequestAdmissionPolicy.evaluate(
+                    config = config.requestAdmission,
+                    request = parsed,
+                )
         ) {
             is ProxyRequestAdmissionDecision.Accepted -> {
                 if (config.proxyRequestsPaused && decision.request.isProxyTraffic()) {
@@ -131,27 +137,31 @@ object ProxyIngressPreflight {
             "Active connections must leave room for admitted management traffic"
         }
 
-        val parsed = when (
-            val result = HttpRequestHeaderBlockParser.parse(
-                headerBlock = headerBlock,
-                maxHeaderBytes = config.maxHeaderBytes,
-            )
-        ) {
-            is HttpRequestHeaderBlockParseResult.Accepted -> result.request
-            is HttpRequestHeaderBlockParseResult.Rejected -> {
-                val failure = ProxyServerFailure.HeaderBlockParse(
-                    reason = result.reason,
-                    requestLineRejectionReason = result.requestLineRejectionReason,
-                )
-                return rejected(failure = failure, requiresAuditLog = false)
+        val parsed =
+            when (
+                val result =
+                    HttpRequestHeaderBlockParser.parse(
+                        headerBlock = headerBlock,
+                        maxHeaderBytes = config.maxHeaderBytes,
+                    )
+            ) {
+                is HttpRequestHeaderBlockParseResult.Accepted -> result.request
+                is HttpRequestHeaderBlockParseResult.Rejected -> {
+                    val failure =
+                        ProxyServerFailure.HeaderBlockParse(
+                            reason = result.reason,
+                            requestLineRejectionReason = result.requestLineRejectionReason,
+                        )
+                    return rejected(failure = failure, requiresAuditLog = false)
+                }
             }
-        }
 
         return when (
-            val decision = ProxyRequestAdmissionPolicy.evaluate(
-                config = config.requestAdmission,
-                request = parsed,
-            )
+            val decision =
+                ProxyRequestAdmissionPolicy.evaluate(
+                    config = config.requestAdmission,
+                    request = parsed,
+                )
         ) {
             is ProxyRequestAdmissionDecision.Accepted -> {
                 if (decision.request.isProxyTraffic()) {

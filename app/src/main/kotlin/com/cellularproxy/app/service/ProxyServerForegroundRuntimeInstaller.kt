@@ -59,30 +59,32 @@ object ProxyServerForegroundRuntimeInstaller {
 
             is AppConfigBootstrapResult.Ready -> {
                 val managementHandlerReference = RuntimeManagementApiHandlerReference()
-                val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-                    plainConfig = bootstrapResult.plainConfig,
-                    sensitiveConfig = bootstrapResult.sensitiveConfig,
-                    observedNetworks = observedNetworks,
-                    socketConnector = socketConnector,
-                    managementHandlerReference = managementHandlerReference,
-                    publicIp = publicIp,
-                    cloudflareStatus = cloudflareStatus,
-                    cloudflareStart = cloudflareStart,
-                    cloudflareStop = cloudflareStop,
-                    rotateMobileData = rotateMobileData,
-                    rotateAirplaneMode = rotateAirplaneMode,
-                    rootOperationsEnabled = rootOperationsEnabled,
-                    rootAvailability = rootAvailability,
-                    workerExecutor = workerExecutor,
-                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                    acceptLoopExecutor = acceptLoopExecutor,
-                    maxConcurrentConnections = maxConcurrentConnections
-                        ?: bootstrapResult.plainConfig.proxy.maxConcurrentConnections,
-                    outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
-                    recordMetricEvent = recordMetricEvent,
-                    recordManagementAudit = recordManagementAudit,
-                    bindListener = bindListener,
-                )
+                val lifecycle =
+                    ProxyServerForegroundRuntimeLifecycleFactory.create(
+                        plainConfig = bootstrapResult.plainConfig,
+                        sensitiveConfig = bootstrapResult.sensitiveConfig,
+                        observedNetworks = observedNetworks,
+                        socketConnector = socketConnector,
+                        managementHandlerReference = managementHandlerReference,
+                        publicIp = publicIp,
+                        cloudflareStatus = cloudflareStatus,
+                        cloudflareStart = cloudflareStart,
+                        cloudflareStop = cloudflareStop,
+                        rotateMobileData = rotateMobileData,
+                        rotateAirplaneMode = rotateAirplaneMode,
+                        rootOperationsEnabled = rootOperationsEnabled,
+                        rootAvailability = rootAvailability,
+                        workerExecutor = workerExecutor,
+                        queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                        acceptLoopExecutor = acceptLoopExecutor,
+                        maxConcurrentConnections =
+                            maxConcurrentConnections
+                                ?: bootstrapResult.plainConfig.proxy.maxConcurrentConnections,
+                        outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
+                        recordMetricEvent = recordMetricEvent,
+                        recordManagementAudit = recordManagementAudit,
+                        bindListener = bindListener,
+                    )
                 ProxyServerForegroundRuntimeInstallResult.Installed(
                     registration = ForegroundProxyRuntimeLifecycleInstaller.install(lifecycle),
                     managementHandlerReference = managementHandlerReference,

@@ -9,10 +9,11 @@ object SensitiveConfigRepositoryFactory {
         context: Context,
         cipher: SensitiveValueCipher = AndroidKeystoreSensitiveValueCipher.create(),
     ): SensitiveConfigRepository {
-        val sharedPreferences = context.getSharedPreferences(
-            SENSITIVE_PREFERENCES_NAME,
-            Context.MODE_PRIVATE,
-        )
+        val sharedPreferences =
+            context.getSharedPreferences(
+                SENSITIVE_PREFERENCES_NAME,
+                Context.MODE_PRIVATE,
+            )
         return SensitiveConfigRepository(
             store = SharedPreferencesSensitiveKeyValueStore(sharedPreferences),
             cipher = cipher,

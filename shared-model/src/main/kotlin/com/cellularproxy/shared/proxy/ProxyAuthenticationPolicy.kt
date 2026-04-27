@@ -61,8 +61,9 @@ object ProxyAuthenticationPolicy {
             return ProxyAuthenticationDecision.Accepted
         }
 
-        val header = proxyAuthorization?.trim()
-            ?: return ProxyAuthenticationDecision.rejected(ProxyAuthenticationRejectionReason.MissingAuthorization)
+        val header =
+            proxyAuthorization?.trim()
+                ?: return ProxyAuthenticationDecision.rejected(ProxyAuthenticationRejectionReason.MissingAuthorization)
         if (header.isEmpty()) {
             return ProxyAuthenticationDecision.rejected(ProxyAuthenticationRejectionReason.MissingAuthorization)
         }
@@ -78,8 +79,9 @@ object ProxyAuthenticationPolicy {
         }
 
         val encodedCredentials = header.substring(firstWhitespace).trim()
-        val suppliedCredential = encodedCredentials.decodeBasicCredential()
-            ?: return ProxyAuthenticationDecision.rejected(ProxyAuthenticationRejectionReason.MalformedCredentials)
+        val suppliedCredential =
+            encodedCredentials.decodeBasicCredential()
+                ?: return ProxyAuthenticationDecision.rejected(ProxyAuthenticationRejectionReason.MalformedCredentials)
 
         return if (suppliedCredential == config.credential.canonicalBasicPayload()) {
             ProxyAuthenticationDecision.Accepted
@@ -93,22 +95,24 @@ object ProxyAuthenticationPolicy {
             return null
         }
 
-        val decodedBytes = try {
-            Base64.getDecoder().decode(this)
-        } catch (_: IllegalArgumentException) {
-            return null
-        }
+        val decodedBytes =
+            try {
+                Base64.getDecoder().decode(this)
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
 
-        val decoded = try {
-            Charsets.UTF_8
-                .newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(ByteBuffer.wrap(decodedBytes))
-                .toString()
-        } catch (_: CharacterCodingException) {
-            return null
-        }
+        val decoded =
+            try {
+                Charsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(decodedBytes))
+                    .toString()
+            } catch (_: CharacterCodingException) {
+                return null
+            }
 
         return decoded.takeIf { ':' in it }
     }

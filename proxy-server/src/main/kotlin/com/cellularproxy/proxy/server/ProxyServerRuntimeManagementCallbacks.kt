@@ -77,11 +77,12 @@ object ProxyServerRuntimeManagementCallbacks {
                 runtime.status.copy(
                     publicIp = publicIp(),
                     cloudflare = cloudflareStatus(),
-                    rootAvailability = if (rootOperationsAreEnabled) {
-                        rootAvailability()
-                    } else {
-                        RootAvailabilityStatus.Unknown
-                    },
+                    rootAvailability =
+                        if (rootOperationsAreEnabled) {
+                            rootAvailability()
+                        } else {
+                            RootAvailabilityStatus.Unknown
+                        },
                 )
             },
             rootOperationsEnabled = rootOperationsEnabled,
@@ -90,20 +91,21 @@ object ProxyServerRuntimeManagementCallbacks {
             cloudflareStatus = cloudflareStatus,
             cloudflareStart = cloudflareStart,
             cloudflareStop = cloudflareStop,
-            rotateMobileData = rotateMobileData.guardRootOperations(
-                rootOperationsEnabled = rootOperationsEnabled,
-                operation = RotationOperation.MobileData,
-            ),
-            rotateAirplaneMode = rotateAirplaneMode.guardRootOperations(
-                rootOperationsEnabled = rootOperationsEnabled,
-                operation = RotationOperation.AirplaneMode,
-            ),
+            rotateMobileData =
+                rotateMobileData.guardRootOperations(
+                    rootOperationsEnabled = rootOperationsEnabled,
+                    operation = RotationOperation.MobileData,
+                ),
+            rotateAirplaneMode =
+                rotateAirplaneMode.guardRootOperations(
+                    rootOperationsEnabled = rootOperationsEnabled,
+                    operation = RotationOperation.AirplaneMode,
+                ),
             serviceStop = { runtime.requestStop() },
         )
 }
 
-private fun RotationStartGateResult.toManagementTransition(): RotationTransitionResult =
-    cooldownTransition ?: startTransition
+private fun RotationStartGateResult.toManagementTransition(): RotationTransitionResult = cooldownTransition ?: startTransition
 
 private fun requestRotationIfRootEnabled(
     operation: RotationOperation,
@@ -113,25 +115,25 @@ private fun requestRotationIfRootEnabled(
     rotationCooldown: Duration,
 ): RotationTransitionResult =
     if (rootOperationsEnabled()) {
-        rotationControlPlane.requestStart(
-            operation = operation,
-            nowElapsedMillis = nowElapsedMillis(),
-            cooldown = rotationCooldown,
-        ).toManagementTransition()
+        rotationControlPlane
+            .requestStart(
+                operation = operation,
+                nowElapsedMillis = nowElapsedMillis(),
+                cooldown = rotationCooldown,
+            ).toManagementTransition()
     } else {
         rootOperationsDisabledRotationTransition(operation)
     }
 
-private fun rootOperationsDisabledRotationTransition(
-    operation: RotationOperation,
-): RotationTransitionResult =
+private fun rootOperationsDisabledRotationTransition(operation: RotationOperation): RotationTransitionResult =
     RotationTransitionResult(
         disposition = RotationTransitionDisposition.Rejected,
-        status = RotationStatus(
-            state = RotationState.Failed,
-            operation = operation,
-            failureReason = RotationFailureReason.RootOperationsDisabled,
-        ),
+        status =
+            RotationStatus(
+                state = RotationState.Failed,
+                operation = operation,
+                failureReason = RotationFailureReason.RootOperationsDisabled,
+            ),
     )
 
 private fun (() -> RotationTransitionResult).guardRootOperations(

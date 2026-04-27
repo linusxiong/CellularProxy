@@ -87,18 +87,20 @@ class FileBackedManagementApiAuditLog(
     }
 
     fun record(record: ManagementApiAuditRecord) {
-        val persisted = PersistedManagementApiAuditRecord(
-            occurredAtEpochMillis = clock(),
-            operation = record.operation,
-            outcome = record.outcome,
-            statusCode = record.statusCode,
-            disposition = record.disposition,
-        )
+        val persisted =
+            PersistedManagementApiAuditRecord(
+                occurredAtEpochMillis = clock(),
+                operation = record.operation,
+                outcome = record.outcome,
+                statusCode = record.statusCode,
+                disposition = record.disposition,
+            )
 
         synchronized(lock) {
             file.parentFile?.mkdirs()
-            val retainedLines = (readRecordsLocked().map(PersistedManagementApiAuditRecord::toLine) + persisted.toLine())
-                .takeLast(maxRecords)
+            val retainedLines =
+                (readRecordsLocked().map(PersistedManagementApiAuditRecord::toLine) + persisted.toLine())
+                    .takeLast(maxRecords)
             replaceFile(file, retainedLines.joinToString(separator = "\n", postfix = "\n"))
         }
     }
@@ -108,8 +110,7 @@ class FileBackedManagementApiAuditLog(
             readRecordsLocked()
         }
 
-    private fun readRecordsLocked(): List<PersistedManagementApiAuditRecord> =
-        readLinesLocked().mapNotNull(::parseLineOrNull)
+    private fun readRecordsLocked(): List<PersistedManagementApiAuditRecord> = readLinesLocked().mapNotNull(::parseLineOrNull)
 
     private fun readLinesLocked(): List<String> {
         if (!file.exists()) {
@@ -158,8 +159,10 @@ private fun parseLine(line: String): PersistedManagementApiAuditRecord {
         operation = fields[2].takeUnless { it == NULL_FIELD }?.let(ManagementApiOperation::valueOf),
         outcome = ManagementApiAuditOutcome.valueOf(fields[3]),
         statusCode = fields[4].takeUnless { it == NULL_FIELD }?.toInt(),
-        disposition = fields[5].takeUnless { it == NULL_FIELD }
-            ?.let(ManagementApiStreamExchangeDisposition::valueOf),
+        disposition =
+            fields[5]
+                .takeUnless { it == NULL_FIELD }
+                ?.let(ManagementApiStreamExchangeDisposition::valueOf),
     )
 }
 
@@ -200,7 +203,10 @@ internal fun replaceManagementAuditFileAtomically(
     }
 }
 
-private fun moveManagementAuditFileAtomically(source: Path, target: Path) {
+private fun moveManagementAuditFileAtomically(
+    source: Path,
+    target: Path,
+) {
     Files.move(
         source,
         target,
@@ -209,7 +215,10 @@ private fun moveManagementAuditFileAtomically(source: Path, target: Path) {
     )
 }
 
-private fun moveManagementAuditFileNonAtomically(source: Path, target: Path) {
+private fun moveManagementAuditFileNonAtomically(
+    source: Path,
+    target: Path,
+) {
     Files.move(
         source,
         target,

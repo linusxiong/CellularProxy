@@ -26,26 +26,30 @@ data class NotificationStatusModel(
             return NotificationStatusModel(
                 serviceState = serviceState,
                 title = serviceState.title,
-                contentText = listOf(
-                    dashboard.listenEndpoint,
-                    dashboard.routeText,
-                    "${dashboard.activeConnections} active",
-                ).joinToString(" | "),
-                detailText = listOf(
-                    dashboard.publicIp?.let { "IP $it" } ?: "IP unknown",
-                    "Cloudflare ${dashboard.cloudflare.state.label}",
-                    "Root ${dashboard.root.label}",
-                ).joinToString(" | "),
+                contentText =
+                    listOf(
+                        dashboard.listenEndpoint,
+                        dashboard.routeText,
+                        "${dashboard.activeConnections} active",
+                    ).joinToString(" | "),
+                detailText =
+                    listOf(
+                        dashboard.publicIp?.let { "IP $it" } ?: "IP unknown",
+                        "Cloudflare ${dashboard.cloudflare.state.label}",
+                        "Root ${dashboard.root.label}",
+                    ).joinToString(" | "),
                 warningText = warnings.toWarningText(),
                 warnings = warnings,
-                priority = when {
-                    warnings.isNotEmpty() -> NotificationPriority.Warning
-                    serviceState.isForeground -> NotificationPriority.Foreground
-                    else -> NotificationPriority.Status
-                },
+                priority =
+                    when {
+                        warnings.isNotEmpty() -> NotificationPriority.Warning
+                        serviceState.isForeground -> NotificationPriority.Foreground
+                        else -> NotificationPriority.Status
+                    },
                 isOngoing = serviceState.isForeground,
-                stopActionEnabled = serviceState == NotificationServiceState.Starting ||
-                    serviceState == NotificationServiceState.Running,
+                stopActionEnabled =
+                    serviceState == NotificationServiceState.Starting ||
+                        serviceState == NotificationServiceState.Running,
             )
         }
     }
@@ -76,50 +80,55 @@ enum class NotificationWarning(
     CloudflareFailed("Cloudflare tunnel failed"),
 }
 
-private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState = when (this) {
-    ProxyServiceState.Starting -> NotificationServiceState.Starting
-    ProxyServiceState.Running -> NotificationServiceState.Running
-    ProxyServiceState.Stopping -> NotificationServiceState.Stopping
-    ProxyServiceState.Stopped -> NotificationServiceState.Stopped
-    ProxyServiceState.Failed -> NotificationServiceState.Failed
-}
+private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState =
+    when (this) {
+        ProxyServiceState.Starting -> NotificationServiceState.Starting
+        ProxyServiceState.Running -> NotificationServiceState.Running
+        ProxyServiceState.Stopping -> NotificationServiceState.Stopping
+        ProxyServiceState.Stopped -> NotificationServiceState.Stopped
+        ProxyServiceState.Failed -> NotificationServiceState.Failed
+    }
 
 private val DashboardStatusModel.routeText: String
     get() = boundRoute?.displayName ?: configuredRoute.label
 
 private val DashboardRouteTarget.label: String
-    get() = when (this) {
-        DashboardRouteTarget.WiFi -> "Wi-Fi"
-        DashboardRouteTarget.Cellular -> "Cellular"
-        DashboardRouteTarget.Vpn -> "VPN"
-        DashboardRouteTarget.Automatic -> "Automatic"
-    }
+    get() =
+        when (this) {
+            DashboardRouteTarget.WiFi -> "Wi-Fi"
+            DashboardRouteTarget.Cellular -> "Cellular"
+            DashboardRouteTarget.Vpn -> "VPN"
+            DashboardRouteTarget.Automatic -> "Automatic"
+        }
 
 private val DashboardCloudflareState.label: String
-    get() = when (this) {
-        DashboardCloudflareState.Disabled -> "disabled"
-        DashboardCloudflareState.Starting -> "starting"
-        DashboardCloudflareState.Connected -> "connected"
-        DashboardCloudflareState.Degraded -> "degraded"
-        DashboardCloudflareState.Stopped -> "stopped"
-        DashboardCloudflareState.Failed -> "failed"
-    }
+    get() =
+        when (this) {
+            DashboardCloudflareState.Disabled -> "disabled"
+            DashboardCloudflareState.Starting -> "starting"
+            DashboardCloudflareState.Connected -> "connected"
+            DashboardCloudflareState.Degraded -> "degraded"
+            DashboardCloudflareState.Stopped -> "stopped"
+            DashboardCloudflareState.Failed -> "failed"
+        }
 
 private val DashboardRootState.label: String
-    get() = when (this) {
-        DashboardRootState.Disabled -> "disabled"
-        DashboardRootState.Unknown -> "unknown"
-        DashboardRootState.Available -> "available"
-        DashboardRootState.Unavailable -> "unavailable"
-    }
+    get() =
+        when (this) {
+            DashboardRootState.Disabled -> "disabled"
+            DashboardRootState.Unknown -> "unknown"
+            DashboardRootState.Available -> "available"
+            DashboardRootState.Unavailable -> "unavailable"
+        }
 
-private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarning> = mapTo(linkedSetOf()) {
-    when (it) {
-        DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
-        DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
-        DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
+private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarning> =
+    mapTo(linkedSetOf()) {
+        when (it) {
+            DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
+            DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
+            DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
+        }
     }
-}
 
 private fun Set<NotificationWarning>.toWarningText(): String? {
     if (isEmpty()) return null

@@ -17,12 +17,13 @@ class ConnectTunnelStreamRelayTest {
         val clientInput = CloseTrackingInputStream("hello tunnel".toByteArray(Charsets.UTF_8))
         val originOutput = FlushTrackingOutputStream()
 
-        val result = ConnectTunnelStreamRelay.relayOneWay(
-            input = clientInput,
-            output = originOutput,
-            direction = ConnectTunnelRelayDirection.ClientToOrigin,
-            bufferSize = 4,
-        )
+        val result =
+            ConnectTunnelStreamRelay.relayOneWay(
+                input = clientInput,
+                output = originOutput,
+                direction = ConnectTunnelRelayDirection.ClientToOrigin,
+                bufferSize = 4,
+            )
 
         assertEquals(
             ConnectTunnelStreamRelayResult.Completed(
@@ -42,12 +43,13 @@ class ConnectTunnelStreamRelayTest {
         val originBytes = byteArrayOf(0, 1, 2, 127, (-1).toByte())
         val clientOutput = FlushTrackingOutputStream()
 
-        val result = ConnectTunnelStreamRelay.relayOneWay(
-            input = ByteArrayInputStream(originBytes),
-            output = clientOutput,
-            direction = ConnectTunnelRelayDirection.OriginToClient,
-            bufferSize = 2,
-        )
+        val result =
+            ConnectTunnelStreamRelay.relayOneWay(
+                input = ByteArrayInputStream(originBytes),
+                output = clientOutput,
+                direction = ConnectTunnelRelayDirection.OriginToClient,
+                bufferSize = 2,
+            )
 
         assertEquals(
             ConnectTunnelStreamRelayResult.Completed(
@@ -64,12 +66,13 @@ class ConnectTunnelStreamRelayTest {
         val input = ThrowingReadInputStream(bytesBeforeFailure = "abc".toByteArray(Charsets.UTF_8))
         val output = BufferedUntilFlushOutputStream()
 
-        val result = ConnectTunnelStreamRelay.relayOneWay(
-            input = input,
-            output = output,
-            direction = ConnectTunnelRelayDirection.ClientToOrigin,
-            bufferSize = 8,
-        )
+        val result =
+            ConnectTunnelStreamRelay.relayOneWay(
+                input = input,
+                output = output,
+                direction = ConnectTunnelRelayDirection.ClientToOrigin,
+                bufferSize = 8,
+            )
 
         assertEquals(
             ConnectTunnelStreamRelayResult.Failed(
@@ -88,12 +91,13 @@ class ConnectTunnelStreamRelayTest {
         val input = ByteArrayInputStream("abcdef".toByteArray(Charsets.UTF_8))
         val output = ThrowingSecondWriteOutputStream()
 
-        val result = ConnectTunnelStreamRelay.relayOneWay(
-            input = input,
-            output = output,
-            direction = ConnectTunnelRelayDirection.OriginToClient,
-            bufferSize = 3,
-        )
+        val result =
+            ConnectTunnelStreamRelay.relayOneWay(
+                input = input,
+                output = output,
+                direction = ConnectTunnelRelayDirection.OriginToClient,
+                bufferSize = 3,
+            )
 
         assertEquals(
             ConnectTunnelStreamRelayResult.Failed(
@@ -112,11 +116,12 @@ class ConnectTunnelStreamRelayTest {
         val input = ByteArrayInputStream("abc".toByteArray(Charsets.UTF_8))
         val output = ThrowingFlushOutputStream()
 
-        val result = ConnectTunnelStreamRelay.relayOneWay(
-            input = input,
-            output = output,
-            direction = ConnectTunnelRelayDirection.ClientToOrigin,
-        )
+        val result =
+            ConnectTunnelStreamRelay.relayOneWay(
+                input = input,
+                output = output,
+                direction = ConnectTunnelRelayDirection.ClientToOrigin,
+            )
 
         assertEquals(
             ConnectTunnelStreamRelayResult.Failed(
@@ -196,7 +201,11 @@ class ConnectTunnelStreamRelayTest {
             throw IOException("read failed")
         }
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int {
             if (index < bytesBeforeFailure.size) {
                 val count = minOf(length, bytesBeforeFailure.size - index)
                 bytesBeforeFailure.copyInto(buffer, destinationOffset = offset, startIndex = index, endIndex = index + count)
@@ -218,7 +227,11 @@ class ConnectTunnelStreamRelayTest {
             pending.write(value)
         }
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ) {
             pending.write(buffer, offset, length)
         }
 
@@ -234,7 +247,11 @@ class ConnectTunnelStreamRelayTest {
     private class ThrowingSecondWriteOutputStream : FlushTrackingOutputStream() {
         private var writeCalls = 0
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ) {
             writeCalls += 1
             if (writeCalls > 1) {
                 throw IOException("write failed")
@@ -244,8 +261,6 @@ class ConnectTunnelStreamRelayTest {
     }
 
     private class ThrowingFlushOutputStream : FlushTrackingOutputStream() {
-        override fun flush() {
-            throw IOException("flush failed")
-        }
+        override fun flush(): Unit = throw IOException("flush failed")
     }
 }

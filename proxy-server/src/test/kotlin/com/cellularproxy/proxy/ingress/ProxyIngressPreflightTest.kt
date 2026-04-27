@@ -21,27 +21,32 @@ import kotlin.test.assertTrue
 
 class ProxyIngressPreflightTest {
     private val credential = ProxyCredential(username = "proxy-user", password = "proxy-pass")
-    private val config = ProxyIngressPreflightConfig(
-        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
-        requestAdmission = ProxyRequestAdmissionConfig(
-            proxyAuthentication = ProxyAuthenticationConfig(
-                authEnabled = true,
-                credential = credential,
-            ),
-            managementApiToken = "management-token",
-        ),
-    )
+    private val config =
+        ProxyIngressPreflightConfig(
+            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = true,
+                            credential = credential,
+                        ),
+                    managementApiToken = "management-token",
+                ),
+        )
 
     @Test
     fun `accepts authenticated proxy requests and reserves capacity before dispatch`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config,
-            activeConnections = 1,
-            headerBlock = "GET http://example.com/resource HTTP/1.1\r\n" +
-                "Accept: text/plain\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config,
+                activeConnections = 1,
+                headerBlock =
+                    "GET http://example.com/resource HTTP/1.1\r\n" +
+                        "Accept: text/plain\r\n" +
+                        "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                        "\r\n",
+            )
 
         val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.HttpProxy>(accepted.request)
@@ -58,11 +63,12 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `rejects at capacity before parsing request data`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config,
-            activeConnections = 2,
-            headerBlock = "not a request",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config,
+                activeConnections = 2,
+                headerBlock = "not a request",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         assertIs<ProxyServerFailure.ConnectionLimit>(rejected.failure)
@@ -72,11 +78,12 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `maps malformed headers to safe bad request responses`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config,
-            activeConnections = 0,
-            headerBlock = "GET http://example.com/#fragment HTTP/1.1\r\n\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config,
+                activeConnections = 0,
+                headerBlock = "GET http://example.com/#fragment HTTP/1.1\r\n\r\n",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         val failure = assertIs<ProxyServerFailure.HeaderBlockParse>(rejected.failure)
@@ -88,11 +95,12 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `maps proxy authentication rejection to safe proxy auth challenge`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config,
-            activeConnections = 0,
-            headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config,
+                activeConnections = 0,
+                headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         val failure = assertIs<ProxyServerFailure.Admission>(rejected.failure)
@@ -108,13 +116,15 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `accepts authenticated high-impact management requests and preserves audit metadata`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config,
-            activeConnections = 0,
-            headerBlock = "POST /api/service/stop HTTP/1.1\r\n" +
-                "Authorization: Bearer management-token\r\n" +
-                "\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config,
+                activeConnections = 0,
+                headerBlock =
+                    "POST /api/service/stop HTTP/1.1\r\n" +
+                        "Authorization: Bearer management-token\r\n" +
+                        "\r\n",
+            )
 
         val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
@@ -126,13 +136,15 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `rejects authenticated HTTP proxy requests while proxy requests are paused`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config.copy(proxyRequestsPaused = true),
-            activeConnections = 0,
-            headerBlock = "GET http://example.com/resource HTTP/1.1\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config.copy(proxyRequestsPaused = true),
+                activeConnections = 0,
+                headerBlock =
+                    "GET http://example.com/resource HTTP/1.1\r\n" +
+                        "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                        "\r\n",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         assertEquals(ProxyServerFailure.ProxyRequestsPaused, rejected.failure)
@@ -142,13 +154,15 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `rejects authenticated CONNECT requests while proxy requests are paused`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config.copy(proxyRequestsPaused = true),
-            activeConnections = 0,
-            headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config.copy(proxyRequestsPaused = true),
+                activeConnections = 0,
+                headerBlock =
+                    "CONNECT example.com:443 HTTP/1.1\r\n" +
+                        "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                        "\r\n",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         assertEquals(ProxyServerFailure.ProxyRequestsPaused, rejected.failure)
@@ -158,11 +172,12 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `keeps proxy authentication rejection ahead of paused proxy rejection`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config.copy(proxyRequestsPaused = true),
-            activeConnections = 0,
-            headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config.copy(proxyRequestsPaused = true),
+                activeConnections = 0,
+                headerBlock = "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         val failure = assertIs<ProxyServerFailure.Admission>(rejected.failure)
@@ -178,13 +193,15 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `allows management requests while proxy requests are paused`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config.copy(proxyRequestsPaused = true),
-            activeConnections = 0,
-            headerBlock = "GET /api/status HTTP/1.1\r\n" +
-                "Authorization: Bearer management-token\r\n" +
-                "\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config.copy(proxyRequestsPaused = true),
+                activeConnections = 0,
+                headerBlock =
+                    "GET /api/status HTTP/1.1\r\n" +
+                        "Authorization: Bearer management-token\r\n" +
+                        "\r\n",
+            )
 
         val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
@@ -196,13 +213,15 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `allows management requests while paused even when proxy connection capacity is full`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config.copy(proxyRequestsPaused = true),
-            activeConnections = 2,
-            headerBlock = "GET /api/status HTTP/1.1\r\n" +
-                "Authorization: Bearer management-token\r\n" +
-                "\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config.copy(proxyRequestsPaused = true),
+                activeConnections = 2,
+                headerBlock =
+                    "GET /api/status HTTP/1.1\r\n" +
+                        "Authorization: Bearer management-token\r\n" +
+                        "\r\n",
+            )
 
         val accepted = assertIs<ProxyIngressPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
@@ -214,11 +233,12 @@ class ProxyIngressPreflightTest {
 
     @Test
     fun `marks rejected management authorization attempts for audit logging`() {
-        val decision = ProxyIngressPreflight.evaluate(
-            config = config,
-            activeConnections = 0,
-            headerBlock = "GET /api/status HTTP/1.1\r\n\r\n",
-        )
+        val decision =
+            ProxyIngressPreflight.evaluate(
+                config = config,
+                activeConnections = 0,
+                headerBlock = "GET /api/status HTTP/1.1\r\n\r\n",
+            )
 
         val rejected = assertIs<ProxyIngressPreflightDecision.Rejected>(decision)
         assertIs<ProxyServerFailure.Admission>(rejected.failure)

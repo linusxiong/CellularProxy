@@ -6,11 +6,12 @@ import kotlin.test.assertEquals
 class HttpResponseBodyFramingPolicyTest {
     @Test
     fun `classifies fixed-length response bodies`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("content-length" to listOf("42")),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("content-length" to listOf("42")),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.FixedLength(42)),
@@ -21,11 +22,12 @@ class HttpResponseBodyFramingPolicyTest {
     @Test
     fun `classifies statuses that cannot carry response bodies as no body`() {
         listOf(100, 101, 204, 304).forEach { statusCode ->
-            val response = ParsedHttpResponse(
-                statusCode = statusCode,
-                reasonPhrase = "No Body",
-                headers = linkedMapOf("content-length" to listOf("123")),
-            )
+            val response =
+                ParsedHttpResponse(
+                    statusCode = statusCode,
+                    reasonPhrase = "No Body",
+                    headers = linkedMapOf("content-length" to listOf("123")),
+                )
 
             assertEquals(
                 HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.NoBody),
@@ -36,11 +38,12 @@ class HttpResponseBodyFramingPolicyTest {
 
     @Test
     fun `classifies HEAD responses as no body despite body framing headers`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("content-length" to listOf("123")),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("content-length" to listOf("123")),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.NoBody),
@@ -50,11 +53,12 @@ class HttpResponseBodyFramingPolicyTest {
 
     @Test
     fun `classifies final chunked transfer encoding responses`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("transfer-encoding" to listOf("chunked")),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("transfer-encoding" to listOf("chunked")),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.Chunked),
@@ -64,11 +68,12 @@ class HttpResponseBodyFramingPolicyTest {
 
     @Test
     fun `classifies responses without explicit framing as close delimited`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = emptyMap(),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = emptyMap(),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.CloseDelimited),
@@ -78,11 +83,12 @@ class HttpResponseBodyFramingPolicyTest {
 
     @Test
     fun `rejects ambiguous content length headers`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("content-length" to listOf("2", "3")),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("content-length" to listOf("2", "3")),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Rejected(HttpResponseBodyFramingRejectionReason.AmbiguousContentLength),
@@ -92,11 +98,12 @@ class HttpResponseBodyFramingPolicyTest {
 
     @Test
     fun `allows duplicate matching content length headers`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("content-length" to listOf("7", "7")),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("content-length" to listOf("7", "7")),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.FixedLength(7)),
@@ -107,11 +114,12 @@ class HttpResponseBodyFramingPolicyTest {
     @Test
     fun `rejects invalid content length syntax`() {
         listOf("-1", "+1", " 1", "1 ", "0x10", "١").forEach { contentLength ->
-            val response = ParsedHttpResponse(
-                statusCode = 200,
-                reasonPhrase = "OK",
-                headers = linkedMapOf("content-length" to listOf(contentLength)),
-            )
+            val response =
+                ParsedHttpResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers = linkedMapOf("content-length" to listOf(contentLength)),
+                )
 
             assertEquals(
                 HttpResponseBodyFramingResult.Rejected(HttpResponseBodyFramingRejectionReason.InvalidContentLength),
@@ -127,11 +135,12 @@ class HttpResponseBodyFramingPolicyTest {
             listOf("gzip, chunked"),
             listOf("chunked", "gzip"),
         ).forEach { transferEncoding ->
-            val response = ParsedHttpResponse(
-                statusCode = 200,
-                reasonPhrase = "OK",
-                headers = linkedMapOf("transfer-encoding" to transferEncoding),
-            )
+            val response =
+                ParsedHttpResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers = linkedMapOf("transfer-encoding" to transferEncoding),
+                )
 
             assertEquals(
                 HttpResponseBodyFramingResult.Rejected(HttpResponseBodyFramingRejectionReason.UnsupportedTransferEncoding),
@@ -142,14 +151,16 @@ class HttpResponseBodyFramingPolicyTest {
 
     @Test
     fun `transfer encoding takes precedence over content length`() {
-        val response = ParsedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf(
-                "transfer-encoding" to listOf("chunked"),
-                "content-length" to listOf("5"),
-            ),
-        )
+        val response =
+            ParsedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers =
+                    linkedMapOf(
+                        "transfer-encoding" to listOf("chunked"),
+                        "content-length" to listOf("5"),
+                    ),
+            )
 
         assertEquals(
             HttpResponseBodyFramingResult.Accepted(HttpResponseBodyFraming.Chunked),

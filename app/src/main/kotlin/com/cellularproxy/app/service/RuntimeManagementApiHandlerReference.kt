@@ -12,11 +12,12 @@ class RuntimeManagementApiHandlerReference : ManagementApiHandler {
 
     fun install(handler: ManagementApiHandler): Closeable {
         val newEntry = RuntimeManagementApiHandlerEntry(handler)
-        val previous = synchronized(lock) {
-            val previousEntry = currentEntry
-            currentEntry = newEntry
-            previousEntry
-        }
+        val previous =
+            synchronized(lock) {
+                val previousEntry = currentEntry
+                currentEntry = newEntry
+                previousEntry
+            }
         previous?.closeSuppressingExceptions()
         return RuntimeManagementApiHandlerRegistration(newEntry)
     }
@@ -26,21 +27,21 @@ class RuntimeManagementApiHandlerReference : ManagementApiHandler {
         return handler?.handle(operation) ?: unavailableResponse()
     }
 
-    override fun toString(): String =
-        "RuntimeManagementApiHandlerReference(installed=${synchronized(lock) { currentEntry != null }})"
+    override fun toString(): String = "RuntimeManagementApiHandlerReference(installed=${synchronized(lock) { currentEntry != null }})"
 
     private inner class RuntimeManagementApiHandlerRegistration(
         private val entry: RuntimeManagementApiHandlerEntry,
     ) : Closeable {
         override fun close() {
-            val removed = synchronized(lock) {
-                if (currentEntry === entry) {
-                    currentEntry = null
-                    entry
-                } else {
-                    null
+            val removed =
+                synchronized(lock) {
+                    if (currentEntry === entry) {
+                        currentEntry = null
+                        entry
+                    } else {
+                        null
+                    }
                 }
-            }
             removed?.close()
         }
     }
@@ -50,12 +51,13 @@ class RuntimeManagementApiHandlerReference : ManagementApiHandler {
             ManagementApiResponse(
                 statusCode = 503,
                 reasonPhrase = "Service Unavailable",
-                headers = linkedMapOf(
-                    "Content-Type" to "application/json; charset=utf-8",
-                    "Content-Length" to UNAVAILABLE_BODY.toByteArray(Charsets.UTF_8).size.toString(),
-                    "Cache-Control" to "no-store",
-                    "Connection" to "close",
-                ),
+                headers =
+                    linkedMapOf(
+                        "Content-Type" to "application/json; charset=utf-8",
+                        "Content-Length" to UNAVAILABLE_BODY.toByteArray(Charsets.UTF_8).size.toString(),
+                        "Cache-Control" to "no-store",
+                        "Connection" to "close",
+                    ),
                 body = UNAVAILABLE_BODY,
             )
     }

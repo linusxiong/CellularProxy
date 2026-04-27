@@ -19,21 +19,23 @@ class RotationRootCommandController(
 
         return when (operation) {
             RotationOperation.MobileData ->
-                mobileDataController.disable(
-                    timeoutMillis = timeoutMillis,
-                    secrets = secrets,
-                ).toRotationRootCommandResult(
-                    operation = operation,
-                    phase = RotationRootCommandPhase.DisableCommand,
-                )
+                mobileDataController
+                    .disable(
+                        timeoutMillis = timeoutMillis,
+                        secrets = secrets,
+                    ).toRotationRootCommandResult(
+                        operation = operation,
+                        phase = RotationRootCommandPhase.DisableCommand,
+                    )
             RotationOperation.AirplaneMode ->
-                airplaneModeController.enable(
-                    timeoutMillis = timeoutMillis,
-                    secrets = secrets,
-                ).toRotationRootCommandResult(
-                    operation = operation,
-                    phase = RotationRootCommandPhase.DisableCommand,
-                )
+                airplaneModeController
+                    .enable(
+                        timeoutMillis = timeoutMillis,
+                        secrets = secrets,
+                    ).toRotationRootCommandResult(
+                        operation = operation,
+                        phase = RotationRootCommandPhase.DisableCommand,
+                    )
         }
     }
 
@@ -46,21 +48,23 @@ class RotationRootCommandController(
 
         return when (operation) {
             RotationOperation.MobileData ->
-                mobileDataController.enable(
-                    timeoutMillis = timeoutMillis,
-                    secrets = secrets,
-                ).toRotationRootCommandResult(
-                    operation = operation,
-                    phase = RotationRootCommandPhase.EnableCommand,
-                )
+                mobileDataController
+                    .enable(
+                        timeoutMillis = timeoutMillis,
+                        secrets = secrets,
+                    ).toRotationRootCommandResult(
+                        operation = operation,
+                        phase = RotationRootCommandPhase.EnableCommand,
+                    )
             RotationOperation.AirplaneMode ->
-                airplaneModeController.disable(
-                    timeoutMillis = timeoutMillis,
-                    secrets = secrets,
-                ).toRotationRootCommandResult(
-                    operation = operation,
-                    phase = RotationRootCommandPhase.EnableCommand,
-                )
+                airplaneModeController
+                    .disable(
+                        timeoutMillis = timeoutMillis,
+                        secrets = secrets,
+                    ).toRotationRootCommandResult(
+                        operation = operation,
+                        phase = RotationRootCommandPhase.EnableCommand,
+                    )
         }
     }
 }
@@ -114,16 +118,19 @@ data class RotationRootCommandResult(
             ?: RotationEvent.RootCommandFailedToStart(expectedCategory)
 
     private val expectedCategory: RootCommandCategory
-        get() = when (operation) {
-            RotationOperation.MobileData -> when (phase) {
-                RotationRootCommandPhase.DisableCommand -> RootCommandCategory.MobileDataDisable
-                RotationRootCommandPhase.EnableCommand -> RootCommandCategory.MobileDataEnable
+        get() =
+            when (operation) {
+                RotationOperation.MobileData ->
+                    when (phase) {
+                        RotationRootCommandPhase.DisableCommand -> RootCommandCategory.MobileDataDisable
+                        RotationRootCommandPhase.EnableCommand -> RootCommandCategory.MobileDataEnable
+                    }
+                RotationOperation.AirplaneMode ->
+                    when (phase) {
+                        RotationRootCommandPhase.DisableCommand -> RootCommandCategory.AirplaneModeEnable
+                        RotationRootCommandPhase.EnableCommand -> RootCommandCategory.AirplaneModeDisable
+                    }
             }
-            RotationOperation.AirplaneMode -> when (phase) {
-                RotationRootCommandPhase.DisableCommand -> RootCommandCategory.AirplaneModeEnable
-                RotationRootCommandPhase.EnableCommand -> RootCommandCategory.AirplaneModeDisable
-            }
-        }
 }
 
 enum class RotationRootCommandPhase {
@@ -145,12 +152,13 @@ private fun MobileDataRootCommandResult.toRotationRootCommandResult(
         operation = operation,
         phase = phase,
         execution = execution,
-        failureReason = when (failureReason) {
-            null -> null
-            MobileDataRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
-            MobileDataRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
-            MobileDataRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
-        },
+        failureReason =
+            when (failureReason) {
+                null -> null
+                MobileDataRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
+                MobileDataRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
+                MobileDataRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
+            },
     )
 
 private fun AirplaneModeRootCommandResult.toRotationRootCommandResult(
@@ -161,10 +169,11 @@ private fun AirplaneModeRootCommandResult.toRotationRootCommandResult(
         operation = operation,
         phase = phase,
         execution = execution,
-        failureReason = when (failureReason) {
-            null -> null
-            AirplaneModeRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
-            AirplaneModeRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
-            AirplaneModeRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
-        },
+        failureReason =
+            when (failureReason) {
+                null -> null
+                AirplaneModeRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
+                AirplaneModeRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
+                AirplaneModeRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
+            },
     )

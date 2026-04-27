@@ -35,7 +35,9 @@ sealed interface OriginHttpResponseStreamPreflightResult {
 
 sealed interface OriginHttpResponseStreamPreflightRejectionReason {
     data object IncompleteHeaderBlock : OriginHttpResponseStreamPreflightRejectionReason
+
     data object HeaderBlockTooLarge : OriginHttpResponseStreamPreflightRejectionReason
+
     data object MalformedHeaderEncoding : OriginHttpResponseStreamPreflightRejectionReason
 
     data class HeaderParseRejected(
@@ -51,10 +53,11 @@ object OriginHttpResponseStreamPreflight {
         require(maxHeaderBytes > 0) { "Maximum header bytes must be positive" }
 
         return when (
-            val readResult = HttpHeaderBlockStreamReader.read(
-                input = input,
-                maxHeaderBytes = maxHeaderBytes,
-            )
+            val readResult =
+                HttpHeaderBlockStreamReader.read(
+                    input = input,
+                    maxHeaderBytes = maxHeaderBytes,
+                )
         ) {
             is HttpHeaderBlockStreamReadResult.Completed ->
                 parseHeaderBlock(
@@ -86,10 +89,11 @@ object OriginHttpResponseStreamPreflight {
         maxHeaderBytes: Int,
     ): OriginHttpResponseStreamPreflightResult =
         when (
-            val parseResult = HttpResponseHeaderBlockParser.parse(
-                headerBlock = headerBlock,
-                maxHeaderBytes = maxHeaderBytes,
-            )
+            val parseResult =
+                HttpResponseHeaderBlockParser.parse(
+                    headerBlock = headerBlock,
+                    maxHeaderBytes = maxHeaderBytes,
+                )
         ) {
             is HttpResponseHeaderBlockParseResult.Accepted ->
                 OriginHttpResponseStreamPreflightResult.Accepted(

@@ -15,20 +15,22 @@ class RotationControlPlaneTest {
     fun `start and progress share one session and terminal timestamp tracker`() {
         val controlPlane = RotationControlPlane()
 
-        val startResult = controlPlane.requestStart(
-            operation = RotationOperation.MobileData,
-            nowElapsedMillis = 10_000,
-            cooldown = 180.seconds,
-        )
+        val startResult =
+            controlPlane.requestStart(
+                operation = RotationOperation.MobileData,
+                nowElapsedMillis = 10_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(RotationState.CheckingRoot, startResult.status.state)
         assertEquals(startResult.status, controlPlane.currentStatus)
         assertNull(controlPlane.lastTerminalElapsedMillis)
 
-        val progressResult = controlPlane.applyProgress(
-            event = RotationEvent.RootUnavailable,
-            nowElapsedMillis = 12_000,
-        )
+        val progressResult =
+            controlPlane.applyProgress(
+                event = RotationEvent.RootUnavailable,
+                nowElapsedMillis = 12_000,
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, progressResult.transition.disposition)
         assertEquals(RotationState.Failed, progressResult.status.state)
@@ -43,26 +45,29 @@ class RotationControlPlaneTest {
 
     @Test
     fun `terminal timestamp from progress gates cooldown for the next start`() {
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.ResumingProxyRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-                newPublicIp = "203.0.113.25",
-                publicIpChanged = true,
-            ),
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ResumingProxyRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.25",
+                        publicIpChanged = true,
+                    ),
+            )
 
         controlPlane.applyProgress(
             event = RotationEvent.ProxyRequestsResumed,
             nowElapsedMillis = 20_000,
         )
 
-        val rejectedStart = controlPlane.requestStart(
-            operation = RotationOperation.AirplaneMode,
-            nowElapsedMillis = 80_000,
-            cooldown = 180.seconds,
-        )
+        val rejectedStart =
+            controlPlane.requestStart(
+                operation = RotationOperation.AirplaneMode,
+                nowElapsedMillis = 80_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(
             RotationCooldownDecision.Rejected(remainingCooldown = 120.seconds),
@@ -75,15 +80,17 @@ class RotationControlPlaneTest {
 
     @Test
     fun `initial terminal timestamp participates in first cooldown check`() {
-        val controlPlane = RotationControlPlane(
-            initialLastTerminalElapsedMillis = 1_000,
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialLastTerminalElapsedMillis = 1_000,
+            )
 
-        val result = controlPlane.requestStart(
-            operation = RotationOperation.MobileData,
-            nowElapsedMillis = 31_000,
-            cooldown = 60.seconds,
-        )
+        val result =
+            controlPlane.requestStart(
+                operation = RotationOperation.MobileData,
+                nowElapsedMillis = 31_000,
+                cooldown = 60.seconds,
+            )
 
         assertEquals(
             RotationCooldownDecision.Rejected(remainingCooldown = 30.seconds),
@@ -102,16 +109,18 @@ class RotationControlPlaneTest {
 
     @Test
     fun `mutating operations are synchronized to linearize session and timestamp state`() {
-        val requestStartMethod = assertNotNull(
-            RotationControlPlane::class.java.declaredMethods.singleOrNull {
-                it.name.startsWith("requestStart") && it.parameterCount == 3
-            },
-        )
-        val applyProgressMethod = RotationControlPlane::class.java.getDeclaredMethod(
-            "applyProgress",
-            RotationEvent::class.java,
-            Long::class.javaPrimitiveType,
-        )
+        val requestStartMethod =
+            assertNotNull(
+                RotationControlPlane::class.java.declaredMethods.singleOrNull {
+                    it.name.startsWith("requestStart") && it.parameterCount == 3
+                },
+            )
+        val applyProgressMethod =
+            RotationControlPlane::class.java.getDeclaredMethod(
+                "applyProgress",
+                RotationEvent::class.java,
+                Long::class.javaPrimitiveType,
+            )
 
         assertTrue(requestStartMethod.modifiers.let(Modifier::isSynchronized))
         assertTrue(applyProgressMethod.modifiers.let(Modifier::isSynchronized))
@@ -120,9 +129,10 @@ class RotationControlPlaneTest {
     @Test
     fun `separate status and timestamp getters use the same monitor as mutations`() {
         val currentStatusGetter = RotationControlPlane::class.java.getDeclaredMethod("getCurrentStatus")
-        val lastTerminalGetter = RotationControlPlane::class.java.getDeclaredMethod(
-            "getLastTerminalElapsedMillis",
-        )
+        val lastTerminalGetter =
+            RotationControlPlane::class.java.getDeclaredMethod(
+                "getLastTerminalElapsedMillis",
+            )
 
         assertTrue(currentStatusGetter.modifiers.let(Modifier::isSynchronized))
         assertTrue(lastTerminalGetter.modifiers.let(Modifier::isSynchronized))
@@ -130,9 +140,10 @@ class RotationControlPlaneTest {
 
     @Test
     fun `snapshot reads status and terminal timestamp together`() {
-        val controlPlane = RotationControlPlane(
-            initialLastTerminalElapsedMillis = 5_000,
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialLastTerminalElapsedMillis = 5_000,
+            )
 
         val snapshot = controlPlane.snapshot()
 
@@ -168,26 +179,29 @@ class RotationControlPlaneTest {
     fun `terminal initial status requires initial terminal timestamp`() {
         assertFailsWith<IllegalArgumentException> {
             RotationControlPlane(
-                initialStatus = RotationStatus(
-                    state = RotationState.Completed,
-                    operation = RotationOperation.MobileData,
-                    oldPublicIp = "198.51.100.10",
-                    newPublicIp = "203.0.113.25",
-                    publicIpChanged = true,
-                ),
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.Completed,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.25",
+                        publicIpChanged = true,
+                    ),
             )
         }
 
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.Completed,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-                newPublicIp = "203.0.113.25",
-                publicIpChanged = true,
-            ),
-            initialLastTerminalElapsedMillis = 20_000,
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.Completed,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.25",
+                        publicIpChanged = true,
+                    ),
+                initialLastTerminalElapsedMillis = 20_000,
+            )
 
         assertEquals(RotationState.Completed, controlPlane.currentStatus.state)
         assertEquals(20_000, controlPlane.lastTerminalElapsedMillis)
@@ -197,11 +211,12 @@ class RotationControlPlaneTest {
     fun `control plane snapshot rejects impossible terminal hydration`() {
         assertFailsWith<IllegalArgumentException> {
             RotationControlPlaneSnapshot(
-                status = RotationStatus(
-                    state = RotationState.Failed,
-                    operation = RotationOperation.AirplaneMode,
-                    failureReason = RotationFailureReason.RootUnavailable,
-                ),
+                status =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.AirplaneMode,
+                        failureReason = RotationFailureReason.RootUnavailable,
+                    ),
                 lastTerminalElapsedMillis = null,
             )
         }
@@ -214,14 +229,16 @@ class RotationControlPlaneTest {
             )
         }
 
-        val cooldownRejectedSnapshot = RotationControlPlaneSnapshot(
-            status = RotationStatus(
-                state = RotationState.Failed,
-                operation = RotationOperation.AirplaneMode,
-                failureReason = RotationFailureReason.CooldownActive,
-            ),
-            lastTerminalElapsedMillis = null,
-        )
+        val cooldownRejectedSnapshot =
+            RotationControlPlaneSnapshot(
+                status =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.AirplaneMode,
+                        failureReason = RotationFailureReason.CooldownActive,
+                    ),
+                lastTerminalElapsedMillis = null,
+            )
 
         assertFalse(cooldownRejectedSnapshot.status.isActive)
     }

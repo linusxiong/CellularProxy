@@ -17,13 +17,18 @@ import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 
 class CellularProxyForegroundService : Service() {
-    private val runtimeCompositionOwner = ForegroundServiceRuntimeCompositionOwner {
-        CellularProxyRuntimeCompositionInstaller.install(this)
-    }
+    private val runtimeCompositionOwner =
+        ForegroundServiceRuntimeCompositionOwner {
+            CellularProxyRuntimeCompositionInstaller.install(this)
+        }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         ForegroundServiceCommandExecutor.execute(
             commandResult = ForegroundServiceCommandParser.parse(intent?.action),
             runtimeLifecycle = runtimeCompositionOwner,
@@ -41,7 +46,10 @@ class CellularProxyForegroundService : Service() {
         }
     }
 
-    private fun applyServiceEffect(effect: ForegroundServiceCommandEffect, startId: Int) {
+    private fun applyServiceEffect(
+        effect: ForegroundServiceCommandEffect,
+        startId: Int,
+    ) {
         when (effect) {
             ForegroundServiceCommandEffect.PromoteToForeground -> promoteToForeground()
             ForegroundServiceCommandEffect.StopForegroundAndSelf -> stopForegroundAndSelf(startId)
@@ -50,12 +58,13 @@ class CellularProxyForegroundService : Service() {
     }
 
     private fun promoteToForeground() {
-        val descriptor = ForegroundServiceNotificationDescriptor.from(
-            NotificationStatusModel.from(
-                config = AppConfig.default(),
-                status = ProxyServiceStatus(state = ProxyServiceState.Starting),
-            ),
-        )
+        val descriptor =
+            ForegroundServiceNotificationDescriptor.from(
+                NotificationStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus(state = ProxyServiceState.Starting),
+                ),
+            )
         createNotificationChannel(descriptor)
         val notification = buildNotification(descriptor)
 
@@ -80,30 +89,33 @@ class CellularProxyForegroundService : Service() {
             return
         }
 
-        val channel = NotificationChannel(
-            descriptor.channelId,
-            getString(descriptor.channelNameResId),
-            descriptor.channelImportance.toAndroidImportance(),
-        ).apply {
-            description = getString(descriptor.channelDescriptionResId)
-        }
+        val channel =
+            NotificationChannel(
+                descriptor.channelId,
+                getString(descriptor.channelNameResId),
+                descriptor.channelImportance.toAndroidImportance(),
+            ).apply {
+                description = getString(descriptor.channelDescriptionResId)
+            }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(descriptor: ForegroundServiceNotificationDescriptor): Notification {
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, descriptor.channelId)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-        }
+        val builder =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, descriptor.channelId)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
 
         builder
             .setSmallIcon(descriptor.smallIconResId)
             .setContentTitle(descriptor.title)
             .setContentText(descriptor.contentText)
             .setStyle(
-                Notification.BigTextStyle()
+                Notification
+                    .BigTextStyle()
                     .bigText(
                         listOfNotNull(
                             descriptor.contentText,
@@ -111,17 +123,17 @@ class CellularProxyForegroundService : Service() {
                             descriptor.warningText,
                         ).joinToString("\n"),
                     ),
-            )
-            .setOngoing(descriptor.isOngoing)
+            ).setOngoing(descriptor.isOngoing)
             .setShowWhen(false)
 
         descriptor.stopAction?.let { action ->
             builder.addAction(
-                Notification.Action.Builder(
-                    Icon.createWithResource(this, descriptor.smallIconResId),
-                    action.label,
-                    stopActionPendingIntent(action),
-                ).build(),
+                Notification.Action
+                    .Builder(
+                        Icon.createWithResource(this, descriptor.smallIconResId),
+                        action.label,
+                        stopActionPendingIntent(action),
+                    ).build(),
             )
         }
 
@@ -130,19 +142,22 @@ class CellularProxyForegroundService : Service() {
 
     @SuppressLint("UnspecifiedImmutableFlag")
     private fun stopActionPendingIntent(action: ForegroundServiceNotificationAction): PendingIntent {
-        val intent = Intent(this, CellularProxyForegroundService::class.java)
-            .setAction(action.action)
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
+        val intent =
+            Intent(this, CellularProxyForegroundService::class.java)
+                .setAction(action.action)
+        val flags =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
         return PendingIntent.getService(this, STOP_ACTION_REQUEST_CODE, intent, flags)
     }
 }
 
-private fun NotificationChannelImportance.toAndroidImportance(): Int = when (this) {
-    NotificationChannelImportance.Low -> NotificationManager.IMPORTANCE_LOW
-}
+private fun NotificationChannelImportance.toAndroidImportance(): Int =
+    when (this) {
+        NotificationChannelImportance.Low -> NotificationManager.IMPORTANCE_LOW
+    }
 
 private const val STOP_ACTION_REQUEST_CODE = 1

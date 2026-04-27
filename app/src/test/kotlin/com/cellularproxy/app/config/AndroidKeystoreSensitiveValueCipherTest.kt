@@ -59,10 +59,11 @@ class AndroidKeystoreSensitiveValueCipherTest {
 }
 
 private class FixedSecretKeyProvider : AndroidKeystoreSensitiveValueCipher.SecretKeyProvider {
-    private val key: SecretKey = KeyGenerator.getInstance("AES").run {
-        init(256)
-        generateKey()
-    }
+    private val key: SecretKey =
+        KeyGenerator.getInstance("AES").run {
+            init(256)
+            generateKey()
+        }
 
     override fun getOrCreateKey(): SecretKey = key
 }

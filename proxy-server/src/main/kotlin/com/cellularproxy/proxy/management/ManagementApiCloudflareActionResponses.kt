@@ -10,20 +10,21 @@ object ManagementApiCloudflareActionResponses {
     ): ManagementApiResponse =
         ManagementApiResponse.json(
             statusCode = if (result.accepted) 202 else 409,
-            body = buildString {
-                append('{')
-                append(""""accepted":""")
-                append(result.accepted)
-                append(',')
-                append(""""disposition":""")
-                append('"')
-                append(result.disposition.apiValue())
-                append('"')
-                append(',')
-                append(""""cloudflare":""")
-                append(result.status.managementApiJson(secrets))
-                append('}')
-            },
+            body =
+                buildString {
+                    append('{')
+                    append(""""accepted":""")
+                    append(result.accepted)
+                    append(',')
+                    append(""""disposition":""")
+                    append('"')
+                    append(result.disposition.apiValue())
+                    append('"')
+                    append(',')
+                    append(""""cloudflare":""")
+                    append(result.status.managementApiJson(secrets))
+                    append('}')
+                },
         )
 }
 

@@ -16,19 +16,25 @@ sealed interface HttpHeaderBlockStreamReadResult {
         }
     }
 
-    data class Incomplete(val bytesRead: Int) : HttpHeaderBlockStreamReadResult {
+    data class Incomplete(
+        val bytesRead: Int,
+    ) : HttpHeaderBlockStreamReadResult {
         init {
             require(bytesRead >= 0) { "Bytes read must be non-negative" }
         }
     }
 
-    data class HeaderBlockTooLarge(val bytesRead: Int) : HttpHeaderBlockStreamReadResult {
+    data class HeaderBlockTooLarge(
+        val bytesRead: Int,
+    ) : HttpHeaderBlockStreamReadResult {
         init {
             require(bytesRead >= 0) { "Bytes read must be non-negative" }
         }
     }
 
-    data class MalformedHeaderEncoding(val bytesRead: Int) : HttpHeaderBlockStreamReadResult {
+    data class MalformedHeaderEncoding(
+        val bytesRead: Int,
+    ) : HttpHeaderBlockStreamReadResult {
         init {
             require(bytesRead >= 0) { "Bytes read must be non-negative" }
         }
@@ -55,8 +61,9 @@ object HttpHeaderBlockStreamReader {
             headerBytes.write(next)
             if (terminatesHeaderBlock(thirdPrevious, secondPrevious, previous, next)) {
                 val bytes = headerBytes.toByteArray()
-                val decodedHeaderBlock = bytes.decodeStrictUtf8OrNull()
-                    ?: return HttpHeaderBlockStreamReadResult.MalformedHeaderEncoding(bytesRead = bytes.size)
+                val decodedHeaderBlock =
+                    bytes.decodeStrictUtf8OrNull()
+                        ?: return HttpHeaderBlockStreamReadResult.MalformedHeaderEncoding(bytesRead = bytes.size)
                 return HttpHeaderBlockStreamReadResult.Completed(
                     headerBlock = decodedHeaderBlock,
                     bytesRead = bytes.size,
@@ -79,7 +86,8 @@ object HttpHeaderBlockStreamReader {
         previous: Int,
         current: Int,
     ): Boolean =
-        previous == LINE_FEED && current == LINE_FEED ||
+        previous == LINE_FEED &&
+            current == LINE_FEED ||
             thirdPrevious == CARRIAGE_RETURN &&
             secondPrevious == LINE_FEED &&
             previous == CARRIAGE_RETURN &&

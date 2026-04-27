@@ -7,8 +7,8 @@ import java.io.Closeable
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
 
 class RuntimeManagementApiHandlerReferenceTest {
@@ -30,9 +30,10 @@ class RuntimeManagementApiHandlerReferenceTest {
     @Test
     fun `installed handler receives management operations until registration is closed`() {
         val reference = RuntimeManagementApiHandlerReference()
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 200, body = """{"status":"running"}"""),
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 200, body = """{"status":"running"}"""),
+            )
 
         val registration = reference.install(handler)
 
@@ -48,9 +49,10 @@ class RuntimeManagementApiHandlerReferenceTest {
     fun `closing stale registration does not uninstall replacement handler`() {
         val reference = RuntimeManagementApiHandlerReference()
         val first = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
-        val second = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 200, body = """{"status":"replacement"}"""),
-        )
+        val second =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 200, body = """{"status":"replacement"}"""),
+            )
         val firstRegistration = reference.install(first)
         val secondRegistration = reference.install(second)
 
@@ -85,9 +87,10 @@ class RuntimeManagementApiHandlerReferenceTest {
     fun `installing replacement keeps replacement active when previous cleanup fails`() {
         val reference = RuntimeManagementApiHandlerReference()
         val first = ThrowingCloseManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
-        val second = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 200, body = """{"status":"replacement"}"""),
-        )
+        val second =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 200, body = """{"status":"replacement"}"""),
+            )
         reference.install(first)
 
         val secondRegistration = reference.install(second)
@@ -104,9 +107,10 @@ class RuntimeManagementApiHandlerReferenceTest {
     fun `installing replacement keeps replacement active when previous cleanup throws non-exception throwable`() {
         val reference = RuntimeManagementApiHandlerReference()
         val first = ThrowingErrorCloseManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
-        val second = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 200, body = """{"status":"replacement"}"""),
-        )
+        val second =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 200, body = """{"status":"replacement"}"""),
+            )
         reference.install(first)
 
         val secondRegistration = reference.install(second)
@@ -125,9 +129,10 @@ class RuntimeManagementApiHandlerReferenceTest {
         val handler = ThrowingCloseManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
         val registration = reference.install(handler)
 
-        val failure = assertFailsWith<IllegalStateException> {
-            registration.close()
-        }
+        val failure =
+            assertFailsWith<IllegalStateException> {
+                registration.close()
+            }
 
         assertEquals("close failed", failure.message)
         assertEquals(1, handler.closeCount)
@@ -141,10 +146,11 @@ class RuntimeManagementApiHandlerReferenceTest {
         val reference = RuntimeManagementApiHandlerReference()
         reference.install(SecretBearingManagementApiHandler)
 
-        val diagnosticText = listOf(
-            reference.toString(),
-            reference.handle(ManagementApiOperation.Status).toHttpString(),
-        ).joinToString("\n")
+        val diagnosticText =
+            listOf(
+                reference.toString(),
+                reference.handle(ManagementApiOperation.Status).toHttpString(),
+            ).joinToString("\n")
 
         assertContains(diagnosticText, "RuntimeManagementApiHandlerReference")
         assertFalse(diagnosticText.contains("handler-secret"))
@@ -201,7 +207,10 @@ class RuntimeManagementApiHandlerReferenceTest {
 
     private object SecretBearingManagementApiHandler : ManagementApiHandler {
         override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-            ManagementApiResponse.json(statusCode = 200, body = """{"secret":"redacted"}""")
+            ManagementApiResponse.json(
+                statusCode = 200,
+                body = """{"secret":"redacted"}""",
+            )
 
         override fun toString(): String = "SecretBearingManagementApiHandler(handler-secret)"
     }

@@ -12,13 +12,15 @@ import kotlin.test.assertFalse
 class ManagementApiCloudflareActionResponsesTest {
     @Test
     fun `accepted cloudflare transition renders accepted response`() {
-        val response = ManagementApiCloudflareActionResponses.transition(
-            result = CloudflareTunnelTransitionResult(
-                disposition = CloudflareTunnelTransitionDisposition.Accepted,
-                status = CloudflareTunnelStatus.starting(),
-            ),
-            secrets = LogRedactionSecrets(),
-        )
+        val response =
+            ManagementApiCloudflareActionResponses.transition(
+                result =
+                    CloudflareTunnelTransitionResult(
+                        disposition = CloudflareTunnelTransitionDisposition.Accepted,
+                        status = CloudflareTunnelStatus.starting(),
+                    ),
+                secrets = LogRedactionSecrets(),
+            )
 
         assertEquals(202, response.statusCode)
         assertEquals(
@@ -29,13 +31,15 @@ class ManagementApiCloudflareActionResponsesTest {
 
     @Test
     fun `duplicate cloudflare transition renders conflict response`() {
-        val response = ManagementApiCloudflareActionResponses.transition(
-            result = CloudflareTunnelTransitionResult(
-                disposition = CloudflareTunnelTransitionDisposition.Duplicate,
-                status = CloudflareTunnelStatus.connected(),
-            ),
-            secrets = LogRedactionSecrets(),
-        )
+        val response =
+            ManagementApiCloudflareActionResponses.transition(
+                result =
+                    CloudflareTunnelTransitionResult(
+                        disposition = CloudflareTunnelTransitionDisposition.Duplicate,
+                        status = CloudflareTunnelStatus.connected(),
+                    ),
+                secrets = LogRedactionSecrets(),
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -46,13 +50,15 @@ class ManagementApiCloudflareActionResponsesTest {
 
     @Test
     fun `ignored cloudflare transition renders conflict response`() {
-        val response = ManagementApiCloudflareActionResponses.transition(
-            result = CloudflareTunnelTransitionResult(
-                disposition = CloudflareTunnelTransitionDisposition.Ignored,
-                status = CloudflareTunnelStatus.disabled(),
-            ),
-            secrets = LogRedactionSecrets(),
-        )
+        val response =
+            ManagementApiCloudflareActionResponses.transition(
+                result =
+                    CloudflareTunnelTransitionResult(
+                        disposition = CloudflareTunnelTransitionDisposition.Ignored,
+                        status = CloudflareTunnelStatus.disabled(),
+                    ),
+                secrets = LogRedactionSecrets(),
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -63,16 +69,19 @@ class ManagementApiCloudflareActionResponsesTest {
 
     @Test
     fun `cloudflare transition response redacts configured secrets from failure reasons`() {
-        val response = ManagementApiCloudflareActionResponses.transition(
-            result = CloudflareTunnelTransitionResult(
-                disposition = CloudflareTunnelTransitionDisposition.Duplicate,
-                status = CloudflareTunnelStatus(
-                    state = CloudflareTunnelState.Failed,
-                    failureReason = "edge rejected cloudflare-secret at https://edge.example.test/tunnel?token=cloudflare-secret",
-                ),
-            ),
-            secrets = LogRedactionSecrets(cloudflareTunnelToken = "cloudflare-secret"),
-        )
+        val response =
+            ManagementApiCloudflareActionResponses.transition(
+                result =
+                    CloudflareTunnelTransitionResult(
+                        disposition = CloudflareTunnelTransitionDisposition.Duplicate,
+                        status =
+                            CloudflareTunnelStatus(
+                                state = CloudflareTunnelState.Failed,
+                                failureReason = "edge rejected cloudflare-secret at https://edge.example.test/tunnel?token=cloudflare-secret",
+                            ),
+                    ),
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "cloudflare-secret"),
+            )
 
         assertEquals(
             """{"accepted":false,"disposition":"duplicate","cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"edge rejected [REDACTED] at https://edge.example.test/tunnel?[REDACTED]"}}""",

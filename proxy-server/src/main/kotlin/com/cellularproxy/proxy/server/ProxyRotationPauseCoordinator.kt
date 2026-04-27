@@ -16,18 +16,20 @@ class ProxyRotationPauseCoordinator(
         }
 
         synchronized(controlPlane) {
-            val event = when (controlPlane.currentStatus.state) {
-                RotationState.PausingNewRequests -> pauseController.pauseProxyRequests()
-                RotationState.ResumingProxyRequests -> pauseController.resumeProxyRequests()
-                else -> return ProxyRotationPauseAdvanceResult.NoAction(controlPlane.snapshot())
-            }
+            val event =
+                when (controlPlane.currentStatus.state) {
+                    RotationState.PausingNewRequests -> pauseController.pauseProxyRequests()
+                    RotationState.ResumingProxyRequests -> pauseController.resumeProxyRequests()
+                    else -> return ProxyRotationPauseAdvanceResult.NoAction(controlPlane.snapshot())
+                }
 
             return ProxyRotationPauseAdvanceResult.Applied(
                 event = event,
-                progress = controlPlane.applyProgress(
-                    event = event,
-                    nowElapsedMillis = nowElapsedMillis,
-                ),
+                progress =
+                    controlPlane.applyProgress(
+                        event = event,
+                        nowElapsedMillis = nowElapsedMillis,
+                    ),
             )
         }
     }

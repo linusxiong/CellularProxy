@@ -10,9 +10,10 @@ import kotlin.test.assertNull
 class SharedPreferencesSensitiveKeyValueStoreTest {
     @Test
     fun `reads values from SharedPreferences by exact key`() {
-        val preferences = FakeSharedPreferences(
-            SensitiveConfigSecretKeys.managementApiToken to "encrypted-management-token",
-        )
+        val preferences =
+            FakeSharedPreferences(
+                SensitiveConfigSecretKeys.managementApiToken to "encrypted-management-token",
+            )
         val store = SharedPreferencesSensitiveKeyValueStore(preferences)
 
         assertEquals(
@@ -24,19 +25,21 @@ class SharedPreferencesSensitiveKeyValueStoreTest {
 
     @Test
     fun `replace writes encrypted values and removes stale keys in one commit`() {
-        val preferences = FakeSharedPreferences(
-            SensitiveConfigSecretKeys.proxyAuthCredential to "old-credential",
-            SensitiveConfigSecretKeys.managementApiToken to "old-token",
-            SensitiveConfigSecretKeys.cloudflareTunnelToken to "old-cloudflare-token",
-            "foreign.secret" to "foreign-value",
-        )
+        val preferences =
+            FakeSharedPreferences(
+                SensitiveConfigSecretKeys.proxyAuthCredential to "old-credential",
+                SensitiveConfigSecretKeys.managementApiToken to "old-token",
+                SensitiveConfigSecretKeys.cloudflareTunnelToken to "old-cloudflare-token",
+                "foreign.secret" to "foreign-value",
+            )
         val store = SharedPreferencesSensitiveKeyValueStore(preferences)
 
         store.replace(
-            encryptedValues = mapOf(
-                SensitiveConfigSecretKeys.proxyAuthCredential to "new-credential",
-                SensitiveConfigSecretKeys.managementApiToken to "new-token",
-            ),
+            encryptedValues =
+                mapOf(
+                    SensitiveConfigSecretKeys.proxyAuthCredential to "new-credential",
+                    SensitiveConfigSecretKeys.managementApiToken to "new-token",
+                ),
             keysToRemove = setOf(SensitiveConfigSecretKeys.cloudflareTunnelToken),
         )
 
@@ -50,11 +53,12 @@ class SharedPreferencesSensitiveKeyValueStoreTest {
 
     @Test
     fun `clear removes only requested keys in one commit`() {
-        val preferences = FakeSharedPreferences(
-            SensitiveConfigSecretKeys.proxyAuthCredential to "credential",
-            SensitiveConfigSecretKeys.managementApiToken to "token",
-            "foreign.secret" to "foreign-value",
-        )
+        val preferences =
+            FakeSharedPreferences(
+                SensitiveConfigSecretKeys.proxyAuthCredential to "credential",
+                SensitiveConfigSecretKeys.managementApiToken to "token",
+                "foreign.secret" to "foreign-value",
+            )
         val store = SharedPreferencesSensitiveKeyValueStore(preferences)
 
         store.clear(
@@ -117,7 +121,10 @@ private class FakeSharedPreferences(
     var applyCount: Int = 0
         private set
 
-    override fun getString(key: String?, defValue: String?): String? =
+    override fun getString(
+        key: String?,
+        defValue: String?,
+    ): String? =
         if (throwOnGetString) {
             throw ClassCastException("Stored value is not a string")
         } else {
@@ -130,30 +137,44 @@ private class FakeSharedPreferences(
 
     override fun getAll(): MutableMap<String, *> = values.toMutableMap()
 
-    override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? = defValues
+    override fun getStringSet(
+        key: String?,
+        defValues: MutableSet<String>?,
+    ): MutableSet<String>? = defValues
 
-    override fun getInt(key: String?, defValue: Int): Int = defValue
+    override fun getInt(
+        key: String?,
+        defValue: Int,
+    ): Int = defValue
 
-    override fun getLong(key: String?, defValue: Long): Long = defValue
+    override fun getLong(
+        key: String?,
+        defValue: Long,
+    ): Long = defValue
 
-    override fun getFloat(key: String?, defValue: Float): Float = defValue
+    override fun getFloat(
+        key: String?,
+        defValue: Float,
+    ): Float = defValue
 
-    override fun getBoolean(key: String?, defValue: Boolean): Boolean = defValue
+    override fun getBoolean(
+        key: String?,
+        defValue: Boolean,
+    ): Boolean = defValue
 
-    override fun registerOnSharedPreferenceChangeListener(
-        listener: SharedPreferences.OnSharedPreferenceChangeListener?,
-    ) = Unit
+    override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
 
-    override fun unregisterOnSharedPreferenceChangeListener(
-        listener: SharedPreferences.OnSharedPreferenceChangeListener?,
-    ) = Unit
+    override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
 
     private inner class FakeEditor : SharedPreferences.Editor {
         private val writes: MutableMap<String, String> = linkedMapOf()
         private val removals: MutableSet<String> = linkedSetOf()
         private var clearRequested: Boolean = false
 
-        override fun putString(key: String?, value: String?): SharedPreferences.Editor {
+        override fun putString(
+            key: String?,
+            value: String?,
+        ): SharedPreferences.Editor {
             requireNotNull(key)
             requireNotNull(value)
             writes[key] = value
@@ -193,14 +214,29 @@ private class FakeSharedPreferences(
             commit()
         }
 
-        override fun putStringSet(key: String?, values: MutableSet<String>?): SharedPreferences.Editor = this
+        override fun putStringSet(
+            key: String?,
+            values: MutableSet<String>?,
+        ): SharedPreferences.Editor = this
 
-        override fun putInt(key: String?, value: Int): SharedPreferences.Editor = this
+        override fun putInt(
+            key: String?,
+            value: Int,
+        ): SharedPreferences.Editor = this
 
-        override fun putLong(key: String?, value: Long): SharedPreferences.Editor = this
+        override fun putLong(
+            key: String?,
+            value: Long,
+        ): SharedPreferences.Editor = this
 
-        override fun putFloat(key: String?, value: Float): SharedPreferences.Editor = this
+        override fun putFloat(
+            key: String?,
+            value: Float,
+        ): SharedPreferences.Editor = this
 
-        override fun putBoolean(key: String?, value: Boolean): SharedPreferences.Editor = this
+        override fun putBoolean(
+            key: String?,
+            value: Boolean,
+        ): SharedPreferences.Editor = this
     }
 }

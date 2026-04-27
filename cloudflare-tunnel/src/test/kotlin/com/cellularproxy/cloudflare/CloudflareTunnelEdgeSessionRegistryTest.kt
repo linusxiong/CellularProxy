@@ -108,8 +108,7 @@ class CloudflareTunnelEdgeSessionRegistryTest {
         assertFalse(registry.toString().contains("second-secret-connection"))
     }
 
-    private fun connectedSnapshot() =
-        CloudflareTunnelControlPlane(CloudflareTunnelStatus.connected()).snapshot()
+    private fun connectedSnapshot() = CloudflareTunnelControlPlane(CloudflareTunnelStatus.connected()).snapshot()
 
     private fun degradedSnapshot() =
         CloudflareTunnelControlPlane(CloudflareTunnelStatus.connected())

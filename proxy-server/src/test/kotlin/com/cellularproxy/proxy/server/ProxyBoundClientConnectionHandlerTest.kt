@@ -16,9 +16,9 @@ import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
 import com.cellularproxy.shared.proxy.ProxyAuthenticationConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import java.io.BufferedReader
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.Socket
@@ -35,43 +35,50 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProxyBoundClientConnectionHandlerTest {
-    private val config = ProxyIngressPreflightConfig(
-        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
-        requestAdmission = ProxyRequestAdmissionConfig(
-            proxyAuthentication = ProxyAuthenticationConfig(
-                authEnabled = false,
-                credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-            ),
-            managementApiToken = MANAGEMENT_TOKEN,
-        ),
-    )
+    private val config =
+        ProxyIngressPreflightConfig(
+            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = false,
+                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        ),
+                    managementApiToken = MANAGEMENT_TOKEN,
+                ),
+        )
 
     @Test
     fun `overlapping accepted sockets contribute to connection-limit admission`() {
-        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
-            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
-        ).listener
+        val listener =
+            assertIs<ProxyServerSocketBindResult.Bound>(
+                ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+            ).listener
         val blockingManagementHandler = BlockingManagementHandler()
-        val server = ProxyBoundClientConnectionHandler(
-            exchangeHandler = exchangeHandler(managementHandler = blockingManagementHandler),
-        )
+        val server =
+            ProxyBoundClientConnectionHandler(
+                exchangeHandler = exchangeHandler(managementHandler = blockingManagementHandler),
+            )
         val metricEvents = CopyOnWriteArrayList<ProxyTrafficMetricsEvent>()
         val firstServerFailure = AtomicReference<Throwable?>()
         val firstClientFailure = AtomicReference<Throwable?>()
 
         listener.use {
             val firstClientSocket = Socket(LOOPBACK_HOST, listener.listenPort)
-            val firstServer = thread(start = true) {
-                firstServerFailure.capture {
-                    val result = server.handleNext(
-                        listener = listener,
-                        config = config,
-                        recordMetricEvent = { metricEvents.add(it) },
-                    )
-                    assertEquals(0, result.activeConnectionsBeforeAdmission)
-                    assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result.exchange)
+            val firstServer =
+                thread(start = true) {
+                    firstServerFailure.capture {
+                        val result =
+                            server.handleNext(
+                                listener = listener,
+                                config = config,
+                                recordMetricEvent = { metricEvents.add(it) },
+                            )
+                        assertEquals(0, result.activeConnectionsBeforeAdmission)
+                        assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result.exchange)
+                    }
                 }
-            }
 
             assertTrue(
                 metricEvents.awaitEvents(
@@ -81,18 +88,19 @@ class ProxyBoundClientConnectionHandlerTest {
             )
             assertEquals(1, server.activeClientConnections)
 
-            val firstClient = thread(start = true) {
-                firstClientFailure.capture {
-                    firstClientSocket.use { socket ->
-                        socket.getOutputStream().write(managementRequestBytes())
-                        socket.getOutputStream().flush()
-                        assertEquals(
-                            "HTTP/1.1 202 Accepted",
-                            BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.US_ASCII)).readLine(),
-                        )
+            val firstClient =
+                thread(start = true) {
+                    firstClientFailure.capture {
+                        firstClientSocket.use { socket ->
+                            socket.getOutputStream().write(managementRequestBytes())
+                            socket.getOutputStream().flush()
+                            assertEquals(
+                                "HTTP/1.1 202 Accepted",
+                                BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.US_ASCII)).readLine(),
+                            )
+                        }
                     }
                 }
-            }
 
             assertTrue(blockingManagementHandler.awaitStarted(), "first request should reach management handler")
             assertEquals(1, server.activeClientConnections)
@@ -101,16 +109,18 @@ class ProxyBoundClientConnectionHandlerTest {
                 secondClient.getOutputStream().write(managementRequestBytes())
                 secondClient.getOutputStream().flush()
 
-                val secondResult = server.handleNext(
-                    listener = listener,
-                    config = config,
-                    recordMetricEvent = { metricEvents.add(it) },
-                )
+                val secondResult =
+                    server.handleNext(
+                        listener = listener,
+                        config = config,
+                        recordMetricEvent = { metricEvents.add(it) },
+                    )
 
                 assertEquals(1, secondResult.activeConnectionsBeforeAdmission)
-                val rejected = assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(
-                    secondResult.exchange,
-                )
+                val rejected =
+                    assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(
+                        secondResult.exchange,
+                    )
                 assertIs<ProxyServerFailure.ConnectionLimit>(rejected.failure)
                 assertEquals(
                     "HTTP/1.1 503 Service Unavailable",
@@ -145,12 +155,14 @@ class ProxyBoundClientConnectionHandlerTest {
 
     @Test
     fun `active connection count is decremented when exchange handling throws`() {
-        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
-            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
-        ).listener
-        val server = ProxyBoundClientConnectionHandler(
-            exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
-        )
+        val listener =
+            assertIs<ProxyServerSocketBindResult.Bound>(
+                ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+            ).listener
+        val server =
+            ProxyBoundClientConnectionHandler(
+                exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
+            )
 
         listener.use {
             Socket(LOOPBACK_HOST, listener.listenPort).use { socket ->
@@ -172,16 +184,20 @@ class ProxyBoundClientConnectionHandlerTest {
 
     @Test
     fun `active connection count is decremented before close metric callback runs`() {
-        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
-            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
-        ).listener
-        val server = ProxyBoundClientConnectionHandler(
-            exchangeHandler = exchangeHandler(
-                managementHandler = ManagementApiHandler {
-                    ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}""")
-                },
-            ),
-        )
+        val listener =
+            assertIs<ProxyServerSocketBindResult.Bound>(
+                ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+            ).listener
+        val server =
+            ProxyBoundClientConnectionHandler(
+                exchangeHandler =
+                    exchangeHandler(
+                        managementHandler =
+                            ManagementApiHandler {
+                                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}""")
+                            },
+                    ),
+            )
         val activeConnectionsObservedOnClose = AtomicReference<Long>()
 
         listener.use {
@@ -212,41 +228,47 @@ class ProxyBoundClientConnectionHandlerTest {
         val releaseOriginBody = CountDownLatch(1)
         val serverResult = AtomicReference<ProxyBoundClientConnectionHandlingResult?>()
         val serverFailure = AtomicReference<Throwable?>()
-        val httpConnector = OutboundHttpOriginConnector { request ->
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = BlockingHttpResponseBodyInputStream(
-                        bodyReadStarted = originBodyReadStarted,
-                        releaseBody = releaseOriginBody,
-                    ),
-                    output = ByteArrayOutputStream(),
-                    host = request.host,
-                    port = request.port,
-                ),
-            )
-        }
-        server = ProxyBoundClientConnectionHandler(
-            exchangeHandler = ProxyClientStreamExchangeHandler(
-                httpConnector = httpConnector,
-                connectConnector = ThrowingConnectConnector(),
-                managementHandler = ThrowingManagementHandler(),
-            ),
-        )
-        val clientOutput = ByteArrayOutputStream()
-
-        val serverThread = thread(start = true) {
-            serverFailure.capture {
-                serverResult.set(
-                    server.handleAccepted(
-                        client = ProxyClientStreamConnection(
-                            input = ByteArrayInputStream(httpProxyRequestBytes()),
-                            output = clientOutput,
-                        ),
-                        config = config,
+        val httpConnector =
+            OutboundHttpOriginConnector { request ->
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input =
+                            BlockingHttpResponseBodyInputStream(
+                                bodyReadStarted = originBodyReadStarted,
+                                releaseBody = releaseOriginBody,
+                            ),
+                        output = ByteArrayOutputStream(),
+                        host = request.host,
+                        port = request.port,
                     ),
                 )
             }
-        }
+        server =
+            ProxyBoundClientConnectionHandler(
+                exchangeHandler =
+                    ProxyClientStreamExchangeHandler(
+                        httpConnector = httpConnector,
+                        connectConnector = ThrowingConnectConnector(),
+                        managementHandler = ThrowingManagementHandler(),
+                    ),
+            )
+        val clientOutput = ByteArrayOutputStream()
+
+        val serverThread =
+            thread(start = true) {
+                serverFailure.capture {
+                    serverResult.set(
+                        server.handleAccepted(
+                            client =
+                                ProxyClientStreamConnection(
+                                    input = ByteArrayInputStream(httpProxyRequestBytes()),
+                                    output = clientOutput,
+                                ),
+                            config = config,
+                        ),
+                    )
+                }
+            }
 
         assertTrue(originBodyReadStarted.await(1, TimeUnit.SECONDS), "HTTP forwarding should reach response body")
         assertEquals(1, server.activeProxyExchanges)
@@ -267,12 +289,14 @@ class ProxyBoundClientConnectionHandlerTest {
 
     @Test
     fun `header read idle timeout emits safe response and releases active connection`() {
-        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
-            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
-        ).listener
-        val server = ProxyBoundClientConnectionHandler(
-            exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
-        )
+        val listener =
+            assertIs<ProxyServerSocketBindResult.Bound>(
+                ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+            ).listener
+        val server =
+            ProxyBoundClientConnectionHandler(
+                exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
+            )
         val metricEvents = CopyOnWriteArrayList<ProxyTrafficMetricsEvent>()
         val serverResult = AtomicReference<ProxyBoundClientConnectionHandlingResult?>()
         val serverFailure = AtomicReference<Throwable?>()
@@ -280,18 +304,19 @@ class ProxyBoundClientConnectionHandlerTest {
         listener.use {
             Socket(LOOPBACK_HOST, listener.listenPort).use { client ->
                 client.soTimeout = CLIENT_TEST_READ_TIMEOUT_MILLIS
-                val serverThread = thread(start = true) {
-                    serverFailure.capture {
-                        serverResult.set(
-                            server.handleNext(
-                                listener = listener,
-                                config = config,
-                                clientHeaderReadIdleTimeoutMillis = 50,
-                                recordMetricEvent = { metricEvents.add(it) },
-                            ),
-                        )
+                val serverThread =
+                    thread(start = true) {
+                        serverFailure.capture {
+                            serverResult.set(
+                                server.handleNext(
+                                    listener = listener,
+                                    config = config,
+                                    clientHeaderReadIdleTimeoutMillis = 50,
+                                    recordMetricEvent = { metricEvents.add(it) },
+                                ),
+                            )
+                        }
                     }
-                }
 
                 assertEquals(
                     "HTTP/1.1 408 Request Timeout",
@@ -317,12 +342,14 @@ class ProxyBoundClientConnectionHandlerTest {
 
     @Test
     fun `header read idle timeout records partial header bytes received`() {
-        val listener = assertIs<ProxyServerSocketBindResult.Bound>(
-            ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
-        ).listener
-        val server = ProxyBoundClientConnectionHandler(
-            exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
-        )
+        val listener =
+            assertIs<ProxyServerSocketBindResult.Bound>(
+                ProxyServerSocketBinder.bindEphemeral(listenHost = LOOPBACK_HOST),
+            ).listener
+        val server =
+            ProxyBoundClientConnectionHandler(
+                exchangeHandler = exchangeHandler(managementHandler = ThrowingManagementHandler()),
+            )
         val metricEvents = CopyOnWriteArrayList<ProxyTrafficMetricsEvent>()
         val partialHeader = "GET http://example.com/ HTTP/1.1\r\nHost: example.com"
         val serverFailure = AtomicReference<Throwable?>()
@@ -330,16 +357,17 @@ class ProxyBoundClientConnectionHandlerTest {
         listener.use {
             Socket(LOOPBACK_HOST, listener.listenPort).use { client ->
                 client.soTimeout = CLIENT_TEST_READ_TIMEOUT_MILLIS
-                val serverThread = thread(start = true) {
-                    serverFailure.capture {
-                        server.handleNext(
-                            listener = listener,
-                            config = config,
-                            clientHeaderReadIdleTimeoutMillis = 50,
-                            recordMetricEvent = { metricEvents.add(it) },
-                        )
+                val serverThread =
+                    thread(start = true) {
+                        serverFailure.capture {
+                            server.handleNext(
+                                listener = listener,
+                                config = config,
+                                clientHeaderReadIdleTimeoutMillis = 50,
+                                recordMetricEvent = { metricEvents.add(it) },
+                            )
+                        }
                     }
-                }
 
                 client.getOutputStream().write(partialHeader.toByteArray(Charsets.US_ASCII))
                 client.getOutputStream().flush()
@@ -358,9 +386,7 @@ class ProxyBoundClientConnectionHandlerTest {
         assertEquals(0, server.activeClientConnections)
     }
 
-    private fun exchangeHandler(
-        managementHandler: ManagementApiHandler,
-    ): ProxyClientStreamExchangeHandler =
+    private fun exchangeHandler(managementHandler: ManagementApiHandler): ProxyClientStreamExchangeHandler =
         ProxyClientStreamExchangeHandler(
             httpConnector = ThrowingHttpConnector(),
             connectConnector = ThrowingConnectConnector(),
@@ -373,14 +399,14 @@ class ProxyBoundClientConnectionHandlerTest {
                 "Host: phone.local\r\n" +
                 "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
                 "\r\n"
-            ).toByteArray(Charsets.US_ASCII)
+        ).toByteArray(Charsets.US_ASCII)
 
     private fun httpProxyRequestBytes(): ByteArray =
         (
             "GET http://origin.example/resource HTTP/1.1\r\n" +
                 "Host: origin.example\r\n" +
                 "\r\n"
-            ).toByteArray(Charsets.US_ASCII)
+        ).toByteArray(Charsets.US_ASCII)
 
     private class BlockingManagementHandler : ManagementApiHandler {
         private val started = CountDownLatch(1)
@@ -403,11 +429,12 @@ class ProxyBoundClientConnectionHandlerTest {
         private val bodyReadStarted: CountDownLatch,
         private val releaseBody: CountDownLatch,
     ) : InputStream() {
-        private val bytes = (
-            "HTTP/1.1 200 OK\r\n" +
-                "Content-Length: 4\r\n" +
-                "\r\n" +
-                "BODY"
+        private val bytes =
+            (
+                "HTTP/1.1 200 OK\r\n" +
+                    "Content-Length: 4\r\n" +
+                    "\r\n" +
+                    "BODY"
             ).toByteArray(Charsets.US_ASCII)
         private val bodyStartIndex = bytes.size - 4
         private var index = 0
@@ -422,7 +449,11 @@ class ProxyBoundClientConnectionHandlerTest {
             }
         }
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int {
             require(offset >= 0 && length >= 0 && length <= buffer.size - offset) {
                 "Invalid buffer range"
             }
@@ -475,9 +506,7 @@ class ProxyBoundClientConnectionHandlerTest {
         }
     }
 
-    private fun CopyOnWriteArrayList<ProxyTrafficMetricsEvent>.awaitEvents(
-        expected: List<ProxyTrafficMetricsEvent>,
-    ): Boolean {
+    private fun CopyOnWriteArrayList<ProxyTrafficMetricsEvent>.awaitEvents(expected: List<ProxyTrafficMetricsEvent>): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1)
         while (System.nanoTime() < deadline) {
             if (toList() == expected) {

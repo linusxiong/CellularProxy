@@ -40,10 +40,11 @@ class TerminalRotationTimestampTrackerTest {
     fun `records accepted completed rotation timestamp`() {
         val tracker = TerminalRotationTimestampTracker(initialLastTerminalElapsedMillis = 1_000)
 
-        val decision = tracker.observe(
-            transition = acceptedCompletedTransition(),
-            nowElapsedMillis = 2_500,
-        )
+        val decision =
+            tracker.observe(
+                transition = acceptedCompletedTransition(),
+                nowElapsedMillis = 2_500,
+            )
 
         assertEquals(TerminalRotationTimestampObservation.Recorded(2_500), decision)
         assertEquals(2_500, tracker.lastTerminalElapsedMillis)
@@ -53,10 +54,11 @@ class TerminalRotationTimestampTrackerTest {
     fun `records accepted failed attempted rotation timestamp`() {
         val tracker = TerminalRotationTimestampTracker()
 
-        val decision = tracker.observe(
-            transition = acceptedFailedTransition(RotationFailureReason.RootUnavailable),
-            nowElapsedMillis = 3_000,
-        )
+        val decision =
+            tracker.observe(
+                transition = acceptedFailedTransition(RotationFailureReason.RootUnavailable),
+                nowElapsedMillis = 3_000,
+            )
 
         assertEquals(TerminalRotationTimestampObservation.Recorded(3_000), decision)
         assertEquals(3_000, tracker.lastTerminalElapsedMillis)
@@ -66,10 +68,11 @@ class TerminalRotationTimestampTrackerTest {
     fun `does not record cooldown rejection failure`() {
         val tracker = TerminalRotationTimestampTracker(initialLastTerminalElapsedMillis = 1_000)
 
-        val decision = tracker.observe(
-            transition = acceptedFailedTransition(RotationFailureReason.CooldownActive),
-            nowElapsedMillis = 2_000,
-        )
+        val decision =
+            tracker.observe(
+                transition = acceptedFailedTransition(RotationFailureReason.CooldownActive),
+                nowElapsedMillis = 2_000,
+            )
 
         assertEquals(
             TerminalRotationTimestampObservation.NotRecorded(
@@ -84,20 +87,24 @@ class TerminalRotationTimestampTrackerTest {
     fun `does not record duplicate or ignored transitions`() {
         val tracker = TerminalRotationTimestampTracker(initialLastTerminalElapsedMillis = 1_000)
 
-        val duplicateDecision = tracker.observe(
-            transition = RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Duplicate,
-                status = completedStatus(),
-            ),
-            nowElapsedMillis = 2_000,
-        )
-        val ignoredDecision = tracker.observe(
-            transition = RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Ignored,
-                status = completedStatus(),
-            ),
-            nowElapsedMillis = 3_000,
-        )
+        val duplicateDecision =
+            tracker.observe(
+                transition =
+                    RotationTransitionResult(
+                        disposition = RotationTransitionDisposition.Duplicate,
+                        status = completedStatus(),
+                    ),
+                nowElapsedMillis = 2_000,
+            )
+        val ignoredDecision =
+            tracker.observe(
+                transition =
+                    RotationTransitionResult(
+                        disposition = RotationTransitionDisposition.Ignored,
+                        status = completedStatus(),
+                    ),
+                nowElapsedMillis = 3_000,
+            )
 
         assertEquals(
             TerminalRotationTimestampObservation.NotRecorded(
@@ -118,16 +125,19 @@ class TerminalRotationTimestampTrackerTest {
     fun `does not record accepted non terminal transition`() {
         val tracker = TerminalRotationTimestampTracker(initialLastTerminalElapsedMillis = 1_000)
 
-        val decision = tracker.observe(
-            transition = RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Accepted,
-                status = RotationStatus(
-                    state = RotationState.CheckingRoot,
-                    operation = RotationOperation.MobileData,
-                ),
-            ),
-            nowElapsedMillis = 2_000,
-        )
+        val decision =
+            tracker.observe(
+                transition =
+                    RotationTransitionResult(
+                        disposition = RotationTransitionDisposition.Accepted,
+                        status =
+                            RotationStatus(
+                                state = RotationState.CheckingRoot,
+                                operation = RotationOperation.MobileData,
+                            ),
+                    ),
+                nowElapsedMillis = 2_000,
+            )
 
         assertEquals(
             TerminalRotationTimestampObservation.NotRecorded(
@@ -142,10 +152,11 @@ class TerminalRotationTimestampTrackerTest {
     fun `does not move last terminal timestamp backwards`() {
         val tracker = TerminalRotationTimestampTracker(initialLastTerminalElapsedMillis = 10_000)
 
-        val decision = tracker.observe(
-            transition = acceptedCompletedTransition(),
-            nowElapsedMillis = 5_000,
-        )
+        val decision =
+            tracker.observe(
+                transition = acceptedCompletedTransition(),
+                nowElapsedMillis = 5_000,
+            )
 
         assertEquals(
             TerminalRotationTimestampObservation.NotRecorded(
@@ -165,16 +176,19 @@ class TerminalRotationTimestampTrackerTest {
         val start = CountDownLatch(1)
 
         try {
-            val futures = List(contenderCount) { index ->
-                executor.submit(Callable {
-                    ready.countDown()
-                    start.await()
-                    tracker.observe(
-                        transition = acceptedCompletedTransition(),
-                        nowElapsedMillis = (index + 1) * 1_000L,
+            val futures =
+                List(contenderCount) { index ->
+                    executor.submit(
+                        Callable {
+                            ready.countDown()
+                            start.await()
+                            tracker.observe(
+                                transition = acceptedCompletedTransition(),
+                                nowElapsedMillis = (index + 1) * 1_000L,
+                            )
+                        },
                     )
-                })
-            }
+                }
 
             assertTrue(ready.await(1, TimeUnit.SECONDS))
             start.countDown()
@@ -196,11 +210,12 @@ class TerminalRotationTimestampTrackerTest {
     private fun acceptedFailedTransition(reason: RotationFailureReason): RotationTransitionResult =
         RotationTransitionResult(
             disposition = RotationTransitionDisposition.Accepted,
-            status = RotationStatus(
-                state = RotationState.Failed,
-                operation = RotationOperation.MobileData,
-                failureReason = reason,
-            ),
+            status =
+                RotationStatus(
+                    state = RotationState.Failed,
+                    operation = RotationOperation.MobileData,
+                    failureReason = reason,
+                ),
         )
 
     private fun completedStatus(): RotationStatus =

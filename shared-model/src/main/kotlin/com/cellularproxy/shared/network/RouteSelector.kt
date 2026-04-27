@@ -30,12 +30,13 @@ data class NetworkSnapshot(
 )
 
 fun NetworkSnapshot.toNetworkDescriptorOrNull(): NetworkDescriptor? {
-    val category = when {
-        NetworkTransport.Vpn in transports -> NetworkCategory.Vpn
-        transports == setOf(NetworkTransport.WiFi) -> NetworkCategory.WiFi
-        transports == setOf(NetworkTransport.Cellular) -> NetworkCategory.Cellular
-        else -> null
-    }
+    val category =
+        when {
+            NetworkTransport.Vpn in transports -> NetworkCategory.Vpn
+            transports == setOf(NetworkTransport.WiFi) -> NetworkCategory.WiFi
+            transports == setOf(NetworkTransport.Cellular) -> NetworkCategory.Cellular
+            else -> null
+        }
 
     return category?.let {
         NetworkDescriptor(

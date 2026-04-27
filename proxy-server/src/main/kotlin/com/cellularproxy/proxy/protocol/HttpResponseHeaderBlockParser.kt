@@ -10,8 +10,13 @@ data class ParsedHttpResponse(
 )
 
 sealed interface HttpResponseHeaderBlockParseResult {
-    data class Accepted(val response: ParsedHttpResponse) : HttpResponseHeaderBlockParseResult
-    data class Rejected(val reason: HttpResponseHeaderBlockRejectionReason) : HttpResponseHeaderBlockParseResult
+    data class Accepted(
+        val response: ParsedHttpResponse,
+    ) : HttpResponseHeaderBlockParseResult
+
+    data class Rejected(
+        val reason: HttpResponseHeaderBlockRejectionReason,
+    ) : HttpResponseHeaderBlockParseResult
 }
 
 enum class HttpResponseHeaderBlockRejectionReason {
@@ -33,16 +38,18 @@ object HttpResponseHeaderBlockParser {
             return HttpResponseHeaderBlockParseResult.Rejected(HttpResponseHeaderBlockRejectionReason.HeaderBlockTooLarge)
         }
 
-        val headerTerminator = headerBlock.headerTerminator()
-            ?: return HttpResponseHeaderBlockParseResult.Rejected(HttpResponseHeaderBlockRejectionReason.IncompleteHeaderBlock)
+        val headerTerminator =
+            headerBlock.headerTerminator()
+                ?: return HttpResponseHeaderBlockParseResult.Rejected(HttpResponseHeaderBlockRejectionReason.IncompleteHeaderBlock)
         if (headerTerminator.endIndex != headerBlock.length) {
             return HttpResponseHeaderBlockParseResult.Rejected(HttpResponseHeaderBlockRejectionReason.MalformedHeader)
         }
 
         val headerText = headerBlock.substring(0, headerTerminator.startIndex)
         val lines = headerText.split(headerTerminator.lineSeparator)
-        val status = parseStatusLine(lines.firstOrNull().orEmpty())
-            ?: return HttpResponseHeaderBlockParseResult.Rejected(HttpResponseHeaderBlockRejectionReason.MalformedStatusLine)
+        val status =
+            parseStatusLine(lines.firstOrNull().orEmpty())
+                ?: return HttpResponseHeaderBlockParseResult.Rejected(HttpResponseHeaderBlockRejectionReason.MalformedStatusLine)
 
         val headers = linkedMapOf<String, MutableList<String>>()
         for (line in lines.drop(1)) {
@@ -123,14 +130,11 @@ object HttpResponseHeaderBlockParser {
         }
     }
 
-    private fun String.isHttpToken(): Boolean =
-        isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+    private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-    private fun String.trimHorizontalWhitespace(): String =
-        trim { it == ' ' || it == '\t' }
+    private fun String.trimHorizontalWhitespace(): String = trim { it == ' ' || it == '\t' }
 
-    private fun Char.isDisallowedHeaderValueControl(): Boolean =
-        code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+    private fun Char.isDisallowedHeaderValueControl(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 }
 
 private data class ParsedStatusLine(
@@ -156,9 +160,10 @@ private const val SUPPORTED_HTTP_VERSION_PREFIX = "HTTP/1.1 "
 private const val DELETE_CONTROL_CHAR = 0x7F
 private val HTTP_STATUS_CODE_RANGE = 100..599
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).toSet()
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).toSet()

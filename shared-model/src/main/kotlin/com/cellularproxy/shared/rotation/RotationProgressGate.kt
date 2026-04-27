@@ -16,10 +16,11 @@ class RotationProgressGate(
         }
 
         val transition = sessionController.apply(event)
-        val terminalTimestampObservation = terminalTimestampTracker.observe(
-            transition = transition,
-            nowElapsedMillis = nowElapsedMillis,
-        )
+        val terminalTimestampObservation =
+            terminalTimestampTracker.observe(
+                transition = transition,
+                nowElapsedMillis = nowElapsedMillis,
+            )
 
         return RotationProgressGateResult(
             transition = transition,

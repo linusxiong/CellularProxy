@@ -12,22 +12,25 @@ import kotlin.time.Duration.Companion.seconds
 class RotationNetworkReturnPolicyTest {
     @Test
     fun `rotation network return succeeds when selected explicit route is available`() {
-        val cellular = network(
-            id = "cell-1",
-            category = NetworkCategory.Cellular,
-            isAvailable = true,
-        )
+        val cellular =
+            network(
+                id = "cell-1",
+                category = NetworkCategory.Cellular,
+                isAvailable = true,
+            )
 
-        val decision = RotationNetworkReturnPolicy.evaluate(
-            routeTarget = RouteTarget.Cellular,
-            networks = listOf(
-                network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = true),
-                cellular,
-            ),
-            waitStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 1_250,
-            networkReturnTimeout = 60.seconds,
-        )
+        val decision =
+            RotationNetworkReturnPolicy.evaluate(
+                routeTarget = RouteTarget.Cellular,
+                networks =
+                    listOf(
+                        network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = true),
+                        cellular,
+                    ),
+                waitStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 1_250,
+                networkReturnTimeout = 60.seconds,
+            )
 
         assertEquals(
             RotationNetworkReturnDecision.Returned(
@@ -41,23 +44,26 @@ class RotationNetworkReturnPolicyTest {
 
     @Test
     fun `automatic route return selects the first available network in monitor order`() {
-        val vpn = network(
-            id = "vpn-1",
-            category = NetworkCategory.Vpn,
-            isAvailable = true,
-        )
+        val vpn =
+            network(
+                id = "vpn-1",
+                category = NetworkCategory.Vpn,
+                isAvailable = true,
+            )
 
-        val decision = RotationNetworkReturnPolicy.evaluate(
-            routeTarget = RouteTarget.Automatic,
-            networks = listOf(
-                network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = false),
-                vpn,
-                network(id = "cell-1", category = NetworkCategory.Cellular, isAvailable = true),
-            ),
-            waitStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 5_000,
-            networkReturnTimeout = 60.seconds,
-        )
+        val decision =
+            RotationNetworkReturnPolicy.evaluate(
+                routeTarget = RouteTarget.Automatic,
+                networks =
+                    listOf(
+                        network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = false),
+                        vpn,
+                        network(id = "cell-1", category = NetworkCategory.Cellular, isAvailable = true),
+                    ),
+                waitStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 5_000,
+                networkReturnTimeout = 60.seconds,
+            )
 
         assertEquals(
             RotationNetworkReturnDecision.Returned(
@@ -71,16 +77,18 @@ class RotationNetworkReturnPolicyTest {
 
     @Test
     fun `rotation network return waits before timeout when selected route is still unavailable`() {
-        val decision = RotationNetworkReturnPolicy.evaluate(
-            routeTarget = RouteTarget.Cellular,
-            networks = listOf(
-                network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = true),
-                network(id = "cell-1", category = NetworkCategory.Cellular, isAvailable = false),
-            ),
-            waitStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 21_250,
-            networkReturnTimeout = 60.seconds,
-        )
+        val decision =
+            RotationNetworkReturnPolicy.evaluate(
+                routeTarget = RouteTarget.Cellular,
+                networks =
+                    listOf(
+                        network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = true),
+                        network(id = "cell-1", category = NetworkCategory.Cellular, isAvailable = false),
+                    ),
+                waitStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 21_250,
+                networkReturnTimeout = 60.seconds,
+            )
 
         assertEquals(
             RotationNetworkReturnDecision.Waiting(
@@ -94,15 +102,17 @@ class RotationNetworkReturnPolicyTest {
 
     @Test
     fun `rotation network return times out when selected route remains unavailable`() {
-        val decision = RotationNetworkReturnPolicy.evaluate(
-            routeTarget = RouteTarget.Cellular,
-            networks = listOf(
-                network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = true),
-            ),
-            waitStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 61_000,
-            networkReturnTimeout = 60.seconds,
-        )
+        val decision =
+            RotationNetworkReturnPolicy.evaluate(
+                routeTarget = RouteTarget.Cellular,
+                networks =
+                    listOf(
+                        network(id = "wifi-1", category = NetworkCategory.WiFi, isAvailable = true),
+                    ),
+                waitStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 61_000,
+                networkReturnTimeout = 60.seconds,
+            )
 
         assertEquals(
             RotationNetworkReturnDecision.TimedOut(routeTarget = RouteTarget.Cellular),
@@ -113,13 +123,14 @@ class RotationNetworkReturnPolicyTest {
 
     @Test
     fun `zero network return timeout fails immediately when selected route is unavailable`() {
-        val decision = RotationNetworkReturnPolicy.evaluate(
-            routeTarget = RouteTarget.Vpn,
-            networks = emptyList(),
-            waitStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 1_000,
-            networkReturnTimeout = 0.seconds,
-        )
+        val decision =
+            RotationNetworkReturnPolicy.evaluate(
+                routeTarget = RouteTarget.Vpn,
+                networks = emptyList(),
+                waitStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 1_000,
+                networkReturnTimeout = 0.seconds,
+            )
 
         assertEquals(
             RotationNetworkReturnDecision.TimedOut(routeTarget = RouteTarget.Vpn),
@@ -130,13 +141,14 @@ class RotationNetworkReturnPolicyTest {
 
     @Test
     fun `rotation network return fails closed when wait start time is observed in the future`() {
-        val decision = RotationNetworkReturnPolicy.evaluate(
-            routeTarget = RouteTarget.Cellular,
-            networks = emptyList(),
-            waitStartedElapsedMillis = 5_000,
-            nowElapsedMillis = 4_000,
-            networkReturnTimeout = 3.seconds,
-        )
+        val decision =
+            RotationNetworkReturnPolicy.evaluate(
+                routeTarget = RouteTarget.Cellular,
+                networks = emptyList(),
+                waitStartedElapsedMillis = 5_000,
+                nowElapsedMillis = 4_000,
+                networkReturnTimeout = 3.seconds,
+            )
 
         assertEquals(
             RotationNetworkReturnDecision.Waiting(
@@ -184,21 +196,23 @@ class RotationNetworkReturnPolicyTest {
         assertFailsWith<IllegalArgumentException> {
             RotationNetworkReturnDecision.Returned(
                 routeTarget = RouteTarget.Cellular,
-                selectedNetwork = network(
-                    id = "wifi-1",
-                    category = NetworkCategory.WiFi,
-                    isAvailable = true,
-                ),
+                selectedNetwork =
+                    network(
+                        id = "wifi-1",
+                        category = NetworkCategory.WiFi,
+                        isAvailable = true,
+                    ),
             )
         }
         assertFailsWith<IllegalArgumentException> {
             RotationNetworkReturnDecision.Returned(
                 routeTarget = RouteTarget.Cellular,
-                selectedNetwork = network(
-                    id = "cell-1",
-                    category = NetworkCategory.Cellular,
-                    isAvailable = false,
-                ),
+                selectedNetwork =
+                    network(
+                        id = "cell-1",
+                        category = NetworkCategory.Cellular,
+                        isAvailable = false,
+                    ),
             )
         }
         assertFailsWith<IllegalArgumentException> {

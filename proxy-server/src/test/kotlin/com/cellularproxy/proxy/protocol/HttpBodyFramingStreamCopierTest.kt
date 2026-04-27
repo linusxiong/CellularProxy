@@ -14,11 +14,12 @@ class HttpBodyFramingStreamCopierTest {
         val input = CountingInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyRequestBody(
-            framing = HttpRequestBodyFraming.NoBody,
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyRequestBody(
+                framing = HttpRequestBodyFraming.NoBody,
+                input = input,
+                output = output,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = 0), result)
         assertEquals(0, input.readCalls)
@@ -30,12 +31,13 @@ class HttpBodyFramingStreamCopierTest {
         val input = ByteArrayInputStream("helloNEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyRequestBody(
-            framing = HttpRequestBodyFraming.FixedLength(5),
-            input = input,
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyRequestBody(
+                framing = HttpRequestBodyFraming.FixedLength(5),
+                input = input,
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = 5), result)
         assertEquals("hello", output.toString(Charsets.US_ASCII))
@@ -46,12 +48,13 @@ class HttpBodyFramingStreamCopierTest {
     fun `request fixed-length framing returns premature end unchanged`() {
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyRequestBody(
-            framing = HttpRequestBodyFraming.FixedLength(5),
-            input = ByteArrayInputStream("abc".toByteArray(Charsets.US_ASCII)),
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyRequestBody(
+                framing = HttpRequestBodyFraming.FixedLength(5),
+                input = ByteArrayInputStream("abc".toByteArray(Charsets.US_ASCII)),
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.PrematureEnd(bytesCopied = 3, expectedBytes = 5), result)
         assertEquals("abc", output.toString(Charsets.US_ASCII))
@@ -62,11 +65,12 @@ class HttpBodyFramingStreamCopierTest {
         val input = CountingInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.NoBody,
-            input = input,
-            output = output,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.NoBody,
+                input = input,
+                output = output,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = 0), result)
         assertEquals(0, input.readCalls)
@@ -78,12 +82,13 @@ class HttpBodyFramingStreamCopierTest {
         val input = ByteArrayInputStream("helloNEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.FixedLength(5),
-            input = input,
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.FixedLength(5),
+                input = input,
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = 5), result)
         assertEquals("hello", output.toString(Charsets.US_ASCII))
@@ -94,12 +99,13 @@ class HttpBodyFramingStreamCopierTest {
     fun `response fixed-length framing returns premature end unchanged`() {
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.FixedLength(5),
-            input = ByteArrayInputStream("abc".toByteArray(Charsets.US_ASCII)),
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.FixedLength(5),
+                input = ByteArrayInputStream("abc".toByteArray(Charsets.US_ASCII)),
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.PrematureEnd(bytesCopied = 3, expectedBytes = 5), result)
         assertEquals("abc", output.toString(Charsets.US_ASCII))
@@ -111,12 +117,13 @@ class HttpBodyFramingStreamCopierTest {
         val input = ByteArrayInputStream(chunkedBody + "NEXT".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.Chunked,
-            input = input,
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.Chunked,
+                input = input,
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = chunkedBody.size.toLong()), result)
         assertContentEquals(chunkedBody, output.toByteArray())
@@ -127,12 +134,13 @@ class HttpBodyFramingStreamCopierTest {
     fun `response chunked framing returns premature end unchanged`() {
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.Chunked,
-            input = ByteArrayInputStream("5\r\nabc".toByteArray(Charsets.US_ASCII)),
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.Chunked,
+                input = ByteArrayInputStream("5\r\nabc".toByteArray(Charsets.US_ASCII)),
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.ChunkedPrematureEnd(bytesCopied = 6), result)
         assertEquals("5\r\nabc", output.toString(Charsets.US_ASCII))
@@ -142,11 +150,12 @@ class HttpBodyFramingStreamCopierTest {
     fun `response chunked framing returns malformed chunk unchanged`() {
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.Chunked,
-            input = ByteArrayInputStream("Z\r\nNEXT".toByteArray(Charsets.US_ASCII)),
-            output = output,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.Chunked,
+                input = ByteArrayInputStream("Z\r\nNEXT".toByteArray(Charsets.US_ASCII)),
+                output = output,
+            )
 
         assertEquals(
             HttpBodyStreamCopyResult.MalformedChunk(
@@ -161,12 +170,13 @@ class HttpBodyFramingStreamCopierTest {
     @Test
     fun `response chunked framing forwards chunk header and trailer limits`() {
         val oversizedChunkHeaderOutput = ByteArrayOutputStream()
-        val oversizedChunkHeader = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.Chunked,
-            input = ByteArrayInputStream("5;long=value\r\nhello\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-            output = oversizedChunkHeaderOutput,
-            maxChunkHeaderBytes = 4,
-        )
+        val oversizedChunkHeader =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.Chunked,
+                input = ByteArrayInputStream("5;long=value\r\nhello\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                output = oversizedChunkHeaderOutput,
+                maxChunkHeaderBytes = 4,
+            )
 
         assertEquals(
             HttpBodyStreamCopyResult.MalformedChunk(
@@ -178,12 +188,13 @@ class HttpBodyFramingStreamCopierTest {
         assertContentEquals(ByteArray(0), oversizedChunkHeaderOutput.toByteArray())
 
         val oversizedTrailerOutput = ByteArrayOutputStream()
-        val oversizedTrailer = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.Chunked,
-            input = ByteArrayInputStream("0\r\nX-Test: value\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-            output = oversizedTrailerOutput,
-            maxTrailerBytes = 4,
-        )
+        val oversizedTrailer =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.Chunked,
+                input = ByteArrayInputStream("0\r\nX-Test: value\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                output = oversizedTrailerOutput,
+                maxTrailerBytes = 4,
+            )
 
         assertEquals(
             HttpBodyStreamCopyResult.MalformedChunk(
@@ -200,12 +211,13 @@ class HttpBodyFramingStreamCopierTest {
         val body = byteArrayOf(0, 1, 2, 127, (-1).toByte())
         val output = ByteArrayOutputStream()
 
-        val result = HttpBodyFramingStreamCopier.copyResponseBody(
-            framing = HttpResponseBodyFraming.CloseDelimited,
-            input = ByteArrayInputStream(body),
-            output = output,
-            bufferSize = 2,
-        )
+        val result =
+            HttpBodyFramingStreamCopier.copyResponseBody(
+                framing = HttpResponseBodyFraming.CloseDelimited,
+                input = ByteArrayInputStream(body),
+                output = output,
+                bufferSize = 2,
+            )
 
         assertEquals(HttpBodyStreamCopyResult.Completed(bytesCopied = body.size.toLong()), result)
         assertContentEquals(body, output.toByteArray())

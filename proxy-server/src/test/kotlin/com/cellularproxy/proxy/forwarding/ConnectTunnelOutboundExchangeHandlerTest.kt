@@ -26,26 +26,30 @@ class ConnectTunnelOutboundExchangeHandlerTest {
         var clientOutputShutdowns = 0
         val originInput = CloseTrackingInputStream("origin response".toByteArray(Charsets.UTF_8))
         val originOutput = CloseTrackingOutputStream()
-        val originConnection = OutboundConnectTunnelConnection(
-            input = originInput,
-            output = originOutput,
-            host = "origin.example",
-            port = 443,
-        )
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Connected(originConnection),
-        )
+        val originConnection =
+            OutboundConnectTunnelConnection(
+                input = originInput,
+                output = originOutput,
+                host = "origin.example",
+                port = 443,
+            )
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Connected(originConnection),
+            )
 
-        val result = ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
-            accepted = accepted,
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-                shutdownInputAction = { clientInputShutdowns += 1 },
-                shutdownOutputAction = { clientOutputShutdowns += 1 },
-            ),
-            relayBufferSize = 4,
-        )
+        val result =
+            ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
+                accepted = accepted,
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                        shutdownInputAction = { clientInputShutdowns += 1 },
+                        shutdownOutputAction = { clientOutputShutdowns += 1 },
+                    ),
+                relayBufferSize = 4,
+            )
 
         assertEquals(listOf("origin.example" to 443), connector.openedOrigins)
         val relayed = assertIs<ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed>(result)
@@ -89,23 +93,27 @@ class ConnectTunnelOutboundExchangeHandlerTest {
         val clientInput = ThrowingReadInputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
-            accepted = accepted(
-                ParsedHttpRequest(
-                    request = ParsedProxyRequest.HttpProxy(
-                        method = "GET",
-                        host = "origin.example",
-                        port = 80,
-                        originTarget = "/",
+        val result =
+            ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
+                accepted =
+                    accepted(
+                        ParsedHttpRequest(
+                            request =
+                                ParsedProxyRequest.HttpProxy(
+                                    method = "GET",
+                                    host = "origin.example",
+                                    port = 80,
+                                    originTarget = "/",
+                                ),
+                            headers = emptyMap(),
+                        ),
                     ),
-                    headers = emptyMap(),
-                ),
-            ),
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-            ),
-        )
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                    ),
+            )
 
         assertEquals(
             ConnectTunnelOutboundExchangeRelayHandlingResult.UnsupportedAcceptedRequest(
@@ -118,19 +126,22 @@ class ConnectTunnelOutboundExchangeHandlerTest {
 
     @Test
     fun `separately callable relay path maps outbound open failures to sanitized proxy error responses`() {
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout),
-        )
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout),
+            )
         val clientInput = ThrowingReadInputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
-            accepted = accepted(connectRequest(host = "secret.example", port = 443)),
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-            ),
-        )
+        val result =
+            ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
+                accepted = accepted(connectRequest(host = "secret.example", port = 443)),
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                    ),
+            )
 
         val failed = assertIs<ConnectTunnelOutboundExchangeRelayHandlingResult.ConnectionFailed>(result)
         assertEquals(ProxyServerFailure.OutboundConnectionTimeout, failed.failure)
@@ -143,24 +154,26 @@ class ConnectTunnelOutboundExchangeHandlerTest {
     fun `separately callable relay path propagates established response write failure and closes opened origin`() {
         val originInput = CloseTrackingInputStream(ByteArray(0))
         val originOutput = CloseTrackingOutputStream()
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Connected(
-                OutboundConnectTunnelConnection(
-                    input = originInput,
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 443,
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Connected(
+                    OutboundConnectTunnelConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 ),
-            ),
-        )
+            )
 
         assertFailsWith<IOException> {
             ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
                 accepted = accepted(connectRequest()),
-                client = ConnectTunnelClientConnection(
-                    input = CloseTrackingInputStream(ByteArray(0)),
-                    output = ThrowingWriteOutputStream(),
-                ),
+                client =
+                    ConnectTunnelClientConnection(
+                        input = CloseTrackingInputStream(ByteArray(0)),
+                        output = ThrowingWriteOutputStream(),
+                    ),
             )
         }
 
@@ -176,10 +189,11 @@ class ConnectTunnelOutboundExchangeHandlerTest {
         assertFailsWith<IllegalArgumentException> {
             ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
                 accepted = accepted(connectRequest()),
-                client = ConnectTunnelClientConnection(
-                    input = CloseTrackingInputStream(ByteArray(0)),
-                    output = clientOutput,
-                ),
+                client =
+                    ConnectTunnelClientConnection(
+                        input = CloseTrackingInputStream(ByteArray(0)),
+                        output = clientOutput,
+                    ),
                 relayBufferSize = 0,
             )
         }
@@ -194,25 +208,28 @@ class ConnectTunnelOutboundExchangeHandlerTest {
         val clientOutput = CloseTrackingOutputStream()
         val originInput = ThrowingCloseTrackingInputStream()
         val originOutput = CloseTrackingOutputStream()
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Connected(
-                OutboundConnectTunnelConnection(
-                    input = originInput,
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 443,
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Connected(
+                    OutboundConnectTunnelConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
-            accepted = accepted,
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-            ),
-            relayBufferSize = 8,
-        )
+        val result =
+            ConnectTunnelOutboundExchangeHandler(connector).handleAndRelay(
+                accepted = accepted,
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                    ),
+                relayBufferSize = 8,
+            )
 
         val relayed = assertIs<ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed>(result)
         val relayResult = assertIs<ConnectTunnelBidirectionalRelayResult.Failed>(relayed.relayResult)
@@ -237,20 +254,23 @@ class ConnectTunnelOutboundExchangeHandlerTest {
         val clientOutput = ByteArrayOutputStream()
         val originInput = CloseTrackingInputStream(ByteArray(0))
         val originOutput = CloseTrackingOutputStream()
-        val originConnection = OutboundConnectTunnelConnection(
-            input = originInput,
-            output = originOutput,
-            host = "origin.example",
-            port = 443,
-        )
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Connected(originConnection),
-        )
+        val originConnection =
+            OutboundConnectTunnelConnection(
+                input = originInput,
+                output = originOutput,
+                host = "origin.example",
+                port = 443,
+            )
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Connected(originConnection),
+            )
 
-        val result = ConnectTunnelOutboundExchangeHandler(connector).handle(
-            accepted = accepted,
-            clientOutput = clientOutput,
-        )
+        val result =
+            ConnectTunnelOutboundExchangeHandler(connector).handle(
+                accepted = accepted,
+                clientOutput = clientOutput,
+            )
 
         assertEquals(listOf("origin.example" to 443), connector.openedOrigins)
         val established = assertIs<ConnectTunnelOutboundExchangeHandlingResult.Established>(result)
@@ -268,40 +288,47 @@ class ConnectTunnelOutboundExchangeHandlerTest {
 
     @Test
     fun `returns unsupported for non-connect accepted requests without opening origin or writing client output`() {
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.DnsResolutionFailed),
-        )
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.DnsResolutionFailed),
+            )
         val clientOutput = ByteArrayOutputStream()
 
-        val httpResult = ConnectTunnelOutboundExchangeHandler(connector).handle(
-            accepted = accepted(
-                ParsedHttpRequest(
-                    request = ParsedProxyRequest.HttpProxy(
-                        method = "GET",
-                        host = "origin.example",
-                        port = 80,
-                        originTarget = "/",
+        val httpResult =
+            ConnectTunnelOutboundExchangeHandler(connector).handle(
+                accepted =
+                    accepted(
+                        ParsedHttpRequest(
+                            request =
+                                ParsedProxyRequest.HttpProxy(
+                                    method = "GET",
+                                    host = "origin.example",
+                                    port = 80,
+                                    originTarget = "/",
+                                ),
+                            headers = emptyMap(),
+                        ),
                     ),
-                    headers = emptyMap(),
-                ),
-            ),
-            clientOutput = clientOutput,
-        )
+                clientOutput = clientOutput,
+            )
 
-        val managementResult = ConnectTunnelOutboundExchangeHandler(connector).handle(
-            accepted = accepted(
-                ParsedHttpRequest(
-                    request = ParsedProxyRequest.Management(
-                        method = HttpMethod.Get,
-                        originTarget = "/health",
-                        requiresToken = false,
-                        requiresAuditLog = false,
+        val managementResult =
+            ConnectTunnelOutboundExchangeHandler(connector).handle(
+                accepted =
+                    accepted(
+                        ParsedHttpRequest(
+                            request =
+                                ParsedProxyRequest.Management(
+                                    method = HttpMethod.Get,
+                                    originTarget = "/health",
+                                    requiresToken = false,
+                                    requiresAuditLog = false,
+                                ),
+                            headers = emptyMap(),
+                        ),
                     ),
-                    headers = emptyMap(),
-                ),
-            ),
-            clientOutput = clientOutput,
-        )
+                clientOutput = clientOutput,
+            )
 
         assertEquals(
             ConnectTunnelOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
@@ -316,15 +343,17 @@ class ConnectTunnelOutboundExchangeHandlerTest {
 
     @Test
     fun `maps outbound open failures to sanitized proxy error responses`() {
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout),
-        )
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout),
+            )
         val clientOutput = ByteArrayOutputStream()
 
-        val result = ConnectTunnelOutboundExchangeHandler(connector).handle(
-            accepted = accepted(connectRequest(host = "secret.example", port = 443)),
-            clientOutput = clientOutput,
-        )
+        val result =
+            ConnectTunnelOutboundExchangeHandler(connector).handle(
+                accepted = accepted(connectRequest(host = "secret.example", port = 443)),
+                clientOutput = clientOutput,
+            )
 
         val failed = assertIs<ConnectTunnelOutboundExchangeHandlingResult.ConnectionFailed>(result)
         assertEquals(ProxyServerFailure.OutboundConnectionTimeout, failed.failure)
@@ -357,16 +386,17 @@ class ConnectTunnelOutboundExchangeHandlerTest {
     fun `closes opened origin when writing established response fails`() {
         val originInput = CloseTrackingInputStream(ByteArray(0))
         val originOutput = CloseTrackingOutputStream()
-        val connector = RecordingConnectTunnelConnector(
-            OutboundConnectTunnelOpenResult.Connected(
-                OutboundConnectTunnelConnection(
-                    input = originInput,
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 443,
+        val connector =
+            RecordingConnectTunnelConnector(
+                OutboundConnectTunnelOpenResult.Connected(
+                    OutboundConnectTunnelConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 ),
-            ),
-        )
+            )
 
         assertFailsWith<IOException> {
             ConnectTunnelOutboundExchangeHandler(connector).handle(
@@ -395,12 +425,13 @@ class ConnectTunnelOutboundExchangeHandlerTest {
         }
         assertFailsWith<IllegalArgumentException> {
             ConnectTunnelOutboundExchangeHandlingResult.Established(
-                connection = OutboundConnectTunnelConnection(
-                    input = ByteArrayInputStream(ByteArray(0)),
-                    output = ByteArrayOutputStream(),
-                    host = "origin.example",
-                    port = 443,
-                ),
+                connection =
+                    OutboundConnectTunnelConnection(
+                        input = ByteArrayInputStream(ByteArray(0)),
+                        output = ByteArrayOutputStream(),
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 host = "origin.example",
                 port = 443,
                 responseBytesWritten = -1,
@@ -453,8 +484,7 @@ class ConnectTunnelOutboundExchangeHandlerTest {
     }
 
     private class FailingConnectTunnelConnector : OutboundConnectTunnelConnector {
-        override fun open(request: ParsedProxyRequest.ConnectTunnel): OutboundConnectTunnelOpenResult =
-            error("Origin must not be opened")
+        override fun open(request: ParsedProxyRequest.ConnectTunnel): OutboundConnectTunnelOpenResult = error("Origin must not be opened")
     }
 
     private class CloseTrackingInputStream(
@@ -467,8 +497,11 @@ class ConnectTunnelOutboundExchangeHandlerTest {
 
         override fun read(): Int = delegate.read()
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-            delegate.read(buffer, offset, length)
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = delegate.read(buffer, offset, length)
 
         override fun close() {
             wasClosed = true
@@ -487,36 +520,36 @@ class ConnectTunnelOutboundExchangeHandlerTest {
     }
 
     private class ThrowingWriteOutputStream : OutputStream() {
-        override fun write(value: Int) {
-            throw IOException("write failed")
-        }
+        override fun write(value: Int): Unit = throw IOException("write failed")
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
-            throw IOException("write failed")
-        }
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Unit = throw IOException("write failed")
     }
 
     private class ThrowingReadInputStream : InputStream() {
-        override fun read(): Int {
-            throw IOException("read failed")
-        }
+        override fun read(): Int = throw IOException("read failed")
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            throw IOException("read failed")
-        }
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = throw IOException("read failed")
     }
 
     private class ThrowingCloseTrackingInputStream : InputStream() {
         var wasClosed: Boolean = false
             private set
 
-        override fun read(): Int {
-            throw IOException("read failed")
-        }
+        override fun read(): Int = throw IOException("read failed")
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            throw IOException("read failed")
-        }
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = throw IOException("read failed")
 
         override fun close() {
             wasClosed = true

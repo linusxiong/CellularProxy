@@ -1,7 +1,7 @@
 package com.cellularproxy.shared.rotation
 
-import com.cellularproxy.shared.root.RootCommandOutcome
 import com.cellularproxy.shared.root.RootCommandCategory
+import com.cellularproxy.shared.root.RootCommandOutcome
 import com.cellularproxy.shared.root.RootCommandResult
 
 data class RotationStatus(
@@ -24,9 +24,10 @@ data class RotationStatus(
             RotationState.CheckingCooldown,
             RotationState.CheckingRoot,
             RotationState.ProbingOldPublicIp,
-            -> requireActiveMetadata(
-                oldPublicIpAllowed = false,
-            )
+            ->
+                requireActiveMetadata(
+                    oldPublicIpAllowed = false,
+                )
             RotationState.PausingNewRequests,
             RotationState.DrainingConnections,
             RotationState.RunningDisableCommand,
@@ -34,10 +35,11 @@ data class RotationStatus(
             RotationState.RunningEnableCommand,
             RotationState.WaitingForNetworkReturn,
             RotationState.ProbingNewPublicIp,
-            -> requireActiveMetadata(
-                oldPublicIpAllowed = true,
-                oldPublicIpRequired = true,
-            )
+            ->
+                requireActiveMetadata(
+                    oldPublicIpAllowed = true,
+                    oldPublicIpRequired = true,
+                )
             RotationState.Completed -> {
                 require(operation != null)
                 require(oldPublicIp != null)
@@ -51,7 +53,7 @@ data class RotationStatus(
                 require(publicIpChanged == null || oldPublicIp != null && newPublicIp != null)
                 require(
                     publicIpChanged == null ||
-                    publicIpChanged == (oldPublicIp != newPublicIp),
+                        publicIpChanged == (oldPublicIp != newPublicIp),
                 )
             }
             RotationState.ResumingProxyRequests -> {
@@ -125,25 +127,49 @@ enum class RotationFailureReason {
 }
 
 sealed interface RotationEvent {
-    data class StartRequested(val operation: RotationOperation) : RotationEvent
+    data class StartRequested(
+        val operation: RotationOperation,
+    ) : RotationEvent
+
     data object CooldownPassed : RotationEvent
+
     data object CooldownRejected : RotationEvent
+
     data object RootAvailable : RotationEvent
+
     data object RootUnavailable : RotationEvent
-    data class OldPublicIpProbeSucceeded(val publicIp: String) : RotationEvent
+
+    data class OldPublicIpProbeSucceeded(
+        val publicIp: String,
+    ) : RotationEvent
+
     data object OldPublicIpProbeFailed : RotationEvent
+
     data object NewRequestsPaused : RotationEvent
+
     data object ConnectionsDrained : RotationEvent
-    data class RootCommandCompleted(val result: RootCommandResult) : RotationEvent
-    data class RootCommandFailedToStart(val category: RootCommandCategory) : RotationEvent
+
+    data class RootCommandCompleted(
+        val result: RootCommandResult,
+    ) : RotationEvent
+
+    data class RootCommandFailedToStart(
+        val category: RootCommandCategory,
+    ) : RotationEvent
+
     data object ToggleDelayElapsed : RotationEvent
+
     data object NetworkReturned : RotationEvent
+
     data object NetworkReturnTimedOut : RotationEvent
+
     data class NewPublicIpProbeSucceeded(
         val publicIp: String,
         val strictIpChangeRequired: Boolean,
     ) : RotationEvent
+
     data object NewPublicIpProbeFailed : RotationEvent
+
     data object ProxyRequestsResumed : RotationEvent
 }
 
@@ -170,32 +196,34 @@ object RotationStateMachine {
         if (event is RotationEvent.StartRequested) {
             return when {
                 status.isActive -> duplicate(status)
-                else -> accepted(
-                    RotationStatus(
-                        state = RotationState.CheckingCooldown,
-                        operation = event.operation,
-                    ),
-                )
+                else ->
+                    accepted(
+                        RotationStatus(
+                            state = RotationState.CheckingCooldown,
+                            operation = event.operation,
+                        ),
+                    )
             }
         }
 
-        val next = when (status.state) {
-            RotationState.CheckingCooldown -> status.afterCooldown(event)
-            RotationState.CheckingRoot -> status.afterRootCheck(event)
-            RotationState.ProbingOldPublicIp -> status.afterOldIpProbe(event)
-            RotationState.PausingNewRequests -> status.afterNewRequestsPaused(event)
-            RotationState.DrainingConnections -> status.afterConnectionDrain(event)
-            RotationState.RunningDisableCommand -> status.afterDisableCommand(event)
-            RotationState.WaitingForToggleDelay -> status.afterToggleDelay(event)
-            RotationState.RunningEnableCommand -> status.afterEnableCommand(event)
-            RotationState.WaitingForNetworkReturn -> status.afterNetworkReturn(event)
-            RotationState.ProbingNewPublicIp -> status.afterNewIpProbe(event)
-            RotationState.ResumingProxyRequests -> status.afterProxyRequestsResumed(event)
-            RotationState.Idle,
-            RotationState.Completed,
-            RotationState.Failed,
-            -> null
-        }
+        val next =
+            when (status.state) {
+                RotationState.CheckingCooldown -> status.afterCooldown(event)
+                RotationState.CheckingRoot -> status.afterRootCheck(event)
+                RotationState.ProbingOldPublicIp -> status.afterOldIpProbe(event)
+                RotationState.PausingNewRequests -> status.afterNewRequestsPaused(event)
+                RotationState.DrainingConnections -> status.afterConnectionDrain(event)
+                RotationState.RunningDisableCommand -> status.afterDisableCommand(event)
+                RotationState.WaitingForToggleDelay -> status.afterToggleDelay(event)
+                RotationState.RunningEnableCommand -> status.afterEnableCommand(event)
+                RotationState.WaitingForNetworkReturn -> status.afterNetworkReturn(event)
+                RotationState.ProbingNewPublicIp -> status.afterNewIpProbe(event)
+                RotationState.ResumingProxyRequests -> status.afterProxyRequestsResumed(event)
+                RotationState.Idle,
+                RotationState.Completed,
+                RotationState.Failed,
+                -> null
+            }
 
         return if (next == null) ignored(status) else accepted(next)
     }
@@ -221,10 +249,11 @@ object RotationStateMachine {
 
     private fun RotationStatus.afterOldIpProbe(event: RotationEvent): RotationStatus? =
         when (event) {
-            is RotationEvent.OldPublicIpProbeSucceeded -> copy(
-                state = RotationState.PausingNewRequests,
-                oldPublicIp = event.publicIp,
-            )
+            is RotationEvent.OldPublicIpProbeSucceeded ->
+                copy(
+                    state = RotationState.PausingNewRequests,
+                    oldPublicIp = event.publicIp,
+                )
             RotationEvent.OldPublicIpProbeFailed ->
                 failed(RotationFailureReason.OldPublicIpProbeFailed)
             else -> null
@@ -306,10 +335,11 @@ object RotationStateMachine {
 
     private fun RotationStatus.afterNewIpProbe(event: RotationEvent): RotationStatus? =
         when (event) {
-            is RotationEvent.NewPublicIpProbeSucceeded -> completeWithNewIp(
-                publicIp = event.publicIp,
-                strictIpChangeRequired = event.strictIpChangeRequired,
-            )
+            is RotationEvent.NewPublicIpProbeSucceeded ->
+                completeWithNewIp(
+                    publicIp = event.publicIp,
+                    strictIpChangeRequired = event.strictIpChangeRequired,
+                )
             RotationEvent.NewPublicIpProbeFailed ->
                 resumingFailure(RotationFailureReason.NewPublicIpProbeFailed)
             else -> null
@@ -317,11 +347,12 @@ object RotationStateMachine {
 
     private fun RotationStatus.afterProxyRequestsResumed(event: RotationEvent): RotationStatus? =
         when (event) {
-            RotationEvent.ProxyRequestsResumed -> if (failureReason == null) {
-                copy(state = RotationState.Completed)
-            } else {
-                copy(state = RotationState.Failed)
-            }
+            RotationEvent.ProxyRequestsResumed ->
+                if (failureReason == null) {
+                    copy(state = RotationState.Completed)
+                } else {
+                    copy(state = RotationState.Failed)
+                }
             else -> null
         }
 
@@ -349,25 +380,27 @@ object RotationStateMachine {
         reason: RotationFailureReason,
         newPublicIp: String? = null,
         publicIpChanged: Boolean? = null,
-    ): RotationStatus = RotationStatus(
-        state = RotationState.Failed,
-        operation = requireNotNull(operation),
-        oldPublicIp = oldPublicIp,
-        newPublicIp = newPublicIp,
-        publicIpChanged = publicIpChanged,
-        failureReason = reason,
-    )
+    ): RotationStatus =
+        RotationStatus(
+            state = RotationState.Failed,
+            operation = requireNotNull(operation),
+            oldPublicIp = oldPublicIp,
+            newPublicIp = newPublicIp,
+            publicIpChanged = publicIpChanged,
+            failureReason = reason,
+        )
 
     private fun RotationStatus.resumingFailure(
         reason: RotationFailureReason,
         newPublicIp: String? = null,
         publicIpChanged: Boolean? = null,
-    ): RotationStatus = copy(
-        state = RotationState.ResumingProxyRequests,
-        newPublicIp = newPublicIp,
-        publicIpChanged = publicIpChanged,
-        failureReason = reason,
-    )
+    ): RotationStatus =
+        copy(
+            state = RotationState.ResumingProxyRequests,
+            newPublicIp = newPublicIp,
+            publicIpChanged = publicIpChanged,
+            failureReason = reason,
+        )
 
     private fun RotationStatus.disableCommandCategory() =
         when (operation) {
@@ -393,23 +426,26 @@ object RotationStateMachine {
         RotationTransitionResult(RotationTransitionDisposition.Ignored, status)
 }
 
-private val TERMINAL_STATES = setOf(
-    RotationState.Idle,
-    RotationState.Completed,
-    RotationState.Failed,
-)
+private val TERMINAL_STATES =
+    setOf(
+        RotationState.Idle,
+        RotationState.Completed,
+        RotationState.Failed,
+    )
 
-private val RESUMABLE_FAILURE_REASONS = setOf(
-    RotationFailureReason.RootCommandFailed,
-    RotationFailureReason.RootCommandTimedOut,
-    RotationFailureReason.NetworkReturnTimedOut,
-    RotationFailureReason.NewPublicIpProbeFailed,
-    RotationFailureReason.StrictIpChangeRequired,
-)
+private val RESUMABLE_FAILURE_REASONS =
+    setOf(
+        RotationFailureReason.RootCommandFailed,
+        RotationFailureReason.RootCommandTimedOut,
+        RotationFailureReason.NetworkReturnTimedOut,
+        RotationFailureReason.NewPublicIpProbeFailed,
+        RotationFailureReason.StrictIpChangeRequired,
+    )
 
-private val RESUMABLE_FAILURE_REASONS_WITHOUT_NEW_IP = setOf(
-    RotationFailureReason.RootCommandFailed,
-    RotationFailureReason.RootCommandTimedOut,
-    RotationFailureReason.NetworkReturnTimedOut,
-    RotationFailureReason.NewPublicIpProbeFailed,
-)
+private val RESUMABLE_FAILURE_REASONS_WITHOUT_NEW_IP =
+    setOf(
+        RotationFailureReason.RootCommandFailed,
+        RotationFailureReason.RootCommandTimedOut,
+        RotationFailureReason.NetworkReturnTimedOut,
+        RotationFailureReason.NewPublicIpProbeFailed,
+    )

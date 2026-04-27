@@ -16,8 +16,7 @@ data class ProxyRequestAdmissionConfig(
         require(managementApiToken.isNotBlank()) { "Management API token must not be blank" }
     }
 
-    override fun toString(): String =
-        "ProxyRequestAdmissionConfig(proxyAuthentication=[REDACTED], managementApiToken=[REDACTED])"
+    override fun toString(): String = "ProxyRequestAdmissionConfig(proxyAuthentication=[REDACTED], managementApiToken=[REDACTED])"
 }
 
 sealed interface ProxyRequestAdmissionDecision {
@@ -68,20 +67,22 @@ object ProxyRequestAdmissionPolicy {
         config: ProxyRequestAdmissionConfig,
         request: ParsedHttpRequest,
     ): ProxyRequestAdmissionDecision {
-        val proxyAuthorization = when (val header = request.headers.singleHeaderValue(PROXY_AUTHORIZATION_HEADER)) {
-            HeaderLookup.Duplicate -> {
-                return ProxyRequestAdmissionDecision.Rejected(
-                    ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
-                )
+        val proxyAuthorization =
+            when (val header = request.headers.singleHeaderValue(PROXY_AUTHORIZATION_HEADER)) {
+                HeaderLookup.Duplicate -> {
+                    return ProxyRequestAdmissionDecision.Rejected(
+                        ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
+                    )
+                }
+                HeaderLookup.Missing -> null
+                is HeaderLookup.Present -> header.value
             }
-            HeaderLookup.Missing -> null
-            is HeaderLookup.Present -> header.value
-        }
 
-        val authenticationDecision = ProxyAuthenticationPolicy.evaluate(
-            config = config.proxyAuthentication,
-            proxyAuthorization = proxyAuthorization,
-        )
+        val authenticationDecision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = config.proxyAuthentication,
+                proxyAuthorization = proxyAuthorization,
+            )
         return if (authenticationDecision.accepted) {
             accepted(
                 request = request.request,
@@ -102,12 +103,13 @@ object ProxyRequestAdmissionPolicy {
         request: ParsedProxyRequest.Management,
         headers: Map<String, List<String>>,
     ): ProxyRequestAdmissionDecision {
-        val authorization = when (val header = headers.singleHeaderValue(AUTHORIZATION_HEADER)) {
-            HeaderLookup.Duplicate ->
-                return rejectedManagement(ManagementAuthorizationRejectionReason.DuplicateAuthorizationHeader)
-            HeaderLookup.Missing -> null
-            is HeaderLookup.Present -> header.value.trim()
-        }
+        val authorization =
+            when (val header = headers.singleHeaderValue(AUTHORIZATION_HEADER)) {
+                HeaderLookup.Duplicate ->
+                    return rejectedManagement(ManagementAuthorizationRejectionReason.DuplicateAuthorizationHeader)
+                HeaderLookup.Missing -> null
+                is HeaderLookup.Present -> header.value.trim()
+            }
 
         if (!request.requiresToken) {
             return accepted(
@@ -149,9 +151,7 @@ object ProxyRequestAdmissionPolicy {
         }
     }
 
-    private fun rejectedManagement(
-        reason: ManagementAuthorizationRejectionReason,
-    ): ProxyRequestAdmissionDecision.Rejected =
+    private fun rejectedManagement(reason: ManagementAuthorizationRejectionReason): ProxyRequestAdmissionDecision.Rejected =
         ProxyRequestAdmissionDecision.Rejected(
             ProxyRequestAdmissionRejectionReason.ManagementAuthorization(reason),
         )
@@ -173,15 +173,20 @@ private data class AcceptedProxyRequestAdmissionDecision(
 
 private sealed interface HeaderLookup {
     data object Missing : HeaderLookup
+
     data object Duplicate : HeaderLookup
-    data class Present(val value: String) : HeaderLookup
+
+    data class Present(
+        val value: String,
+    ) : HeaderLookup
 }
 
 private fun Map<String, List<String>>.singleHeaderValue(name: String): HeaderLookup {
     val normalizedName = name.lowercase(Locale.US)
-    val values = entries
-        .filter { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }
-        .flatMap { (_, headerValues) -> headerValues }
+    val values =
+        entries
+            .filter { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }
+            .flatMap { (_, headerValues) -> headerValues }
 
     return when (values.size) {
         0 -> HeaderLookup.Missing
@@ -191,7 +196,10 @@ private fun Map<String, List<String>>.singleHeaderValue(name: String): HeaderLoo
 }
 
 internal object ConstantTimeSecret {
-    fun equalsUtf8(supplied: String, expected: String): Boolean {
+    fun equalsUtf8(
+        supplied: String,
+        expected: String,
+    ): Boolean {
         val suppliedBytes = supplied.toByteArray(Charsets.UTF_8)
         val expectedBytes = expected.toByteArray(Charsets.UTF_8)
         return MessageDigest.isEqual(suppliedBytes, expectedBytes)

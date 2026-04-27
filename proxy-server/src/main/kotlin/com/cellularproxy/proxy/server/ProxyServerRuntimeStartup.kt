@@ -50,11 +50,12 @@ object ProxyServerRuntimeStartup {
         require(backlog > 0) { "Server socket backlog must be positive" }
 
         return when (
-            val startup = ProxyServiceStartupPolicy.evaluate(
-                config = config,
-                managementApiTokenPresent = managementApiTokenPresent,
-                observedNetworks = observedNetworks,
-            )
+            val startup =
+                ProxyServiceStartupPolicy.evaluate(
+                    config = config,
+                    managementApiTokenPresent = managementApiTokenPresent,
+                    observedNetworks = observedNetworks,
+                )
         ) {
             is ProxyServiceStartupDecision.Failed ->
                 ProxyServerRuntimeStartupResult.Failed(
@@ -77,32 +78,35 @@ object ProxyServerRuntimeStartup {
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult,
     ): ProxyServerRuntimeStartupResult =
         when (
-            val bindResult = bindListener(
-                startup.listenHost,
-                startup.listenPort,
-                backlog,
-            )
+            val bindResult =
+                bindListener(
+                    startup.listenHost,
+                    startup.listenPort,
+                    backlog,
+                )
         ) {
             is ProxyServerSocketBindResult.Failed ->
                 ProxyServerRuntimeStartupResult.Failed(
                     startupError = bindResult.startupError,
-                    status = ProxyServiceStatus.failed(
-                        startupError = bindResult.startupError,
-                        configuredRoute = startup.configuredRoute,
-                    ),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = bindResult.startupError,
+                            configuredRoute = startup.configuredRoute,
+                        ),
                 )
 
             is ProxyServerSocketBindResult.Bound ->
                 ProxyServerRuntimeStartupResult.Started(
                     listener = bindResult.listener,
-                    status = ProxyServiceStatus.running(
-                        listenHost = bindResult.listener.listenHost,
-                        listenPort = bindResult.listener.listenPort,
-                        configuredRoute = startup.configuredRoute,
-                        boundRoute = startup.routeCandidates.first(),
-                        publicIp = null,
-                        hasHighSecurityRisk = startup.hasHighSecurityRisk,
-                    ),
+                    status =
+                        ProxyServiceStatus.running(
+                            listenHost = bindResult.listener.listenHost,
+                            listenPort = bindResult.listener.listenPort,
+                            configuredRoute = startup.configuredRoute,
+                            boundRoute = startup.routeCandidates.first(),
+                            publicIp = null,
+                            hasHighSecurityRisk = startup.hasHighSecurityRisk,
+                        ),
                 )
         }
 }

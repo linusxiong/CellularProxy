@@ -17,49 +17,63 @@ import kotlin.test.assertIs
 
 class ConnectTunnelEstablishmentRendererTest {
     private val credential = ProxyCredential(username = "proxy-user", password = "proxy-pass")
-    private val admissionConfig = ProxyRequestAdmissionConfig(
-        proxyAuthentication = ProxyAuthenticationConfig(
-            authEnabled = true,
-            credential = credential,
-        ),
-        managementApiToken = "management-token",
-    )
+    private val admissionConfig =
+        ProxyRequestAdmissionConfig(
+            proxyAuthentication =
+                ProxyAuthenticationConfig(
+                    authEnabled = true,
+                    credential = credential,
+                ),
+            managementApiToken = "management-token",
+        )
 
     @Test
     fun `renders admitted connect request as connection established response`() {
-        val request = ParsedHttpRequest(
-            request = ParsedProxyRequest.ConnectTunnel(
-                host = "example.com",
-                port = 443,
-            ),
-            headers = linkedMapOf(
-                "proxy-authorization" to listOf(validProxyAuthorization()),
-                "host" to listOf("example.com:443"),
-            ),
-        )
-        val accepted = assertIs<ProxyRequestAdmissionDecision.Accepted>(
-            ProxyRequestAdmissionPolicy.evaluate(admissionConfig, request),
-        )
+        val request =
+            ParsedHttpRequest(
+                request =
+                    ParsedProxyRequest.ConnectTunnel(
+                        host = "example.com",
+                        port = 443,
+                    ),
+                headers =
+                    linkedMapOf(
+                        "proxy-authorization" to listOf(validProxyAuthorization()),
+                        "host" to listOf("example.com:443"),
+                    ),
+            )
+        val accepted =
+            assertIs<ProxyRequestAdmissionDecision.Accepted>(
+                ProxyRequestAdmissionPolicy.evaluate(admissionConfig, request),
+            )
 
         val plan = ConnectTunnelEstablishmentRenderer.render(accepted)
 
         assertEquals("example.com", plan.host)
         assertEquals(443, plan.port)
         assertEquals("HTTP/1.1 200 Connection Established\r\n\r\n", plan.response.toHttpString())
-        assertEquals(plan.response.toHttpString().toByteArray(Charsets.UTF_8).toList(), plan.response.toByteArray().toList())
+        assertEquals(
+            plan.response
+                .toHttpString()
+                .toByteArray(Charsets.UTF_8)
+                .toList(),
+            plan.response.toByteArray().toList(),
+        )
     }
 
     @Test
     fun `preserves bracketed ipv6 connect targets`() {
-        val accepted = admitted(
-            ParsedHttpRequest(
-                request = ParsedProxyRequest.ConnectTunnel(
-                    host = "[2001:db8::1]",
-                    port = 8443,
+        val accepted =
+            admitted(
+                ParsedHttpRequest(
+                    request =
+                        ParsedProxyRequest.ConnectTunnel(
+                            host = "[2001:db8::1]",
+                            port = 8443,
+                        ),
+                    headers = mapOf("proxy-authorization" to listOf(validProxyAuthorization())),
                 ),
-                headers = mapOf("proxy-authorization" to listOf(validProxyAuthorization())),
-            ),
-        )
+            )
 
         val plan = ConnectTunnelEstablishmentRenderer.render(accepted)
 
@@ -74,12 +88,13 @@ class ConnectTunnelEstablishmentRendererTest {
             ConnectTunnelEstablishmentRenderer.render(
                 admitted(
                     ParsedHttpRequest(
-                        request = ParsedProxyRequest.HttpProxy(
-                            method = "GET",
-                            host = "example.com",
-                            port = 80,
-                            originTarget = "/",
-                        ),
+                        request =
+                            ParsedProxyRequest.HttpProxy(
+                                method = "GET",
+                                host = "example.com",
+                                port = 80,
+                                originTarget = "/",
+                            ),
                         headers = mapOf("proxy-authorization" to listOf(validProxyAuthorization())),
                     ),
                 ),
@@ -89,12 +104,13 @@ class ConnectTunnelEstablishmentRendererTest {
             ConnectTunnelEstablishmentRenderer.render(
                 admitted(
                     ParsedHttpRequest(
-                        request = ParsedProxyRequest.Management(
-                            method = HttpMethod.Get,
-                            originTarget = "/health",
-                            requiresToken = false,
-                            requiresAuditLog = false,
-                        ),
+                        request =
+                            ParsedProxyRequest.Management(
+                                method = HttpMethod.Get,
+                                originTarget = "/health",
+                                requiresToken = false,
+                                requiresAuditLog = false,
+                            ),
                         headers = emptyMap(),
                     ),
                 ),

@@ -19,9 +19,10 @@ class ForegroundServiceRuntimeCompositionOwnerTest {
     @Test
     fun `installIfNeeded installs once until owner is closed`() {
         val installations = mutableListOf<RecordingCloseable>()
-        val owner = ForegroundServiceRuntimeCompositionOwner {
-            RecordingCloseable().also(installations::add)
-        }
+        val owner =
+            ForegroundServiceRuntimeCompositionOwner {
+                RecordingCloseable().also(installations::add)
+            }
 
         val first = owner.installIfNeeded()
         val second = owner.installIfNeeded()
@@ -47,15 +48,16 @@ class ForegroundServiceRuntimeCompositionOwnerTest {
         val started = CountDownLatch(1)
         val registration = RecordingCloseable()
         val installedLifecycle = OwnerRecordingRuntimeLifecycle(events, started)
-        val owner = ForegroundServiceRuntimeCompositionOwner {
-            events += "owner:install"
-            ForegroundProxyRuntimeLifecycleInstaller.install(installedLifecycle).let {
-                Closeable {
-                    it.close()
-                    registration.close()
+        val owner =
+            ForegroundServiceRuntimeCompositionOwner {
+                events += "owner:install"
+                ForegroundProxyRuntimeLifecycleInstaller.install(installedLifecycle).let {
+                    Closeable {
+                        it.close()
+                        registration.close()
+                    }
                 }
             }
-        }
 
         try {
             ForegroundServiceCommandExecutor.execute(
@@ -75,11 +77,12 @@ class ForegroundServiceRuntimeCompositionOwnerTest {
 
     @Test
     fun `closeQuietly swallows cleanup failures and clears current installation`() {
-        val owner = ForegroundServiceRuntimeCompositionOwner {
-            Closeable {
-                throw IllegalStateException("close failed")
+        val owner =
+            ForegroundServiceRuntimeCompositionOwner {
+                Closeable {
+                    throw IllegalStateException("close failed")
+                }
             }
-        }
 
         owner.installIfNeeded()
 

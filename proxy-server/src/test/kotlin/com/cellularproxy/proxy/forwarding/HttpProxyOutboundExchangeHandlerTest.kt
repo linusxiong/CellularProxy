@@ -19,29 +19,32 @@ import kotlin.test.assertIs
 class HttpProxyOutboundExchangeHandlerTest {
     @Test
     fun `opens origin connection and preserves stream forwarder result`() {
-        val accepted = accepted(
-            httpProxyRequest(
-                method = "GET",
-                originTarget = "/resource",
-            ),
-        )
+        val accepted =
+            accepted(
+                httpProxyRequest(
+                    method = "GET",
+                    originTarget = "/resource",
+                ),
+            )
         val clientInput = ByteArrayInputStream("NEXT".toByteArray(Charsets.US_ASCII))
         val clientOutput = ByteArrayOutputStream()
         val originInputHeader = "HTTP/1.1 204 No Content\r\ncontent-length: 0\r\n\r\n"
         val originOutput = ByteArrayOutputStream()
-        val originConnection = OutboundHttpOriginConnection(
-            input = ByteArrayInputStream(originInputHeader.toByteArray(Charsets.US_ASCII)),
-            output = originOutput,
-            host = "origin.example",
-            port = 80,
-        )
+        val originConnection =
+            OutboundHttpOriginConnection(
+                input = ByteArrayInputStream(originInputHeader.toByteArray(Charsets.US_ASCII)),
+                output = originOutput,
+                host = "origin.example",
+                port = 80,
+            )
         val connector = RecordingConnector(OutboundHttpOriginOpenResult.Connected(originConnection))
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted,
-            clientInput = clientInput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted = accepted,
+                clientInput = clientInput,
+                clientOutput = clientOutput,
+            )
 
         assertEquals(listOf("origin.example" to 80), connector.openedOrigins)
         val forwarded = assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(result)
@@ -49,17 +52,19 @@ class HttpProxyOutboundExchangeHandlerTest {
             HttpProxyStreamExchangeForwardingResult.Forwarded(
                 host = "origin.example",
                 port = 80,
-                requestHeaderBytesWritten = (
-                    "GET /resource HTTP/1.1\r\n" +
-                        "host: origin.example\r\n" +
-                        "\r\n"
+                requestHeaderBytesWritten =
+                    (
+                        "GET /resource HTTP/1.1\r\n" +
+                            "host: origin.example\r\n" +
+                            "\r\n"
                     ).toByteArray(Charsets.UTF_8).size,
                 requestBodyBytesWritten = 0,
                 responseStatusCode = 204,
                 responseHeaderBytesRead = originInputHeader.toByteArray(Charsets.UTF_8).size,
-                responseHeaderBytesWritten = (
-                    "HTTP/1.1 204 No Content\r\n" +
-                        "\r\n"
+                responseHeaderBytesWritten =
+                    (
+                        "HTTP/1.1 204 No Content\r\n" +
+                            "\r\n"
                     ).toByteArray(Charsets.UTF_8).size,
                 responseBodyBytesWritten = 0,
                 mustCloseClientConnection = false,
@@ -85,22 +90,24 @@ class HttpProxyOutboundExchangeHandlerTest {
         val accepted = accepted(httpProxyRequest(method = "GET"))
         val originInput = CloseTrackingInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII))
         val originOutput = CloseTrackingOutputStream()
-        val connector = RecordingConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = originInput,
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 80,
+        val connector =
+            RecordingConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted,
-            clientInput = ByteArrayInputStream(ByteArray(0)),
-            clientOutput = ByteArrayOutputStream(),
-        )
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted = accepted,
+                clientInput = ByteArrayInputStream(ByteArray(0)),
+                clientOutput = ByteArrayOutputStream(),
+            )
 
         assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(result)
         assertEquals(true, originInput.wasClosed)
@@ -109,27 +116,30 @@ class HttpProxyOutboundExchangeHandlerTest {
 
     @Test
     fun `closes connected origin streams after exchange forwarding failure`() {
-        val accepted = accepted(
-            httpProxyRequest(headers = linkedMapOf("transfer-encoding" to listOf("chunked"))),
-        )
+        val accepted =
+            accepted(
+                httpProxyRequest(headers = linkedMapOf("transfer-encoding" to listOf("chunked"))),
+            )
         val originInput = CloseTrackingInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII))
         val originOutput = CloseTrackingOutputStream()
-        val connector = RecordingConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = originInput,
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 80,
+        val connector =
+            RecordingConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted,
-            clientInput = ByteArrayInputStream("0\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-            clientOutput = ByteArrayOutputStream(),
-        )
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted = accepted,
+                clientInput = ByteArrayInputStream("0\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                clientOutput = ByteArrayOutputStream(),
+            )
 
         val forwarded = assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(result)
         assertIs<HttpProxyStreamExchangeForwardingResult.RequestForwardingFailed>(forwarded.result)
@@ -142,44 +152,47 @@ class HttpProxyOutboundExchangeHandlerTest {
         val accepted = accepted(httpProxyRequest(method = "GET"))
         val originInput = CloseTrackingInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII))
         val originOutput = ThrowingCloseOutputStream()
-        val connector = RecordingConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = originInput,
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 80,
+        val connector =
+            RecordingConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted,
-            clientInput = ByteArrayInputStream(ByteArray(0)),
-            clientOutput = ByteArrayOutputStream(),
-        )
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted = accepted,
+                clientInput = ByteArrayInputStream(ByteArray(0)),
+                clientOutput = ByteArrayOutputStream(),
+            )
 
         assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(result)
         assertEquals(true, originInput.wasClosed)
         assertEquals(true, originOutput.wasClosed)
     }
 
-
     @Test
     fun `returns unsupported for accepted CONNECT without opening origin or writing client output`() {
         val connector = RecordingConnector(OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.DnsResolutionFailed))
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted(
-                ParsedHttpRequest(
-                    request = ParsedProxyRequest.ConnectTunnel("origin.example", 443),
-                    headers = emptyMap(),
-                ),
-            ),
-            clientInput = ByteArrayInputStream(ByteArray(0)),
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted =
+                    accepted(
+                        ParsedHttpRequest(
+                            request = ParsedProxyRequest.ConnectTunnel("origin.example", 443),
+                            headers = emptyMap(),
+                        ),
+                    ),
+                clientInput = ByteArrayInputStream(ByteArray(0)),
+                clientOutput = clientOutput,
+            )
 
         assertEquals(
             HttpProxyOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
@@ -196,21 +209,24 @@ class HttpProxyOutboundExchangeHandlerTest {
         val connector = RecordingConnector(OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.DnsResolutionFailed))
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted(
-                ParsedHttpRequest(
-                    request = ParsedProxyRequest.Management(
-                        method = HttpMethod.Get,
-                        originTarget = "/health",
-                        requiresToken = false,
-                        requiresAuditLog = false,
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted =
+                    accepted(
+                        ParsedHttpRequest(
+                            request =
+                                ParsedProxyRequest.Management(
+                                    method = HttpMethod.Get,
+                                    originTarget = "/health",
+                                    requiresToken = false,
+                                    requiresAuditLog = false,
+                                ),
+                            headers = emptyMap(),
+                        ),
                     ),
-                    headers = emptyMap(),
-                ),
-            ),
-            clientInput = ByteArrayInputStream(ByteArray(0)),
-            clientOutput = clientOutput,
-        )
+                clientInput = ByteArrayInputStream(ByteArray(0)),
+                clientOutput = clientOutput,
+            )
 
         assertEquals(
             HttpProxyOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
@@ -227,15 +243,17 @@ class HttpProxyOutboundExchangeHandlerTest {
         val accepted = accepted(httpProxyRequest(originTarget = "/secret?token=raw-secret"))
         val clientInput = ByteArrayInputStream("body".toByteArray(Charsets.US_ASCII))
         val clientOutput = ByteArrayOutputStream()
-        val connector = RecordingConnector(
-            OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.DnsResolutionFailed),
-        )
+        val connector =
+            RecordingConnector(
+                OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.DnsResolutionFailed),
+            )
 
-        val result = HttpProxyOutboundExchangeHandler(connector).handle(
-            accepted = accepted,
-            clientInput = clientInput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyOutboundExchangeHandler(connector).handle(
+                accepted = accepted,
+                clientInput = clientInput,
+                clientOutput = clientOutput,
+            )
 
         val failed = assertIs<HttpProxyOutboundExchangeHandlingResult.ConnectionFailed>(result)
         assertEquals(ProxyServerFailure.DnsResolutionFailed, failed.failure)
@@ -305,12 +323,13 @@ class HttpProxyOutboundExchangeHandlerTest {
         headers: Map<String, List<String>> = emptyMap(),
     ): ParsedHttpRequest =
         ParsedHttpRequest(
-            request = ParsedProxyRequest.HttpProxy(
-                method = method,
-                host = host,
-                port = port,
-                originTarget = originTarget,
-            ),
+            request =
+                ParsedProxyRequest.HttpProxy(
+                    method = method,
+                    host = host,
+                    port = port,
+                    originTarget = originTarget,
+                ),
             headers = headers,
         )
 
@@ -343,8 +362,11 @@ class HttpProxyOutboundExchangeHandlerTest {
 
         override fun read(): Int = delegate.read()
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-            delegate.read(buffer, offset, length)
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = delegate.read(buffer, offset, length)
 
         override fun close() {
             wasClosed = true
@@ -361,7 +383,11 @@ class HttpProxyOutboundExchangeHandlerTest {
             delegate.write(value)
         }
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ) {
             delegate.write(buffer, offset, length)
         }
 

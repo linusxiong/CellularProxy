@@ -7,10 +7,11 @@ import kotlin.test.assertEquals
 class HttpHeaderBlockStreamReaderTest {
     @Test
     fun `reads CRLF terminated header block without consuming following body bytes`() {
-        val input = ByteArrayInputStream(
-            "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\nbody"
-                .toByteArray(Charsets.US_ASCII),
-        )
+        val input =
+            ByteArrayInputStream(
+                "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\nbody"
+                    .toByteArray(Charsets.US_ASCII),
+            )
 
         val result = HttpHeaderBlockStreamReader.read(input)
 
@@ -26,9 +27,10 @@ class HttpHeaderBlockStreamReaderTest {
 
     @Test
     fun `reads LF terminated header block`() {
-        val input = ByteArrayInputStream(
-            "HTTP/1.1 200 OK\nContent-Length: 0\n\nNEXT".toByteArray(Charsets.US_ASCII),
-        )
+        val input =
+            ByteArrayInputStream(
+                "HTTP/1.1 200 OK\nContent-Length: 0\n\nNEXT".toByteArray(Charsets.US_ASCII),
+            )
 
         val result = HttpHeaderBlockStreamReader.read(input)
 
@@ -69,38 +71,39 @@ class HttpHeaderBlockStreamReaderTest {
 
     @Test
     fun `reports malformed header encoding instead of replacing invalid UTF-8 bytes`() {
-        val invalidUtf8HeaderBlock = byteArrayOf(
-            'G'.code.toByte(),
-            'E'.code.toByte(),
-            'T'.code.toByte(),
-            ' '.code.toByte(),
-            '/'.code.toByte(),
-            ' '.code.toByte(),
-            'H'.code.toByte(),
-            'T'.code.toByte(),
-            'T'.code.toByte(),
-            'P'.code.toByte(),
-            '/'.code.toByte(),
-            '1'.code.toByte(),
-            '.'.code.toByte(),
-            '1'.code.toByte(),
-            '\r'.code.toByte(),
-            '\n'.code.toByte(),
-            'X'.code.toByte(),
-            '-'.code.toByte(),
-            'N'.code.toByte(),
-            'a'.code.toByte(),
-            'm'.code.toByte(),
-            'e'.code.toByte(),
-            ':'.code.toByte(),
-            ' '.code.toByte(),
-            0xC3.toByte(),
-            0x28.toByte(),
-            '\r'.code.toByte(),
-            '\n'.code.toByte(),
-            '\r'.code.toByte(),
-            '\n'.code.toByte(),
-        )
+        val invalidUtf8HeaderBlock =
+            byteArrayOf(
+                'G'.code.toByte(),
+                'E'.code.toByte(),
+                'T'.code.toByte(),
+                ' '.code.toByte(),
+                '/'.code.toByte(),
+                ' '.code.toByte(),
+                'H'.code.toByte(),
+                'T'.code.toByte(),
+                'T'.code.toByte(),
+                'P'.code.toByte(),
+                '/'.code.toByte(),
+                '1'.code.toByte(),
+                '.'.code.toByte(),
+                '1'.code.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+                'X'.code.toByte(),
+                '-'.code.toByte(),
+                'N'.code.toByte(),
+                'a'.code.toByte(),
+                'm'.code.toByte(),
+                'e'.code.toByte(),
+                ':'.code.toByte(),
+                ' '.code.toByte(),
+                0xC3.toByte(),
+                0x28.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+            )
         val input = ByteArrayInputStream(invalidUtf8HeaderBlock + "NEXT".toByteArray(Charsets.US_ASCII))
 
         val result = HttpHeaderBlockStreamReader.read(input)

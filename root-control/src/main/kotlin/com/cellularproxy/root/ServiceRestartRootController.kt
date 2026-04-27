@@ -16,33 +16,35 @@ class ServiceRestartRootController(
         require(timeoutMillis > 0) { "Service restart root command timeout must be positive" }
 
         val command = RootShellCommands.serviceRestart(packageName)
-        val execution = try {
-            executor.execute(
-                command = command,
-                timeoutMillis = timeoutMillis,
-                secrets = secrets,
-            )
-        } catch (exception: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw exception
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (_: Exception) {
-            return ServiceRestartRootCommandResult(
-                packageName = packageName,
-                execution = null,
-                failureReason = ServiceRestartRootCommandFailure.ProcessExecutionFailed,
-            )
-        }
+        val execution =
+            try {
+                executor.execute(
+                    command = command,
+                    timeoutMillis = timeoutMillis,
+                    secrets = secrets,
+                )
+            } catch (exception: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw exception
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                return ServiceRestartRootCommandResult(
+                    packageName = packageName,
+                    execution = null,
+                    failureReason = ServiceRestartRootCommandFailure.ProcessExecutionFailed,
+                )
+            }
 
         return ServiceRestartRootCommandResult(
             packageName = packageName,
             execution = execution,
-            failureReason = when (execution.result.outcome) {
-                RootCommandOutcome.Success -> null
-                RootCommandOutcome.Failure -> ServiceRestartRootCommandFailure.CommandFailed
-                RootCommandOutcome.Timeout -> ServiceRestartRootCommandFailure.CommandTimedOut
-            },
+            failureReason =
+                when (execution.result.outcome) {
+                    RootCommandOutcome.Success -> null
+                    RootCommandOutcome.Failure -> ServiceRestartRootCommandFailure.CommandFailed
+                    RootCommandOutcome.Timeout -> ServiceRestartRootCommandFailure.CommandTimedOut
+                },
         )
     }
 }

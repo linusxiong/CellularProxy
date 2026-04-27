@@ -75,13 +75,14 @@ class ProxyServerForegroundRuntimeLifecycle(
 
             when (val result = startRuntime()) {
                 is ProxyServerRuntimeResult.Running -> {
-                    runningRuntimeRegistration = try {
-                        onRuntimeStarted(result.runtime)
-                    } catch (throwable: Throwable) {
-                        result.runtime.requestStop()
-                        result.runtime.awaitStopFailure()?.let(throwable::addSuppressed)
-                        throw throwable
-                    }
+                    runningRuntimeRegistration =
+                        try {
+                            onRuntimeStarted(result.runtime)
+                        } catch (throwable: Throwable) {
+                            result.runtime.requestStop()
+                            result.runtime.awaitStopFailure()?.let(throwable::addSuppressed)
+                            throw throwable
+                        }
                     runningRuntime = result.runtime
                 }
 
@@ -104,29 +105,31 @@ class ProxyServerForegroundRuntimeLifecycle(
     }
 
     override fun stopProxyRuntime() {
-        val stopRequest = synchronized(lock) {
-            check(!closed) { "Proxy foreground runtime lifecycle is closed" }
-            if (runningRuntime == null || stopInProgress) {
-                return
+        val stopRequest =
+            synchronized(lock) {
+                check(!closed) { "Proxy foreground runtime lifecycle is closed" }
+                if (runningRuntime == null || stopInProgress) {
+                    return
+                }
+                val latch = CountDownLatch(1)
+                stopCompletionLatch = latch
+                stopInProgress = true
+                lastStopFailure = null
+                lastStopWorkerFailure = null
+                StopRequest(runtime = runningRuntime!!, latch = latch)
             }
-            val latch = CountDownLatch(1)
-            stopCompletionLatch = latch
-            stopInProgress = true
-            lastStopFailure = null
-            lastStopWorkerFailure = null
-            StopRequest(runtime = runningRuntime!!, latch = latch)
-        }
 
         stopRequest.runtime.requestStop()
         try {
             stopExecutor.execute {
                 completeStopRequest(
                     stopRequest = stopRequest,
-                    failure = try {
-                        stopRequest.runtime.awaitStopFailure()
-                    } catch (throwable: Throwable) {
-                        ProxyServerForegroundRuntimeStopWorkerException(throwable)
-                    },
+                    failure =
+                        try {
+                            stopRequest.runtime.awaitStopFailure()
+                        } catch (throwable: Throwable) {
+                            ProxyServerForegroundRuntimeStopWorkerException(throwable)
+                        },
                 )
             }
         } catch (exception: RejectedExecutionException) {
@@ -191,12 +194,13 @@ class ProxyServerForegroundRuntimeLifecycle(
     }
 
     override fun close() {
-        val runtime = synchronized(lock) {
-            if (closed) {
-                return
+        val runtime =
+            synchronized(lock) {
+                if (closed) {
+                    return
+                }
+                runningRuntime
             }
-            runningRuntime
-        }
 
         var failure: Throwable? = null
         try {
@@ -207,11 +211,12 @@ class ProxyServerForegroundRuntimeLifecycle(
         } catch (throwable: Throwable) {
             failure = throwable
         } finally {
-            val registrationToClose = synchronized(lock) {
-                runningRuntimeRegistration.also {
-                    runningRuntimeRegistration = null
+            val registrationToClose =
+                synchronized(lock) {
+                    runningRuntimeRegistration.also {
+                        runningRuntimeRegistration = null
+                    }
                 }
-            }
             try {
                 registrationToClose?.close()
             } catch (throwable: Throwable) {
@@ -271,8 +276,7 @@ private data class StopRequest(
 private object ProxyRuntimeStopThreadFactory : ThreadFactory {
     private val threadIds = AtomicLong(0)
 
-    override fun newThread(command: Runnable): Thread =
-        Thread(command, "CellularProxyRuntimeStop-${threadIds.incrementAndGet()}")
+    override fun newThread(command: Runnable): Thread = Thread(command, "CellularProxyRuntimeStop-${threadIds.incrementAndGet()}")
 }
 
 private const val DEFAULT_STOP_TIMEOUT_MILLIS = 5_000L

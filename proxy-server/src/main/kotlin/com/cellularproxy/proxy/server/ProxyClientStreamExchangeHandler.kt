@@ -113,10 +113,11 @@ class ProxyClientStreamExchangeHandler(
 ) {
     private val httpHandler = HttpProxyOutboundExchangeHandler(httpConnector)
     private val connectHandler = ConnectTunnelOutboundExchangeHandler(connectConnector)
-    private val managementHandler = ManagementApiStreamExchangeHandler(
-        handler = managementHandler,
-        recordManagementAudit = recordManagementAudit,
-    )
+    private val managementHandler =
+        ManagementApiStreamExchangeHandler(
+            handler = managementHandler,
+            recordManagementAudit = recordManagementAudit,
+        )
 
     val activeProxyExchanges: Long
         get() = proxyActivityTracker.activeProxyExchanges
@@ -139,30 +140,34 @@ class ProxyClientStreamExchangeHandler(
             require(maxResponseTrailerBytes >= 0) { "Maximum response trailer bytes must be non-negative" }
             require(connectRelayBufferSize > 0) { "CONNECT relay buffer size must be positive" }
 
-            val preflight = ProxyIngressStreamPreflight.evaluate(
-                config = config,
-                activeConnections = activeConnections,
-                input = client.input,
-            )
+            val preflight =
+                ProxyIngressStreamPreflight.evaluate(
+                    config = config,
+                    activeConnections = activeConnections,
+                    input = client.input,
+                )
 
             return when (preflight) {
                 is ProxyIngressStreamPreflightDecision.Accepted -> {
                     client.clearReadTimeout()
-                    ProxyClientStreamExchangeMetrics.acceptedStartedEvents(preflight.headerBytesRead)
+                    ProxyClientStreamExchangeMetrics
+                        .acceptedStartedEvents(preflight.headerBytesRead)
                         .recordSafely(recordMetricEvent)
                     val proxyActivity = proxyActivityTracker.begin(preflight.request)
                     var completed = false
                     try {
-                        val result = handleAccepted(
-                            accepted = preflight,
-                            client = client,
-                            httpBufferSize = httpBufferSize,
-                            maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                            maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                            maxResponseTrailerBytes = maxResponseTrailerBytes,
-                            connectRelayBufferSize = connectRelayBufferSize,
-                        )
-                        ProxyClientStreamExchangeMetrics.acceptedCompletedEvents(result)
+                        val result =
+                            handleAccepted(
+                                accepted = preflight,
+                                client = client,
+                                httpBufferSize = httpBufferSize,
+                                maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                                maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                                maxResponseTrailerBytes = maxResponseTrailerBytes,
+                                connectRelayBufferSize = connectRelayBufferSize,
+                            )
+                        ProxyClientStreamExchangeMetrics
+                            .acceptedCompletedEvents(result)
                             .recordSafely(recordMetricEvent)
                         completed = true
                         result
@@ -178,7 +183,8 @@ class ProxyClientStreamExchangeHandler(
                         recordRejectedManagementAuditIfNeeded(preflight)
                         writePreflightRejection(preflight, client.output)
                             .also { rejected ->
-                                ProxyClientStreamExchangeMetrics.eventsFor(rejected)
+                                ProxyClientStreamExchangeMetrics
+                                    .eventsFor(rejected)
                                     .recordSafely(recordMetricEvent)
                             }
                     }
@@ -242,15 +248,16 @@ class ProxyClientStreamExchangeHandler(
         rejected: ProxyIngressStreamPreflightDecision.Rejected,
         clientOutput: OutputStream,
     ): ProxyClientStreamExchangeHandlingResult.PreflightRejected {
-        val bytesWritten = when (val response = rejected.response) {
-            is ProxyErrorResponseDecision.Emit -> {
-                val bytes = response.response.toByteArray()
-                clientOutput.write(bytes)
-                clientOutput.flush()
-                bytes.size
+        val bytesWritten =
+            when (val response = rejected.response) {
+                is ProxyErrorResponseDecision.Emit -> {
+                    val bytes = response.response.toByteArray()
+                    clientOutput.write(bytes)
+                    clientOutput.flush()
+                    bytes.size
+                }
+                ProxyErrorResponseDecision.Suppress -> 0
             }
-            ProxyErrorResponseDecision.Suppress -> 0
-        }
 
         return ProxyClientStreamExchangeHandlingResult.PreflightRejected(
             failure = rejected.failure,
@@ -264,10 +271,11 @@ class ProxyClientStreamExchangeHandler(
         if (!preflight.requiresAuditLog) {
             return
         }
-        val statusCode = when (val response = preflight.response) {
-            is ProxyErrorResponseDecision.Emit -> response.response.statusCode
-            ProxyErrorResponseDecision.Suppress -> return
-        }
+        val statusCode =
+            when (val response = preflight.response) {
+                is ProxyErrorResponseDecision.Emit -> response.response.statusCode
+                ProxyErrorResponseDecision.Suppress -> return
+            }
         recordManagementAuditSafely(
             ManagementApiStreamAuditEvent(
                 operation = null,

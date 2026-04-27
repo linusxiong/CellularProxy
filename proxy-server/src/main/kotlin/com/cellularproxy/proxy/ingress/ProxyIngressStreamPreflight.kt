@@ -46,10 +46,11 @@ object ProxyIngressStreamPreflight {
     ): ProxyIngressStreamPreflightDecision {
         if (!config.proxyRequestsPaused) {
             when (
-                val decision = ConnectionLimitAdmissionPolicy.evaluate(
-                    config = config.connectionLimit,
-                    activeConnections = activeConnections,
-                )
+                val decision =
+                    ConnectionLimitAdmissionPolicy.evaluate(
+                        config = config.connectionLimit,
+                        activeConnections = activeConnections,
+                    )
             ) {
                 is ConnectionLimitAdmissionDecision.Accepted -> Unit
                 is ConnectionLimitAdmissionDecision.Rejected -> {
@@ -64,18 +65,19 @@ object ProxyIngressStreamPreflight {
         }
 
         val countingInput = HeaderCountingInputStream(input)
-        val readResult = try {
-            HttpHeaderBlockStreamReader.read(
-                input = countingInput,
-                maxHeaderBytes = config.maxHeaderBytes,
-            )
-        } catch (_: SocketTimeoutException) {
-            return rejected(
-                failure = ProxyServerFailure.IdleTimeout,
-                requiresAuditLog = false,
-                headerBytesRead = countingInput.bytesRead,
-            )
-        }
+        val readResult =
+            try {
+                HttpHeaderBlockStreamReader.read(
+                    input = countingInput,
+                    maxHeaderBytes = config.maxHeaderBytes,
+                )
+            } catch (_: SocketTimeoutException) {
+                return rejected(
+                    failure = ProxyServerFailure.IdleTimeout,
+                    requiresAuditLog = false,
+                    headerBytesRead = countingInput.bytesRead,
+                )
+            }
 
         return when (readResult) {
             is HttpHeaderBlockStreamReadResult.Completed ->
@@ -87,25 +89,28 @@ object ProxyIngressStreamPreflight {
                 )
             is HttpHeaderBlockStreamReadResult.Incomplete ->
                 rejected(
-                    failure = ProxyServerFailure.HeaderBlockParse(
-                        reason = HttpRequestHeaderBlockRejectionReason.IncompleteHeaderBlock,
-                    ),
+                    failure =
+                        ProxyServerFailure.HeaderBlockParse(
+                            reason = HttpRequestHeaderBlockRejectionReason.IncompleteHeaderBlock,
+                        ),
                     requiresAuditLog = false,
                     headerBytesRead = readResult.bytesRead,
                 )
             is HttpHeaderBlockStreamReadResult.HeaderBlockTooLarge ->
                 rejected(
-                    failure = ProxyServerFailure.HeaderBlockParse(
-                        reason = HttpRequestHeaderBlockRejectionReason.HeaderBlockTooLarge,
-                    ),
+                    failure =
+                        ProxyServerFailure.HeaderBlockParse(
+                            reason = HttpRequestHeaderBlockRejectionReason.HeaderBlockTooLarge,
+                        ),
                     requiresAuditLog = false,
                     headerBytesRead = readResult.bytesRead,
                 )
             is HttpHeaderBlockStreamReadResult.MalformedHeaderEncoding ->
                 rejected(
-                    failure = ProxyServerFailure.HeaderBlockParse(
-                        reason = HttpRequestHeaderBlockRejectionReason.MalformedHeaderEncoding,
-                    ),
+                    failure =
+                        ProxyServerFailure.HeaderBlockParse(
+                            reason = HttpRequestHeaderBlockRejectionReason.MalformedHeaderEncoding,
+                        ),
                     requiresAuditLog = false,
                     headerBytesRead = readResult.bytesRead,
                 )
@@ -119,11 +124,12 @@ object ProxyIngressStreamPreflight {
         headerBytesRead: Int,
     ): ProxyIngressStreamPreflightDecision =
         when (
-            val decision = ProxyIngressPreflight.evaluate(
-                config = config,
-                activeConnections = activeConnections,
-                headerBlock = headerBlock,
-            )
+            val decision =
+                ProxyIngressPreflight.evaluate(
+                    config = config,
+                    activeConnections = activeConnections,
+                    headerBlock = headerBlock,
+                )
         ) {
             is ProxyIngressPreflightDecision.Accepted ->
                 ProxyIngressStreamPreflightDecision.Accepted(

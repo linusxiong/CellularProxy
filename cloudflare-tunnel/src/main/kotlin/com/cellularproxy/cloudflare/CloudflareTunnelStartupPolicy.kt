@@ -33,8 +33,7 @@ sealed interface CloudflareTunnelStartupDecision {
     class Ready(
         val credentials: CloudflareTunnelCredentials,
     ) : CloudflareTunnelStartupDecision {
-        override fun toString(): String =
-            "CloudflareTunnelStartupDecision.Ready(credentials=<redacted>)"
+        override fun toString(): String = "CloudflareTunnelStartupDecision.Ready(credentials=<redacted>)"
     }
 
     data class Failed(

@@ -64,10 +64,11 @@ object ProxyServiceStartupPolicy {
             )
         }
 
-        val routeCandidates = RouteSelector.candidatesFor(
-            target = config.network.defaultRoutePolicy,
-            networks = observedNetworks,
-        )
+        val routeCandidates =
+            RouteSelector.candidatesFor(
+                target = config.network.defaultRoutePolicy,
+                networks = observedNetworks,
+            )
         if (routeCandidates.isEmpty()) {
             return failed(
                 startupError = ProxyStartupError.UnavailableSelectedRoute,
@@ -90,10 +91,11 @@ object ProxyServiceStartupPolicy {
     ): ProxyServiceStartupDecision.Failed =
         ProxyServiceStartupDecision.Failed(
             startupError = startupError,
-            status = ProxyServiceStatus.failed(
-                startupError = startupError,
-                configuredRoute = configuredRoute,
-            ),
+            status =
+                ProxyServiceStatus.failed(
+                    startupError = startupError,
+                    configuredRoute = configuredRoute,
+                ),
         )
 }
 

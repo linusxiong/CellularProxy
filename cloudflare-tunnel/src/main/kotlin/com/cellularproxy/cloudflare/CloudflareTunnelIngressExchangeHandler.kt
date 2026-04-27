@@ -25,8 +25,7 @@ class CloudflareLocalManagementRequest(
     val body: ByteArray
         get() = bodyBytes.copyOf()
 
-    override fun toString(): String =
-        "CloudflareLocalManagementRequest(method=$method, originTarget=<redacted>)"
+    override fun toString(): String = "CloudflareLocalManagementRequest(method=$method, originTarget=<redacted>)"
 }
 
 sealed interface CloudflareTunnelIngressResult {
@@ -35,15 +34,13 @@ sealed interface CloudflareTunnelIngressResult {
     class Forwarded(
         override val response: CloudflareTunnelResponse,
     ) : CloudflareTunnelIngressResult {
-        override fun toString(): String =
-            "Forwarded(statusCode=${response.statusCode})"
+        override fun toString(): String = "Forwarded(statusCode=${response.statusCode})"
     }
 
     class Rejected(
         override val response: CloudflareTunnelResponse,
     ) : CloudflareTunnelIngressResult {
-        override fun toString(): String =
-            "Rejected(statusCode=${response.statusCode})"
+        override fun toString(): String = "Rejected(statusCode=${response.statusCode})"
     }
 }
 
@@ -85,35 +82,38 @@ class CloudflareTunnelResponse(
         }
     }
 
-    override fun toString(): String =
-        "CloudflareTunnelResponse(statusCode=$statusCode)"
+    override fun toString(): String = "CloudflareTunnelResponse(statusCode=$statusCode)"
 
-    fun toHttpString(): String = buildString {
-        append("HTTP/1.1 ")
-        append(statusCode)
-        append(' ')
-        append(reasonPhrase)
-        append(CRLF)
-        headers.forEach { (name, value) ->
-            append(name)
-            append(": ")
-            append(value)
+    fun toHttpString(): String =
+        buildString {
+            append("HTTP/1.1 ")
+            append(statusCode)
+            append(' ')
+            append(reasonPhrase)
             append(CRLF)
+            headers.forEach { (name, value) ->
+                append(name)
+                append(": ")
+                append(value)
+                append(CRLF)
+            }
+            append(CRLF)
+            append(body)
         }
-        append(CRLF)
-        append(body)
-    }
 
-    fun toByteArray(): ByteArray =
-        toHttpString().toByteArray(Charsets.UTF_8)
+    fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
 
     companion object {
-        fun json(statusCode: Int, body: String): CloudflareTunnelResponse {
-            val headers = linkedMapOf(
-                "Content-Type" to "application/json; charset=utf-8",
-                "Content-Length" to body.toByteArray(Charsets.UTF_8).size.toString(),
-                "Cache-Control" to "no-store",
-            )
+        fun json(
+            statusCode: Int,
+            body: String,
+        ): CloudflareTunnelResponse {
+            val headers =
+                linkedMapOf(
+                    "Content-Type" to "application/json; charset=utf-8",
+                    "Content-Length" to body.toByteArray(Charsets.UTF_8).size.toString(),
+                    "Cache-Control" to "no-store",
+                )
 
             return CloudflareTunnelResponse(
                 statusCode = statusCode,
@@ -127,10 +127,11 @@ class CloudflareTunnelResponse(
             CloudflareTunnelResponse(
                 statusCode = statusCode,
                 reasonPhrase = reasonPhraseFor(statusCode),
-                headers = linkedMapOf(
-                    "Content-Length" to "0",
-                    "Cache-Control" to "no-store",
-                ),
+                headers =
+                    linkedMapOf(
+                        "Content-Length" to "0",
+                        "Cache-Control" to "no-store",
+                    ),
                 body = "",
             )
     }
@@ -180,7 +181,10 @@ object CloudflareTunnelIngressExchangeHandler {
 }
 
 private fun forbiddenResponse(): CloudflareTunnelResponse =
-    CloudflareTunnelResponse.json(statusCode = 403, body = """{"error":"forbidden"}""")
+    CloudflareTunnelResponse.json(
+        statusCode = 403,
+        body = """{"error":"forbidden"}""",
+    )
 
 private fun String.toManagementIngressRequest(method: HttpMethod): ManagementIngressRequest =
     when {
@@ -190,16 +194,14 @@ private fun String.toManagementIngressRequest(method: HttpMethod): ManagementIng
         else -> ManagementIngressRequest.OriginForm(method = method, path = this)
     }
 
-private fun String.isExplicitProxyForm(): Boolean =
-    contains("://")
+private fun String.isExplicitProxyForm(): Boolean = contains("://")
 
 private fun String.isOriginFormTarget(): Boolean =
     startsWith("/") &&
         none { it.isUnsafeOriginTargetCharacter() } &&
         !contains('#')
 
-private fun Char.isUnsafeOriginTargetCharacter(): Boolean =
-    isWhitespace() || isUnsafeHttpHeaderCharacter()
+private fun Char.isUnsafeOriginTargetCharacter(): Boolean = isWhitespace() || isUnsafeHttpHeaderCharacter()
 
 private fun Map<String, List<String>>.toDefensiveHeaders(): Map<String, List<String>> =
     Collections.unmodifiableMap(
@@ -210,19 +212,16 @@ private fun Map<String, List<String>>.toDefensiveHeaders(): Map<String, List<Str
         },
     )
 
-private fun String.isHttpToken(): Boolean =
-    isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-private fun Map<String, String>.containsHeader(name: String): Boolean =
-    headerValue(name) != null
+private fun Map<String, String>.containsHeader(name: String): Boolean = headerValue(name) != null
 
 private fun Map<String, String>.headerValue(name: String): String? {
     val normalizedName = name.lowercase(Locale.US)
     return entries.singleOrNull { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }?.value
 }
 
-private fun Char.isUnsafeHttpHeaderCharacter(): Boolean =
-    code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+private fun Char.isUnsafeHttpHeaderCharacter(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 
 private fun reasonPhraseFor(statusCode: Int): String =
     when (statusCode) {
@@ -242,9 +241,10 @@ private const val TRANSFER_ENCODING_HEADER = "Transfer-Encoding"
 private const val CRLF = "\r\n"
 private const val DELETE_CONTROL_CHAR = 0x7F
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).toSet()
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).toSet()

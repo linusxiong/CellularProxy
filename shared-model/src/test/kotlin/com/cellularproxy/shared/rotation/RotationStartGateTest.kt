@@ -12,16 +12,18 @@ class RotationStartGateTest {
     fun `accepted start with no prior terminal rotation advances past cooldown gate`() {
         val session = RotationSessionController()
         val terminalTimestamps = TerminalRotationTimestampTracker()
-        val gate = RotationStartGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val gate =
+            RotationStartGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.requestStart(
-            operation = RotationOperation.MobileData,
-            nowElapsedMillis = 10_000,
-            cooldown = 180.seconds,
-        )
+        val result =
+            gate.requestStart(
+                operation = RotationOperation.MobileData,
+                nowElapsedMillis = 10_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.startTransition.disposition)
         assertEquals(RotationState.CheckingCooldown, result.startTransition.status.state)
@@ -43,19 +45,22 @@ class RotationStartGateTest {
     @Test
     fun `accepted start rejected by cooldown fails session without extending cooldown`() {
         val session = RotationSessionController()
-        val terminalTimestamps = TerminalRotationTimestampTracker(
-            initialLastTerminalElapsedMillis = 1_000,
-        )
-        val gate = RotationStartGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val terminalTimestamps =
+            TerminalRotationTimestampTracker(
+                initialLastTerminalElapsedMillis = 1_000,
+            )
+        val gate =
+            RotationStartGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.requestStart(
-            operation = RotationOperation.AirplaneMode,
-            nowElapsedMillis = 121_000,
-            cooldown = 180.seconds,
-        )
+        val result =
+            gate.requestStart(
+                operation = RotationOperation.AirplaneMode,
+                nowElapsedMillis = 121_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.startTransition.disposition)
         assertEquals(
@@ -80,19 +85,22 @@ class RotationStartGateTest {
     fun `duplicate active start does not evaluate or apply cooldown`() {
         val session = RotationSessionController()
         val active = session.requestStart(RotationOperation.MobileData).status
-        val terminalTimestamps = TerminalRotationTimestampTracker(
-            initialLastTerminalElapsedMillis = 1_000,
-        )
-        val gate = RotationStartGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val terminalTimestamps =
+            TerminalRotationTimestampTracker(
+                initialLastTerminalElapsedMillis = 1_000,
+            )
+        val gate =
+            RotationStartGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.requestStart(
-            operation = RotationOperation.AirplaneMode,
-            nowElapsedMillis = 181_000,
-            cooldown = 180.seconds,
-        )
+        val result =
+            gate.requestStart(
+                operation = RotationOperation.AirplaneMode,
+                nowElapsedMillis = 181_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(RotationTransitionDisposition.Duplicate, result.startTransition.disposition)
         assertEquals(active, result.startTransition.status)
@@ -107,10 +115,11 @@ class RotationStartGateTest {
     @Test
     fun `invalid cooldown inputs are rejected before mutating idle session`() {
         val session = RotationSessionController()
-        val gate = RotationStartGate(
-            sessionController = session,
-            terminalTimestampTracker = TerminalRotationTimestampTracker(),
-        )
+        val gate =
+            RotationStartGate(
+                sessionController = session,
+                terminalTimestampTracker = TerminalRotationTimestampTracker(),
+            )
 
         assertFailsWith<IllegalArgumentException> {
             gate.requestStart(

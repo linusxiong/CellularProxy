@@ -1,7 +1,7 @@
 package com.cellularproxy.app.config
 
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -39,7 +39,10 @@ object PlainConfigPreferencesMapper {
             replacePreferences(preferences, config)
         }
 
-    fun replacePreferences(preferences: MutablePreferences, config: AppConfig) {
+    fun replacePreferences(
+        preferences: MutablePreferences,
+        config: AppConfig,
+    ) {
         preferences.clear()
         preferences.putAll(
             PlainConfigPreferenceKeys.proxyListenHost to config.proxy.listenHost,
@@ -64,52 +67,69 @@ object PlainConfigPreferencesMapper {
         val defaults = AppConfig.default()
 
         return AppConfig(
-            proxy = ProxyConfig(
-                listenHost = preferences[PlainConfigPreferenceKeys.proxyListenHost]
-                    ?.takeIf { it.isSupportedListenHost() }
-                    ?: defaults.proxy.listenHost,
-                listenPort = preferences[PlainConfigPreferenceKeys.proxyListenPort]
-                    ?.takeIf { it in TCP_PORT_RANGE }
-                    ?: defaults.proxy.listenPort,
-                authEnabled = preferences[PlainConfigPreferenceKeys.proxyAuthEnabled]
-                    ?: defaults.proxy.authEnabled,
-                maxConcurrentConnections = preferences[PlainConfigPreferenceKeys.proxyMaxConcurrentConnections]
-                    ?.takeIf { it > 0 }
-                    ?: defaults.proxy.maxConcurrentConnections,
-            ),
-            network = NetworkConfig(
-                defaultRoutePolicy = preferences[PlainConfigPreferenceKeys.defaultRoutePolicy]
-                    ?.toRouteTargetOrNull()
-                    ?: defaults.network.defaultRoutePolicy,
-            ),
-            rotation = RotationConfig(
-                strictIpChangeRequired = preferences[PlainConfigPreferenceKeys.strictIpChangeRequired]
-                    ?: defaults.rotation.strictIpChangeRequired,
-                mobileDataOffDelay = preferences[PlainConfigPreferenceKeys.mobileDataOffDelay]
-                    .toPositiveDurationOrDefault(defaults.rotation.mobileDataOffDelay),
-                networkReturnTimeout = preferences[PlainConfigPreferenceKeys.networkReturnTimeout]
-                    .toPositiveDurationOrDefault(defaults.rotation.networkReturnTimeout),
-                cooldown = preferences[PlainConfigPreferenceKeys.cooldown]
-                    .toPositiveDurationOrDefault(defaults.rotation.cooldown),
-            ),
-            root = RootConfig(
-                operationsEnabled = preferences[PlainConfigPreferenceKeys.rootOperationsEnabled]
-                    ?: defaults.root.operationsEnabled,
-            ),
-            cloudflare = CloudflareConfig(
-                enabled = preferences[PlainConfigPreferenceKeys.cloudflareEnabled]
-                    ?: defaults.cloudflare.enabled,
-                tunnelTokenPresent = preferences[PlainConfigPreferenceKeys.cloudflareTunnelTokenPresent]
-                    ?: defaults.cloudflare.tunnelTokenPresent,
-                managementHostnameLabel = preferences[PlainConfigPreferenceKeys.cloudflareManagementHostnameLabel]
-                    ?: defaults.cloudflare.managementHostnameLabel,
-            ),
+            proxy =
+                ProxyConfig(
+                    listenHost =
+                        preferences[PlainConfigPreferenceKeys.proxyListenHost]
+                            ?.takeIf { it.isSupportedListenHost() }
+                            ?: defaults.proxy.listenHost,
+                    listenPort =
+                        preferences[PlainConfigPreferenceKeys.proxyListenPort]
+                            ?.takeIf { it in TCP_PORT_RANGE }
+                            ?: defaults.proxy.listenPort,
+                    authEnabled =
+                        preferences[PlainConfigPreferenceKeys.proxyAuthEnabled]
+                            ?: defaults.proxy.authEnabled,
+                    maxConcurrentConnections =
+                        preferences[PlainConfigPreferenceKeys.proxyMaxConcurrentConnections]
+                            ?.takeIf { it > 0 }
+                            ?: defaults.proxy.maxConcurrentConnections,
+                ),
+            network =
+                NetworkConfig(
+                    defaultRoutePolicy =
+                        preferences[PlainConfigPreferenceKeys.defaultRoutePolicy]
+                            ?.toRouteTargetOrNull()
+                            ?: defaults.network.defaultRoutePolicy,
+                ),
+            rotation =
+                RotationConfig(
+                    strictIpChangeRequired =
+                        preferences[PlainConfigPreferenceKeys.strictIpChangeRequired]
+                            ?: defaults.rotation.strictIpChangeRequired,
+                    mobileDataOffDelay =
+                        preferences[PlainConfigPreferenceKeys.mobileDataOffDelay]
+                            .toPositiveDurationOrDefault(defaults.rotation.mobileDataOffDelay),
+                    networkReturnTimeout =
+                        preferences[PlainConfigPreferenceKeys.networkReturnTimeout]
+                            .toPositiveDurationOrDefault(defaults.rotation.networkReturnTimeout),
+                    cooldown =
+                        preferences[PlainConfigPreferenceKeys.cooldown]
+                            .toPositiveDurationOrDefault(defaults.rotation.cooldown),
+                ),
+            root =
+                RootConfig(
+                    operationsEnabled =
+                        preferences[PlainConfigPreferenceKeys.rootOperationsEnabled]
+                            ?: defaults.root.operationsEnabled,
+                ),
+            cloudflare =
+                CloudflareConfig(
+                    enabled =
+                        preferences[PlainConfigPreferenceKeys.cloudflareEnabled]
+                            ?: defaults.cloudflare.enabled,
+                    tunnelTokenPresent =
+                        preferences[PlainConfigPreferenceKeys.cloudflareTunnelTokenPresent]
+                            ?: defaults.cloudflare.tunnelTokenPresent,
+                    managementHostnameLabel =
+                        preferences[PlainConfigPreferenceKeys.cloudflareManagementHostnameLabel]
+                            ?: defaults.cloudflare.managementHostnameLabel,
+                ),
         )
     }
 }
 
-private fun String.toRouteTargetOrNull(): RouteTarget? =
-    RouteTarget.entries.firstOrNull { it.name == this }
+private fun String.toRouteTargetOrNull(): RouteTarget? = RouteTarget.entries.firstOrNull { it.name == this }
 
 private fun Long?.toPositiveDurationOrDefault(default: Duration): Duration =
     this

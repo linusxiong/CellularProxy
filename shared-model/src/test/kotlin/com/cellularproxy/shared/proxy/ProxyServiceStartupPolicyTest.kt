@@ -16,18 +16,20 @@ class ProxyServiceStartupPolicyTest {
     fun `ready startup exposes listener route candidates and security risk`() {
         val wifi = NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", isAvailable = true)
         val unavailableCell = NetworkDescriptor("cell", NetworkCategory.Cellular, "Carrier", isAvailable = false)
-        val config = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(authEnabled = false),
-            network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.Automatic),
-        )
+        val config =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(authEnabled = false),
+                network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.Automatic),
+            )
 
-        val ready = assertIs<ProxyServiceStartupDecision.Ready>(
-            ProxyServiceStartupPolicy.evaluate(
-                config = config,
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(unavailableCell, wifi),
-            ),
-        )
+        val ready =
+            assertIs<ProxyServiceStartupDecision.Ready>(
+                ProxyServiceStartupPolicy.evaluate(
+                    config = config,
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(unavailableCell, wifi),
+                ),
+            )
 
         assertEquals("0.0.0.0", ready.listenHost)
         assertEquals(8080, ready.listenPort)
@@ -38,18 +40,22 @@ class ProxyServiceStartupPolicyTest {
 
     @Test
     fun `invalid config maps to structured startup errors before route checks`() {
-        val invalidHost = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(listenHost = "localhost"),
-        )
-        val invalidPort = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(listenPort = 0),
-        )
-        val invalidMaxConcurrentConnections = AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = 0),
-        )
-        val missingCloudflareToken = AppConfig.default().copy(
-            cloudflare = AppConfig.default().cloudflare.copy(enabled = true, tunnelTokenPresent = false),
-        )
+        val invalidHost =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(listenHost = "localhost"),
+            )
+        val invalidPort =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(listenPort = 0),
+            )
+        val invalidMaxConcurrentConnections =
+            AppConfig.default().copy(
+                proxy = AppConfig.default().proxy.copy(maxConcurrentConnections = 0),
+            )
+        val missingCloudflareToken =
+            AppConfig.default().copy(
+                cloudflare = AppConfig.default().cloudflare.copy(enabled = true, tunnelTokenPresent = false),
+            )
 
         assertStartupFailure(
             config = invalidHost,
@@ -71,18 +77,20 @@ class ProxyServiceStartupPolicyTest {
 
     @Test
     fun `missing management token fails before route checks`() {
-        val config = AppConfig.default().copy(
-            network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.Cellular),
-        )
+        val config =
+            AppConfig.default().copy(
+                network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.Cellular),
+            )
         val wifi = NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", isAvailable = true)
 
-        val failed = assertIs<ProxyServiceStartupDecision.Failed>(
-            ProxyServiceStartupPolicy.evaluate(
-                config = config,
-                managementApiTokenPresent = false,
-                observedNetworks = listOf(wifi),
-            ),
-        )
+        val failed =
+            assertIs<ProxyServiceStartupDecision.Failed>(
+                ProxyServiceStartupPolicy.evaluate(
+                    config = config,
+                    managementApiTokenPresent = false,
+                    observedNetworks = listOf(wifi),
+                ),
+            )
 
         assertEquals(ProxyStartupError.MissingManagementApiToken, failed.startupError)
         assertEquals(ProxyStartupError.MissingManagementApiToken, failed.status.startupError)
@@ -91,18 +99,20 @@ class ProxyServiceStartupPolicyTest {
 
     @Test
     fun `explicit route startup fails when selected route is unavailable`() {
-        val config = AppConfig.default().copy(
-            network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.Cellular),
-        )
+        val config =
+            AppConfig.default().copy(
+                network = AppConfig.default().network.copy(defaultRoutePolicy = RouteTarget.Cellular),
+            )
         val wifi = NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", isAvailable = true)
 
-        val failed = assertIs<ProxyServiceStartupDecision.Failed>(
-            ProxyServiceStartupPolicy.evaluate(
-                config = config,
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifi),
-            ),
-        )
+        val failed =
+            assertIs<ProxyServiceStartupDecision.Failed>(
+                ProxyServiceStartupPolicy.evaluate(
+                    config = config,
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifi),
+                ),
+            )
 
         assertEquals(ProxyStartupError.UnavailableSelectedRoute, failed.startupError)
         assertEquals(RouteTarget.Cellular, failed.status.configuredRoute)
@@ -112,13 +122,14 @@ class ProxyServiceStartupPolicyTest {
     fun `automatic route startup fails when no routeable networks are available`() {
         val unavailableWifi = NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", isAvailable = false)
 
-        val failed = assertIs<ProxyServiceStartupDecision.Failed>(
-            ProxyServiceStartupPolicy.evaluate(
-                config = AppConfig.default(),
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(unavailableWifi),
-            ),
-        )
+        val failed =
+            assertIs<ProxyServiceStartupDecision.Failed>(
+                ProxyServiceStartupPolicy.evaluate(
+                    config = AppConfig.default(),
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(unavailableWifi),
+                ),
+            )
 
         assertEquals(ProxyStartupError.UnavailableSelectedRoute, failed.startupError)
         assertFalse(failed.status.hasHighSecurityRisk)
@@ -147,13 +158,14 @@ class ProxyServiceStartupPolicyTest {
         config: AppConfig,
         expected: ProxyStartupError,
     ) {
-        val failed = assertIs<ProxyServiceStartupDecision.Failed>(
-            ProxyServiceStartupPolicy.evaluate(
-                config = config,
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", true)),
-            ),
-        )
+        val failed =
+            assertIs<ProxyServiceStartupDecision.Failed>(
+                ProxyServiceStartupPolicy.evaluate(
+                    config = config,
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", true)),
+                ),
+            )
 
         assertEquals(expected, failed.startupError)
         assertEquals(expected, failed.status.startupError)

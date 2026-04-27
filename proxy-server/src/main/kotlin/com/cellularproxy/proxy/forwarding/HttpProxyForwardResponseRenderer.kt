@@ -52,14 +52,11 @@ class ForwardedHttpResponseHead(
         this.headers = copiedHeaders
     }
 
-    fun toHttpString(): String =
-        headerString()
+    fun toHttpString(): String = headerString()
 
-    fun toByteArray(): ByteArray =
-        headerString().toByteArray(Charsets.UTF_8)
+    fun toByteArray(): ByteArray = headerString().toByteArray(Charsets.UTF_8)
 
-    private fun headerString(): String =
-        renderHttpResponseHead(statusCode, reasonPhrase, headers)
+    private fun headerString(): String = renderHttpResponseHead(statusCode, reasonPhrase, headers)
 }
 
 class ForwardedHttpResponse(
@@ -134,14 +131,11 @@ class ForwardedHttpResponse(
         this.bodyBytes = bodyCopy
     }
 
-    fun toHttpString(): String =
-        headerString() + bodyBytes.decodeStrictUtf8()
+    fun toHttpString(): String = headerString() + bodyBytes.decodeStrictUtf8()
 
-    fun toByteArray(): ByteArray =
-        headerString().toByteArray(Charsets.UTF_8) + bodyBytes
+    fun toByteArray(): ByteArray = headerString().toByteArray(Charsets.UTF_8) + bodyBytes
 
-    private fun headerString(): String =
-        renderHttpResponseHead(statusCode, reasonPhrase, headers)
+    private fun headerString(): String = renderHttpResponseHead(statusCode, reasonPhrase, headers)
 }
 
 object HttpProxyForwardResponseRenderer {
@@ -168,14 +162,13 @@ object HttpProxyForwardResponseRenderer {
         reasonPhrase: String,
         headers: Map<String, List<String>>,
         body: ByteArray = EMPTY_BODY,
-    ): ForwardedHttpResponse {
-        return ForwardedHttpResponse(
+    ): ForwardedHttpResponse =
+        ForwardedHttpResponse(
             statusCode = statusCode,
             reasonPhrase = reasonPhrase,
             headers = sanitizeResponseHeaders(statusCode, headers),
             body = body,
         )
-    }
 
     private fun sanitizeResponseHeaders(
         statusCode: Int,
@@ -196,7 +189,7 @@ object HttpProxyForwardResponseRenderer {
                     (
                         normalizedHeaderName == TRANSFER_ENCODING_HEADER ||
                             (statusCode != NOT_MODIFIED_STATUS && normalizedHeaderName == CONTENT_LENGTH_HEADER)
-                        )
+                    )
             val stripAmbiguousContentLength =
                 !statusCode.forbidsResponseBody() &&
                     hasTransferEncoding &&
@@ -239,14 +232,15 @@ private fun Map<String, List<String>>.validatedHeaderSnapshot(): Map<String, Lis
     forEach { (name, values) ->
         require(name.isHttpToken()) { "Header name must be a valid HTTP token" }
         require(values.isNotEmpty()) { "Header values must not be empty" }
-        copiedHeaders[name] = Collections.unmodifiableList(
-            values.map { value ->
-                require(value.none(Char::isDisallowedHeaderValueControl)) {
-                    "Header value must not contain control characters"
-                }
-                value
-            },
-        )
+        copiedHeaders[name] =
+            Collections.unmodifiableList(
+                values.map { value ->
+                    require(value.none(Char::isDisallowedHeaderValueControl)) {
+                        "Header value must not contain control characters"
+                    }
+                    value
+                },
+            )
     }
 
     val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
@@ -276,17 +270,13 @@ private fun renderHttpResponseHead(
         append(CRLF)
     }
 
-private fun String.isSafeSingleLine(): Boolean =
-    none(Char::isISOControl)
+private fun String.isSafeSingleLine(): Boolean = none(Char::isISOControl)
 
-private fun String.isHttpToken(): Boolean =
-    isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-private fun String.isDecimalDigits(): Boolean =
-    isNotEmpty() && all { it in '0'..'9' }
+private fun String.isDecimalDigits(): Boolean = isNotEmpty() && all { it in '0'..'9' }
 
-private fun Char.isDisallowedHeaderValueControl(): Boolean =
-    code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+private fun Char.isDisallowedHeaderValueControl(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 
 private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String): List<String> {
     val normalizedName = name.lowercase(Locale.US)
@@ -299,8 +289,9 @@ private fun Int.forbidsResponseBody(): Boolean =
     this in INFORMATIONAL_STATUS_RANGE || this == NO_CONTENT_STATUS || this == NOT_MODIFIED_STATUS
 
 private fun List<String>.isSupportedChunkedTransferEncoding(): Boolean {
-    val codings = flatMap { value -> value.split(',') }
-        .map { coding -> coding.trim().lowercase(Locale.US) }
+    val codings =
+        flatMap { value -> value.split(',') }
+            .map { coding -> coding.trim().lowercase(Locale.US) }
     return codings == listOf(CHUNKED_TRANSFER_CODING)
 }
 
@@ -382,8 +373,7 @@ private fun ByteArray.toAsciiStringOrNull(): String? {
     return toString(Charsets.US_ASCII)
 }
 
-private fun Char.isHexDigit(): Boolean =
-    this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
 private fun ByteArray.decodeStrictUtf8(): String =
     try {
@@ -412,19 +402,21 @@ private val HTTP_STATUS_CODE_RANGE = 100..599
 private val INFORMATIONAL_STATUS_RANGE = 100..199
 private val ASCII_BYTE_RANGE = 0x00..0x7F
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
-private val HOP_BY_HOP_RESPONSE_HEADERS = setOf(
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-connection",
-    "te",
-    "trailer",
-    "upgrade",
-)
+private val HOP_BY_HOP_RESPONSE_HEADERS =
+    setOf(
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-connection",
+        "te",
+        "trailer",
+        "upgrade",
+    )
 private val EMPTY_BODY = ByteArray(0)
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).toSet()
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).toSet()

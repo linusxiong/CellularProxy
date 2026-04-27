@@ -14,12 +14,13 @@ object HttpBodyFramingStreamCopier {
 
         return when (framing) {
             HttpRequestBodyFraming.NoBody -> HttpBodyStreamCopyResult.Completed(bytesCopied = 0)
-            is HttpRequestBodyFraming.FixedLength -> HttpBodyStreamCopier.copyFixedLength(
-                input = input,
-                output = output,
-                contentLength = framing.contentLength,
-                bufferSize = bufferSize,
-            )
+            is HttpRequestBodyFraming.FixedLength ->
+                HttpBodyStreamCopier.copyFixedLength(
+                    input = input,
+                    output = output,
+                    contentLength = framing.contentLength,
+                    bufferSize = bufferSize,
+                )
         }
     }
 
@@ -37,24 +38,27 @@ object HttpBodyFramingStreamCopier {
 
         return when (framing) {
             HttpResponseBodyFraming.NoBody -> HttpBodyStreamCopyResult.Completed(bytesCopied = 0)
-            is HttpResponseBodyFraming.FixedLength -> HttpBodyStreamCopier.copyFixedLength(
-                input = input,
-                output = output,
-                contentLength = framing.contentLength,
-                bufferSize = bufferSize,
-            )
-            HttpResponseBodyFraming.Chunked -> HttpBodyStreamCopier.copyChunked(
-                input = input,
-                output = output,
-                bufferSize = bufferSize,
-                maxChunkHeaderBytes = maxChunkHeaderBytes,
-                maxTrailerBytes = maxTrailerBytes,
-            )
-            HttpResponseBodyFraming.CloseDelimited -> HttpBodyStreamCopier.copyCloseDelimited(
-                input = input,
-                output = output,
-                bufferSize = bufferSize,
-            )
+            is HttpResponseBodyFraming.FixedLength ->
+                HttpBodyStreamCopier.copyFixedLength(
+                    input = input,
+                    output = output,
+                    contentLength = framing.contentLength,
+                    bufferSize = bufferSize,
+                )
+            HttpResponseBodyFraming.Chunked ->
+                HttpBodyStreamCopier.copyChunked(
+                    input = input,
+                    output = output,
+                    bufferSize = bufferSize,
+                    maxChunkHeaderBytes = maxChunkHeaderBytes,
+                    maxTrailerBytes = maxTrailerBytes,
+                )
+            HttpResponseBodyFraming.CloseDelimited ->
+                HttpBodyStreamCopier.copyCloseDelimited(
+                    input = input,
+                    output = output,
+                    bufferSize = bufferSize,
+                )
         }
     }
 }

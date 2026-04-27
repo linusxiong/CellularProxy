@@ -56,10 +56,11 @@ class ProxyBoundClientConnectionHandler(
             "Client header-read idle timeout must be positive"
         }
         val client = listener.accept(headerReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis)
-        val reservation = reserveAccepted(
-            client = client,
-            recordMetricEvent = recordMetricEvent,
-        )
+        val reservation =
+            reserveAccepted(
+                client = client,
+                recordMetricEvent = recordMetricEvent,
+            )
         return handleReserved(
             reservation = reservation,
             config = config,
@@ -82,10 +83,11 @@ class ProxyBoundClientConnectionHandler(
         connectRelayBufferSize: Int = DEFAULT_BOUND_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
     ): ProxyBoundClientConnectionHandlingResult {
-        val reservation = reserveAccepted(
-            client = client,
-            recordMetricEvent = recordMetricEvent,
-        )
+        val reservation =
+            reserveAccepted(
+                client = client,
+                recordMetricEvent = recordMetricEvent,
+            )
         return handleReserved(
             reservation = reservation,
             config = config,
@@ -123,30 +125,30 @@ class ProxyBoundClientConnectionHandler(
         maxResponseTrailerBytes: Int = DEFAULT_BOUND_RESPONSE_TRAILER_BYTES,
         connectRelayBufferSize: Int = DEFAULT_BOUND_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
-    ): ProxyBoundClientConnectionHandlingResult {
-        return try {
+    ): ProxyBoundClientConnectionHandlingResult =
+        try {
             ProxyBoundClientConnectionHandlingResult(
                 activeConnectionsBeforeAdmission = reservation.activeConnectionsBeforeAdmission,
-                exchange = exchangeHandler.handle(
-                    config = config,
-                    activeConnections = reservation.activeConnectionsBeforeAdmission,
-                    client = reservation.client,
-                    httpBufferSize = httpBufferSize,
-                    maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                    maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                    maxResponseTrailerBytes = maxResponseTrailerBytes,
-                    connectRelayBufferSize = connectRelayBufferSize,
-                    recordMetricEvent = { event ->
-                        if (!event.isSocketLifecycleEvent()) {
-                            recordMetricEvent(event)
-                        }
-                    },
-                ),
+                exchange =
+                    exchangeHandler.handle(
+                        config = config,
+                        activeConnections = reservation.activeConnectionsBeforeAdmission,
+                        client = reservation.client,
+                        httpBufferSize = httpBufferSize,
+                        maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                        maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                        maxResponseTrailerBytes = maxResponseTrailerBytes,
+                        connectRelayBufferSize = connectRelayBufferSize,
+                        recordMetricEvent = { event ->
+                            if (!event.isSocketLifecycleEvent()) {
+                                recordMetricEvent(event)
+                            }
+                        },
+                    ),
             )
         } finally {
             reservation.release()
         }
-    }
 }
 
 private fun ProxyTrafficMetricsEvent.isSocketLifecycleEvent(): Boolean =

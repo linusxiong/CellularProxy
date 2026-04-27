@@ -43,12 +43,13 @@ class RouteSelectorTest {
 
     @Test
     fun `network snapshot with exactly WiFi transport converts to WiFi descriptor`() {
-        val snapshot = NetworkSnapshot(
-            id = "wifi",
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-            transports = setOf(NetworkTransport.WiFi),
-        )
+        val snapshot =
+            NetworkSnapshot(
+                id = "wifi",
+                displayName = "Home Wi-Fi",
+                isAvailable = true,
+                transports = setOf(NetworkTransport.WiFi),
+            )
 
         assertEquals(
             NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", isAvailable = true),
@@ -58,12 +59,13 @@ class RouteSelectorTest {
 
     @Test
     fun `network snapshot with exactly Cellular transport converts to Cellular descriptor`() {
-        val snapshot = NetworkSnapshot(
-            id = "cell",
-            displayName = "Carrier",
-            isAvailable = true,
-            transports = setOf(NetworkTransport.Cellular),
-        )
+        val snapshot =
+            NetworkSnapshot(
+                id = "cell",
+                displayName = "Carrier",
+                isAvailable = true,
+                transports = setOf(NetworkTransport.Cellular),
+            )
 
         assertEquals(
             NetworkDescriptor("cell", NetworkCategory.Cellular, "Carrier", isAvailable = true),
@@ -73,12 +75,13 @@ class RouteSelectorTest {
 
     @Test
     fun `network snapshot with VPN transport converts to VPN descriptor before underlay transports`() {
-        val snapshot = NetworkSnapshot(
-            id = "vpn",
-            displayName = "Work VPN",
-            isAvailable = true,
-            transports = setOf(NetworkTransport.Vpn, NetworkTransport.WiFi, NetworkTransport.Other),
-        )
+        val snapshot =
+            NetworkSnapshot(
+                id = "vpn",
+                displayName = "Work VPN",
+                isAvailable = true,
+                transports = setOf(NetworkTransport.Vpn, NetworkTransport.WiFi, NetworkTransport.Other),
+            )
 
         assertEquals(
             NetworkDescriptor("vpn", NetworkCategory.Vpn, "Work VPN", isAvailable = true),
@@ -88,12 +91,13 @@ class RouteSelectorTest {
 
     @Test
     fun `network snapshot conversion preserves unavailable state`() {
-        val snapshot = NetworkSnapshot(
-            id = "wifi",
-            displayName = "Home Wi-Fi",
-            isAvailable = false,
-            transports = setOf(NetworkTransport.WiFi),
-        )
+        val snapshot =
+            NetworkSnapshot(
+                id = "wifi",
+                displayName = "Home Wi-Fi",
+                isAvailable = false,
+                transports = setOf(NetworkTransport.WiFi),
+            )
 
         assertEquals(
             NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", isAvailable = false),

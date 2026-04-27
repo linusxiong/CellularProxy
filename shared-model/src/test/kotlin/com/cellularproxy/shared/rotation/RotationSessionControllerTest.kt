@@ -44,19 +44,22 @@ class RotationSessionControllerTest {
         val start = CountDownLatch(1)
 
         try {
-            val futures = List(contenderCount) { index ->
-                executor.submit(Callable {
-                    ready.countDown()
-                    start.await()
-                    controller.requestStart(
-                        if (index % 2 == 0) {
-                            RotationOperation.MobileData
-                        } else {
-                            RotationOperation.AirplaneMode
+            val futures =
+                List(contenderCount) { index ->
+                    executor.submit(
+                        Callable {
+                            ready.countDown()
+                            start.await()
+                            controller.requestStart(
+                                if (index % 2 == 0) {
+                                    RotationOperation.MobileData
+                                } else {
+                                    RotationOperation.AirplaneMode
+                                },
+                            )
                         },
                     )
-                })
-            }
+                }
 
             assertTrue(ready.await(1, TimeUnit.SECONDS))
             start.countDown()
@@ -102,26 +105,28 @@ class RotationSessionControllerTest {
 
     @Test
     fun `seeded session continues transitions from provided status`() {
-        val runningDisable = statusAfter(
-            RotationEvent.StartRequested(RotationOperation.MobileData),
-            RotationEvent.CooldownPassed,
-            RotationEvent.RootAvailable,
-            RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
-            RotationEvent.NewRequestsPaused,
-            RotationEvent.ConnectionsDrained,
-        )
+        val runningDisable =
+            statusAfter(
+                RotationEvent.StartRequested(RotationOperation.MobileData),
+                RotationEvent.CooldownPassed,
+                RotationEvent.RootAvailable,
+                RotationEvent.OldPublicIpProbeSucceeded("198.51.100.10"),
+                RotationEvent.NewRequestsPaused,
+                RotationEvent.ConnectionsDrained,
+            )
         val controller = RotationSessionController(initialStatus = runningDisable)
 
-        val result = controller.apply(
-            RotationEvent.RootCommandCompleted(
-                RootCommandResult.completed(
-                    category = RootCommandCategory.MobileDataDisable,
-                    exitCode = 0,
-                    stdout = "",
-                    stderr = "",
+        val result =
+            controller.apply(
+                RotationEvent.RootCommandCompleted(
+                    RootCommandResult.completed(
+                        category = RootCommandCategory.MobileDataDisable,
+                        exitCode = 0,
+                        stdout = "",
+                        stderr = "",
+                    ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
         assertEquals(RotationState.WaitingForToggleDelay, result.status.state)

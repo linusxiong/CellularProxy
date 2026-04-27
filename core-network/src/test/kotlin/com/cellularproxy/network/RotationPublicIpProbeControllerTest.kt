@@ -23,19 +23,21 @@ class RotationPublicIpProbeControllerTest {
     fun `old public IP probe success maps to old probe succeeded rotation event`() {
         val network = network("cell", NetworkCategory.Cellular)
         val endpoint = PublicIpProbeEndpoint(host = "ip.example")
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Success(
-                publicIp = "203.0.113.10",
-                network = network,
-            ),
-        )
-
-        val decision = runSuspend {
-            RotationPublicIpProbeController(runner).probeOldPublicIp(
-                route = RouteTarget.Cellular,
-                endpoint = endpoint,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "203.0.113.10",
+                    network = network,
+                ),
             )
-        }
+
+        val decision =
+            runSuspend {
+                RotationPublicIpProbeController(runner).probeOldPublicIp(
+                    route = RouteTarget.Cellular,
+                    endpoint = endpoint,
+                )
+            }
 
         val succeeded = assertIs<RotationPublicIpProbeDecision.OldProbeSucceeded>(decision)
         assertEquals("203.0.113.10", succeeded.publicIp)
@@ -48,19 +50,21 @@ class RotationPublicIpProbeControllerTest {
     fun `old public IP probe failure maps to old probe failed rotation event and preserves failure metadata`() {
         val network = network("wifi", NetworkCategory.WiFi)
         val endpoint = PublicIpProbeEndpoint(host = "ip.example")
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Failed(
-                reason = PublicIpProbeFailure.ResponseTimedOut,
-                network = network,
-            ),
-        )
-
-        val decision = runSuspend {
-            RotationPublicIpProbeController(runner).probeOldPublicIp(
-                route = RouteTarget.WiFi,
-                endpoint = endpoint,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Failed(
+                    reason = PublicIpProbeFailure.ResponseTimedOut,
+                    network = network,
+                ),
             )
-        }
+
+        val decision =
+            runSuspend {
+                RotationPublicIpProbeController(runner).probeOldPublicIp(
+                    route = RouteTarget.WiFi,
+                    endpoint = endpoint,
+                )
+            }
 
         val failed = assertIs<RotationPublicIpProbeDecision.OldProbeFailed>(decision)
         assertEquals(PublicIpProbeFailure.ResponseTimedOut, failed.reason)
@@ -71,20 +75,22 @@ class RotationPublicIpProbeControllerTest {
     @Test
     fun `new public IP probe success maps strict flag into new probe succeeded rotation event`() {
         val network = network("cell", NetworkCategory.Cellular)
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Success(
-                publicIp = "203.0.113.11",
-                network = network,
-            ),
-        )
-
-        val decision = runSuspend {
-            RotationPublicIpProbeController(runner).probeNewPublicIp(
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                strictIpChangeRequired = true,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "203.0.113.11",
+                    network = network,
+                ),
             )
-        }
+
+        val decision =
+            runSuspend {
+                RotationPublicIpProbeController(runner).probeNewPublicIp(
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    strictIpChangeRequired = true,
+                )
+            }
 
         val succeeded = assertIs<RotationPublicIpProbeDecision.NewProbeSucceeded>(decision)
         assertEquals("203.0.113.11", succeeded.publicIp)
@@ -100,17 +106,19 @@ class RotationPublicIpProbeControllerTest {
 
     @Test
     fun `new public IP probe failure maps to new probe failed rotation event`() {
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp),
-        )
-
-        val decision = runSuspend {
-            RotationPublicIpProbeController(runner).probeNewPublicIp(
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                strictIpChangeRequired = false,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp),
             )
-        }
+
+        val decision =
+            runSuspend {
+                RotationPublicIpProbeController(runner).probeNewPublicIp(
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    strictIpChangeRequired = false,
+                )
+            }
 
         val failed = assertIs<RotationPublicIpProbeDecision.NewProbeFailed>(decision)
         assertEquals(PublicIpProbeFailure.InvalidPublicIp, failed.reason)
@@ -122,26 +130,29 @@ class RotationPublicIpProbeControllerTest {
     fun `old public IP probe coordinator applies successful old probe while phase snapshot is current`() {
         val endpoint = PublicIpProbeEndpoint(host = "ip.example")
         val network = network("cell", NetworkCategory.Cellular)
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Success(
-                publicIp = "198.51.100.10",
-                network = network,
-            ),
-        )
-        val controlPlane = probingOldIpControlPlane()
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
-
-        val result = runSuspend {
-            coordinator.probeOldPublicIp(
-                expectedSnapshot = controlPlane.snapshot(),
-                route = RouteTarget.Cellular,
-                endpoint = endpoint,
-                nowElapsedMillis = 20_000,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.10",
+                    network = network,
+                ),
             )
-        }
+        val controlPlane = probingOldIpControlPlane()
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+
+        val result =
+            runSuspend {
+                coordinator.probeOldPublicIp(
+                    expectedSnapshot = controlPlane.snapshot(),
+                    route = RouteTarget.Cellular,
+                    endpoint = endpoint,
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         val applied = assertIs<RotationPublicIpProbeAdvanceResult.Applied>(result)
         assertIs<RotationPublicIpProbeDecision.OldProbeSucceeded>(applied.decision)
@@ -153,23 +164,26 @@ class RotationPublicIpProbeControllerTest {
 
     @Test
     fun `old public IP probe coordinator applies failed old probe as terminal failure`() {
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Failed(PublicIpProbeFailure.ResponseTimedOut),
-        )
-        val controlPlane = probingOldIpControlPlane()
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
-
-        val result = runSuspend {
-            coordinator.probeOldPublicIp(
-                expectedSnapshot = controlPlane.snapshot(),
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                nowElapsedMillis = 20_000,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Failed(PublicIpProbeFailure.ResponseTimedOut),
             )
-        }
+        val controlPlane = probingOldIpControlPlane()
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+
+        val result =
+            runSuspend {
+                coordinator.probeOldPublicIp(
+                    expectedSnapshot = controlPlane.snapshot(),
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         val applied = assertIs<RotationPublicIpProbeAdvanceResult.Applied>(result)
         assertIs<RotationPublicIpProbeDecision.OldProbeFailed>(applied.decision)
@@ -181,27 +195,30 @@ class RotationPublicIpProbeControllerTest {
 
     @Test
     fun `new public IP probe coordinator applies successful new probe and preserves strict flag`() {
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Success(
-                publicIp = "198.51.100.10",
-                network = network("cell", NetworkCategory.Cellular),
-            ),
-        )
-        val controlPlane = probingNewIpControlPlane()
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
-
-        val result = runSuspend {
-            coordinator.probeNewPublicIp(
-                expectedSnapshot = controlPlane.snapshot(),
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                strictIpChangeRequired = true,
-                nowElapsedMillis = 20_000,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.10",
+                    network = network("cell", NetworkCategory.Cellular),
+                ),
             )
-        }
+        val controlPlane = probingNewIpControlPlane()
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+
+        val result =
+            runSuspend {
+                coordinator.probeNewPublicIp(
+                    expectedSnapshot = controlPlane.snapshot(),
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    strictIpChangeRequired = true,
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         val applied = assertIs<RotationPublicIpProbeAdvanceResult.Applied>(result)
         assertEquals(
@@ -219,24 +236,27 @@ class RotationPublicIpProbeControllerTest {
 
     @Test
     fun `new public IP probe coordinator applies failed new probe as resumable failure`() {
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp),
-        )
-        val controlPlane = probingNewIpControlPlane()
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
-
-        val result = runSuspend {
-            coordinator.probeNewPublicIp(
-                expectedSnapshot = controlPlane.snapshot(),
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                strictIpChangeRequired = false,
-                nowElapsedMillis = 20_000,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp),
             )
-        }
+        val controlPlane = probingNewIpControlPlane()
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+
+        val result =
+            runSuspend {
+                coordinator.probeNewPublicIp(
+                    expectedSnapshot = controlPlane.snapshot(),
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    strictIpChangeRequired = false,
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         val applied = assertIs<RotationPublicIpProbeAdvanceResult.Applied>(result)
         assertIs<RotationPublicIpProbeDecision.NewProbeFailed>(applied.decision)
@@ -248,33 +268,38 @@ class RotationPublicIpProbeControllerTest {
     @Test
     fun `stale public IP probe snapshot is rejected before executing probe`() {
         val actualStatus = probingOldIpStatus()
-        val staleSnapshot = RotationControlPlaneSnapshot(
-            status = actualStatus,
-            lastTerminalElapsedMillis = 1_000,
-        )
-        val controlPlane = RotationControlPlane(
-            initialStatus = actualStatus,
-            initialLastTerminalElapsedMillis = 2_000,
-        )
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Success(
-                publicIp = "198.51.100.10",
-                network = network("cell", NetworkCategory.Cellular),
-            ),
-        )
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
-
-        val result = runSuspend {
-            coordinator.probeOldPublicIp(
-                expectedSnapshot = staleSnapshot,
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                nowElapsedMillis = 20_000,
+        val staleSnapshot =
+            RotationControlPlaneSnapshot(
+                status = actualStatus,
+                lastTerminalElapsedMillis = 1_000,
             )
-        }
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus = actualStatus,
+                initialLastTerminalElapsedMillis = 2_000,
+            )
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.10",
+                    network = network("cell", NetworkCategory.Cellular),
+                ),
+            )
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+
+        val result =
+            runSuspend {
+                coordinator.probeOldPublicIp(
+                    expectedSnapshot = staleSnapshot,
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         val stale = assertIs<RotationPublicIpProbeAdvanceResult.Stale>(result)
         assertEquals(staleSnapshot, stale.expectedSnapshot)
@@ -288,31 +313,35 @@ class RotationPublicIpProbeControllerTest {
     fun `stale public IP probe result is not applied after control plane moves phases`() {
         val controlPlane = probingOldIpControlPlane()
         val endpoint = PublicIpProbeEndpoint(host = "ip.example")
-        val runner = MutatingPublicIpProbeRunner(
-            result = PublicIpProbeResult.Success(
-                publicIp = "198.51.100.10",
-                network = network("cell", NetworkCategory.Cellular),
-            ),
-        ) {
-            controlPlane.applyProgress(
-                event = RotationEvent.OldPublicIpProbeFailed,
-                nowElapsedMillis = 19_000,
+        val runner =
+            MutatingPublicIpProbeRunner(
+                result =
+                    PublicIpProbeResult.Success(
+                        publicIp = "198.51.100.10",
+                        network = network("cell", NetworkCategory.Cellular),
+                    ),
+            ) {
+                controlPlane.applyProgress(
+                    event = RotationEvent.OldPublicIpProbeFailed,
+                    nowElapsedMillis = 19_000,
+                )
+            }
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
             )
-        }
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
         val expectedSnapshot = controlPlane.snapshot()
 
-        val result = runSuspend {
-            coordinator.probeOldPublicIp(
-                expectedSnapshot = expectedSnapshot,
-                route = RouteTarget.Cellular,
-                endpoint = endpoint,
-                nowElapsedMillis = 20_000,
-            )
-        }
+        val result =
+            runSuspend {
+                coordinator.probeOldPublicIp(
+                    expectedSnapshot = expectedSnapshot,
+                    route = RouteTarget.Cellular,
+                    endpoint = endpoint,
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         val stale = assertIs<RotationPublicIpProbeAdvanceResult.Stale>(result)
         assertIs<RotationPublicIpProbeDecision.OldProbeSucceeded>(stale.decision)
@@ -323,29 +352,34 @@ class RotationPublicIpProbeControllerTest {
 
     @Test
     fun `public IP probe coordinator does not probe outside matching phase`() {
-        val runner = RecordingPublicIpProbeRunner(
-            PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp),
-        )
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.PausingNewRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-            ),
-        )
-        val coordinator = RotationPublicIpProbeCoordinator(
-            probeController = RotationPublicIpProbeController(runner),
-            controlPlane = controlPlane,
-        )
-
-        val result = runSuspend {
-            coordinator.probeOldPublicIp(
-                expectedSnapshot = controlPlane.snapshot(),
-                route = RouteTarget.Cellular,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                nowElapsedMillis = 20_000,
+        val runner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp),
             )
-        }
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.PausingNewRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
+        val coordinator =
+            RotationPublicIpProbeCoordinator(
+                probeController = RotationPublicIpProbeController(runner),
+                controlPlane = controlPlane,
+            )
+
+        val result =
+            runSuspend {
+                coordinator.probeOldPublicIp(
+                    expectedSnapshot = controlPlane.snapshot(),
+                    route = RouteTarget.Cellular,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    nowElapsedMillis = 20_000,
+                )
+            }
 
         assertIs<RotationPublicIpProbeAdvanceResult.NoAction>(result)
         assertEquals(emptyList(), runner.calls)
@@ -395,8 +429,7 @@ class RotationPublicIpProbeControllerTest {
             isAvailable = true,
         )
 
-    private fun probingOldIpControlPlane(): RotationControlPlane =
-        RotationControlPlane(initialStatus = probingOldIpStatus())
+    private fun probingOldIpControlPlane(): RotationControlPlane = RotationControlPlane(initialStatus = probingOldIpStatus())
 
     private fun probingOldIpStatus(): RotationStatus =
         RotationStatus(
@@ -406,11 +439,12 @@ class RotationPublicIpProbeControllerTest {
 
     private fun probingNewIpControlPlane(): RotationControlPlane =
         RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.ProbingNewPublicIp,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-            ),
+            initialStatus =
+                RotationStatus(
+                    state = RotationState.ProbingNewPublicIp,
+                    operation = RotationOperation.MobileData,
+                    oldPublicIp = "198.51.100.10",
+                ),
         )
 }
 

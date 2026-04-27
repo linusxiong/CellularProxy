@@ -25,10 +25,11 @@ class RotationRootAvailabilityCoordinator(
 
         preflight(expectedSnapshot)?.let { return it }
 
-        val decision = availabilityController.checkRoot(
-            timeoutMillis = timeoutMillis,
-            secrets = secrets,
-        )
+        val decision =
+            availabilityController.checkRoot(
+                timeoutMillis = timeoutMillis,
+                secrets = secrets,
+            )
 
         return applyIfCurrent(
             expectedSnapshot = expectedSnapshot,
@@ -37,9 +38,7 @@ class RotationRootAvailabilityCoordinator(
         )
     }
 
-    private fun preflight(
-        expectedSnapshot: RotationControlPlaneSnapshot,
-    ): RotationRootAvailabilityAdvanceResult? =
+    private fun preflight(expectedSnapshot: RotationControlPlaneSnapshot): RotationRootAvailabilityAdvanceResult? =
         synchronized(controlPlane) {
             val actualSnapshot = controlPlane.snapshot()
             when {
@@ -71,10 +70,11 @@ class RotationRootAvailabilityCoordinator(
 
             RotationRootAvailabilityAdvanceResult.Applied(
                 decision = decision,
-                progress = controlPlane.applyProgress(
-                    event = decision.event,
-                    nowElapsedMillis = nowElapsedMillis,
-                ),
+                progress =
+                    controlPlane.applyProgress(
+                        event = decision.event,
+                        nowElapsedMillis = nowElapsedMillis,
+                    ),
             )
         }
 }

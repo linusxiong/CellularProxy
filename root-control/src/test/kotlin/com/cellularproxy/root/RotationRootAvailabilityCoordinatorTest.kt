@@ -24,21 +24,24 @@ class RotationRootAvailabilityCoordinatorTest {
     fun `available root check advances checking-root rotation to old public-ip probing`() {
         val controlPlane = checkingRootControlPlane()
         val calls = mutableListOf<RotationRootAvailabilityCall>()
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController(
-                calls = calls,
-                result = rootAvailableCheckResult(rawStdout = "0\n"),
-            ),
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController(
+                        calls = calls,
+                        result = rootAvailableCheckResult(rawStdout = "0\n"),
+                    ),
+                controlPlane = controlPlane,
+            )
         val secrets = LogRedactionSecrets(managementApiToken = "management-token")
 
-        val result = coordinator.checkRootAvailability(
-            expectedSnapshot = controlPlane.snapshot(),
-            timeoutMillis = 2_000,
-            nowElapsedMillis = 20_000,
-            secrets = secrets,
-        )
+        val result =
+            coordinator.checkRootAvailability(
+                expectedSnapshot = controlPlane.snapshot(),
+                timeoutMillis = 2_000,
+                nowElapsedMillis = 20_000,
+                secrets = secrets,
+            )
 
         val applied = assertIs<RotationRootAvailabilityAdvanceResult.Applied>(result)
         assertIs<RotationRootAvailabilityDecision.Available>(applied.decision)
@@ -53,18 +56,21 @@ class RotationRootAvailabilityCoordinatorTest {
     @Test
     fun `unavailable root check advances checking-root rotation to terminal failure and records timestamp`() {
         val controlPlane = checkingRootControlPlane()
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController(
-                result = rootUnavailableCheckResult(),
-            ),
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController(
+                        result = rootUnavailableCheckResult(),
+                    ),
+                controlPlane = controlPlane,
+            )
 
-        val result = coordinator.checkRootAvailability(
-            expectedSnapshot = controlPlane.snapshot(),
-            timeoutMillis = 2_000,
-            nowElapsedMillis = 20_000,
-        )
+        val result =
+            coordinator.checkRootAvailability(
+                expectedSnapshot = controlPlane.snapshot(),
+                timeoutMillis = 2_000,
+                nowElapsedMillis = 20_000,
+            )
 
         val applied = assertIs<RotationRootAvailabilityAdvanceResult.Applied>(result)
         val unavailable = assertIs<RotationRootAvailabilityDecision.Unavailable>(applied.decision)
@@ -77,38 +83,45 @@ class RotationRootAvailabilityCoordinatorTest {
 
     @Test
     fun `stale snapshot is rejected before executing root check`() {
-        val staleSnapshot = RotationControlPlaneSnapshot(
-            status = RotationStatus(
-                state = RotationState.CheckingRoot,
-                operation = RotationOperation.MobileData,
-            ),
-            lastTerminalElapsedMillis = null,
-            transitionGeneration = 0,
-        )
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.CheckingRoot,
-                operation = RotationOperation.MobileData,
-            ),
-        )
+        val staleSnapshot =
+            RotationControlPlaneSnapshot(
+                status =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+                lastTerminalElapsedMillis = null,
+                transitionGeneration = 0,
+            )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
         controlPlane.applyProgress(
             event = RotationEvent.RootAvailable,
             nowElapsedMillis = 10_000,
         )
         var rootCheckExecuted = false
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController {
-                rootCheckExecuted = true
-                rootAvailableCheckResult(rawStdout = "0")
-            },
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController {
+                        rootCheckExecuted = true
+                        rootAvailableCheckResult(rawStdout = "0")
+                    },
+                controlPlane = controlPlane,
+            )
 
-        val result = coordinator.checkRootAvailability(
-            expectedSnapshot = staleSnapshot,
-            timeoutMillis = 2_000,
-            nowElapsedMillis = 20_000,
-        )
+        val result =
+            coordinator.checkRootAvailability(
+                expectedSnapshot = staleSnapshot,
+                timeoutMillis = 2_000,
+                nowElapsedMillis = 20_000,
+            )
 
         val stale = assertIs<RotationRootAvailabilityAdvanceResult.Stale>(result)
         assertEquals(staleSnapshot, stale.expectedSnapshot)
@@ -126,23 +139,27 @@ class RotationRootAvailabilityCoordinatorTest {
             cooldown = 180.seconds,
         )
         val actualSnapshot = controlPlane.snapshot()
-        val staleSnapshotWithSameValues = actualSnapshot.copy(
-            transitionGeneration = actualSnapshot.transitionGeneration - 1,
-        )
+        val staleSnapshotWithSameValues =
+            actualSnapshot.copy(
+                transitionGeneration = actualSnapshot.transitionGeneration - 1,
+            )
         var rootCheckExecuted = false
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController {
-                rootCheckExecuted = true
-                rootAvailableCheckResult(rawStdout = "0")
-            },
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController {
+                        rootCheckExecuted = true
+                        rootAvailableCheckResult(rawStdout = "0")
+                    },
+                controlPlane = controlPlane,
+            )
 
-        val result = coordinator.checkRootAvailability(
-            expectedSnapshot = staleSnapshotWithSameValues,
-            timeoutMillis = 2_000,
-            nowElapsedMillis = 20_000,
-        )
+        val result =
+            coordinator.checkRootAvailability(
+                expectedSnapshot = staleSnapshotWithSameValues,
+                timeoutMillis = 2_000,
+                nowElapsedMillis = 20_000,
+            )
 
         val stale = assertIs<RotationRootAvailabilityAdvanceResult.Stale>(result)
         assertEquals(staleSnapshotWithSameValues, stale.expectedSnapshot)
@@ -156,22 +173,25 @@ class RotationRootAvailabilityCoordinatorTest {
     fun `stale root check result is not applied after control plane leaves checking-root phase`() {
         val controlPlane = checkingRootControlPlane()
         val expectedSnapshot = controlPlane.snapshot()
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController {
-                controlPlane.applyProgress(
-                    event = RotationEvent.RootUnavailable,
-                    nowElapsedMillis = 19_000,
-                )
-                rootAvailableCheckResult(rawStdout = "0")
-            },
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController {
+                        controlPlane.applyProgress(
+                            event = RotationEvent.RootUnavailable,
+                            nowElapsedMillis = 19_000,
+                        )
+                        rootAvailableCheckResult(rawStdout = "0")
+                    },
+                controlPlane = controlPlane,
+            )
 
-        val result = coordinator.checkRootAvailability(
-            expectedSnapshot = expectedSnapshot,
-            timeoutMillis = 2_000,
-            nowElapsedMillis = 20_000,
-        )
+        val result =
+            coordinator.checkRootAvailability(
+                expectedSnapshot = expectedSnapshot,
+                timeoutMillis = 2_000,
+                nowElapsedMillis = 20_000,
+            )
 
         val stale = assertIs<RotationRootAvailabilityAdvanceResult.Stale>(result)
         assertEquals(expectedSnapshot, stale.expectedSnapshot)
@@ -184,26 +204,31 @@ class RotationRootAvailabilityCoordinatorTest {
 
     @Test
     fun `outside checking-root phase does not execute root check`() {
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.ProbingOldPublicIp,
-                operation = RotationOperation.MobileData,
-            ),
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ProbingOldPublicIp,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
         var rootCheckExecuted = false
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController {
-                rootCheckExecuted = true
-                rootAvailableCheckResult(rawStdout = "0")
-            },
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController {
+                        rootCheckExecuted = true
+                        rootAvailableCheckResult(rawStdout = "0")
+                    },
+                controlPlane = controlPlane,
+            )
 
-        val result = coordinator.checkRootAvailability(
-            expectedSnapshot = controlPlane.snapshot(),
-            timeoutMillis = 2_000,
-            nowElapsedMillis = 20_000,
-        )
+        val result =
+            coordinator.checkRootAvailability(
+                expectedSnapshot = controlPlane.snapshot(),
+                timeoutMillis = 2_000,
+                nowElapsedMillis = 20_000,
+            )
 
         val noAction = assertIs<RotationRootAvailabilityAdvanceResult.NoAction>(result)
         assertEquals(controlPlane.snapshot(), noAction.snapshot)
@@ -215,13 +240,15 @@ class RotationRootAvailabilityCoordinatorTest {
     fun `invalid timing leaves checking-root rotation unchanged before root check`() {
         val controlPlane = checkingRootControlPlane()
         var rootCheckExecuted = false
-        val coordinator = RotationRootAvailabilityCoordinator(
-            availabilityController = rotationRootAvailabilityController {
-                rootCheckExecuted = true
-                rootAvailableCheckResult(rawStdout = "0")
-            },
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            RotationRootAvailabilityCoordinator(
+                availabilityController =
+                    rotationRootAvailabilityController {
+                        rootCheckExecuted = true
+                        rootAvailableCheckResult(rawStdout = "0")
+                    },
+                controlPlane = controlPlane,
+            )
 
         assertFailsWith<IllegalArgumentException> {
             coordinator.checkRootAvailability(
@@ -245,10 +272,11 @@ class RotationRootAvailabilityCoordinatorTest {
     @Test
     fun `applied result invariant rejects ignored rotation progress`() {
         val decision = RotationRootAvailabilityDecision.Available(rootAvailableCheckResult(rawStdout = "0"))
-        val ignoredProgress = RotationControlPlane().applyProgress(
-            event = RotationEvent.RootAvailable,
-            nowElapsedMillis = 20_000,
-        )
+        val ignoredProgress =
+            RotationControlPlane().applyProgress(
+                event = RotationEvent.RootAvailable,
+                nowElapsedMillis = 20_000,
+            )
 
         assertFailsWith<IllegalArgumentException> {
             RotationRootAvailabilityAdvanceResult.Applied(
@@ -268,52 +296,57 @@ class RotationRootAvailabilityCoordinatorTest {
         result: () -> RootAvailabilityCheckResult,
     ): RotationRootAvailabilityController =
         RotationRootAvailabilityController(
-            probe = RotationRootAvailabilityProbe { timeoutMillis, secrets ->
-                calls += RotationRootAvailabilityCall(timeoutMillis, secrets)
-                result()
-            },
+            probe =
+                RotationRootAvailabilityProbe { timeoutMillis, secrets ->
+                    calls += RotationRootAvailabilityCall(timeoutMillis, secrets)
+                    result()
+                },
         )
 
     private fun rotationRootAvailabilityController(
         calls: MutableList<RotationRootAvailabilityCall> = mutableListOf(),
         result: RootAvailabilityCheckResult,
-    ): RotationRootAvailabilityController =
-        rotationRootAvailabilityController(calls = calls) { result }
+    ): RotationRootAvailabilityController = rotationRootAvailabilityController(calls = calls) { result }
 
     private fun checkingRootControlPlane(): RotationControlPlane =
         RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.CheckingRoot,
-                operation = RotationOperation.MobileData,
-            ),
+            initialStatus =
+                RotationStatus(
+                    state = RotationState.CheckingRoot,
+                    operation = RotationOperation.MobileData,
+                ),
         )
 
     private fun rootAvailableCheckResult(rawStdout: String): RootAvailabilityCheckResult =
         RootAvailabilityCheckResult(
             status = RootAvailabilityStatus.Available,
-            execution = rootAvailabilityExecution(
-                result = RootCommandResult.completed(
-                    category = RootCommandCategory.RootAvailabilityCheck,
-                    exitCode = 0,
-                    stdout = rawStdout,
-                    stderr = "",
+            execution =
+                rootAvailabilityExecution(
+                    result =
+                        RootCommandResult.completed(
+                            category = RootCommandCategory.RootAvailabilityCheck,
+                            exitCode = 0,
+                            stdout = rawStdout,
+                            stderr = "",
+                        ),
+                    rawStdout = rawStdout,
                 ),
-                rawStdout = rawStdout,
-            ),
         )
 
     private fun rootUnavailableCheckResult(): RootAvailabilityCheckResult =
         RootAvailabilityCheckResult(
             status = RootAvailabilityStatus.Unavailable,
-            execution = rootAvailabilityExecution(
-                result = RootCommandResult.completed(
-                    category = RootCommandCategory.RootAvailabilityCheck,
-                    exitCode = 1,
-                    stdout = "",
-                    stderr = "permission denied",
+            execution =
+                rootAvailabilityExecution(
+                    result =
+                        RootCommandResult.completed(
+                            category = RootCommandCategory.RootAvailabilityCheck,
+                            exitCode = 1,
+                            stdout = "",
+                            stderr = "permission denied",
+                        ),
+                    rawStdout = "",
                 ),
-                rawStdout = "",
-            ),
             failureReason = RootAvailabilityCheckFailure.CommandFailed,
         )
 

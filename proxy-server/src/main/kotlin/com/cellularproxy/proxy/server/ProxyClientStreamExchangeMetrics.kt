@@ -17,8 +17,7 @@ object ProxyClientStreamExchangeMetrics {
     fun apply(
         metrics: ProxyTrafficMetrics,
         result: ProxyClientStreamExchangeHandlingResult,
-    ): ProxyTrafficMetrics =
-        eventsFor(result).fold(metrics, ProxyTrafficMetricsReducer::apply)
+    ): ProxyTrafficMetrics = eventsFor(result).fold(metrics, ProxyTrafficMetricsReducer::apply)
 
     fun eventsFor(result: ProxyClientStreamExchangeHandlingResult): List<ProxyTrafficMetricsEvent> =
         when (result) {
@@ -29,13 +28,12 @@ object ProxyClientStreamExchangeMetrics {
                 )
             is ProxyClientStreamExchangeHandlingResult.HttpProxyHandled,
             is ProxyClientStreamExchangeHandlingResult.ConnectTunnelHandled,
-            is ProxyClientStreamExchangeHandlingResult.ManagementHandled ->
+            is ProxyClientStreamExchangeHandlingResult.ManagementHandled,
+            ->
                 acceptedStartedEvents(result) + acceptedCompletedEvents(result)
         }
 
-    fun acceptedStartedEvents(
-        result: ProxyClientStreamExchangeHandlingResult,
-    ): List<ProxyTrafficMetricsEvent> =
+    fun acceptedStartedEvents(result: ProxyClientStreamExchangeHandlingResult): List<ProxyTrafficMetricsEvent> =
         when (result) {
             is ProxyClientStreamExchangeHandlingResult.HttpProxyHandled ->
                 acceptedStartedEvents(result.headerBytesRead)
@@ -51,9 +49,7 @@ object ProxyClientStreamExchangeMetrics {
         return acceptedStartEvents(headerBytesRead.toLong())
     }
 
-    fun acceptedCompletedEvents(
-        result: ProxyClientStreamExchangeHandlingResult,
-    ): List<ProxyTrafficMetricsEvent> =
+    fun acceptedCompletedEvents(result: ProxyClientStreamExchangeHandlingResult): List<ProxyTrafficMetricsEvent> =
         when (result) {
             is ProxyClientStreamExchangeHandlingResult.HttpProxyHandled ->
                 acceptedCompletionEvents(
@@ -73,31 +69,31 @@ object ProxyClientStreamExchangeMetrics {
             is ProxyClientStreamExchangeHandlingResult.PreflightRejected -> emptyList()
         }
 
-    fun acceptedClosedEvent(): ProxyTrafficMetricsEvent =
-        ProxyTrafficMetricsEvent.ConnectionClosed
+    fun acceptedClosedEvent(): ProxyTrafficMetricsEvent = ProxyTrafficMetricsEvent.ConnectionClosed
 
     private fun rejectedConnectionEvents(
         bytesReceived: Long,
         bytesSent: Long,
-    ): List<ProxyTrafficMetricsEvent> = buildList {
-        add(ProxyTrafficMetricsEvent.ConnectionRejected)
-        addByteEvents(bytesReceived = bytesReceived, bytesSent = bytesSent)
-    }
+    ): List<ProxyTrafficMetricsEvent> =
+        buildList {
+            add(ProxyTrafficMetricsEvent.ConnectionRejected)
+            addByteEvents(bytesReceived = bytesReceived, bytesSent = bytesSent)
+        }
 
-    private fun acceptedStartEvents(
-        bytesReceived: Long,
-    ): List<ProxyTrafficMetricsEvent> = buildList {
-        add(ProxyTrafficMetricsEvent.ConnectionAccepted)
-        addByteEvents(bytesReceived = bytesReceived, bytesSent = 0)
-    }
+    private fun acceptedStartEvents(bytesReceived: Long): List<ProxyTrafficMetricsEvent> =
+        buildList {
+            add(ProxyTrafficMetricsEvent.ConnectionAccepted)
+            addByteEvents(bytesReceived = bytesReceived, bytesSent = 0)
+        }
 
     private fun acceptedCompletionEvents(
         bytesReceived: Long,
         bytesSent: Long,
-    ): List<ProxyTrafficMetricsEvent> = buildList {
-        addByteEvents(bytesReceived = bytesReceived, bytesSent = bytesSent)
-        add(acceptedClosedEvent())
-    }
+    ): List<ProxyTrafficMetricsEvent> =
+        buildList {
+            addByteEvents(bytesReceived = bytesReceived, bytesSent = bytesSent)
+            add(acceptedClosedEvent())
+        }
 
     private fun MutableList<ProxyTrafficMetricsEvent>.addByteEvents(
         bytesReceived: Long,
@@ -186,13 +182,12 @@ private fun ConnectTunnelBidirectionalRelayResult.clientToOriginBytesRelayed(): 
 private fun ConnectTunnelBidirectionalRelayResult.originToClientBytesRelayed(): Long =
     bytesForDirection(ConnectTunnelRelayDirection.OriginToClient)
 
-private fun ConnectTunnelBidirectionalRelayResult.bytesForDirection(
-    direction: ConnectTunnelRelayDirection,
-): Long {
-    val result = when (direction) {
-        ConnectTunnelRelayDirection.ClientToOrigin -> clientToOrigin
-        ConnectTunnelRelayDirection.OriginToClient -> originToClient
-    }
+private fun ConnectTunnelBidirectionalRelayResult.bytesForDirection(direction: ConnectTunnelRelayDirection): Long {
+    val result =
+        when (direction) {
+            ConnectTunnelRelayDirection.ClientToOrigin -> clientToOrigin
+            ConnectTunnelRelayDirection.OriginToClient -> originToClient
+        }
     return result.bytesRelayed
 }
 

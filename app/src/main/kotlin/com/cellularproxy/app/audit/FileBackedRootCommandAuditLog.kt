@@ -33,20 +33,22 @@ class FileBackedRootCommandAuditLog(
     }
 
     fun record(record: RootCommandAuditRecord) {
-        val persisted = PersistedRootCommandAuditRecord(
-            occurredAtEpochMillis = clock(),
-            phase = record.phase,
-            category = record.category,
-            outcome = record.outcome,
-            exitCode = record.exitCode,
-            stdout = record.stdout,
-            stderr = record.stderr,
-        )
+        val persisted =
+            PersistedRootCommandAuditRecord(
+                occurredAtEpochMillis = clock(),
+                phase = record.phase,
+                category = record.category,
+                outcome = record.outcome,
+                exitCode = record.exitCode,
+                stdout = record.stdout,
+                stderr = record.stderr,
+            )
 
         synchronized(lock) {
             file.parentFile?.mkdirs()
-            val retainedLines = (readRecordsLocked().map(PersistedRootCommandAuditRecord::toLine) + persisted.toLine())
-                .takeLast(maxRecords)
+            val retainedLines =
+                (readRecordsLocked().map(PersistedRootCommandAuditRecord::toLine) + persisted.toLine())
+                    .takeLast(maxRecords)
             replaceFile(file, retainedLines.joinToString(separator = "\n", postfix = "\n"))
         }
     }
@@ -56,8 +58,7 @@ class FileBackedRootCommandAuditLog(
             readRecordsLocked()
         }
 
-    private fun readRecordsLocked(): List<PersistedRootCommandAuditRecord> =
-        readLinesLocked().mapNotNull(::parseLineOrNull)
+    private fun readRecordsLocked(): List<PersistedRootCommandAuditRecord> = readLinesLocked().mapNotNull(::parseLineOrNull)
 
     private fun readLinesLocked(): List<String> {
         if (!file.exists()) {
@@ -118,7 +119,8 @@ private fun String?.encodeNullable(): String =
     if (this == null) {
         NULL_FIELD
     } else {
-        Base64.getUrlEncoder()
+        Base64
+            .getUrlEncoder()
             .withoutPadding()
             .encodeToString(toByteArray(Charsets.UTF_8))
     }

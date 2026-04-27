@@ -38,33 +38,35 @@ class MobileDataRootController(
     ): MobileDataRootCommandResult {
         require(timeoutMillis > 0) { "Mobile data root command timeout must be positive" }
 
-        val execution = try {
-            executor.execute(
-                command = command,
-                timeoutMillis = timeoutMillis,
-                secrets = secrets,
-            )
-        } catch (exception: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw exception
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (_: Exception) {
-            return MobileDataRootCommandResult(
-                action = action,
-                execution = null,
-                failureReason = MobileDataRootCommandFailure.ProcessExecutionFailed,
-            )
-        }
+        val execution =
+            try {
+                executor.execute(
+                    command = command,
+                    timeoutMillis = timeoutMillis,
+                    secrets = secrets,
+                )
+            } catch (exception: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw exception
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                return MobileDataRootCommandResult(
+                    action = action,
+                    execution = null,
+                    failureReason = MobileDataRootCommandFailure.ProcessExecutionFailed,
+                )
+            }
 
         return MobileDataRootCommandResult(
             action = action,
             execution = execution,
-            failureReason = when (execution.result.outcome) {
-                RootCommandOutcome.Success -> null
-                RootCommandOutcome.Failure -> MobileDataRootCommandFailure.CommandFailed
-                RootCommandOutcome.Timeout -> MobileDataRootCommandFailure.CommandTimedOut
-            },
+            failureReason =
+                when (execution.result.outcome) {
+                    RootCommandOutcome.Success -> null
+                    RootCommandOutcome.Failure -> MobileDataRootCommandFailure.CommandFailed
+                    RootCommandOutcome.Timeout -> MobileDataRootCommandFailure.CommandTimedOut
+                },
         )
     }
 }
@@ -125,7 +127,8 @@ enum class MobileDataRootCommandFailure {
 }
 
 private val MobileDataRootAction.expectedCategory: RootCommandCategory
-    get() = when (this) {
-        MobileDataRootAction.Disable -> RootCommandCategory.MobileDataDisable
-        MobileDataRootAction.Enable -> RootCommandCategory.MobileDataEnable
-    }
+    get() =
+        when (this) {
+            MobileDataRootAction.Disable -> RootCommandCategory.MobileDataDisable
+            MobileDataRootAction.Enable -> RootCommandCategory.MobileDataEnable
+        }

@@ -30,23 +30,26 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
     @Test
     fun `http connector opens selected route socket for parsed origin`() {
         ConnectedSocketPair.open().use { socketPair ->
-            val provider = RecordingBoundSocketProvider(
-                result = BoundSocketConnectResult.Connected(socketPair.client, wifiRoute()),
-            )
-            val connectors = ProxyRuntimeOutboundConnectorFactory.create(
-                route = RouteTarget.WiFi,
-                socketProvider = provider,
-                connectTimeoutMillis = 2_500,
-            )
+            val provider =
+                RecordingBoundSocketProvider(
+                    result = BoundSocketConnectResult.Connected(socketPair.client, wifiRoute()),
+                )
+            val connectors =
+                ProxyRuntimeOutboundConnectorFactory.create(
+                    route = RouteTarget.WiFi,
+                    socketProvider = provider,
+                    connectTimeoutMillis = 2_500,
+                )
 
-            val openResult = connectors.httpConnector.open(
-                ParsedProxyRequest.HttpProxy(
-                    method = "GET",
-                    host = "example.com",
-                    port = 8080,
-                    originTarget = "/resource",
-                ),
-            )
+            val openResult =
+                connectors.httpConnector.open(
+                    ParsedProxyRequest.HttpProxy(
+                        method = "GET",
+                        host = "example.com",
+                        port = 8080,
+                        originTarget = "/resource",
+                    ),
+                )
 
             val connected = assertIs<OutboundHttpOriginOpenResult.Connected>(openResult)
             assertEquals("example.com", connected.connection.host)
@@ -61,21 +64,24 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
     @Test
     fun `connect tunnel connector opens selected route socket for parsed authority`() {
         ConnectedSocketPair.open().use { socketPair ->
-            val provider = RecordingBoundSocketProvider(
-                result = BoundSocketConnectResult.Connected(socketPair.client, vpnRoute()),
-            )
-            val connectors = ProxyRuntimeOutboundConnectorFactory.create(
-                route = RouteTarget.Vpn,
-                socketProvider = provider,
-                connectTimeoutMillis = 5_000,
-            )
+            val provider =
+                RecordingBoundSocketProvider(
+                    result = BoundSocketConnectResult.Connected(socketPair.client, vpnRoute()),
+                )
+            val connectors =
+                ProxyRuntimeOutboundConnectorFactory.create(
+                    route = RouteTarget.Vpn,
+                    socketProvider = provider,
+                    connectTimeoutMillis = 5_000,
+                )
 
-            val openResult = connectors.connectConnector.open(
-                ParsedProxyRequest.ConnectTunnel(
-                    host = "api.example.test",
-                    port = 443,
-                ),
-            )
+            val openResult =
+                connectors.connectConnector.open(
+                    ParsedProxyRequest.ConnectTunnel(
+                        host = "api.example.test",
+                        port = 443,
+                    ),
+                )
 
             val connected = assertIs<OutboundConnectTunnelOpenResult.Connected>(openResult)
             assertEquals("api.example.test", connected.connection.host)
@@ -91,30 +97,33 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
     fun `interrupted http connector closes late connected sockets`() {
         ConnectedSocketPair.open().use { socketPair ->
             val provider = SuspendedBoundSocketProvider()
-            val connectors = ProxyRuntimeOutboundConnectorFactory.create(
-                route = RouteTarget.WiFi,
-                socketProvider = provider,
-            )
+            val connectors =
+                ProxyRuntimeOutboundConnectorFactory.create(
+                    route = RouteTarget.WiFi,
+                    socketProvider = provider,
+                )
             val executor = Executors.newSingleThreadExecutor()
             val workerThread = AtomicReference<Thread>()
-            val future = executor.submit<OutboundHttpOriginOpenResult> {
-                workerThread.set(Thread.currentThread())
-                connectors.httpConnector.open(
-                    ParsedProxyRequest.HttpProxy(
-                        method = "GET",
-                        host = "example.com",
-                        port = 80,
-                        originTarget = "/",
-                    ),
-                )
-            }
+            val future =
+                executor.submit<OutboundHttpOriginOpenResult> {
+                    workerThread.set(Thread.currentThread())
+                    connectors.httpConnector.open(
+                        ParsedProxyRequest.HttpProxy(
+                            method = "GET",
+                            host = "example.com",
+                            port = 80,
+                            originTarget = "/",
+                        ),
+                    )
+                }
 
             try {
                 assertTrue(provider.awaitStarted())
                 workerThread.get().interrupt()
-                val failure = assertFailsWith<ExecutionException> {
-                    future.get(1, TimeUnit.SECONDS)
-                }
+                val failure =
+                    assertFailsWith<ExecutionException> {
+                        future.get(1, TimeUnit.SECONDS)
+                    }
                 assertIs<InterruptedException>(failure.cause)
 
                 provider.resumeWith(BoundSocketConnectResult.Connected(socketPair.client, wifiRoute()))
@@ -129,29 +138,33 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
 
     @Test
     fun `http connector maps bound socket failures to proxy origin failures`() {
-        val cases = mapOf(
-            BoundSocketConnectFailure.SelectedRouteUnavailable to OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
-            BoundSocketConnectFailure.DnsResolutionFailed to OutboundHttpOriginOpenFailure.DnsResolutionFailed,
-            BoundSocketConnectFailure.ConnectionFailed to OutboundHttpOriginOpenFailure.OutboundConnectionFailed,
-            BoundSocketConnectFailure.ConnectionTimedOut to OutboundHttpOriginOpenFailure.OutboundConnectionTimeout,
-        )
+        val cases =
+            mapOf(
+                BoundSocketConnectFailure.SelectedRouteUnavailable to OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
+                BoundSocketConnectFailure.DnsResolutionFailed to OutboundHttpOriginOpenFailure.DnsResolutionFailed,
+                BoundSocketConnectFailure.ConnectionFailed to OutboundHttpOriginOpenFailure.OutboundConnectionFailed,
+                BoundSocketConnectFailure.ConnectionTimedOut to OutboundHttpOriginOpenFailure.OutboundConnectionTimeout,
+            )
 
         cases.forEach { (boundFailure, expectedProxyFailure) ->
-            val connectors = ProxyRuntimeOutboundConnectorFactory.create(
-                route = RouteTarget.Cellular,
-                socketProvider = RecordingBoundSocketProvider(
-                    result = BoundSocketConnectResult.Failed(boundFailure),
-                ),
-            )
+            val connectors =
+                ProxyRuntimeOutboundConnectorFactory.create(
+                    route = RouteTarget.Cellular,
+                    socketProvider =
+                        RecordingBoundSocketProvider(
+                            result = BoundSocketConnectResult.Failed(boundFailure),
+                        ),
+                )
 
-            val openResult = connectors.httpConnector.open(
-                ParsedProxyRequest.HttpProxy(
-                    method = "GET",
-                    host = "example.com",
-                    port = 80,
-                    originTarget = "/",
-                ),
-            )
+            val openResult =
+                connectors.httpConnector.open(
+                    ParsedProxyRequest.HttpProxy(
+                        method = "GET",
+                        host = "example.com",
+                        port = 80,
+                        originTarget = "/",
+                    ),
+                )
 
             assertEquals(
                 OutboundHttpOriginOpenResult.Failed(expectedProxyFailure),
@@ -162,27 +175,31 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
 
     @Test
     fun `connect tunnel connector maps bound socket failures to proxy tunnel failures`() {
-        val cases = mapOf(
-            BoundSocketConnectFailure.SelectedRouteUnavailable to OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
-            BoundSocketConnectFailure.DnsResolutionFailed to OutboundConnectTunnelOpenFailure.DnsResolutionFailed,
-            BoundSocketConnectFailure.ConnectionFailed to OutboundConnectTunnelOpenFailure.OutboundConnectionFailed,
-            BoundSocketConnectFailure.ConnectionTimedOut to OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout,
-        )
+        val cases =
+            mapOf(
+                BoundSocketConnectFailure.SelectedRouteUnavailable to OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
+                BoundSocketConnectFailure.DnsResolutionFailed to OutboundConnectTunnelOpenFailure.DnsResolutionFailed,
+                BoundSocketConnectFailure.ConnectionFailed to OutboundConnectTunnelOpenFailure.OutboundConnectionFailed,
+                BoundSocketConnectFailure.ConnectionTimedOut to OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout,
+            )
 
         cases.forEach { (boundFailure, expectedProxyFailure) ->
-            val connectors = ProxyRuntimeOutboundConnectorFactory.create(
-                route = RouteTarget.Automatic,
-                socketProvider = RecordingBoundSocketProvider(
-                    result = BoundSocketConnectResult.Failed(boundFailure),
-                ),
-            )
+            val connectors =
+                ProxyRuntimeOutboundConnectorFactory.create(
+                    route = RouteTarget.Automatic,
+                    socketProvider =
+                        RecordingBoundSocketProvider(
+                            result = BoundSocketConnectResult.Failed(boundFailure),
+                        ),
+                )
 
-            val openResult = connectors.connectConnector.open(
-                ParsedProxyRequest.ConnectTunnel(
-                    host = "example.com",
-                    port = 443,
-                ),
-            )
+            val openResult =
+                connectors.connectConnector.open(
+                    ParsedProxyRequest.ConnectTunnel(
+                        host = "example.com",
+                        port = 443,
+                    ),
+                )
 
             assertEquals(
                 OutboundConnectTunnelOpenResult.Failed(expectedProxyFailure),
@@ -196,9 +213,10 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
         assertFailsWith<IllegalArgumentException> {
             ProxyRuntimeOutboundConnectorFactory.create(
                 route = RouteTarget.WiFi,
-                socketProvider = RecordingBoundSocketProvider(
-                    result = BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
-                ),
+                socketProvider =
+                    RecordingBoundSocketProvider(
+                        result = BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
+                    ),
                 connectTimeoutMillis = 0,
             )
         }

@@ -14,16 +14,19 @@ object ProxyRuntimeIngressConfigFactory {
         maxConcurrentConnections: Int = plainConfig.proxy.maxConcurrentConnections,
     ): ProxyIngressPreflightConfig =
         ProxyIngressPreflightConfig(
-            connectionLimit = ConnectionLimitAdmissionConfig(
-                maxConcurrentConnections = maxConcurrentConnections,
-            ),
-            requestAdmission = ProxyRequestAdmissionConfig(
-                proxyAuthentication = ProxyAuthenticationConfig(
-                    authEnabled = plainConfig.proxy.authEnabled,
-                    credential = sensitiveConfig.proxyCredential,
+            connectionLimit =
+                ConnectionLimitAdmissionConfig(
+                    maxConcurrentConnections = maxConcurrentConnections,
                 ),
-                managementApiToken = sensitiveConfig.managementApiToken,
-            ),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = plainConfig.proxy.authEnabled,
+                            credential = sensitiveConfig.proxyCredential,
+                        ),
+                    managementApiToken = sensitiveConfig.managementApiToken,
+                ),
         )
 }
 

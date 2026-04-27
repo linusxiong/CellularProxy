@@ -33,31 +33,34 @@ class ProxyServiceStatusTest {
 
     @Test
     fun `running status aggregates listener route security cloudflare root and metrics`() {
-        val cellularRoute = NetworkDescriptor(
-            id = "net-42",
-            category = NetworkCategory.Cellular,
-            displayName = "Carrier LTE",
-            isAvailable = true,
-        )
-        val metrics = ProxyTrafficMetrics(
-            activeConnections = 2,
-            totalConnections = 5,
-            rejectedConnections = 1,
-            bytesReceived = 1234,
-            bytesSent = 5678,
-        )
+        val cellularRoute =
+            NetworkDescriptor(
+                id = "net-42",
+                category = NetworkCategory.Cellular,
+                displayName = "Carrier LTE",
+                isAvailable = true,
+            )
+        val metrics =
+            ProxyTrafficMetrics(
+                activeConnections = 2,
+                totalConnections = 5,
+                rejectedConnections = 1,
+                bytesReceived = 1234,
+                bytesSent = 5678,
+            )
 
-        val status = ProxyServiceStatus.running(
-            listenHost = "0.0.0.0",
-            listenPort = 8080,
-            configuredRoute = RouteTarget.Cellular,
-            boundRoute = cellularRoute,
-            publicIp = "203.0.113.10",
-            hasHighSecurityRisk = true,
-            cloudflare = CloudflareTunnelStatus.connected(),
-            rootAvailability = RootAvailabilityStatus.Available,
-            metrics = metrics,
-        )
+        val status =
+            ProxyServiceStatus.running(
+                listenHost = "0.0.0.0",
+                listenPort = 8080,
+                configuredRoute = RouteTarget.Cellular,
+                boundRoute = cellularRoute,
+                publicIp = "203.0.113.10",
+                hasHighSecurityRisk = true,
+                cloudflare = CloudflareTunnelStatus.connected(),
+                rootAvailability = RootAvailabilityStatus.Available,
+                metrics = metrics,
+            )
 
         assertEquals(ProxyServiceState.Running, status.state)
         assertEquals("0.0.0.0", status.listenHost)
@@ -135,12 +138,13 @@ class ProxyServiceStatusTest {
                 state = ProxyServiceState.Running,
                 listenHost = "127.0.0.1",
                 listenPort = 8080,
-                boundRoute = NetworkDescriptor(
-                    id = "wifi",
-                    category = NetworkCategory.WiFi,
-                    displayName = "Wi-Fi",
-                    isAvailable = true,
-                ),
+                boundRoute =
+                    NetworkDescriptor(
+                        id = "wifi",
+                        category = NetworkCategory.WiFi,
+                        displayName = "Wi-Fi",
+                        isAvailable = true,
+                    ),
                 startupError = ProxyStartupError.UnavailableSelectedRoute,
             )
         }

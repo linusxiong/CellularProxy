@@ -25,13 +25,15 @@ interface SensitiveConfigGenerator {
 class SecureRandomSensitiveConfigGenerator(
     private val secureRandom: SecureRandom = SecureRandom(),
 ) : SensitiveConfigGenerator {
-    override fun generateDefaultSensitiveConfig(): SensitiveConfig = SensitiveConfig(
-        proxyCredential = ProxyCredential(
-            username = "proxy-" + generateToken(byteCount = 9),
-            password = generateToken(byteCount = 24),
-        ),
-        managementApiToken = generateToken(byteCount = 32),
-    )
+    override fun generateDefaultSensitiveConfig(): SensitiveConfig =
+        SensitiveConfig(
+            proxyCredential =
+                ProxyCredential(
+                    username = "proxy-" + generateToken(byteCount = 9),
+                    password = generateToken(byteCount = 24),
+                ),
+            managementApiToken = generateToken(byteCount = 32),
+        )
 
     private fun generateToken(byteCount: Int): String {
         val bytes = ByteArray(byteCount)
@@ -48,23 +50,26 @@ class AppConfigBootstrapper(
     suspend fun loadOrCreate(): AppConfigBootstrapResult {
         val plainConfig = plainRepository.load()
 
-        val (sensitiveConfig, createdDefaultSecrets) = when (val sensitiveLoadResult = sensitiveRepository.load()) {
-            SensitiveConfigLoadResult.MissingRequiredSecrets -> {
-                generator.generateDefaultSensitiveConfig()
-                    .also(sensitiveRepository::save) to true
+        val (sensitiveConfig, createdDefaultSecrets) =
+            when (val sensitiveLoadResult = sensitiveRepository.load()) {
+                SensitiveConfigLoadResult.MissingRequiredSecrets -> {
+                    generator
+                        .generateDefaultSensitiveConfig()
+                        .also(sensitiveRepository::save) to true
+                }
+
+                is SensitiveConfigLoadResult.Invalid -> {
+                    return AppConfigBootstrapResult.InvalidSensitiveConfig(sensitiveLoadResult.reason)
+                }
+
+                is SensitiveConfigLoadResult.Loaded -> sensitiveLoadResult.config to false
             }
 
-            is SensitiveConfigLoadResult.Invalid -> {
-                return AppConfigBootstrapResult.InvalidSensitiveConfig(sensitiveLoadResult.reason)
-            }
-
-            is SensitiveConfigLoadResult.Loaded -> sensitiveLoadResult.config to false
-        }
-
-        val (reconciledPlainConfig, reconciled) = reconcileCloudflareTokenPresence(
-            plainConfig = plainConfig,
-            sensitiveConfig = sensitiveConfig,
-        )
+        val (reconciledPlainConfig, reconciled) =
+            reconcileCloudflareTokenPresence(
+                plainConfig = plainConfig,
+                sensitiveConfig = sensitiveConfig,
+            )
 
         return AppConfigBootstrapResult.Ready(
             plainConfig = reconciledPlainConfig,
@@ -83,11 +88,13 @@ class AppConfigBootstrapper(
             return plainConfig to false
         }
 
-        val reconciledConfig = plainConfig.copy(
-            cloudflare = plainConfig.cloudflare.copy(
-                tunnelTokenPresent = cloudflareTokenPresent,
-            ),
-        )
+        val reconciledConfig =
+            plainConfig.copy(
+                cloudflare =
+                    plainConfig.cloudflare.copy(
+                        tunnelTokenPresent = cloudflareTokenPresent,
+                    ),
+            )
         plainRepository.save(reconciledConfig)
         return reconciledConfig to true
     }

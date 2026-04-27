@@ -14,17 +14,20 @@ class RotationControlPlane(
     }
 
     private val sessionController = RotationSessionController(initialStatus = initialStatus)
-    private val terminalTimestampTracker = TerminalRotationTimestampTracker(
-        initialLastTerminalElapsedMillis = initialLastTerminalElapsedMillis,
-    )
-    private val startGate = RotationStartGate(
-        sessionController = sessionController,
-        terminalTimestampTracker = terminalTimestampTracker,
-    )
-    private val progressGate = RotationProgressGate(
-        sessionController = sessionController,
-        terminalTimestampTracker = terminalTimestampTracker,
-    )
+    private val terminalTimestampTracker =
+        TerminalRotationTimestampTracker(
+            initialLastTerminalElapsedMillis = initialLastTerminalElapsedMillis,
+        )
+    private val startGate =
+        RotationStartGate(
+            sessionController = sessionController,
+            terminalTimestampTracker = terminalTimestampTracker,
+        )
+    private val progressGate =
+        RotationProgressGate(
+            sessionController = sessionController,
+            terminalTimestampTracker = terminalTimestampTracker,
+        )
     private var transitionGeneration: Long = 0
 
     @get:Synchronized
@@ -41,11 +44,12 @@ class RotationControlPlane(
         nowElapsedMillis: Long,
         cooldown: Duration,
     ): RotationStartGateResult {
-        val result = startGate.requestStart(
-            operation = operation,
-            nowElapsedMillis = nowElapsedMillis,
-            cooldown = cooldown,
-        )
+        val result =
+            startGate.requestStart(
+                operation = operation,
+                nowElapsedMillis = nowElapsedMillis,
+                cooldown = cooldown,
+            )
         if (result.startTransition.accepted) {
             transitionGeneration += 1
         }
@@ -57,10 +61,11 @@ class RotationControlPlane(
         event: RotationEvent,
         nowElapsedMillis: Long,
     ): RotationProgressGateResult {
-        val result = progressGate.apply(
-            event = event,
-            nowElapsedMillis = nowElapsedMillis,
-        )
+        val result =
+            progressGate.apply(
+                event = event,
+                nowElapsedMillis = nowElapsedMillis,
+            )
         if (result.transition.accepted) {
             transitionGeneration += 1
         }

@@ -29,29 +29,32 @@ class RotationNetworkReturnCoordinator(
             }
 
             return when (
-                val decision = RotationNetworkReturnPolicy.evaluate(
-                    routeTarget = routeTarget,
-                    networks = networks,
-                    waitStartedElapsedMillis = waitStartedElapsedMillis,
-                    nowElapsedMillis = nowElapsedMillis,
-                    networkReturnTimeout = networkReturnTimeout,
-                )
+                val decision =
+                    RotationNetworkReturnPolicy.evaluate(
+                        routeTarget = routeTarget,
+                        networks = networks,
+                        waitStartedElapsedMillis = waitStartedElapsedMillis,
+                        nowElapsedMillis = nowElapsedMillis,
+                        networkReturnTimeout = networkReturnTimeout,
+                    )
             ) {
                 is RotationNetworkReturnDecision.Returned ->
                     RotationNetworkReturnAdvanceResult.Applied(
                         decision = decision,
-                        progress = controlPlane.applyProgress(
-                            event = RotationEvent.NetworkReturned,
-                            nowElapsedMillis = nowElapsedMillis,
-                        ),
+                        progress =
+                            controlPlane.applyProgress(
+                                event = RotationEvent.NetworkReturned,
+                                nowElapsedMillis = nowElapsedMillis,
+                            ),
                     )
                 is RotationNetworkReturnDecision.TimedOut ->
                     RotationNetworkReturnAdvanceResult.Applied(
                         decision = decision,
-                        progress = controlPlane.applyProgress(
-                            event = RotationEvent.NetworkReturnTimedOut,
-                            nowElapsedMillis = nowElapsedMillis,
-                        ),
+                        progress =
+                            controlPlane.applyProgress(
+                                event = RotationEvent.NetworkReturnTimedOut,
+                                nowElapsedMillis = nowElapsedMillis,
+                            ),
                     )
                 is RotationNetworkReturnDecision.Waiting ->
                     RotationNetworkReturnAdvanceResult.Waiting(

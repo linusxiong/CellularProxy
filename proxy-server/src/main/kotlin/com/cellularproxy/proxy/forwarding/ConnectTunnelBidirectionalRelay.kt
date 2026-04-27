@@ -116,8 +116,11 @@ object ConnectTunnelBidirectionalRelay {
                 )
             }
 
-            val second = completionService.take().getRelayResult()
-                .normalizeIfCoordinatorClosed(tunnelClosedByCoordinator)
+            val second =
+                completionService
+                    .take()
+                    .getRelayResult()
+                    .normalizeIfCoordinatorClosed(tunnelClosedByCoordinator)
             if (second is ConnectTunnelStreamRelayResult.Failed) {
                 closeQuietly(client)
                 closeQuietly(origin)
@@ -159,16 +162,18 @@ object ConnectTunnelBidirectionalRelay {
         first: ConnectTunnelStreamRelayResult,
         second: ConnectTunnelStreamRelayResult,
     ): ConnectTunnelBidirectionalRelayResult {
-        val clientToOrigin = resultForDirection(
-            direction = ConnectTunnelRelayDirection.ClientToOrigin,
-            first = first,
-            second = second,
-        )
-        val originToClient = resultForDirection(
-            direction = ConnectTunnelRelayDirection.OriginToClient,
-            first = first,
-            second = second,
-        )
+        val clientToOrigin =
+            resultForDirection(
+                direction = ConnectTunnelRelayDirection.ClientToOrigin,
+                first = first,
+                second = second,
+            )
+        val originToClient =
+            resultForDirection(
+                direction = ConnectTunnelRelayDirection.OriginToClient,
+                first = first,
+                second = second,
+            )
 
         return if (
             clientToOrigin is ConnectTunnelStreamRelayResult.Completed &&

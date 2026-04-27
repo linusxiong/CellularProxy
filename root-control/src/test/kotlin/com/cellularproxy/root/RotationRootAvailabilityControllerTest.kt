@@ -16,15 +16,17 @@ class RotationRootAvailabilityControllerTest {
     fun `available root check maps to root-available rotation event`() {
         val available = rootAvailableCheckResult(rawStdout = "0\n")
         val calls = mutableListOf<RotationRootAvailabilityCall>()
-        val controller = RotationRootAvailabilityController(
-            probe = recordingProbe(calls, available),
-        )
+        val controller =
+            RotationRootAvailabilityController(
+                probe = recordingProbe(calls, available),
+            )
         val secrets = LogRedactionSecrets(managementApiToken = "token")
 
-        val decision = controller.checkRoot(
-            timeoutMillis = 2_000,
-            secrets = secrets,
-        )
+        val decision =
+            controller.checkRoot(
+                timeoutMillis = 2_000,
+                secrets = secrets,
+            )
 
         assertEquals(RotationRootAvailabilityDecision.Available(available), decision)
         assertSame(available, decision.result)
@@ -34,14 +36,16 @@ class RotationRootAvailabilityControllerTest {
 
     @Test
     fun `unavailable root check maps to root-unavailable rotation event`() {
-        val unavailable = RootAvailabilityCheckResult(
-            status = RootAvailabilityStatus.Unavailable,
-            execution = rootCommandFailureExecution(),
-            failureReason = RootAvailabilityCheckFailure.CommandFailed,
-        )
-        val controller = RotationRootAvailabilityController(
-            probe = recordingProbe(mutableListOf(), unavailable),
-        )
+        val unavailable =
+            RootAvailabilityCheckResult(
+                status = RootAvailabilityStatus.Unavailable,
+                execution = rootCommandFailureExecution(),
+                failureReason = RootAvailabilityCheckFailure.CommandFailed,
+            )
+        val controller =
+            RotationRootAvailabilityController(
+                probe = recordingProbe(mutableListOf(), unavailable),
+            )
 
         val decision = controller.checkRoot(timeoutMillis = 2_000)
 
@@ -54,9 +58,10 @@ class RotationRootAvailabilityControllerTest {
     @Test
     fun `unknown root check fails closed as root-unavailable rotation event`() {
         val unknown = RootAvailabilityCheckResult(status = RootAvailabilityStatus.Unknown)
-        val controller = RotationRootAvailabilityController(
-            probe = recordingProbe(mutableListOf(), unknown),
-        )
+        val controller =
+            RotationRootAvailabilityController(
+                probe = recordingProbe(mutableListOf(), unknown),
+            )
 
         val decision = controller.checkRoot(timeoutMillis = 2_000)
 
@@ -68,18 +73,20 @@ class RotationRootAvailabilityControllerTest {
     @Test
     fun `root availability checker can be used as rotation root availability probe`() {
         val calls = mutableListOf<RootAvailabilityCommandCall>()
-        val checker: RotationRootAvailabilityProbe = RootAvailabilityChecker(
-            executor = recordingRootAvailabilityExecutor(
-                calls = calls,
-                result = {
-                    RootCommandProcessResult.Completed(
-                        exitCode = 0,
-                        stdout = "0\n",
-                        stderr = "",
-                    )
-                },
-            ),
-        )
+        val checker: RotationRootAvailabilityProbe =
+            RootAvailabilityChecker(
+                executor =
+                    recordingRootAvailabilityExecutor(
+                        calls = calls,
+                        result = {
+                            RootCommandProcessResult.Completed(
+                                exitCode = 0,
+                                stdout = "0\n",
+                                stderr = "",
+                            )
+                        },
+                    ),
+            )
 
         val result = checker.check(timeoutMillis = 2_000, secrets = LogRedactionSecrets())
 
@@ -125,35 +132,39 @@ private fun recordingRootAvailabilityExecutor(
     result: (RootAvailabilityCommandCall) -> RootCommandProcessResult,
 ): RootCommandExecutor =
     RootCommandExecutor(
-        processExecutor = RootCommandProcessExecutor { command, timeoutMillis ->
-            val call = RootAvailabilityCommandCall(command, timeoutMillis)
-            calls += call
-            result(call)
-        },
+        processExecutor =
+            RootCommandProcessExecutor { command, timeoutMillis ->
+                val call = RootAvailabilityCommandCall(command, timeoutMillis)
+                calls += call
+                result(call)
+            },
     )
 
 private fun rootAvailableCheckResult(rawStdout: String): RootAvailabilityCheckResult =
     RootAvailabilityCheckResult(
         status = RootAvailabilityStatus.Available,
-        execution = rootAvailabilityExecution(
-            result = RootCommandResult.completed(
-                category = RootCommandCategory.RootAvailabilityCheck,
-                exitCode = 0,
-                stdout = rawStdout,
-                stderr = "",
+        execution =
+            rootAvailabilityExecution(
+                result =
+                    RootCommandResult.completed(
+                        category = RootCommandCategory.RootAvailabilityCheck,
+                        exitCode = 0,
+                        stdout = rawStdout,
+                        stderr = "",
+                    ),
+                rawStdout = rawStdout,
             ),
-            rawStdout = rawStdout,
-        ),
     )
 
 private fun rootCommandFailureExecution(): RootCommandExecution =
     rootAvailabilityExecution(
-        result = RootCommandResult.completed(
-            category = RootCommandCategory.RootAvailabilityCheck,
-            exitCode = 1,
-            stdout = "",
-            stderr = "permission denied",
-        ),
+        result =
+            RootCommandResult.completed(
+                category = RootCommandCategory.RootAvailabilityCheck,
+                exitCode = 1,
+                stdout = "",
+                stderr = "permission denied",
+            ),
         rawStdout = "",
     )
 

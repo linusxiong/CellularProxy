@@ -7,24 +7,29 @@ import kotlin.test.assertFailsWith
 class RotationProgressGateTest {
     @Test
     fun `accepted non terminal progress event updates session without recording terminal timestamp`() {
-        val session = RotationSessionController(
-            initialStatus = RotationStatus(
-                state = RotationState.CheckingRoot,
-                operation = RotationOperation.MobileData,
-            ),
-        )
-        val terminalTimestamps = TerminalRotationTimestampTracker(
-            initialLastTerminalElapsedMillis = 1_000,
-        )
-        val gate = RotationProgressGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val session =
+            RotationSessionController(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
+        val terminalTimestamps =
+            TerminalRotationTimestampTracker(
+                initialLastTerminalElapsedMillis = 1_000,
+            )
+        val gate =
+            RotationProgressGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.apply(
-            event = RotationEvent.RootAvailable,
-            nowElapsedMillis = 2_000,
-        )
+        val result =
+            gate.apply(
+                event = RotationEvent.RootAvailable,
+                nowElapsedMillis = 2_000,
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.transition.disposition)
         assertEquals(RotationState.ProbingOldPublicIp, result.status.state)
@@ -40,25 +45,29 @@ class RotationProgressGateTest {
 
     @Test
     fun `accepted terminal completion records terminal timestamp`() {
-        val session = RotationSessionController(
-            initialStatus = RotationStatus(
-                state = RotationState.ResumingProxyRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-                newPublicIp = "203.0.113.25",
-                publicIpChanged = true,
-            ),
-        )
+        val session =
+            RotationSessionController(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ResumingProxyRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.25",
+                        publicIpChanged = true,
+                    ),
+            )
         val terminalTimestamps = TerminalRotationTimestampTracker()
-        val gate = RotationProgressGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val gate =
+            RotationProgressGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.apply(
-            event = RotationEvent.ProxyRequestsResumed,
-            nowElapsedMillis = 9_000,
-        )
+        val result =
+            gate.apply(
+                event = RotationEvent.ProxyRequestsResumed,
+                nowElapsedMillis = 9_000,
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.transition.disposition)
         assertEquals(RotationState.Completed, result.status.state)
@@ -71,22 +80,26 @@ class RotationProgressGateTest {
 
     @Test
     fun `accepted real failure records terminal timestamp`() {
-        val session = RotationSessionController(
-            initialStatus = RotationStatus(
-                state = RotationState.CheckingRoot,
-                operation = RotationOperation.AirplaneMode,
-            ),
-        )
+        val session =
+            RotationSessionController(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.AirplaneMode,
+                    ),
+            )
         val terminalTimestamps = TerminalRotationTimestampTracker()
-        val gate = RotationProgressGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val gate =
+            RotationProgressGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.apply(
-            event = RotationEvent.RootUnavailable,
-            nowElapsedMillis = 7_000,
-        )
+        val result =
+            gate.apply(
+                event = RotationEvent.RootUnavailable,
+                nowElapsedMillis = 7_000,
+            )
 
         assertEquals(RotationTransitionDisposition.Accepted, result.transition.disposition)
         assertEquals(RotationState.Failed, result.status.state)
@@ -100,23 +113,27 @@ class RotationProgressGateTest {
 
     @Test
     fun `ignored progress event does not mutate session or record terminal timestamp`() {
-        val initialStatus = RotationStatus(
-            state = RotationState.CheckingRoot,
-            operation = RotationOperation.MobileData,
-        )
+        val initialStatus =
+            RotationStatus(
+                state = RotationState.CheckingRoot,
+                operation = RotationOperation.MobileData,
+            )
         val session = RotationSessionController(initialStatus = initialStatus)
-        val terminalTimestamps = TerminalRotationTimestampTracker(
-            initialLastTerminalElapsedMillis = 1_000,
-        )
-        val gate = RotationProgressGate(
-            sessionController = session,
-            terminalTimestampTracker = terminalTimestamps,
-        )
+        val terminalTimestamps =
+            TerminalRotationTimestampTracker(
+                initialLastTerminalElapsedMillis = 1_000,
+            )
+        val gate =
+            RotationProgressGate(
+                sessionController = session,
+                terminalTimestampTracker = terminalTimestamps,
+            )
 
-        val result = gate.apply(
-            event = RotationEvent.ToggleDelayElapsed,
-            nowElapsedMillis = 5_000,
-        )
+        val result =
+            gate.apply(
+                event = RotationEvent.ToggleDelayElapsed,
+                nowElapsedMillis = 5_000,
+            )
 
         assertEquals(RotationTransitionDisposition.Ignored, result.transition.disposition)
         assertEquals(initialStatus, result.status)
@@ -133,10 +150,11 @@ class RotationProgressGateTest {
     @Test
     fun `start gate events are rejected so callers cannot bypass cooldown protection`() {
         val session = RotationSessionController()
-        val gate = RotationProgressGate(
-            sessionController = session,
-            terminalTimestampTracker = TerminalRotationTimestampTracker(),
-        )
+        val gate =
+            RotationProgressGate(
+                sessionController = session,
+                terminalTimestampTracker = TerminalRotationTimestampTracker(),
+            )
 
         assertFailsWith<IllegalArgumentException> {
             gate.apply(
@@ -147,16 +165,19 @@ class RotationProgressGateTest {
 
         assertEquals(RotationStatus.idle(), session.currentStatus)
 
-        val checkingCooldownSession = RotationSessionController(
-            initialStatus = RotationStatus(
-                state = RotationState.CheckingCooldown,
-                operation = RotationOperation.AirplaneMode,
-            ),
-        )
-        val checkingCooldownGate = RotationProgressGate(
-            sessionController = checkingCooldownSession,
-            terminalTimestampTracker = TerminalRotationTimestampTracker(),
-        )
+        val checkingCooldownSession =
+            RotationSessionController(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingCooldown,
+                        operation = RotationOperation.AirplaneMode,
+                    ),
+            )
+        val checkingCooldownGate =
+            RotationProgressGate(
+                sessionController = checkingCooldownSession,
+                terminalTimestampTracker = TerminalRotationTimestampTracker(),
+            )
 
         assertFailsWith<IllegalArgumentException> {
             checkingCooldownGate.apply(
@@ -183,15 +204,17 @@ class RotationProgressGateTest {
 
     @Test
     fun `invalid progress observation timestamp is rejected before mutating session`() {
-        val initialStatus = RotationStatus(
-            state = RotationState.CheckingRoot,
-            operation = RotationOperation.MobileData,
-        )
+        val initialStatus =
+            RotationStatus(
+                state = RotationState.CheckingRoot,
+                operation = RotationOperation.MobileData,
+            )
         val session = RotationSessionController(initialStatus = initialStatus)
-        val gate = RotationProgressGate(
-            sessionController = session,
-            terminalTimestampTracker = TerminalRotationTimestampTracker(),
-        )
+        val gate =
+            RotationProgressGate(
+                sessionController = session,
+                terminalTimestampTracker = TerminalRotationTimestampTracker(),
+            )
 
         assertFailsWith<IllegalArgumentException> {
             gate.apply(

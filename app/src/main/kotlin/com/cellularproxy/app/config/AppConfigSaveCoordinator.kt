@@ -22,11 +22,13 @@ class AppConfigSaveCoordinator(
         plainConfig: AppConfig,
         sensitiveConfig: SensitiveConfig,
     ): AppConfigSaveResult {
-        val reconciledPlainConfig = plainConfig.copy(
-            cloudflare = plainConfig.cloudflare.copy(
-                tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
-            ),
-        )
+        val reconciledPlainConfig =
+            plainConfig.copy(
+                cloudflare =
+                    plainConfig.cloudflare.copy(
+                        tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
+                    ),
+            )
         val validationResult = reconciledPlainConfig.validate()
         if (!validationResult.isValid) {
             return AppConfigSaveResult.InvalidPlainConfig(validationResult.errors)

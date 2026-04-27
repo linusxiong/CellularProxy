@@ -10,18 +10,18 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
 class ProxyErrorResponseMapperTest {
     @Test
     fun `maps malformed request parsing to a generic bad request response`() {
-        val decision = ProxyErrorResponseMapper.map(
-            ProxyServerFailure.HeaderBlockParse(
-                reason = HttpRequestHeaderBlockRejectionReason.RequestLineRejected,
-                requestLineRejectionReason = ProxyRequestLineRejectionReason.InvalidAbsoluteUri,
-            ),
-        )
+        val decision =
+            ProxyErrorResponseMapper.map(
+                ProxyServerFailure.HeaderBlockParse(
+                    reason = HttpRequestHeaderBlockRejectionReason.RequestLineRejected,
+                    requestLineRejectionReason = ProxyRequestLineRejectionReason.InvalidAbsoluteUri,
+                ),
+            )
 
         val response = assertEmitted(decision)
 
@@ -33,16 +33,17 @@ class ProxyErrorResponseMapperTest {
 
     @Test
     fun `maps proxy authentication failures to a proxy authentication challenge`() {
-        val failures = listOf(
-            ProxyServerFailure.Admission(
-                ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
-            ),
-            ProxyServerFailure.Admission(
-                ProxyRequestAdmissionRejectionReason.ProxyAuthentication(
-                    ProxyAuthenticationRejectionReason.MissingAuthorization,
+        val failures =
+            listOf(
+                ProxyServerFailure.Admission(
+                    ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
                 ),
-            ),
-        )
+                ProxyServerFailure.Admission(
+                    ProxyRequestAdmissionRejectionReason.ProxyAuthentication(
+                        ProxyAuthenticationRejectionReason.MissingAuthorization,
+                    ),
+                ),
+            )
 
         failures.forEach { failure ->
             val response = assertEmitted(ProxyErrorResponseMapper.map(failure))
@@ -56,11 +57,12 @@ class ProxyErrorResponseMapperTest {
     @Test
     fun `maps management authorization failures to a bearer authentication challenge`() {
         ManagementAuthorizationRejectionReason.entries.forEach { rejectionReason ->
-            val decision = ProxyErrorResponseMapper.map(
-                ProxyServerFailure.Admission(
-                    ProxyRequestAdmissionRejectionReason.ManagementAuthorization(rejectionReason),
-                ),
-            )
+            val decision =
+                ProxyErrorResponseMapper.map(
+                    ProxyServerFailure.Admission(
+                        ProxyRequestAdmissionRejectionReason.ManagementAuthorization(rejectionReason),
+                    ),
+                )
 
             val response = assertEmitted(decision)
 
@@ -72,16 +74,17 @@ class ProxyErrorResponseMapperTest {
 
     @Test
     fun `maps capacity selected-route and paused-proxy failures to service unavailable responses`() {
-        val capacity = assertEmitted(
-            ProxyErrorResponseMapper.map(
-                ProxyServerFailure.ConnectionLimit(
-                    ConnectionLimitAdmissionRejectionReason.MaximumConcurrentConnectionsReached(
-                        activeConnections = 10,
-                        maxConcurrentConnections = 10,
+        val capacity =
+            assertEmitted(
+                ProxyErrorResponseMapper.map(
+                    ProxyServerFailure.ConnectionLimit(
+                        ConnectionLimitAdmissionRejectionReason.MaximumConcurrentConnectionsReached(
+                            activeConnections = 10,
+                            maxConcurrentConnections = 10,
+                        ),
                     ),
                 ),
-            ),
-        )
+            )
         val route = assertEmitted(ProxyErrorResponseMapper.map(ProxyServerFailure.SelectedRouteUnavailable))
         val paused = assertEmitted(ProxyErrorResponseMapper.map(ProxyServerFailure.ProxyRequestsPaused))
 
@@ -162,12 +165,13 @@ class ProxyErrorResponseMapperTest {
     @Test
     fun `defensively snapshots and exposes immutable response headers`() {
         val mutableHeaders = linkedMapOf("X-Test" to "one")
-        val response = ProxyErrorResponse(
-            statusCode = 500,
-            reasonPhrase = "Server Error",
-            headers = mutableHeaders,
-            body = "failure",
-        )
+        val response =
+            ProxyErrorResponse(
+                statusCode = 500,
+                reasonPhrase = "Server Error",
+                headers = mutableHeaders,
+                body = "failure",
+            )
 
         mutableHeaders["X-Test"] = "two"
         assertEquals("one", response.headers["X-Test"])
@@ -192,10 +196,11 @@ class ProxyErrorResponseMapperTest {
             ProxyErrorResponse(
                 statusCode = 500,
                 reasonPhrase = "Server Error",
-                headers = mapOf(
-                    "Content-Length" to "7",
-                    "Transfer-Encoding" to "chunked",
-                ),
+                headers =
+                    mapOf(
+                        "Content-Length" to "7",
+                        "Transfer-Encoding" to "chunked",
+                    ),
                 body = "failure",
             )
         }
@@ -203,10 +208,11 @@ class ProxyErrorResponseMapperTest {
             ProxyErrorResponse(
                 statusCode = 500,
                 reasonPhrase = "Server Error",
-                headers = linkedMapOf(
-                    "Content-Length" to "7",
-                    "content-length" to "7",
-                ),
+                headers =
+                    linkedMapOf(
+                        "Content-Length" to "7",
+                        "content-length" to "7",
+                    ),
                 body = "failure",
             )
         }

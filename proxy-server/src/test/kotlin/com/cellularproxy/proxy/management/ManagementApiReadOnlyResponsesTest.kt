@@ -16,16 +16,17 @@ import kotlin.test.assertFalse
 class ManagementApiReadOnlyResponsesTest {
     @Test
     fun `health response exposes only minimal service health`() {
-        val response = ManagementApiReadOnlyResponses.health(
-            ProxyServiceStatus.running(
-                listenHost = "0.0.0.0",
-                listenPort = 8080,
-                configuredRoute = RouteTarget.Automatic,
-                boundRoute = null,
-                publicIp = "198.51.100.10",
-                hasHighSecurityRisk = true,
-            ),
-        )
+        val response =
+            ManagementApiReadOnlyResponses.health(
+                ProxyServiceStatus.running(
+                    listenHost = "0.0.0.0",
+                    listenPort = 8080,
+                    configuredRoute = RouteTarget.Automatic,
+                    boundRoute = null,
+                    publicIp = "198.51.100.10",
+                    hasHighSecurityRisk = true,
+                ),
+            )
 
         assertEquals(200, response.statusCode)
         assertEquals("""{"ok":true,"serviceState":"running"}""", response.body)
@@ -35,34 +36,39 @@ class ManagementApiReadOnlyResponsesTest {
 
     @Test
     fun `status response renders dashboard fields and redacts cloudflare failure reason`() {
-        val response = ManagementApiReadOnlyResponses.status(
-            status = ProxyServiceStatus.running(
-                listenHost = "0.0.0.0",
-                listenPort = 8080,
-                configuredRoute = RouteTarget.Cellular,
-                boundRoute = NetworkDescriptor(
-                    id = "cell-1",
-                    category = NetworkCategory.Cellular,
-                    displayName = "Carrier LTE",
-                    isAvailable = true,
-                ),
-                publicIp = "198.51.100.23",
-                hasHighSecurityRisk = true,
-                cloudflare = CloudflareTunnelStatus.failed(
-                    "edge rejected Authorization: Bearer raw-token at https://edge.example.test/cdn-cgi?token=raw-token",
-                ),
-                rootAvailability = RootAvailabilityStatus.Available,
-                metrics = ProxyTrafficMetrics(
-                    activeConnections = 2,
-                    totalConnections = 5,
-                    rejectedConnections = 1,
-                    bytesReceived = 42,
-                    bytesSent = 99,
-                ),
-            ),
-            rootOperationsEnabled = true,
-            secrets = LogRedactionSecrets(managementApiToken = "raw-token"),
-        )
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "0.0.0.0",
+                        listenPort = 8080,
+                        configuredRoute = RouteTarget.Cellular,
+                        boundRoute =
+                            NetworkDescriptor(
+                                id = "cell-1",
+                                category = NetworkCategory.Cellular,
+                                displayName = "Carrier LTE",
+                                isAvailable = true,
+                            ),
+                        publicIp = "198.51.100.23",
+                        hasHighSecurityRisk = true,
+                        cloudflare =
+                            CloudflareTunnelStatus.failed(
+                                "edge rejected Authorization: Bearer raw-token at https://edge.example.test/cdn-cgi?token=raw-token",
+                            ),
+                        rootAvailability = RootAvailabilityStatus.Available,
+                        metrics =
+                            ProxyTrafficMetrics(
+                                activeConnections = 2,
+                                totalConnections = 5,
+                                rejectedConnections = 1,
+                                bytesReceived = 42,
+                                bytesSent = 99,
+                            ),
+                    ),
+                rootOperationsEnabled = true,
+                secrets = LogRedactionSecrets(managementApiToken = "raw-token"),
+            )
 
         assertEquals(200, response.statusCode)
         assertEquals(
@@ -79,10 +85,11 @@ class ManagementApiReadOnlyResponsesTest {
 
     @Test
     fun `status response suppresses root availability when root operations are disabled`() {
-        val response = ManagementApiReadOnlyResponses.status(
-            status = ProxyServiceStatus.stopped(rootAvailability = RootAvailabilityStatus.Available),
-            rootOperationsEnabled = false,
-        )
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.stopped(rootAvailability = RootAvailabilityStatus.Available),
+                rootOperationsEnabled = false,
+            )
 
         assertEquals(
             true,
@@ -92,10 +99,11 @@ class ManagementApiReadOnlyResponsesTest {
 
     @Test
     fun `status response includes failed startup error`() {
-        val response = ManagementApiReadOnlyResponses.status(
-            status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
-            rootOperationsEnabled = false,
-        )
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+                rootOperationsEnabled = false,
+            )
 
         assertEquals(
             "{" +
@@ -110,10 +118,11 @@ class ManagementApiReadOnlyResponsesTest {
 
     @Test
     fun `status response includes invalid maximum concurrent connections startup error`() {
-        val response = ManagementApiReadOnlyResponses.status(
-            status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidMaxConcurrentConnections),
-            rootOperationsEnabled = false,
-        )
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidMaxConcurrentConnections),
+                rootOperationsEnabled = false,
+            )
 
         assertEquals(
             true,
@@ -123,12 +132,13 @@ class ManagementApiReadOnlyResponsesTest {
 
     @Test
     fun `networks response preserves order and renders routeable network descriptors`() {
-        val response = ManagementApiReadOnlyResponses.networks(
-            listOf(
-                NetworkDescriptor("wifi-1", NetworkCategory.WiFi, "Office Wi-Fi", true),
-                NetworkDescriptor("vpn-1", NetworkCategory.Vpn, "Tailscale", false),
-            ),
-        )
+        val response =
+            ManagementApiReadOnlyResponses.networks(
+                listOf(
+                    NetworkDescriptor("wifi-1", NetworkCategory.WiFi, "Office Wi-Fi", true),
+                    NetworkDescriptor("vpn-1", NetworkCategory.Vpn, "Tailscale", false),
+                ),
+            )
 
         assertEquals(200, response.statusCode)
         assertEquals(
@@ -145,10 +155,11 @@ class ManagementApiReadOnlyResponsesTest {
 
     @Test
     fun `cloudflare status response redacts configured secrets from free-form failure reasons`() {
-        val response = ManagementApiReadOnlyResponses.cloudflareStatus(
-            status = CloudflareTunnelStatus.failed("failed with tunnel-secret in response"),
-            secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
-        )
+        val response =
+            ManagementApiReadOnlyResponses.cloudflareStatus(
+                status = CloudflareTunnelStatus.failed("failed with tunnel-secret in response"),
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
+            )
 
         assertEquals(
             """{"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"failed with [REDACTED] in response"}}""",

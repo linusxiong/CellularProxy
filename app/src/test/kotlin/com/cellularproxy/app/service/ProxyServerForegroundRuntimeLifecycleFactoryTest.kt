@@ -1,8 +1,8 @@
 package com.cellularproxy.app.service
 
-import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
 import com.cellularproxy.app.audit.ManagementApiAuditRecord
+import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
@@ -32,8 +32,8 @@ import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
-import java.io.ByteArrayOutputStream
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.ServerSocket
@@ -60,25 +60,26 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         var boundListener: BoundProxyServerSocket? = null
         var observedNetworkCalls = 0
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig(),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = {
-                observedNetworkCalls += 1
-                listOf(wifiRoute())
-            },
-            connectionHandler = connectionHandler(),
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
-                    if (result is ProxyServerSocketBindResult.Bound) {
-                        boundListener = result.listener
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = {
+                    observedNetworkCalls += 1
+                    listOf(wifiRoute())
+                },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                        if (result is ProxyServerSocketBindResult.Bound) {
+                            boundListener = result.listener
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -115,24 +116,26 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         var attemptedBind = false
         var currentNetworks = emptyList<NetworkDescriptor>()
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig(),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { currentNetworks },
-            connectionHandler = connectionHandler(),
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                attemptedBind = true
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { currentNetworks },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    attemptedBind = true
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
-            val failure = assertFailsWith<ProxyServerForegroundRuntimeStartException> {
-                lifecycle.startProxyRuntime()
-            }
+            val failure =
+                assertFailsWith<ProxyServerForegroundRuntimeStartException> {
+                    lifecycle.startProxyRuntime()
+                }
 
             assertEquals(ProxyStartupError.UnavailableSelectedRoute, failure.startupError)
             assertEquals(false, attemptedBind)
@@ -157,29 +160,33 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         var attemptedBind = false
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                cloudflare = AppConfig.default().cloudflare.copy(
-                    enabled = true,
-                    tunnelTokenPresent = true,
-                ),
-            ),
-            sensitiveConfig = sensitiveConfig.copy(cloudflareTunnelToken = null),
-            observedNetworks = { listOf(wifiRoute()) },
-            connectionHandler = connectionHandler(),
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { _: String, _: Int, _: Int ->
-                attemptedBind = true
-                error("missing cloudflare tunnel token must fail before binding")
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        cloudflare =
+                            AppConfig.default().cloudflare.copy(
+                                enabled = true,
+                                tunnelTokenPresent = true,
+                            ),
+                    ),
+                sensitiveConfig = sensitiveConfig.copy(cloudflareTunnelToken = null),
+                observedNetworks = { listOf(wifiRoute()) },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { _: String, _: Int, _: Int ->
+                    attemptedBind = true
+                    error("missing cloudflare tunnel token must fail before binding")
+                },
+            )
 
         try {
-            val failure = assertFailsWith<ProxyServerForegroundRuntimeStartException> {
-                lifecycle.startProxyRuntime()
-            }
+            val failure =
+                assertFailsWith<ProxyServerForegroundRuntimeStartException> {
+                    lifecycle.startProxyRuntime()
+                }
 
             assertEquals(ProxyStartupError.MissingCloudflareTunnelToken, failure.startupError)
             assertEquals(false, attemptedBind)
@@ -200,26 +207,29 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         var attemptedBind = false
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                proxy = loopbackAppConfig().proxy.copy(maxConcurrentConnections = 0),
-            ),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            connectionHandler = connectionHandler(),
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { _: String, _: Int, _: Int ->
-                attemptedBind = true
-                error("invalid maximum concurrent connections must fail before binding")
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        proxy = loopbackAppConfig().proxy.copy(maxConcurrentConnections = 0),
+                    ),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { _: String, _: Int, _: Int ->
+                    attemptedBind = true
+                    error("invalid maximum concurrent connections must fail before binding")
+                },
+            )
 
         try {
-            val failure = assertFailsWith<ProxyServerForegroundRuntimeStartException> {
-                lifecycle.startProxyRuntime()
-            }
+            val failure =
+                assertFailsWith<ProxyServerForegroundRuntimeStartException> {
+                    lifecycle.startProxyRuntime()
+                }
 
             assertEquals(ProxyStartupError.InvalidMaxConcurrentConnections, failure.startupError)
             assertEquals(false, attemptedBind)
@@ -240,25 +250,27 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         var attemptedBind = false
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig(),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            connectionHandler = connectionHandler(),
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            maxConcurrentConnections = 0,
-            bindListener = { _: String, _: Int, _: Int ->
-                attemptedBind = true
-                error("invalid maximum concurrent connections override must fail before binding")
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                maxConcurrentConnections = 0,
+                bindListener = { _: String, _: Int, _: Int ->
+                    attemptedBind = true
+                    error("invalid maximum concurrent connections override must fail before binding")
+                },
+            )
 
         try {
-            val failure = assertFailsWith<ProxyServerForegroundRuntimeStartException> {
-                lifecycle.startProxyRuntime()
-            }
+            val failure =
+                assertFailsWith<ProxyServerForegroundRuntimeStartException> {
+                    lifecycle.startProxyRuntime()
+                }
 
             assertEquals(ProxyStartupError.InvalidMaxConcurrentConnections, failure.startupError)
             assertEquals(false, attemptedBind)
@@ -278,23 +290,26 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                cloudflare = AppConfig.default().cloudflare.copy(
-                    enabled = true,
-                    tunnelTokenPresent = false,
-                ),
-            ),
-            sensitiveConfig = sensitiveConfig.copy(cloudflareTunnelToken = "cloudflare-token"),
-            observedNetworks = { listOf(wifiRoute()) },
-            connectionHandler = connectionHandler(),
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        cloudflare =
+                            AppConfig.default().cloudflare.copy(
+                                enabled = true,
+                                tunnelTokenPresent = false,
+                            ),
+                    ),
+                sensitiveConfig = sensitiveConfig.copy(cloudflareTunnelToken = "cloudflare-token"),
+                observedNetworks = { listOf(wifiRoute()) },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -319,29 +334,32 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         FakeOriginServer().use { origin ->
             val provider = RecordingBoundSocketProvider(origin)
             var boundListener: BoundProxyServerSocket? = null
-            val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-                plainConfig = loopbackAppConfig().copy(
-                    network = AppConfig.default().network.copy(
-                        defaultRoutePolicy = RouteTarget.Cellular,
-                    ),
-                ),
-                sensitiveConfig = sensitiveConfig,
-                observedNetworks = { listOf(cellularRoute()) },
-                socketProvider = provider,
-                managementHandler = {
-                    ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { listenHost: String, _: Int, backlog: Int ->
-                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
-                        if (result is ProxyServerSocketBindResult.Bound) {
-                            boundListener = result.listener
+            val lifecycle =
+                ProxyServerForegroundRuntimeLifecycleFactory.create(
+                    plainConfig =
+                        loopbackAppConfig().copy(
+                            network =
+                                AppConfig.default().network.copy(
+                                    defaultRoutePolicy = RouteTarget.Cellular,
+                                ),
+                        ),
+                    sensitiveConfig = sensitiveConfig,
+                    observedNetworks = { listOf(cellularRoute()) },
+                    socketProvider = provider,
+                    managementHandler = {
+                        ManagementApiResponse.json(statusCode = 200, body = "{}")
+                    },
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { listenHost: String, _: Int, backlog: Int ->
+                        ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                            if (result is ProxyServerSocketBindResult.Bound) {
+                                boundListener = result.listener
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
 
             try {
                 lifecycle.startProxyRuntime()
@@ -384,29 +402,32 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         FakeTunnelOriginServer().use { origin ->
             val provider = RecordingBoundSocketProvider(origin.port)
             var boundListener: BoundProxyServerSocket? = null
-            val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-                plainConfig = loopbackAppConfig().copy(
-                    network = AppConfig.default().network.copy(
-                        defaultRoutePolicy = RouteTarget.Cellular,
-                    ),
-                ),
-                sensitiveConfig = sensitiveConfig,
-                observedNetworks = { listOf(cellularRoute()) },
-                socketProvider = provider,
-                managementHandler = {
-                    ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { listenHost: String, _: Int, backlog: Int ->
-                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
-                        if (result is ProxyServerSocketBindResult.Bound) {
-                            boundListener = result.listener
+            val lifecycle =
+                ProxyServerForegroundRuntimeLifecycleFactory.create(
+                    plainConfig =
+                        loopbackAppConfig().copy(
+                            network =
+                                AppConfig.default().network.copy(
+                                    defaultRoutePolicy = RouteTarget.Cellular,
+                                ),
+                        ),
+                    sensitiveConfig = sensitiveConfig,
+                    observedNetworks = { listOf(cellularRoute()) },
+                    socketProvider = provider,
+                    managementHandler = {
+                        ManagementApiResponse.json(statusCode = 200, body = "{}")
+                    },
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { listenHost: String, _: Int, backlog: Int ->
+                        ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                            if (result is ProxyServerSocketBindResult.Bound) {
+                                boundListener = result.listener
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
 
             try {
                 lifecycle.startProxyRuntime()
@@ -458,29 +479,32 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         FakeOriginServer().use { origin ->
             val connector = RecordingBoundNetworkSocketConnector(origin)
             var boundListener: BoundProxyServerSocket? = null
-            val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-                plainConfig = loopbackAppConfig().copy(
-                    network = AppConfig.default().network.copy(
-                        defaultRoutePolicy = RouteTarget.Cellular,
-                    ),
-                ),
-                sensitiveConfig = sensitiveConfig,
-                observedNetworks = { listOf(wifiRoute(), cellularRoute()) },
-                socketConnector = connector,
-                managementHandler = {
-                    ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { listenHost: String, _: Int, backlog: Int ->
-                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
-                        if (result is ProxyServerSocketBindResult.Bound) {
-                            boundListener = result.listener
+            val lifecycle =
+                ProxyServerForegroundRuntimeLifecycleFactory.create(
+                    plainConfig =
+                        loopbackAppConfig().copy(
+                            network =
+                                AppConfig.default().network.copy(
+                                    defaultRoutePolicy = RouteTarget.Cellular,
+                                ),
+                        ),
+                    sensitiveConfig = sensitiveConfig,
+                    observedNetworks = { listOf(wifiRoute(), cellularRoute()) },
+                    socketConnector = connector,
+                    managementHandler = {
+                        ManagementApiResponse.json(statusCode = 200, body = "{}")
+                    },
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { listenHost: String, _: Int, backlog: Int ->
+                        ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                            if (result is ProxyServerSocketBindResult.Bound) {
+                                boundListener = result.listener
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
 
             try {
                 lifecycle.startProxyRuntime()
@@ -524,54 +548,57 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             val connector = RecordingBoundNetworkSocketConnector(origin)
             val managementReference = RuntimeManagementApiHandlerReference()
             var boundListener: BoundProxyServerSocket? = null
-            val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-                plainConfig = loopbackAppConfig().copy(
-                    network = AppConfig.default().network.copy(
-                        defaultRoutePolicy = RouteTarget.Cellular,
-                    ),
-                ),
-                sensitiveConfig = sensitiveConfig,
-                observedNetworks = { listOf(wifiRoute(), cellularRoute()) },
-                socketConnector = connector,
-                managementHandlerReference = managementReference,
-                publicIp = { "203.0.113.20" },
-                cloudflareStatus = { CloudflareTunnelStatus.connected() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Duplicate,
-                        CloudflareTunnelStatus.connected(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Accepted,
-                        CloudflareTunnelStatus.stopped(),
-                    )
-                },
-                rotateMobileData = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rotateAirplaneMode = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rootAvailability = { RootAvailabilityStatus.Unknown },
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { listenHost: String, _: Int, backlog: Int ->
-                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
-                        if (result is ProxyServerSocketBindResult.Bound) {
-                            boundListener = result.listener
+            val lifecycle =
+                ProxyServerForegroundRuntimeLifecycleFactory.create(
+                    plainConfig =
+                        loopbackAppConfig().copy(
+                            network =
+                                AppConfig.default().network.copy(
+                                    defaultRoutePolicy = RouteTarget.Cellular,
+                                ),
+                        ),
+                    sensitiveConfig = sensitiveConfig,
+                    observedNetworks = { listOf(wifiRoute(), cellularRoute()) },
+                    socketConnector = connector,
+                    managementHandlerReference = managementReference,
+                    publicIp = { "203.0.113.20" },
+                    cloudflareStatus = { CloudflareTunnelStatus.connected() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Duplicate,
+                            CloudflareTunnelStatus.connected(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Accepted,
+                            CloudflareTunnelStatus.stopped(),
+                        )
+                    },
+                    rotateMobileData = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rotateAirplaneMode = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rootAvailability = { RootAvailabilityStatus.Unknown },
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { listenHost: String, _: Int, backlog: Int ->
+                        ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                            if (result is ProxyServerSocketBindResult.Bound) {
+                                boundListener = result.listener
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
 
             try {
                 assertEquals(503, managementReference.handle(ManagementApiOperation.Status).statusCode)
@@ -621,51 +648,52 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val managementReference = RuntimeManagementApiHandlerReference()
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
         var boundListener: BoundProxyServerSocket? = null
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig(),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { null },
-            cloudflareStatus = { CloudflareTunnelStatus.connected() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Duplicate,
-                    CloudflareTunnelStatus.connected(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.connected(),
-                )
-            },
-            rotateMobileData = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { RootAvailabilityStatus.Unknown },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            recordManagementAudit = auditRecords::add,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
-                    if (result is ProxyServerSocketBindResult.Bound) {
-                        boundListener = result.listener
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.connected() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Duplicate,
+                        CloudflareTunnelStatus.connected(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.connected(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                recordManagementAudit = auditRecords::add,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                        if (result is ProxyServerSocketBindResult.Bound) {
+                            boundListener = result.listener
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -712,46 +740,47 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val managementReference = RuntimeManagementApiHandlerReference()
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig(),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { "203.0.113.10" },
-            cloudflareStatus = { CloudflareTunnelStatus.connected() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Duplicate,
-                    CloudflareTunnelStatus.connected(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Accepted,
-                    CloudflareTunnelStatus.stopped(),
-                )
-            },
-            rotateMobileData = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { RootAvailabilityStatus.Unknown },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { "203.0.113.10" },
+                cloudflareStatus = { CloudflareTunnelStatus.connected() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Duplicate,
+                        CloudflareTunnelStatus.connected(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Accepted,
+                        CloudflareTunnelStatus.stopped(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             assertEquals(503, managementReference.handle(ManagementApiOperation.Status).statusCode)
@@ -786,50 +815,52 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val managementReference = RuntimeManagementApiHandlerReference()
         var mobileDataRotationCalls = 0
         var airplaneModeRotationCalls = 0
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                root = AppConfig.default().root.copy(operationsEnabled = false),
-            ),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { null },
-            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            rotateMobileData = {
-                mobileDataRotationCalls += 1
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Accepted,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                airplaneModeRotationCalls += 1
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Accepted,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { RootAvailabilityStatus.Unknown },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        root = AppConfig.default().root.copy(operationsEnabled = false),
+                    ),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    mobileDataRotationCalls += 1
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Accepted,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    airplaneModeRotationCalls += 1
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Accepted,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -864,50 +895,52 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val managementReference = RuntimeManagementApiHandlerReference()
         var rootOperationsEnabled = true
         var mobileDataRotationCalls = 0
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                root = AppConfig.default().root.copy(operationsEnabled = true),
-            ),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { null },
-            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            rotateMobileData = {
-                mobileDataRotationCalls += 1
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootOperationsEnabled = { rootOperationsEnabled },
-            rootAvailability = { RootAvailabilityStatus.Unknown },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        root = AppConfig.default().root.copy(operationsEnabled = true),
+                    ),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    mobileDataRotationCalls += 1
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootOperationsEnabled = { rootOperationsEnabled },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -946,48 +979,50 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val managementReference = RuntimeManagementApiHandlerReference()
         var rootAvailability = RootAvailabilityStatus.Unavailable
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                root = AppConfig.default().root.copy(operationsEnabled = true),
-            ),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { null },
-            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            rotateMobileData = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { rootAvailability },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        root = AppConfig.default().root.copy(operationsEnabled = true),
+                    ),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { rootAvailability },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -1021,49 +1056,51 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val managementReference = RuntimeManagementApiHandlerReference()
         var mobileDataRotationCalls = 0
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig().copy(
-                root = AppConfig.default().root.copy(operationsEnabled = true),
-            ),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { null },
-            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            rotateMobileData = {
-                mobileDataRotationCalls += 1
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { RootAvailabilityStatus.Available },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig =
+                    loopbackAppConfig().copy(
+                        root = AppConfig.default().root.copy(operationsEnabled = true),
+                    ),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    mobileDataRotationCalls += 1
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Available },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -1088,46 +1125,47 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val managementReference = RuntimeManagementApiHandlerReference()
-        val lifecycle = ProxyServerForegroundRuntimeLifecycleFactory.create(
-            plainConfig = loopbackAppConfig(),
-            sensitiveConfig = sensitiveConfig,
-            observedNetworks = { listOf(wifiRoute()) },
-            socketProvider = RecordingUnavailableBoundSocketProvider,
-            managementHandlerReference = managementReference,
-            publicIp = { null },
-            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            rotateMobileData = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { RootAvailabilityStatus.Unknown },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Unknown },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             lifecycle.startProxyRuntime()
@@ -1147,35 +1185,39 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         }
     }
 
-    private val sensitiveConfig = SensitiveConfig(
-        proxyCredential = ProxyCredential(
-            username = "proxy-user",
-            password = "proxy-password",
-        ),
-        managementApiToken = "management-token",
-    )
+    private val sensitiveConfig =
+        SensitiveConfig(
+            proxyCredential =
+                ProxyCredential(
+                    username = "proxy-user",
+                    password = "proxy-password",
+                ),
+            managementApiToken = "management-token",
+        )
 
     private fun loopbackAppConfig(): AppConfig =
         AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(
-                listenHost = TEST_LOOPBACK_HOST,
-                listenPort = 8080,
-            ),
+            proxy =
+                AppConfig.default().proxy.copy(
+                    listenHost = TEST_LOOPBACK_HOST,
+                    listenPort = 8080,
+                ),
         )
 
     private fun connectionHandler(): ProxyBoundClientConnectionHandler =
         ProxyBoundClientConnectionHandler(
-            exchangeHandler = ProxyClientStreamExchangeHandler(
-                httpConnector = {
-                    OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.SelectedRouteUnavailable)
-                },
-                connectConnector = {
-                    OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable)
-                },
-                managementHandler = {
-                    ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-            ),
+            exchangeHandler =
+                ProxyClientStreamExchangeHandler(
+                    httpConnector = {
+                        OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.SelectedRouteUnavailable)
+                    },
+                    connectConnector = {
+                        OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable)
+                    },
+                    managementHandler = {
+                        ManagementApiResponse.json(statusCode = 200, body = "{}")
+                    },
+                ),
         )
 
     private fun unauthenticatedProxyRequestBytes(): ByteArray =
@@ -1183,28 +1225,32 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             "GET http://example.com/resource HTTP/1.1\r\n" +
                 "Host: example.com\r\n" +
                 "\r\n"
-            ).toByteArray(Charsets.US_ASCII)
+        ).toByteArray(Charsets.US_ASCII)
 
     private fun authenticatedProxyRequestBytes(): ByteArray {
-        val credentials = Base64.getEncoder()
-            .encodeToString("proxy-user:proxy-password".toByteArray(Charsets.UTF_8))
+        val credentials =
+            Base64
+                .getEncoder()
+                .encodeToString("proxy-user:proxy-password".toByteArray(Charsets.UTF_8))
         return (
             "GET http://origin.example.test:18080/resource HTTP/1.1\r\n" +
                 "Host: ignored.example.test\r\n" +
-            "Proxy-Authorization: Basic $credentials\r\n" +
+                "Proxy-Authorization: Basic $credentials\r\n" +
                 "\r\n"
-            ).toByteArray(Charsets.US_ASCII)
+        ).toByteArray(Charsets.US_ASCII)
     }
 
     private fun authenticatedConnectRequestBytes(): ByteArray {
-        val credentials = Base64.getEncoder()
-            .encodeToString("proxy-user:proxy-password".toByteArray(Charsets.UTF_8))
+        val credentials =
+            Base64
+                .getEncoder()
+                .encodeToString("proxy-user:proxy-password".toByteArray(Charsets.UTF_8))
         return (
             "CONNECT origin.example.test:18443 HTTP/1.1\r\n" +
                 "Host: origin.example.test:18443\r\n" +
                 "Proxy-Authorization: Basic $credentials\r\n" +
                 "\r\n"
-            ).toByteArray(Charsets.US_ASCII)
+        ).toByteArray(Charsets.US_ASCII)
     }
 
     private fun authenticatedManagementRequestBytes(requestLine: String): ByteArray =
@@ -1213,7 +1259,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                 "Host: phone.local\r\n" +
                 "Authorization: Bearer management-token\r\n" +
                 "\r\n"
-            ).toByteArray(Charsets.US_ASCII)
+        ).toByteArray(Charsets.US_ASCII)
 
     private fun wifiRoute(): NetworkDescriptor =
         NetworkDescriptor(
@@ -1249,12 +1295,13 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             callLatch.countDown()
             return BoundSocketConnectResult.Connected(
                 socket = Socket(TEST_LOOPBACK_HOST, originPort),
-                network = NetworkDescriptor(
-                    id = "cellular",
-                    category = NetworkCategory.Cellular,
-                    displayName = "Cellular",
-                    isAvailable = true,
-                ),
+                network =
+                    NetworkDescriptor(
+                        id = "cellular",
+                        category = NetworkCategory.Cellular,
+                        displayName = "Cellular",
+                        isAvailable = true,
+                    ),
             )
         }
 
@@ -1277,8 +1324,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             host: String,
             port: Int,
             timeoutMillis: Long,
-        ): BoundSocketConnectResult =
-            BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
+        ): BoundSocketConnectResult = BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
     }
 
     private class RecordingBoundNetworkSocketConnector(
@@ -1340,7 +1386,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                                     "Connection: close\r\n" +
                                     "\r\n" +
                                     "ok"
-                                ).toByteArray(Charsets.US_ASCII),
+                            ).toByteArray(Charsets.US_ASCII),
                         )
                         socket.getOutputStream().flush()
                     }

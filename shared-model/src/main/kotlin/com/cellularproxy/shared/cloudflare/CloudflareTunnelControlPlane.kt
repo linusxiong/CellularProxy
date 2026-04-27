@@ -11,8 +11,7 @@ class CloudflareTunnelControlPlane(
         get() = status
 
     @Synchronized
-    fun apply(event: CloudflareTunnelEvent): CloudflareTunnelControlPlaneTransitionResult =
-        applyLocked(event)
+    fun apply(event: CloudflareTunnelEvent): CloudflareTunnelControlPlaneTransitionResult = applyLocked(event)
 
     @Synchronized
     fun apply(

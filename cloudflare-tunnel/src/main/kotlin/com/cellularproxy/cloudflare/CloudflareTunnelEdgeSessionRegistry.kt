@@ -24,7 +24,9 @@ interface CloudflareTunnelEdgeCurrentSessionStore {
     ): Boolean
 }
 
-class CloudflareTunnelEdgeSessionRegistry : CloudflareTunnelEdgeSessionStore, CloudflareTunnelEdgeCurrentSessionStore {
+class CloudflareTunnelEdgeSessionRegistry :
+    CloudflareTunnelEdgeSessionStore,
+    CloudflareTunnelEdgeCurrentSessionStore {
     private var activeSession: CloudflareTunnelEdgeSession? = null
 
     @Synchronized
@@ -103,8 +105,7 @@ class CloudflareTunnelEdgeSession internal constructor(
     val snapshot: CloudflareTunnelControlPlaneSnapshot,
     val connection: CloudflareTunnelEdgeConnection,
 ) {
-    override fun toString(): String =
-        "CloudflareTunnelEdgeSession(snapshot=$snapshot, connection=<redacted>)"
+    override fun toString(): String = "CloudflareTunnelEdgeSession(snapshot=$snapshot, connection=<redacted>)"
 }
 
 class CloudflareTunnelEdgeSessionInstallResult internal constructor(

@@ -11,32 +11,34 @@ data class AppConfig(
     val root: RootConfig = RootConfig(),
 ) {
     fun validate(): ConfigValidationResult {
-        val errors = buildList {
-            if (!proxy.listenHost.isSupportedListenHost()) {
-                add(ConfigValidationError.InvalidListenHost)
+        val errors =
+            buildList {
+                if (!proxy.listenHost.isSupportedListenHost()) {
+                    add(ConfigValidationError.InvalidListenHost)
+                }
+                if (proxy.listenPort !in TCP_PORT_RANGE) {
+                    add(ConfigValidationError.InvalidListenPort)
+                }
+                if (proxy.maxConcurrentConnections <= 0) {
+                    add(ConfigValidationError.InvalidMaxConcurrentConnections)
+                }
+                if (cloudflare.enabled && !cloudflare.tunnelTokenPresent) {
+                    add(ConfigValidationError.MissingCloudflareTunnelToken)
+                }
             }
-            if (proxy.listenPort !in TCP_PORT_RANGE) {
-                add(ConfigValidationError.InvalidListenPort)
-            }
-            if (proxy.maxConcurrentConnections <= 0) {
-                add(ConfigValidationError.InvalidMaxConcurrentConnections)
-            }
-            if (cloudflare.enabled && !cloudflare.tunnelTokenPresent) {
-                add(ConfigValidationError.MissingCloudflareTunnelToken)
-            }
-        }
 
         return ConfigValidationResult(errors)
     }
 
     companion object {
-        fun default(): AppConfig = AppConfig(
-            proxy = ProxyConfig(),
-            network = NetworkConfig(),
-            rotation = RotationConfig(),
-            cloudflare = CloudflareConfig(),
-            root = RootConfig(),
-        )
+        fun default(): AppConfig =
+            AppConfig(
+                proxy = ProxyConfig(),
+                network = NetworkConfig(),
+                rotation = RotationConfig(),
+                cloudflare = CloudflareConfig(),
+                root = RootConfig(),
+            )
     }
 }
 

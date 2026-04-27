@@ -22,22 +22,25 @@ import kotlin.test.assertEquals
 class ProxyClientStreamExchangeMetricsTest {
     @Test
     fun `records rejected connection and preflight bytes without opening an active connection`() {
-        val result = ProxyClientStreamExchangeHandlingResult.PreflightRejected(
-            failure = ProxyServerFailure.ConnectionLimit(
-                ConnectionLimitAdmissionRejectionReason.MaximumConcurrentConnectionsReached(
-                    activeConnections = 2,
-                    maxConcurrentConnections = 2,
-                ),
-            ),
-            responseBytesWritten = 71,
-            requiresAuditLog = false,
-            headerBytesRead = 19,
-        )
+        val result =
+            ProxyClientStreamExchangeHandlingResult.PreflightRejected(
+                failure =
+                    ProxyServerFailure.ConnectionLimit(
+                        ConnectionLimitAdmissionRejectionReason.MaximumConcurrentConnectionsReached(
+                            activeConnections = 2,
+                            maxConcurrentConnections = 2,
+                        ),
+                    ),
+                responseBytesWritten = 71,
+                requiresAuditLog = false,
+                headerBytesRead = 19,
+            )
 
-        val metrics = ProxyClientStreamExchangeMetrics.apply(
-            metrics = ProxyTrafficMetrics(),
-            result = result,
-        )
+        val metrics =
+            ProxyClientStreamExchangeMetrics.apply(
+                metrics = ProxyTrafficMetrics(),
+                result = result,
+            )
 
         assertEquals(
             ProxyTrafficMetrics(
@@ -53,27 +56,30 @@ class ProxyClientStreamExchangeMetricsTest {
 
     @Test
     fun `records accepted HTTP exchange bytes and closes the active connection`() {
-        val result = ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
-            headerBytesRead = 83,
-            result = HttpProxyOutboundExchangeHandlingResult.Forwarded(
-                HttpProxyStreamExchangeForwardingResult.Forwarded(
-                    host = "origin.example",
-                    port = 80,
-                    requestHeaderBytesWritten = 61,
-                    requestBodyBytesWritten = 11,
-                    responseStatusCode = 200,
-                    responseHeaderBytesRead = 42,
-                    responseHeaderBytesWritten = 37,
-                    responseBodyBytesWritten = 23,
-                    mustCloseClientConnection = false,
-                ),
-            ),
-        )
+        val result =
+            ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
+                headerBytesRead = 83,
+                result =
+                    HttpProxyOutboundExchangeHandlingResult.Forwarded(
+                        HttpProxyStreamExchangeForwardingResult.Forwarded(
+                            host = "origin.example",
+                            port = 80,
+                            requestHeaderBytesWritten = 61,
+                            requestBodyBytesWritten = 11,
+                            responseStatusCode = 200,
+                            responseHeaderBytesRead = 42,
+                            responseHeaderBytesWritten = 37,
+                            responseBodyBytesWritten = 23,
+                            mustCloseClientConnection = false,
+                        ),
+                    ),
+            )
 
-        val metrics = ProxyClientStreamExchangeMetrics.apply(
-            metrics = ProxyTrafficMetrics(),
-            result = result,
-        )
+        val metrics =
+            ProxyClientStreamExchangeMetrics.apply(
+                metrics = ProxyTrafficMetrics(),
+                result = result,
+            )
 
         assertEquals(
             ProxyTrafficMetrics(
@@ -89,16 +95,18 @@ class ProxyClientStreamExchangeMetricsTest {
 
     @Test
     fun `preserves HTTP request body bytes when origin response preflight fails`() {
-        val result = ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
-            headerBytesRead = 84,
-            result = HttpProxyOutboundExchangeHandlingResult.Forwarded(
-                HttpProxyStreamExchangeForwardingResult.OriginResponsePreflightRejected(
-                    reason = OriginHttpResponseStreamPreflightRejectionReason.IncompleteHeaderBlock,
-                    responseHeaderBytesRead = 39,
-                    requestBodyBytesWritten = 512,
-                ),
-            ),
-        )
+        val result =
+            ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
+                headerBytesRead = 84,
+                result =
+                    HttpProxyOutboundExchangeHandlingResult.Forwarded(
+                        HttpProxyStreamExchangeForwardingResult.OriginResponsePreflightRejected(
+                            reason = OriginHttpResponseStreamPreflightRejectionReason.IncompleteHeaderBlock,
+                            responseHeaderBytesRead = 39,
+                            requestBodyBytesWritten = 512,
+                        ),
+                    ),
+            )
 
         assertEquals(
             listOf(
@@ -118,25 +126,29 @@ class ProxyClientStreamExchangeMetricsTest {
 
     @Test
     fun `preserves HTTP request body bytes and partial response bytes when response forwarding fails`() {
-        val result = ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
-            headerBytesRead = 84,
-            result = HttpProxyOutboundExchangeHandlingResult.Forwarded(
-                HttpProxyStreamExchangeForwardingResult.ResponseForwardingFailed(
-                    responseHeaderBytesRead = 40,
-                    requestBodyBytesWritten = 512,
-                    result = HttpProxyResponseStreamForwardingResult.Rejected(
-                        HttpProxyResponseStreamForwardingRejectionReason.BodyFramingRejected(
-                            HttpResponseBodyFramingRejectionReason.UnsupportedTransferEncoding,
+        val result =
+            ProxyClientStreamExchangeHandlingResult.HttpProxyHandled(
+                headerBytesRead = 84,
+                result =
+                    HttpProxyOutboundExchangeHandlingResult.Forwarded(
+                        HttpProxyStreamExchangeForwardingResult.ResponseForwardingFailed(
+                            responseHeaderBytesRead = 40,
+                            requestBodyBytesWritten = 512,
+                            result =
+                                HttpProxyResponseStreamForwardingResult.Rejected(
+                                    HttpProxyResponseStreamForwardingRejectionReason.BodyFramingRejected(
+                                        HttpResponseBodyFramingRejectionReason.UnsupportedTransferEncoding,
+                                    ),
+                                ),
                         ),
                     ),
-                ),
-            ),
-        )
+            )
 
-        val metrics = ProxyClientStreamExchangeMetrics.apply(
-            metrics = ProxyTrafficMetrics(),
-            result = result,
-        )
+        val metrics =
+            ProxyClientStreamExchangeMetrics.apply(
+                metrics = ProxyTrafficMetrics(),
+                result = result,
+            )
 
         assertEquals(
             ProxyTrafficMetrics(
@@ -152,29 +164,35 @@ class ProxyClientStreamExchangeMetricsTest {
 
     @Test
     fun `records accepted CONNECT relay bytes and closes the active connection`() {
-        val result = ProxyClientStreamExchangeHandlingResult.ConnectTunnelHandled(
-            headerBytesRead = 72,
-            result = ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed(
-                host = "origin.example",
-                port = 443,
-                responseBytesWritten = 39,
-                relayResult = ConnectTunnelBidirectionalRelayResult.Completed(
-                    clientToOrigin = ConnectTunnelStreamRelayResult.Completed(
-                        direction = ConnectTunnelRelayDirection.ClientToOrigin,
-                        bytesRelayed = 101,
+        val result =
+            ProxyClientStreamExchangeHandlingResult.ConnectTunnelHandled(
+                headerBytesRead = 72,
+                result =
+                    ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed(
+                        host = "origin.example",
+                        port = 443,
+                        responseBytesWritten = 39,
+                        relayResult =
+                            ConnectTunnelBidirectionalRelayResult.Completed(
+                                clientToOrigin =
+                                    ConnectTunnelStreamRelayResult.Completed(
+                                        direction = ConnectTunnelRelayDirection.ClientToOrigin,
+                                        bytesRelayed = 101,
+                                    ),
+                                originToClient =
+                                    ConnectTunnelStreamRelayResult.Completed(
+                                        direction = ConnectTunnelRelayDirection.OriginToClient,
+                                        bytesRelayed = 202,
+                                    ),
+                            ),
                     ),
-                    originToClient = ConnectTunnelStreamRelayResult.Completed(
-                        direction = ConnectTunnelRelayDirection.OriginToClient,
-                        bytesRelayed = 202,
-                    ),
-                ),
-            ),
-        )
+            )
 
-        val metrics = ProxyClientStreamExchangeMetrics.apply(
-            metrics = ProxyTrafficMetrics(),
-            result = result,
-        )
+        val metrics =
+            ProxyClientStreamExchangeMetrics.apply(
+                metrics = ProxyTrafficMetrics(),
+                result = result,
+            )
 
         assertEquals(
             ProxyTrafficMetrics(
@@ -190,21 +208,24 @@ class ProxyClientStreamExchangeMetricsTest {
 
     @Test
     fun `records accepted management response bytes and closes the active connection`() {
-        val result = ProxyClientStreamExchangeHandlingResult.ManagementHandled(
-            headerBytesRead = 96,
-            result = ManagementApiStreamExchangeHandlingResult.Responded(
-                operation = com.cellularproxy.proxy.management.ManagementApiOperation.ServiceStop,
-                statusCode = 202,
-                responseBytesWritten = 88,
-                requiresAuditLog = true,
-                disposition = ManagementApiStreamExchangeDisposition.Routed,
-            ),
-        )
+        val result =
+            ProxyClientStreamExchangeHandlingResult.ManagementHandled(
+                headerBytesRead = 96,
+                result =
+                    ManagementApiStreamExchangeHandlingResult.Responded(
+                        operation = com.cellularproxy.proxy.management.ManagementApiOperation.ServiceStop,
+                        statusCode = 202,
+                        responseBytesWritten = 88,
+                        requiresAuditLog = true,
+                        disposition = ManagementApiStreamExchangeDisposition.Routed,
+                    ),
+            )
 
-        val metrics = ProxyClientStreamExchangeMetrics.apply(
-            metrics = ProxyTrafficMetrics(),
-            result = result,
-        )
+        val metrics =
+            ProxyClientStreamExchangeMetrics.apply(
+                metrics = ProxyTrafficMetrics(),
+                result = result,
+            )
 
         assertEquals(
             ProxyTrafficMetrics(

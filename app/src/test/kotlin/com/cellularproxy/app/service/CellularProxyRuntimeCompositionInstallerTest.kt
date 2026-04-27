@@ -12,8 +12,8 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
-import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootCommandAuditPhase
+import com.cellularproxy.shared.root.RootCommandAuditRecord
 import java.io.Closeable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -39,18 +39,20 @@ class CellularProxyRuntimeCompositionInstallerTest {
     @Test
     fun `ready bootstrap installs runtime lifecycle and owns route monitor and executors`() {
         val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
-        val executors = RuntimeCompositionExecutorResources(
-            workerExecutor = Executors.newSingleThreadExecutor(),
-            queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
-            acceptLoopExecutor = Executors.newSingleThreadExecutor(),
-        )
-        val installation = CellularProxyRuntimeCompositionInstaller.installForTesting(
-            bootstrapResult = readyBootstrap(),
-            observedNetworks = routeMonitor::observedNetworks,
-            routeMonitor = routeMonitor,
-            socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
-            executorResources = executors,
-        )
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+            )
 
         assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(installation.installResult)
         assertNotSame(
@@ -77,21 +79,24 @@ class CellularProxyRuntimeCompositionInstallerTest {
     @Test
     fun `invalid sensitive bootstrap closes owned resources without installing runtime lifecycle`() {
         val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
-        val executors = RuntimeCompositionExecutorResources(
-            workerExecutor = Executors.newSingleThreadExecutor(),
-            queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
-            acceptLoopExecutor = Executors.newSingleThreadExecutor(),
-        )
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
 
-        val installation = CellularProxyRuntimeCompositionInstaller.installForTesting(
-            bootstrapResult = AppConfigBootstrapResult.InvalidSensitiveConfig(
-                SensitiveConfigInvalidReason.UndecryptableSecret,
-            ),
-            observedNetworks = routeMonitor::observedNetworks,
-            routeMonitor = routeMonitor,
-            socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
-            executorResources = executors,
-        )
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult =
+                    AppConfigBootstrapResult.InvalidSensitiveConfig(
+                        SensitiveConfigInvalidReason.UndecryptableSecret,
+                    ),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+            )
 
         assertEquals(
             ProxyServerForegroundRuntimeInstallResult.InvalidSensitiveConfig(
@@ -117,11 +122,12 @@ class CellularProxyRuntimeCompositionInstallerTest {
     @Test
     fun `installer failures close owned route monitor and executors before propagating`() {
         val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
-        val executors = RuntimeCompositionExecutorResources(
-            workerExecutor = Executors.newSingleThreadExecutor(),
-            queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
-            acceptLoopExecutor = Executors.newSingleThreadExecutor(),
-        )
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
 
         assertFailsWith<IllegalArgumentException> {
             CellularProxyRuntimeCompositionInstaller.installForTesting(
@@ -150,17 +156,18 @@ class CellularProxyRuntimeCompositionInstallerTest {
     @Test
     fun `production root availability provider emits root command audit records when root operations are enabled`() {
         val auditRecords = mutableListOf<RootCommandAuditRecord>()
-        val provider = createRootAvailabilityProvider(
-            rootOperationsEnabled = { true },
-            processExecutor = { _, _ ->
-                com.cellularproxy.root.RootCommandProcessResult.Completed(
-                    exitCode = 0,
-                    stdout = "0",
-                    stderr = "",
-                )
-            },
-            recordRootAudit = auditRecords::add,
-        )
+        val provider =
+            createRootAvailabilityProvider(
+                rootOperationsEnabled = { true },
+                processExecutor = { _, _ ->
+                    com.cellularproxy.root.RootCommandProcessResult.Completed(
+                        exitCode = 0,
+                        stdout = "0",
+                        stderr = "",
+                    )
+                },
+                recordRootAudit = auditRecords::add,
+            )
 
         assertEquals(com.cellularproxy.shared.root.RootAvailabilityStatus.Available, provider())
         assertEquals(
@@ -172,20 +179,22 @@ class CellularProxyRuntimeCompositionInstallerTest {
     @Test
     fun `production root audit sink failure does not break root availability and reports failure`() {
         val failures = mutableListOf<Throwable>()
-        val provider = createRootAvailabilityProvider(
-            rootOperationsEnabled = { true },
-            processExecutor = { _, _ ->
-                com.cellularproxy.root.RootCommandProcessResult.Completed(
-                    exitCode = 0,
-                    stdout = "0",
-                    stderr = "",
-                )
-            },
-            recordRootAudit = nonFatalRootAuditRecorder(
-                recordRootAudit = { throw java.io.IOException("audit disk full") },
-                reportRootAuditFailure = failures::add,
-            ),
-        )
+        val provider =
+            createRootAvailabilityProvider(
+                rootOperationsEnabled = { true },
+                processExecutor = { _, _ ->
+                    com.cellularproxy.root.RootCommandProcessResult.Completed(
+                        exitCode = 0,
+                        stdout = "0",
+                        stderr = "",
+                    )
+                },
+                recordRootAudit =
+                    nonFatalRootAuditRecorder(
+                        recordRootAudit = { throw java.io.IOException("audit disk full") },
+                        reportRootAuditFailure = failures::add,
+                    ),
+            )
 
         assertEquals(com.cellularproxy.shared.root.RootAvailabilityStatus.Available, provider())
         assertEquals(2, failures.size)
@@ -195,27 +204,30 @@ class CellularProxyRuntimeCompositionInstallerTest {
     @Test
     fun `default production rotation callbacks reject when execution is not wired`() {
         val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
-        val executors = RuntimeCompositionExecutorResources(
-            workerExecutor = Executors.newSingleThreadExecutor(),
-            queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
-            acceptLoopExecutor = Executors.newSingleThreadExecutor(),
-        )
-        val installation = CellularProxyRuntimeCompositionInstaller.installForTesting(
-            bootstrapResult = readyBootstrap(),
-            observedNetworks = routeMonitor::observedNetworks,
-            routeMonitor = routeMonitor,
-            socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
-            executorResources = executors,
-            rootOperationsEnabled = { true },
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+                rootOperationsEnabled = { true },
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
-            val installed = assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(
-                installation.installResult,
-            )
+            val installed =
+                assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(
+                    installation.installResult,
+                )
 
             ForegroundProxyRuntimeLifecycleRegistry.foregroundProxyRuntimeLifecycle.startProxyRuntime()
 
@@ -243,19 +255,23 @@ class CellularProxyRuntimeCompositionInstallerTest {
 
     private fun readyBootstrap(): AppConfigBootstrapResult.Ready =
         AppConfigBootstrapResult.Ready(
-            plainConfig = AppConfig.default().copy(
-                proxy = AppConfig.default().proxy.copy(
-                    listenHost = "127.0.0.1",
-                    listenPort = 8080,
+            plainConfig =
+                AppConfig.default().copy(
+                    proxy =
+                        AppConfig.default().proxy.copy(
+                            listenHost = "127.0.0.1",
+                            listenPort = 8080,
+                        ),
                 ),
-            ),
-            sensitiveConfig = SensitiveConfig(
-                proxyCredential = ProxyCredential(
-                    username = "proxy-user",
-                    password = "proxy-password",
+            sensitiveConfig =
+                SensitiveConfig(
+                    proxyCredential =
+                        ProxyCredential(
+                            username = "proxy-user",
+                            password = "proxy-password",
+                        ),
+                    managementApiToken = "management-token",
                 ),
-                managementApiToken = "management-token",
-            ),
             createdDefaultSecrets = false,
             reconciledPlainConfig = false,
         )
@@ -288,8 +304,7 @@ private object CompositionUnavailableBoundNetworkSocketConnector : BoundNetworkS
         host: String,
         port: Int,
         timeoutMillis: Long,
-    ): BoundSocketConnectResult =
-        BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
+    ): BoundSocketConnectResult = BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
 }
 
 private fun assertTerminates(executor: ExecutorService) {

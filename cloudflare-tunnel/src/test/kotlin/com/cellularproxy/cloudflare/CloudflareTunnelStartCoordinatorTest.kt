@@ -21,14 +21,16 @@ class CloudflareTunnelStartCoordinatorTest {
         val controlPlane = CloudflareTunnelControlPlane()
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
-            coordinator.startIfEnabled(
-                enabled = true,
-                rawTunnelToken = encodedToken(
-                    """{"a":"account-tag","s":"${secret.base64()}","t":"$tunnelId","e":"edge.example.com"}""",
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
+                coordinator.startIfEnabled(
+                    enabled = true,
+                    rawTunnelToken =
+                        encodedToken(
+                            """{"a":"account-tag","s":"${secret.base64()}","t":"$tunnelId","e":"edge.example.com"}""",
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.starting(), result.transition.status)
@@ -45,12 +47,13 @@ class CloudflareTunnelStartCoordinatorTest {
         val initialStart = controlPlane.apply(CloudflareTunnelEvent.StartRequested)
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
-            coordinator.startIfEnabled(
-                enabled = true,
-                rawTunnelToken = validToken(),
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
+                coordinator.startIfEnabled(
+                    enabled = true,
+                    rawTunnelToken = validToken(),
+                ),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Duplicate, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.starting(), result.transition.status)
@@ -66,12 +69,13 @@ class CloudflareTunnelStartCoordinatorTest {
         val connected = controlPlane.snapshot()
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
-            coordinator.startIfEnabled(
-                enabled = true,
-                rawTunnelToken = validToken(),
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
+                coordinator.startIfEnabled(
+                    enabled = true,
+                    rawTunnelToken = validToken(),
+                ),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Duplicate, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.connected(), result.transition.status)
@@ -88,12 +92,13 @@ class CloudflareTunnelStartCoordinatorTest {
         val degraded = controlPlane.snapshot()
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
-            coordinator.startIfEnabled(
-                enabled = true,
-                rawTunnelToken = validToken(),
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
+                coordinator.startIfEnabled(
+                    enabled = true,
+                    rawTunnelToken = validToken(),
+                ),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Duplicate, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.degraded(), result.transition.status)
@@ -110,12 +115,13 @@ class CloudflareTunnelStartCoordinatorTest {
             val controlPlane = CloudflareTunnelControlPlane(initialStatus)
             val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-            val result = assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
-                coordinator.startIfEnabled(
-                    enabled = true,
-                    rawTunnelToken = validToken(),
-                ),
-            )
+            val result =
+                assertIs<CloudflareTunnelStartCoordinatorResult.Ready>(
+                    coordinator.startIfEnabled(
+                        enabled = true,
+                        rawTunnelToken = validToken(),
+                    ),
+                )
 
             assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
             assertEquals(CloudflareTunnelStatus.starting(), result.transition.status)
@@ -128,9 +134,10 @@ class CloudflareTunnelStartCoordinatorTest {
         val controlPlane = CloudflareTunnelControlPlane()
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.FailedStartup>(
-            coordinator.startIfEnabled(enabled = true, rawTunnelToken = "   "),
-        )
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.FailedStartup>(
+                coordinator.startIfEnabled(enabled = true, rawTunnelToken = "   "),
+            )
 
         assertEquals(CloudflareTunnelStartupFailure.MissingTunnelToken, result.failure)
         assertEquals(CloudflareTunnelStatus.disabled(), controlPlane.currentStatus)
@@ -141,9 +148,10 @@ class CloudflareTunnelStartCoordinatorTest {
         val controlPlane = CloudflareTunnelControlPlane()
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.FailedStartup>(
-            coordinator.startIfEnabled(enabled = true, rawTunnelToken = "not base64"),
-        )
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.FailedStartup>(
+                coordinator.startIfEnabled(enabled = true, rawTunnelToken = "not base64"),
+            )
 
         assertEquals(CloudflareTunnelStartupFailure.InvalidTunnelToken, result.failure)
         assertEquals(CloudflareTunnelStatus.disabled(), controlPlane.currentStatus)
@@ -157,9 +165,10 @@ class CloudflareTunnelStartCoordinatorTest {
         val snapshotBefore = controlPlane.snapshot()
         val coordinator = CloudflareTunnelStartCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStartCoordinatorResult.Disabled>(
-            coordinator.startIfEnabled(enabled = false, rawTunnelToken = "not a valid token"),
-        )
+        val result =
+            assertIs<CloudflareTunnelStartCoordinatorResult.Disabled>(
+                coordinator.startIfEnabled(enabled = false, rawTunnelToken = "not a valid token"),
+            )
 
         assertEquals(snapshotBefore, result.snapshot)
         assertEquals(CloudflareTunnelStatus.connected(), controlPlane.currentStatus)
@@ -167,15 +176,17 @@ class CloudflareTunnelStartCoordinatorTest {
 
     @Test
     fun `start coordinator diagnostics do not expose token-derived values`() {
-        val result = CloudflareTunnelStartCoordinatorResult.Ready(
-            credentials = CloudflareTunnelCredentials(
-                accountTag = "account-secret",
-                tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-                tunnelSecret = ByteArray(32) { index -> (index + 1).toByte() },
-                endpoint = "edge.secret",
-            ),
-            transition = CloudflareTunnelControlPlane().apply(CloudflareTunnelEvent.StartRequested),
-        )
+        val result =
+            CloudflareTunnelStartCoordinatorResult.Ready(
+                credentials =
+                    CloudflareTunnelCredentials(
+                        accountTag = "account-secret",
+                        tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+                        tunnelSecret = ByteArray(32) { index -> (index + 1).toByte() },
+                        endpoint = "edge.secret",
+                    ),
+                transition = CloudflareTunnelControlPlane().apply(CloudflareTunnelEvent.StartRequested),
+            )
 
         val rendered = result.toString()
 
@@ -187,22 +198,26 @@ class CloudflareTunnelStartCoordinatorTest {
 
     @Test
     fun `ready result rejects non-start transition`() {
-        val transition = CloudflareTunnelControlPlane()
-            .apply(CloudflareTunnelEvent.Connected)
+        val transition =
+            CloudflareTunnelControlPlane()
+                .apply(CloudflareTunnelEvent.Connected)
 
-        val failure = kotlin.runCatching {
-            CloudflareTunnelStartCoordinatorResult.Ready(
-                credentials = credentials(),
-                transition = transition,
-            )
-        }
+        val failure =
+            kotlin.runCatching {
+                CloudflareTunnelStartCoordinatorResult.Ready(
+                    credentials = credentials(),
+                    transition = transition,
+                )
+            }
 
         assertTrue(failure.isFailure)
     }
 
     private fun validToken(): String =
         encodedToken(
-            """{"a":"account-tag","s":"${ByteArray(32) { index -> (index + 1).toByte() }.base64()}","t":"123e4567-e89b-12d3-a456-426614174000"}""",
+            """{"a":"account-tag","s":"${ByteArray(
+                32,
+            ) { index -> (index + 1).toByte() }.base64()}","t":"123e4567-e89b-12d3-a456-426614174000"}""",
         )
 
     private fun credentials(): CloudflareTunnelCredentials =
@@ -213,9 +228,7 @@ class CloudflareTunnelStartCoordinatorTest {
             endpoint = null,
         )
 
-    private fun encodedToken(json: String): String =
-        Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
+    private fun encodedToken(json: String): String = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
 
-    private fun ByteArray.base64(): String =
-        Base64.getEncoder().encodeToString(this)
+    private fun ByteArray.base64(): String = Base64.getEncoder().encodeToString(this)
 }

@@ -19,20 +19,23 @@ class CloudflareTunnelReconnectCoordinatorTest {
         val controlPlane = degradedControlPlane()
         val degraded = controlPlane.snapshot()
         var receivedCredentials: CloudflareTunnelCredentials? = null
-        val coordinator = CloudflareTunnelReconnectCoordinator(
-            controlPlane = controlPlane,
-            connector = CloudflareTunnelEdgeConnector { credentials ->
-                receivedCredentials = credentials
-                CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
-            },
-        )
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector { credentials ->
+                        receivedCredentials = credentials
+                        CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
+                    },
+            )
 
-        val result = assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
-            coordinator.reconnectIfDegraded(
-                expectedSnapshot = degraded,
-                credentials = credentials(),
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
+                coordinator.reconnectIfDegraded(
+                    expectedSnapshot = degraded,
+                    credentials = credentials(),
+                ),
+            )
 
         assertIs<CloudflareTunnelEdgeConnectionResult.Connected>(result.connectionResult)
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
@@ -49,17 +52,20 @@ class CloudflareTunnelReconnectCoordinatorTest {
         val oldConnection = TrackableEdgeConnection()
         val newConnection = TrackableEdgeConnection()
         registry.install(degraded, oldConnection)
-        val coordinator = CloudflareTunnelReconnectCoordinator(
-            controlPlane = controlPlane,
-            connector = CloudflareTunnelEdgeConnector {
-                CloudflareTunnelEdgeConnectionResult.Connected(newConnection)
-            },
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Connected(newConnection)
+                    },
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
-            coordinator.reconnectIfDegraded(degraded, credentials()),
-        )
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
+                coordinator.reconnectIfDegraded(degraded, credentials()),
+            )
 
         assertSame(newConnection, registry.currentSessionOrNull()?.connection)
         assertEquals(result.transition.snapshot, registry.currentSessionOrNull()?.snapshot)
@@ -72,16 +78,19 @@ class CloudflareTunnelReconnectCoordinatorTest {
         CloudflareTunnelEdgeConnectionFailure.entries.forEach { failure ->
             val controlPlane = degradedControlPlane()
             val degraded = controlPlane.snapshot()
-            val coordinator = CloudflareTunnelReconnectCoordinator(
-                controlPlane = controlPlane,
-                connector = CloudflareTunnelEdgeConnector {
-                    CloudflareTunnelEdgeConnectionResult.Failed(failure)
-                },
-            )
+            val coordinator =
+                CloudflareTunnelReconnectCoordinator(
+                    controlPlane = controlPlane,
+                    connector =
+                        CloudflareTunnelEdgeConnector {
+                            CloudflareTunnelEdgeConnectionResult.Failed(failure)
+                        },
+                )
 
-            val result = assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
-                coordinator.reconnectIfDegraded(degraded, credentials()),
-            )
+            val result =
+                assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
+                    coordinator.reconnectIfDegraded(degraded, credentials()),
+                )
 
             assertEquals(CloudflareTunnelEdgeConnectionResult.Failed(failure), result.connectionResult)
             assertEquals(CloudflareTunnelState.Failed, result.transition.status.state)
@@ -98,17 +107,20 @@ class CloudflareTunnelReconnectCoordinatorTest {
         controlPlane.apply(CloudflareTunnelEvent.StartRequested)
         controlPlane.apply(CloudflareTunnelEvent.Degraded)
         var connectorCalled = false
-        val coordinator = CloudflareTunnelReconnectCoordinator(
-            controlPlane = controlPlane,
-            connector = CloudflareTunnelEdgeConnector {
-                connectorCalled = true
-                CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
-            },
-        )
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector {
+                        connectorCalled = true
+                        CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
+                    },
+            )
 
-        val result = assertIs<CloudflareTunnelReconnectCoordinatorResult.Stale>(
-            coordinator.reconnectIfDegraded(staleDegraded, credentials()),
-        )
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.Stale>(
+                coordinator.reconnectIfDegraded(staleDegraded, credentials()),
+            )
 
         assertFalse(connectorCalled)
         assertEquals(staleDegraded, result.expectedSnapshot)
@@ -121,17 +133,20 @@ class CloudflareTunnelReconnectCoordinatorTest {
         val controlPlane = degradedControlPlane()
         val degraded = controlPlane.snapshot()
         val connection = TrackableEdgeConnection()
-        val coordinator = CloudflareTunnelReconnectCoordinator(
-            controlPlane = controlPlane,
-            connector = CloudflareTunnelEdgeConnector {
-                controlPlane.apply(CloudflareTunnelEvent.StopRequested)
-                CloudflareTunnelEdgeConnectionResult.Connected(connection)
-            },
-        )
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector {
+                        controlPlane.apply(CloudflareTunnelEvent.StopRequested)
+                        CloudflareTunnelEdgeConnectionResult.Connected(connection)
+                    },
+            )
 
-        val result = assertIs<CloudflareTunnelReconnectCoordinatorResult.Stale>(
-            coordinator.reconnectIfDegraded(degraded, credentials()),
-        )
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.Stale>(
+                coordinator.reconnectIfDegraded(degraded, credentials()),
+            )
 
         assertEquals(degraded, result.expectedSnapshot)
         assertEquals(controlPlane.snapshot(), result.actualSnapshot)
@@ -143,17 +158,20 @@ class CloudflareTunnelReconnectCoordinatorTest {
     fun `non-degraded expected snapshot does not open edge connection`() {
         val controlPlane = CloudflareTunnelControlPlane(initialStatus = CloudflareTunnelStatus.connected())
         var connectorCalled = false
-        val coordinator = CloudflareTunnelReconnectCoordinator(
-            controlPlane = controlPlane,
-            connector = CloudflareTunnelEdgeConnector {
-                connectorCalled = true
-                CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
-            },
-        )
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector {
+                        connectorCalled = true
+                        CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
+                    },
+            )
 
-        val result = assertIs<CloudflareTunnelReconnectCoordinatorResult.NoAction>(
-            coordinator.reconnectIfDegraded(controlPlane.snapshot(), credentials()),
-        )
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.NoAction>(
+                coordinator.reconnectIfDegraded(controlPlane.snapshot(), credentials()),
+            )
 
         assertFalse(connectorCalled)
         assertEquals(CloudflareTunnelStatus.connected(), result.snapshot.status)

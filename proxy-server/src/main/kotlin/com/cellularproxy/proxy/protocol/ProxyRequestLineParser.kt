@@ -27,8 +27,13 @@ sealed interface ParsedProxyRequest {
 }
 
 sealed interface ProxyRequestLineParseResult {
-    data class Accepted(val request: ParsedProxyRequest) : ProxyRequestLineParseResult
-    data class Rejected(val reason: ProxyRequestLineRejectionReason) : ProxyRequestLineParseResult
+    data class Accepted(
+        val request: ParsedProxyRequest,
+    ) : ProxyRequestLineParseResult
+
+    data class Rejected(
+        val reason: ProxyRequestLineRejectionReason,
+    ) : ProxyRequestLineParseResult
 }
 
 enum class ProxyRequestLineRejectionReason {
@@ -67,12 +72,16 @@ object ProxyRequestLineParser {
         }
     }
 
-    private fun parseAbsoluteForm(method: String, target: String): ProxyRequestLineParseResult {
-        val uri = try {
-            URI(target)
-        } catch (_: URISyntaxException) {
-            return ProxyRequestLineParseResult.Rejected(ProxyRequestLineRejectionReason.InvalidAbsoluteUri)
-        }
+    private fun parseAbsoluteForm(
+        method: String,
+        target: String,
+    ): ProxyRequestLineParseResult {
+        val uri =
+            try {
+                URI(target)
+            } catch (_: URISyntaxException) {
+                return ProxyRequestLineParseResult.Rejected(ProxyRequestLineRejectionReason.InvalidAbsoluteUri)
+            }
 
         if (uri.scheme != HTTP_SCHEME) {
             return ProxyRequestLineParseResult.Rejected(ProxyRequestLineRejectionReason.UnsupportedProxyScheme)
@@ -102,11 +111,12 @@ object ProxyRequestLineParser {
             return ProxyRequestLineParseResult.Rejected(ProxyRequestLineRejectionReason.InvalidConnectAuthority)
         }
 
-        val authorityUri = try {
-            URI("$AUTHORITY_PARSE_SCHEME://$target")
-        } catch (_: URISyntaxException) {
-            return ProxyRequestLineParseResult.Rejected(ProxyRequestLineRejectionReason.InvalidConnectAuthority)
-        }
+        val authorityUri =
+            try {
+                URI("$AUTHORITY_PARSE_SCHEME://$target")
+            } catch (_: URISyntaxException) {
+                return ProxyRequestLineParseResult.Rejected(ProxyRequestLineRejectionReason.InvalidConnectAuthority)
+            }
 
         val host = authorityUri.host.toBracketedIpv6HostIfNeeded()
         val port = authorityUri.port
@@ -122,12 +132,16 @@ object ProxyRequestLineParser {
         )
     }
 
-    private fun parseOriginForm(method: String, target: String): ProxyRequestLineParseResult {
-        val managementMethod = when (method) {
-            GET_METHOD -> HttpMethod.Get
-            POST_METHOD -> HttpMethod.Post
-            else -> null
-        }
+    private fun parseOriginForm(
+        method: String,
+        target: String,
+    ): ProxyRequestLineParseResult {
+        val managementMethod =
+            when (method) {
+                GET_METHOD -> HttpMethod.Get
+                POST_METHOD -> HttpMethod.Post
+                else -> null
+            }
 
         if (managementMethod == null) {
             return if (target.isPotentialManagementTarget()) {

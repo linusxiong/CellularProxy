@@ -26,34 +26,36 @@ object ManagementApiReadOnlyResponses {
     ): ManagementApiResponse =
         ManagementApiResponse.json(
             statusCode = 200,
-            body = buildString {
-                append('{')
-                append(""""service":""")
-                append(status.serviceJson())
-                append(',')
-                append(""""metrics":""")
-                append(status.metricsJson())
-                append(',')
-                append(""""cloudflare":""")
-                append(status.cloudflare.managementApiJson(secrets))
-                append(',')
-                append(""""root":{"operationsEnabled":""")
-                append(rootOperationsEnabled)
-                append(',')
-                append(""""availability":""")
-                append(status.rootAvailabilityFor(rootOperationsEnabled).apiValue().jsonString())
-                append("}}")
-            },
+            body =
+                buildString {
+                    append('{')
+                    append(""""service":""")
+                    append(status.serviceJson())
+                    append(',')
+                    append(""""metrics":""")
+                    append(status.metricsJson())
+                    append(',')
+                    append(""""cloudflare":""")
+                    append(status.cloudflare.managementApiJson(secrets))
+                    append(',')
+                    append(""""root":{"operationsEnabled":""")
+                    append(rootOperationsEnabled)
+                    append(',')
+                    append(""""availability":""")
+                    append(status.rootAvailabilityFor(rootOperationsEnabled).apiValue().jsonString())
+                    append("}}")
+                },
         )
 
     fun networks(networks: List<NetworkDescriptor>): ManagementApiResponse =
         ManagementApiResponse.json(
             statusCode = 200,
-            body = networks.joinToString(
-                prefix = """{"networks":[""",
-                postfix = "]}",
-                separator = ",",
-            ) { it.networkJson() },
+            body =
+                networks.joinToString(
+                    prefix = """{"networks":[""",
+                    postfix = "]}",
+                    separator = ",",
+                ) { it.networkJson() },
         )
 
     fun publicIp(publicIp: String?): ManagementApiResponse =
@@ -200,8 +202,7 @@ private fun ProxyStartupError.apiValue(): String =
         ProxyStartupError.MissingCloudflareTunnelToken -> "missing_cloudflare_tunnel_token"
     }
 
-internal fun String?.jsonNullableString(): String =
-    this?.jsonString() ?: "null"
+internal fun String?.jsonNullableString(): String = this?.jsonString() ?: "null"
 
 internal fun String.jsonString(): String =
     buildString {

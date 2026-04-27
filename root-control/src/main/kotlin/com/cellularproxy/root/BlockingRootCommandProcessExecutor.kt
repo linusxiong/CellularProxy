@@ -26,13 +26,14 @@ class BlockingRootCommandProcessExecutor(
         val stdout = StreamCapture(process.inputStream, charset).also { it.start() }
         val stderr = StreamCapture(process.errorStream, charset).also { it.start() }
 
-        val completed = try {
-            process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (exception: InterruptedException) {
-            cleanupAfterInterruption(process, stdout, stderr)
-            Thread.currentThread().interrupt()
-            throw exception
-        }
+        val completed =
+            try {
+                process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
+            } catch (exception: InterruptedException) {
+                cleanupAfterInterruption(process, stdout, stderr)
+                Thread.currentThread().interrupt()
+                throw exception
+            }
 
         return if (completed) {
             try {
@@ -148,30 +149,33 @@ private class StreamCapture(
     private val charset: Charset,
 ) {
     private val output = ByteArrayOutputStream()
+
     @Volatile
     private var failure: Exception? = null
+
     @Volatile
     private var closedByOwner: Boolean = false
-    private val thread = Thread {
-        try {
-            input.use { stream ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val read = stream.read(buffer)
-                    if (read == -1) {
-                        break
-                    }
-                    synchronized(output) {
-                        output.write(buffer, 0, read)
+    private val thread =
+        Thread {
+            try {
+                input.use { stream ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = stream.read(buffer)
+                        if (read == -1) {
+                            break
+                        }
+                        synchronized(output) {
+                            output.write(buffer, 0, read)
+                        }
                     }
                 }
+            } catch (exception: Exception) {
+                failure = exception
             }
-        } catch (exception: Exception) {
-            failure = exception
+        }.apply {
+            isDaemon = true
         }
-    }.apply {
-        isDaemon = true
-    }
 
     fun start() {
         thread.start()

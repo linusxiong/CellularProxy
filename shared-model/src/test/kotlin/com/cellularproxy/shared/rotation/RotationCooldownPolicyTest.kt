@@ -9,11 +9,12 @@ import kotlin.time.Duration.Companion.seconds
 class RotationCooldownPolicyTest {
     @Test
     fun `rotation cooldown passes when there is no prior terminal rotation`() {
-        val decision = RotationCooldownPolicy.evaluate(
-            lastTerminalRotationElapsedMillis = null,
-            nowElapsedMillis = 1_000,
-            cooldown = 180.seconds,
-        )
+        val decision =
+            RotationCooldownPolicy.evaluate(
+                lastTerminalRotationElapsedMillis = null,
+                nowElapsedMillis = 1_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(RotationCooldownDecision.Passed, decision)
         assertEquals(RotationEvent.CooldownPassed, decision.event)
@@ -21,11 +22,12 @@ class RotationCooldownPolicyTest {
 
     @Test
     fun `rotation cooldown passes when configured cooldown has elapsed exactly`() {
-        val decision = RotationCooldownPolicy.evaluate(
-            lastTerminalRotationElapsedMillis = 1_000,
-            nowElapsedMillis = 181_000,
-            cooldown = 180.seconds,
-        )
+        val decision =
+            RotationCooldownPolicy.evaluate(
+                lastTerminalRotationElapsedMillis = 1_000,
+                nowElapsedMillis = 181_000,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(RotationCooldownDecision.Passed, decision)
         assertEquals(RotationEvent.CooldownPassed, decision.event)
@@ -33,11 +35,12 @@ class RotationCooldownPolicyTest {
 
     @Test
     fun `rotation cooldown rejection reports remaining cooldown and state-machine event`() {
-        val decision = RotationCooldownPolicy.evaluate(
-            lastTerminalRotationElapsedMillis = 1_000,
-            nowElapsedMillis = 121_500,
-            cooldown = 180.seconds,
-        )
+        val decision =
+            RotationCooldownPolicy.evaluate(
+                lastTerminalRotationElapsedMillis = 1_000,
+                nowElapsedMillis = 121_500,
+                cooldown = 180.seconds,
+            )
 
         assertEquals(
             RotationCooldownDecision.Rejected(remainingCooldown = 59_500.milliseconds),
@@ -48,11 +51,12 @@ class RotationCooldownPolicyTest {
 
     @Test
     fun `rotation cooldown fails closed when observed last terminal time is in the future`() {
-        val decision = RotationCooldownPolicy.evaluate(
-            lastTerminalRotationElapsedMillis = 5_000,
-            nowElapsedMillis = 4_000,
-            cooldown = 3.seconds,
-        )
+        val decision =
+            RotationCooldownPolicy.evaluate(
+                lastTerminalRotationElapsedMillis = 5_000,
+                nowElapsedMillis = 4_000,
+                cooldown = 3.seconds,
+            )
 
         assertEquals(
             RotationCooldownDecision.Rejected(remainingCooldown = 4.seconds),
@@ -63,11 +67,12 @@ class RotationCooldownPolicyTest {
 
     @Test
     fun `zero cooldown passes immediately after a prior terminal rotation`() {
-        val decision = RotationCooldownPolicy.evaluate(
-            lastTerminalRotationElapsedMillis = 1_000,
-            nowElapsedMillis = 1_000,
-            cooldown = 0.seconds,
-        )
+        val decision =
+            RotationCooldownPolicy.evaluate(
+                lastTerminalRotationElapsedMillis = 1_000,
+                nowElapsedMillis = 1_000,
+                cooldown = 0.seconds,
+            )
 
         assertEquals(RotationCooldownDecision.Passed, decision)
     }

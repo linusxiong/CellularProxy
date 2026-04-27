@@ -86,50 +86,54 @@ class ProxyBoundServerAcceptLoop(
 
         var acceptedClientConnections = 0L
         while (!stopRequested.get()) {
-            val client = try {
-                listener.accept(headerReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis)
-            } catch (exception: Exception) {
-                if (stopRequested.get() || listener.isClosed) {
-                    return ProxyBoundServerAcceptLoopResult.Stopped(acceptedClientConnections)
+            val client =
+                try {
+                    listener.accept(headerReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis)
+                } catch (exception: Exception) {
+                    if (stopRequested.get() || listener.isClosed) {
+                        return ProxyBoundServerAcceptLoopResult.Stopped(acceptedClientConnections)
+                    }
+                    return ProxyBoundServerAcceptLoopResult.Failed(acceptedClientConnections, exception)
                 }
-                return ProxyBoundServerAcceptLoopResult.Failed(acceptedClientConnections, exception)
-            }
 
             acceptedClientConnections += 1
-            val reservation = connectionHandler.reserveAccepted(
-                client = client,
-                recordMetricEvent = recordMetricEvent,
-            )
-            val queueClaimed = AtomicBoolean(false)
-            val queuedTimeout = try {
-                queuedClientTimeoutExecutor.schedule(
-                    {
-                        if (queueClaimed.compareAndSet(false, true)) {
-                            writeQueuedIdleTimeout(
-                                reservation = reservation,
-                                recordMetricEvent = recordMetricEvent,
-                            )
-                        }
-                    },
-                    clientHeaderReadIdleTimeoutMillis.toLong(),
-                    TimeUnit.MILLISECONDS,
+            val reservation =
+                connectionHandler.reserveAccepted(
+                    client = client,
+                    recordMetricEvent = recordMetricEvent,
                 )
-            } catch (exception: RejectedExecutionException) {
-                reservation.release()
-                client.closeQuietly()
-                return ProxyBoundServerAcceptLoopResult.Failed(acceptedClientConnections, exception)
-            }
+            val queueClaimed = AtomicBoolean(false)
+            val queuedTimeout =
+                try {
+                    queuedClientTimeoutExecutor.schedule(
+                        {
+                            if (queueClaimed.compareAndSet(false, true)) {
+                                writeQueuedIdleTimeout(
+                                    reservation = reservation,
+                                    recordMetricEvent = recordMetricEvent,
+                                )
+                            }
+                        },
+                        clientHeaderReadIdleTimeoutMillis.toLong(),
+                        TimeUnit.MILLISECONDS,
+                    )
+                } catch (exception: RejectedExecutionException) {
+                    reservation.release()
+                    client.closeQuietly()
+                    return ProxyBoundServerAcceptLoopResult.Failed(acceptedClientConnections, exception)
+                }
             try {
                 workerExecutor.execute {
                     if (queueClaimed.compareAndSet(false, true)) {
                         queuedTimeout.cancel(false)
-                        val currentConfig = try {
-                            configProvider()
-                        } catch (_: Exception) {
-                            reservation.release()
-                            client.closeQuietly()
-                            return@execute
-                        }
+                        val currentConfig =
+                            try {
+                                configProvider()
+                            } catch (_: Exception) {
+                                reservation.release()
+                                client.closeQuietly()
+                                return@execute
+                            }
                         connectionHandler.handleReserved(
                             reservation = reservation,
                             config = currentConfig,
@@ -164,15 +168,16 @@ private fun writeQueuedIdleTimeout(
     recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit,
 ) {
     try {
-        val bytesWritten = when (val response = ProxyErrorResponseMapper.map(ProxyServerFailure.IdleTimeout)) {
-            is ProxyErrorResponseDecision.Emit -> {
-                val bytes = response.response.toByteArray()
-                reservation.client.output.write(bytes)
-                reservation.client.output.flush()
-                bytes.size.toLong()
+        val bytesWritten =
+            when (val response = ProxyErrorResponseMapper.map(ProxyServerFailure.IdleTimeout)) {
+                is ProxyErrorResponseDecision.Emit -> {
+                    val bytes = response.response.toByteArray()
+                    reservation.client.output.write(bytes)
+                    reservation.client.output.flush()
+                    bytes.size.toLong()
+                }
+                ProxyErrorResponseDecision.Suppress -> 0L
             }
-            ProxyErrorResponseDecision.Suppress -> 0L
-        }
         ProxyTrafficMetricsEvent.ConnectionRejected.recordSafely(recordMetricEvent)
         if (bytesWritten > 0) {
             ProxyTrafficMetricsEvent.BytesSent(bytesWritten).recordSafely(recordMetricEvent)

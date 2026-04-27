@@ -25,19 +25,21 @@ class RotationToggleDelayCoordinator(
             }
 
             return when (
-                val decision = RotationToggleDelayPolicy.evaluate(
-                    delayStartedElapsedMillis = delayStartedElapsedMillis,
-                    nowElapsedMillis = nowElapsedMillis,
-                    toggleDelay = toggleDelay,
-                )
+                val decision =
+                    RotationToggleDelayPolicy.evaluate(
+                        delayStartedElapsedMillis = delayStartedElapsedMillis,
+                        nowElapsedMillis = nowElapsedMillis,
+                        toggleDelay = toggleDelay,
+                    )
             ) {
                 RotationToggleDelayDecision.Elapsed ->
                     RotationToggleDelayAdvanceResult.Applied(
                         decision = RotationToggleDelayDecision.Elapsed,
-                        progress = controlPlane.applyProgress(
-                            event = RotationEvent.ToggleDelayElapsed,
-                            nowElapsedMillis = nowElapsedMillis,
-                        ),
+                        progress =
+                            controlPlane.applyProgress(
+                                event = RotationEvent.ToggleDelayElapsed,
+                                nowElapsedMillis = nowElapsedMillis,
+                            ),
                     )
                 is RotationToggleDelayDecision.Waiting ->
                     RotationToggleDelayAdvanceResult.Waiting(

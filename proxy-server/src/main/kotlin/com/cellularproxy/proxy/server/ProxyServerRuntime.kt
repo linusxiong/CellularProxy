@@ -4,11 +4,11 @@ import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceState
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyServiceStopEvent
 import com.cellularproxy.shared.proxy.ProxyServiceStopStateMachine
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionResult
-import com.cellularproxy.shared.proxy.ProxyServiceState
-import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.rotation.RotationEvent
 import java.io.Closeable
 import java.util.concurrent.ExecutionException
@@ -81,10 +81,11 @@ class RunningProxyServerRuntime internal constructor(
     fun requestStop(): ProxyServiceStopTransitionResult {
         while (true) {
             val current = statusReference.get()
-            val result = ProxyServiceStopStateMachine.transition(
-                current = current,
-                event = ProxyServiceStopEvent.StopRequested,
-            )
+            val result =
+                ProxyServiceStopStateMachine.transition(
+                    current = current,
+                    event = ProxyServiceStopEvent.StopRequested,
+                )
             if (statusReference.compareAndSet(current, result.status)) {
                 if (result.accepted) {
                     acceptLoop.stop(listener)
@@ -94,11 +95,9 @@ class RunningProxyServerRuntime internal constructor(
         }
     }
 
-    fun pauseProxyRequests(): RotationEvent.NewRequestsPaused =
-        requestPauseController.pauseProxyRequests()
+    fun pauseProxyRequests(): RotationEvent.NewRequestsPaused = requestPauseController.pauseProxyRequests()
 
-    fun resumeProxyRequests(): RotationEvent.ProxyRequestsResumed =
-        requestPauseController.resumeProxyRequests()
+    fun resumeProxyRequests(): RotationEvent.ProxyRequestsResumed = requestPauseController.resumeProxyRequests()
 
     fun awaitStopped(timeoutMillis: Long): ProxyServerRuntimeStopResult {
         require(timeoutMillis > 0) { "Runtime stop timeout must be positive" }
@@ -170,13 +169,14 @@ object ProxyServerRuntime {
             connectRelayBufferSize = connectRelayBufferSize,
         )
 
-        val startup = ProxyServerRuntimeStartup.start(
-            config = config,
-            managementApiTokenPresent = managementApiTokenPresent,
-            observedNetworks = observedNetworks,
-            backlog = backlog,
-            bindListener = bindListener,
-        )
+        val startup =
+            ProxyServerRuntimeStartup.start(
+                config = config,
+                managementApiTokenPresent = managementApiTokenPresent,
+                observedNetworks = observedNetworks,
+                backlog = backlog,
+                bindListener = bindListener,
+            )
 
         return when (startup) {
             is ProxyServerRuntimeStartupResult.Failed ->
@@ -215,40 +215,43 @@ object ProxyServerRuntime {
         connectRelayBufferSize: Int,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit,
     ): ProxyServerRuntimeResult {
-        val acceptLoop = ProxyBoundServerAcceptLoop(
-            connectionHandler = connectionHandler,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
-        val future = try {
-            acceptLoopExecutor.submit<ProxyBoundServerAcceptLoopResult> {
-                try {
-                    acceptLoop.run(
-                        listener = startup.listener,
-                        configProvider = requestPauseController::currentConfig,
-                        clientHeaderReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis,
-                        httpBufferSize = httpBufferSize,
-                        maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                        maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                        maxResponseTrailerBytes = maxResponseTrailerBytes,
-                        connectRelayBufferSize = connectRelayBufferSize,
-                        recordMetricEvent = recordMetricEvent,
-                    ).also { result ->
-                        if (result is ProxyBoundServerAcceptLoopResult.Failed) {
-                            startup.listener.closeAfterRuntimeFailure()
-                        }
-                    }
-                } catch (throwable: Throwable) {
-                    startup.listener.closeAfterRuntimeFailure()
-                    throw throwable
-                }
-            }
-        } catch (exception: RejectedExecutionException) {
-            startup.listener.closeAfterLaunchFailure()
-            return ProxyServerRuntimeResult.AcceptLoopLaunchFailed(
-                exception = exception,
+        val acceptLoop =
+            ProxyBoundServerAcceptLoop(
+                connectionHandler = connectionHandler,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             )
-        }
+        val future =
+            try {
+                acceptLoopExecutor.submit<ProxyBoundServerAcceptLoopResult> {
+                    try {
+                        acceptLoop
+                            .run(
+                                listener = startup.listener,
+                                configProvider = requestPauseController::currentConfig,
+                                clientHeaderReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis,
+                                httpBufferSize = httpBufferSize,
+                                maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                                maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                                maxResponseTrailerBytes = maxResponseTrailerBytes,
+                                connectRelayBufferSize = connectRelayBufferSize,
+                                recordMetricEvent = recordMetricEvent,
+                            ).also { result ->
+                                if (result is ProxyBoundServerAcceptLoopResult.Failed) {
+                                    startup.listener.closeAfterRuntimeFailure()
+                                }
+                            }
+                    } catch (throwable: Throwable) {
+                        startup.listener.closeAfterRuntimeFailure()
+                        throw throwable
+                    }
+                }
+            } catch (exception: RejectedExecutionException) {
+                startup.listener.closeAfterLaunchFailure()
+                return ProxyServerRuntimeResult.AcceptLoopLaunchFailed(
+                    exception = exception,
+                )
+            }
 
         return ProxyServerRuntimeResult.Running(
             RunningProxyServerRuntime(

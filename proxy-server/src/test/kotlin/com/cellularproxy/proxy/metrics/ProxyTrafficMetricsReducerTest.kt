@@ -8,14 +8,15 @@ import kotlin.test.assertFailsWith
 class ProxyTrafficMetricsReducerTest {
     @Test
     fun `applies accepted rejected closed and byte events to traffic metrics`() {
-        val metrics = listOf(
-            ProxyTrafficMetricsEvent.ConnectionAccepted,
-            ProxyTrafficMetricsEvent.ConnectionAccepted,
-            ProxyTrafficMetricsEvent.BytesReceived(120),
-            ProxyTrafficMetricsEvent.BytesSent(75),
-            ProxyTrafficMetricsEvent.ConnectionRejected,
-            ProxyTrafficMetricsEvent.ConnectionClosed,
-        ).fold(ProxyTrafficMetrics(), ProxyTrafficMetricsReducer::apply)
+        val metrics =
+            listOf(
+                ProxyTrafficMetricsEvent.ConnectionAccepted,
+                ProxyTrafficMetricsEvent.ConnectionAccepted,
+                ProxyTrafficMetricsEvent.BytesReceived(120),
+                ProxyTrafficMetricsEvent.BytesSent(75),
+                ProxyTrafficMetricsEvent.ConnectionRejected,
+                ProxyTrafficMetricsEvent.ConnectionClosed,
+            ).fold(ProxyTrafficMetrics(), ProxyTrafficMetricsReducer::apply)
 
         assertEquals(
             ProxyTrafficMetrics(

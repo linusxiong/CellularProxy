@@ -29,10 +29,11 @@ class ProxyRequestLineParserTest {
 
     @Test
     fun `rejects absolute-form HTTP proxy requests with invalid ports`() {
-        val invalidTargets = listOf(
-            "http://example.com:0/",
-            "http://example.com:65536/",
-        )
+        val invalidTargets =
+            listOf(
+                "http://example.com:0/",
+                "http://example.com:65536/",
+            )
 
         invalidTargets.forEach { target ->
             assertEquals(
@@ -117,13 +118,14 @@ class ProxyRequestLineParserTest {
 
     @Test
     fun `rejects malformed CONNECT authorities`() {
-        val invalidTargets = listOf(
-            "example.com",
-            "example.com:0",
-            "example.com:65536",
-            "user@example.com:443",
-            "[2001:db8::1]",
-        )
+        val invalidTargets =
+            listOf(
+                "example.com",
+                "example.com:0",
+                "example.com:65536",
+                "user@example.com:443",
+                "[2001:db8::1]",
+            )
 
         invalidTargets.forEach { target ->
             assertEquals(

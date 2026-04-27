@@ -4,7 +4,10 @@ import java.util.Locale
 
 sealed interface HttpRequestBodyFraming {
     data object NoBody : HttpRequestBodyFraming
-    data class FixedLength(val contentLength: Long) : HttpRequestBodyFraming {
+
+    data class FixedLength(
+        val contentLength: Long,
+    ) : HttpRequestBodyFraming {
         init {
             require(contentLength >= 0) { "Content length must be non-negative" }
         }
@@ -12,8 +15,13 @@ sealed interface HttpRequestBodyFraming {
 }
 
 sealed interface HttpRequestBodyFramingResult {
-    data class Accepted(val framing: HttpRequestBodyFraming) : HttpRequestBodyFramingResult
-    data class Rejected(val reason: HttpRequestBodyFramingRejectionReason) : HttpRequestBodyFramingResult
+    data class Accepted(
+        val framing: HttpRequestBodyFraming,
+    ) : HttpRequestBodyFramingResult
+
+    data class Rejected(
+        val reason: HttpRequestBodyFramingRejectionReason,
+    ) : HttpRequestBodyFramingResult
 }
 
 enum class HttpRequestBodyFramingRejectionReason {
@@ -54,8 +62,9 @@ object HttpRequestBodyFramingPolicy {
             return HttpRequestBodyFramingResult.Rejected(HttpRequestBodyFramingRejectionReason.InvalidContentLength)
         }
 
-        val parsedContentLength = contentLength.toLongOrNull()
-            ?: return HttpRequestBodyFramingResult.Rejected(HttpRequestBodyFramingRejectionReason.InvalidContentLength)
+        val parsedContentLength =
+            contentLength.toLongOrNull()
+                ?: return HttpRequestBodyFramingResult.Rejected(HttpRequestBodyFramingRejectionReason.InvalidContentLength)
 
         return HttpRequestBodyFramingResult.Accepted(
             HttpRequestBodyFraming.FixedLength(parsedContentLength),
@@ -69,8 +78,7 @@ object HttpRequestBodyFramingPolicy {
             .flatMap { (_, values) -> values }
     }
 
-    private fun String.isRequestBodyFramingAsciiDecimalDigits(): Boolean =
-        isNotEmpty() && all { it in '0'..'9' }
+    private fun String.isRequestBodyFramingAsciiDecimalDigits(): Boolean = isNotEmpty() && all { it in '0'..'9' }
 }
 
 private const val REQUEST_BODY_FRAMING_CONTENT_LENGTH_HEADER = "content-length"

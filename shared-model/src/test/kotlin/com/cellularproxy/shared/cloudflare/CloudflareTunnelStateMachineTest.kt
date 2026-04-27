@@ -21,14 +21,16 @@ class CloudflareTunnelStateMachineTest {
     fun `start request moves disabled stopped and failed tunnels to starting`() {
         val failed = CloudflareTunnelStatus.failed("edge connection failed")
 
-        val fromDisabled = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.disabled(),
-            CloudflareTunnelEvent.StartRequested,
-        )
-        val fromStopped = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.stopped(),
-            CloudflareTunnelEvent.StartRequested,
-        )
+        val fromDisabled =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.disabled(),
+                CloudflareTunnelEvent.StartRequested,
+            )
+        val fromStopped =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.stopped(),
+                CloudflareTunnelEvent.StartRequested,
+            )
         val fromFailed = CloudflareTunnelStateMachine.transition(failed, CloudflareTunnelEvent.StartRequested)
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, fromDisabled.disposition)
@@ -39,18 +41,21 @@ class CloudflareTunnelStateMachineTest {
 
     @Test
     fun `start request is duplicate while tunnel is already active`() {
-        val starting = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.starting(),
-            CloudflareTunnelEvent.StartRequested,
-        )
-        val connected = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.connected(),
-            CloudflareTunnelEvent.StartRequested,
-        )
-        val degraded = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.degraded(),
-            CloudflareTunnelEvent.StartRequested,
-        )
+        val starting =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.starting(),
+                CloudflareTunnelEvent.StartRequested,
+            )
+        val connected =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.connected(),
+                CloudflareTunnelEvent.StartRequested,
+            )
+        val degraded =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.degraded(),
+                CloudflareTunnelEvent.StartRequested,
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Duplicate, starting.disposition)
         assertEquals(CloudflareTunnelStatus.starting(), starting.status)
@@ -62,18 +67,21 @@ class CloudflareTunnelStateMachineTest {
 
     @Test
     fun `connected and degraded events update active tunnel state`() {
-        val connected = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.starting(),
-            CloudflareTunnelEvent.Connected,
-        )
-        val degraded = CloudflareTunnelStateMachine.transition(
-            connected.status,
-            CloudflareTunnelEvent.Degraded,
-        )
-        val recovered = CloudflareTunnelStateMachine.transition(
-            degraded.status,
-            CloudflareTunnelEvent.Connected,
-        )
+        val connected =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.starting(),
+                CloudflareTunnelEvent.Connected,
+            )
+        val degraded =
+            CloudflareTunnelStateMachine.transition(
+                connected.status,
+                CloudflareTunnelEvent.Degraded,
+            )
+        val recovered =
+            CloudflareTunnelStateMachine.transition(
+                degraded.status,
+                CloudflareTunnelEvent.Connected,
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, connected.disposition)
         assertEquals(CloudflareTunnelStatus.connected(), connected.status)
@@ -88,10 +96,11 @@ class CloudflareTunnelStateMachineTest {
 
     @Test
     fun `failure event moves active tunnel to failed with reason`() {
-        val result = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.connected(),
-            CloudflareTunnelEvent.Failed("edge error Authorization: bearer-token"),
-        )
+        val result =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.connected(),
+                CloudflareTunnelEvent.Failed("edge error Authorization: bearer-token"),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.disposition)
         assertEquals(CloudflareTunnelState.Failed, result.status.state)
@@ -101,22 +110,26 @@ class CloudflareTunnelStateMachineTest {
 
     @Test
     fun `stop request stops only active or failed tunnels and does not resurrect disabled tunnels`() {
-        val fromConnected = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.connected(),
-            CloudflareTunnelEvent.StopRequested,
-        )
-        val fromFailed = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.failed("edge connection failed"),
-            CloudflareTunnelEvent.StopRequested,
-        )
-        val fromDisabled = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.disabled(),
-            CloudflareTunnelEvent.StopRequested,
-        )
-        val fromStopped = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.stopped(),
-            CloudflareTunnelEvent.StopRequested,
-        )
+        val fromConnected =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.connected(),
+                CloudflareTunnelEvent.StopRequested,
+            )
+        val fromFailed =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.failed("edge connection failed"),
+                CloudflareTunnelEvent.StopRequested,
+            )
+        val fromDisabled =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.disabled(),
+                CloudflareTunnelEvent.StopRequested,
+            )
+        val fromStopped =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.stopped(),
+                CloudflareTunnelEvent.StopRequested,
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, fromConnected.disposition)
         assertEquals(CloudflareTunnelStatus.stopped(), fromConnected.status)
@@ -130,14 +143,16 @@ class CloudflareTunnelStateMachineTest {
 
     @Test
     fun `disable request always ends disabled and duplicate disable is reported`() {
-        val fromConnected = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.connected(),
-            CloudflareTunnelEvent.DisableRequested,
-        )
-        val fromDisabled = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.disabled(),
-            CloudflareTunnelEvent.DisableRequested,
-        )
+        val fromConnected =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.connected(),
+                CloudflareTunnelEvent.DisableRequested,
+            )
+        val fromDisabled =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.disabled(),
+                CloudflareTunnelEvent.DisableRequested,
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, fromConnected.disposition)
         assertEquals(CloudflareTunnelStatus.disabled(), fromConnected.status)
@@ -147,14 +162,16 @@ class CloudflareTunnelStateMachineTest {
 
     @Test
     fun `stale lifecycle events are ignored when tunnel is inactive`() {
-        val connectedWhileDisabled = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.disabled(),
-            CloudflareTunnelEvent.Connected,
-        )
-        val failedWhileStopped = CloudflareTunnelStateMachine.transition(
-            CloudflareTunnelStatus.stopped(),
-            CloudflareTunnelEvent.Failed("late failure"),
-        )
+        val connectedWhileDisabled =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.disabled(),
+                CloudflareTunnelEvent.Connected,
+            )
+        val failedWhileStopped =
+            CloudflareTunnelStateMachine.transition(
+                CloudflareTunnelStatus.stopped(),
+                CloudflareTunnelEvent.Failed("late failure"),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Ignored, connectedWhileDisabled.disposition)
         assertEquals(CloudflareTunnelStatus.disabled(), connectedWhileDisabled.status)

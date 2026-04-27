@@ -20,40 +20,42 @@ class RotationRootCommandCoordinator(
         require(timeoutMillis > 0) { "Rotation root command timeout must be positive" }
         require(nowElapsedMillis >= 0) { "Rotation root command observation elapsed millis must not be negative" }
 
-        val commandRequest = synchronized(controlPlane) {
-            val snapshot = controlPlane.snapshot()
-            val status = snapshot.status
-            when (status.state) {
-                RotationState.RunningDisableCommand ->
-                    RootCommandRequest(
-                        phase = RotationRootCommandPhase.DisableCommand,
-                        operation = requireNotNull(status.operation),
-                        expectedSnapshot = snapshot,
-                    )
-                RotationState.RunningEnableCommand ->
-                    RootCommandRequest(
-                        phase = RotationRootCommandPhase.EnableCommand,
-                        operation = requireNotNull(status.operation),
-                        expectedSnapshot = snapshot,
-                    )
-                else -> return RotationRootCommandAdvanceResult.NoAction(snapshot)
+        val commandRequest =
+            synchronized(controlPlane) {
+                val snapshot = controlPlane.snapshot()
+                val status = snapshot.status
+                when (status.state) {
+                    RotationState.RunningDisableCommand ->
+                        RootCommandRequest(
+                            phase = RotationRootCommandPhase.DisableCommand,
+                            operation = requireNotNull(status.operation),
+                            expectedSnapshot = snapshot,
+                        )
+                    RotationState.RunningEnableCommand ->
+                        RootCommandRequest(
+                            phase = RotationRootCommandPhase.EnableCommand,
+                            operation = requireNotNull(status.operation),
+                            expectedSnapshot = snapshot,
+                        )
+                    else -> return RotationRootCommandAdvanceResult.NoAction(snapshot)
+                }
             }
-        }
 
-        val commandResult = when (commandRequest.phase) {
-            RotationRootCommandPhase.DisableCommand ->
-                commandController.runDisableCommand(
-                    operation = commandRequest.operation,
-                    timeoutMillis = timeoutMillis,
-                    secrets = secrets,
-                )
-            RotationRootCommandPhase.EnableCommand ->
-                commandController.runEnableCommand(
-                    operation = commandRequest.operation,
-                    timeoutMillis = timeoutMillis,
-                    secrets = secrets,
-                )
-        }
+        val commandResult =
+            when (commandRequest.phase) {
+                RotationRootCommandPhase.DisableCommand ->
+                    commandController.runDisableCommand(
+                        operation = commandRequest.operation,
+                        timeoutMillis = timeoutMillis,
+                        secrets = secrets,
+                    )
+                RotationRootCommandPhase.EnableCommand ->
+                    commandController.runEnableCommand(
+                        operation = commandRequest.operation,
+                        timeoutMillis = timeoutMillis,
+                        secrets = secrets,
+                    )
+            }
 
         val event = commandResult.toRotationEvent()
 
@@ -68,10 +70,11 @@ class RotationRootCommandCoordinator(
 
             return RotationRootCommandAdvanceResult.Applied(
                 commandResult = commandResult,
-                progress = controlPlane.applyProgress(
-                    event = event,
-                    nowElapsedMillis = nowElapsedMillis,
-                ),
+                progress =
+                    controlPlane.applyProgress(
+                        event = event,
+                        nowElapsedMillis = nowElapsedMillis,
+                    ),
             )
         }
     }
@@ -82,10 +85,11 @@ class RotationRootCommandCoordinator(
         val expectedSnapshot: RotationControlPlaneSnapshot,
     ) {
         val expectedState: RotationState
-            get() = when (phase) {
-                RotationRootCommandPhase.DisableCommand -> RotationState.RunningDisableCommand
-                RotationRootCommandPhase.EnableCommand -> RotationState.RunningEnableCommand
-            }
+            get() =
+                when (phase) {
+                    RotationRootCommandPhase.DisableCommand -> RotationState.RunningDisableCommand
+                    RotationRootCommandPhase.EnableCommand -> RotationState.RunningEnableCommand
+                }
     }
 }
 

@@ -116,10 +116,11 @@ class HttpProxyOutboundExchangeHandler(
         require(maxResponseChunkHeaderBytes > 0) { "Maximum response chunk header bytes must be positive" }
         require(maxResponseTrailerBytes >= 0) { "Maximum response trailer bytes must be non-negative" }
 
-        val request = accepted.request as? ParsedProxyRequest.HttpProxy
-            ?: return HttpProxyOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
-                HttpProxyOutboundExchangeUnsupportedReason.NotPlainHttpProxyRequest,
-            )
+        val request =
+            accepted.request as? ParsedProxyRequest.HttpProxy
+                ?: return HttpProxyOutboundExchangeHandlingResult.UnsupportedAcceptedRequest(
+                    HttpProxyOutboundExchangeUnsupportedReason.NotPlainHttpProxyRequest,
+                )
 
         return when (val openResult = connector.open(request)) {
             is OutboundHttpOriginOpenResult.Connected ->
@@ -173,15 +174,16 @@ class HttpProxyOutboundExchangeHandler(
         failure: ProxyServerFailure,
         clientOutput: OutputStream,
     ): HttpProxyOutboundExchangeHandlingResult.ConnectionFailed {
-        val bytesWritten = when (val decision = ProxyErrorResponseMapper.map(failure)) {
-            is ProxyErrorResponseDecision.Emit -> {
-                val bytes = decision.response.toByteArray()
-                clientOutput.write(bytes)
-                clientOutput.flush()
-                bytes.size
+        val bytesWritten =
+            when (val decision = ProxyErrorResponseMapper.map(failure)) {
+                is ProxyErrorResponseDecision.Emit -> {
+                    val bytes = decision.response.toByteArray()
+                    clientOutput.write(bytes)
+                    clientOutput.flush()
+                    bytes.size
+                }
+                ProxyErrorResponseDecision.Suppress -> 0
             }
-            ProxyErrorResponseDecision.Suppress -> 0
-        }
 
         return HttpProxyOutboundExchangeHandlingResult.ConnectionFailed(
             failure = failure,

@@ -13,10 +13,11 @@ class FileBackedManagementApiAuditLogTest {
     @Test
     fun `records management api audit entries durably with timestamps`() {
         withLogFile { file ->
-            val auditLog = FileBackedManagementApiAuditLog(
-                file = file,
-                clock = incrementingClock(start = 1_000L),
-            )
+            val auditLog =
+                FileBackedManagementApiAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 1_000L),
+                )
 
             auditLog.record(
                 ManagementApiAuditRecord(
@@ -62,11 +63,12 @@ class FileBackedManagementApiAuditLogTest {
     @Test
     fun `retains newest management audit records when max record count is exceeded`() {
         withLogFile { file ->
-            val auditLog = FileBackedManagementApiAuditLog(
-                file = file,
-                clock = incrementingClock(start = 10L),
-                maxRecords = 2,
-            )
+            val auditLog =
+                FileBackedManagementApiAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 10L),
+                    maxRecords = 2,
+                )
 
             auditLog.record(record(ManagementApiOperation.CloudflareStart))
             auditLog.record(record(ManagementApiOperation.CloudflareStop))
@@ -97,10 +99,11 @@ class FileBackedManagementApiAuditLogTest {
     @Test
     fun `skips malformed persisted management audit lines when reading and compacting`() {
         withLogFile { file ->
-            val auditLog = FileBackedManagementApiAuditLog(
-                file = file,
-                clock = incrementingClock(start = 20L),
-            )
+            val auditLog =
+                FileBackedManagementApiAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 20L),
+                )
             auditLog.record(record(ManagementApiOperation.RotateAirplaneMode))
             file.appendText("malformed\n")
             file.appendText("v2\t20\tRotateAirplaneMode\tResponded\t202\tRouted\n")
@@ -151,17 +154,19 @@ class FileBackedManagementApiAuditLogTest {
     @Test
     fun `failed management audit replacement preserves existing log`() {
         withLogFile { file ->
-            val auditLog = FileBackedManagementApiAuditLog(
-                file = file,
-                clock = incrementingClock(start = 30L),
-            )
+            val auditLog =
+                FileBackedManagementApiAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 30L),
+                )
             auditLog.record(record(ManagementApiOperation.CloudflareStart))
             val originalContents = file.readText()
-            val failingAuditLog = FileBackedManagementApiAuditLog(
-                file = file,
-                clock = incrementingClock(start = 31L),
-                replaceFile = { _, _ -> throw java.io.IOException("disk full") },
-            )
+            val failingAuditLog =
+                FileBackedManagementApiAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 31L),
+                    replaceFile = { _, _ -> throw java.io.IOException("disk full") },
+                )
 
             assertFailsWith<java.io.IOException> {
                 failingAuditLog.record(record(ManagementApiOperation.CloudflareStop))
@@ -237,7 +242,8 @@ class FileBackedManagementApiAuditLogTest {
                 },
                 moveNonAtomically = { source, target ->
                     nonAtomicMoveUsed = true
-                    java.nio.file.Files.move(source, target)
+                    java.nio.file.Files
+                        .move(source, target)
                 },
             )
 

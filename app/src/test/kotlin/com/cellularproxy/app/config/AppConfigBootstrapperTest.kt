@@ -1,78 +1,85 @@
 package com.cellularproxy.app.config
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.runBlocking
 
 class AppConfigBootstrapperTest {
     @Test
-    fun `first run generates required sensitive defaults and saves them encrypted`() = withPlainRepository { plainRepository, _ ->
-        val sensitiveStore = BootstrapInMemorySensitiveKeyValueStore()
-        val sensitiveRepository = SensitiveConfigRepository(
-            store = sensitiveStore,
-            cipher = BootstrapReversibleTestCipher,
-        )
-        val bootstrapper = AppConfigBootstrapper(
-            plainRepository = plainRepository,
-            sensitiveRepository = sensitiveRepository,
-            generator = FixedSensitiveConfigGenerator,
-        )
+    fun `first run generates required sensitive defaults and saves them encrypted`() =
+        withPlainRepository { plainRepository, _ ->
+            val sensitiveStore = BootstrapInMemorySensitiveKeyValueStore()
+            val sensitiveRepository =
+                SensitiveConfigRepository(
+                    store = sensitiveStore,
+                    cipher = BootstrapReversibleTestCipher,
+                )
+            val bootstrapper =
+                AppConfigBootstrapper(
+                    plainRepository = plainRepository,
+                    sensitiveRepository = sensitiveRepository,
+                    generator = FixedSensitiveConfigGenerator,
+                )
 
-        val result = bootstrapper.loadOrCreate()
+            val result = bootstrapper.loadOrCreate()
 
-        val ready = assertIs<AppConfigBootstrapResult.Ready>(result)
-        assertTrue(ready.createdDefaultSecrets)
-        assertFalse(ready.reconciledPlainConfig)
-        assertEquals(AppConfig.default(), ready.plainConfig)
-        assertEquals(
-            SensitiveConfig(
-                proxyCredential = ProxyCredential(username = "generated-proxy", password = "generated-password"),
-                managementApiToken = "generated-management-token",
-            ),
-            ready.sensitiveConfig,
-        )
-        assertIs<SensitiveConfigLoadResult.Loaded>(sensitiveRepository.load())
-        val persistedText = sensitiveStore.values.values.joinToString(separator = "\n")
-        assertFalse("generated-proxy" in persistedText)
-        assertFalse("generated-password" in persistedText)
-        assertFalse("generated-management-token" in persistedText)
-    }
+            val ready = assertIs<AppConfigBootstrapResult.Ready>(result)
+            assertTrue(ready.createdDefaultSecrets)
+            assertFalse(ready.reconciledPlainConfig)
+            assertEquals(AppConfig.default(), ready.plainConfig)
+            assertEquals(
+                SensitiveConfig(
+                    proxyCredential = ProxyCredential(username = "generated-proxy", password = "generated-password"),
+                    managementApiToken = "generated-management-token",
+                ),
+                ready.sensitiveConfig,
+            )
+            assertIs<SensitiveConfigLoadResult.Loaded>(sensitiveRepository.load())
+            val persistedText = sensitiveStore.values.values.joinToString(separator = "\n")
+            assertFalse("generated-proxy" in persistedText)
+            assertFalse("generated-password" in persistedText)
+            assertFalse("generated-management-token" in persistedText)
+        }
 
     @Test
     fun `reconciles plain Cloudflare token-present flag to encrypted token presence`() =
         withPlainRepository { plainRepository, _ ->
-            val stalePlainConfig = AppConfig.default().copy(
-                cloudflare = CloudflareConfig(
-                    enabled = true,
-                    tunnelTokenPresent = true,
-                    managementHostnameLabel = "manage.example.com",
-                ),
-            )
+            val stalePlainConfig =
+                AppConfig.default().copy(
+                    cloudflare =
+                        CloudflareConfig(
+                            enabled = true,
+                            tunnelTokenPresent = true,
+                            managementHostnameLabel = "manage.example.com",
+                        ),
+                )
             plainRepository.save(stalePlainConfig)
-            val sensitiveRepository = SensitiveConfigRepository(
-                store = BootstrapInMemorySensitiveKeyValueStore(),
-                cipher = BootstrapReversibleTestCipher,
-            )
+            val sensitiveRepository =
+                SensitiveConfigRepository(
+                    store = BootstrapInMemorySensitiveKeyValueStore(),
+                    cipher = BootstrapReversibleTestCipher,
+                )
             sensitiveRepository.save(FixedSensitiveConfigGenerator.generateDefaultSensitiveConfig())
-            val bootstrapper = AppConfigBootstrapper(
-                plainRepository = plainRepository,
-                sensitiveRepository = sensitiveRepository,
-                generator = FixedSensitiveConfigGenerator,
-            )
+            val bootstrapper =
+                AppConfigBootstrapper(
+                    plainRepository = plainRepository,
+                    sensitiveRepository = sensitiveRepository,
+                    generator = FixedSensitiveConfigGenerator,
+                )
 
             val result = bootstrapper.loadOrCreate()
 
@@ -87,50 +94,58 @@ class AppConfigBootstrapperTest {
         }
 
     @Test
-    fun `marks Cloudflare token present when encrypted token exists`() = withPlainRepository { plainRepository, _ ->
-        val sensitiveRepository = SensitiveConfigRepository(
-            store = BootstrapInMemorySensitiveKeyValueStore(),
-            cipher = BootstrapReversibleTestCipher,
-        )
-        val expectedSensitiveConfig = FixedSensitiveConfigGenerator.generateDefaultSensitiveConfig()
-            .copy(cloudflareTunnelToken = "cloudflare-token")
-        sensitiveRepository.save(expectedSensitiveConfig)
-        val bootstrapper = AppConfigBootstrapper(
-            plainRepository = plainRepository,
-            sensitiveRepository = sensitiveRepository,
-            generator = FixedSensitiveConfigGenerator,
-        )
+    fun `marks Cloudflare token present when encrypted token exists`() =
+        withPlainRepository { plainRepository, _ ->
+            val sensitiveRepository =
+                SensitiveConfigRepository(
+                    store = BootstrapInMemorySensitiveKeyValueStore(),
+                    cipher = BootstrapReversibleTestCipher,
+                )
+            val expectedSensitiveConfig =
+                FixedSensitiveConfigGenerator
+                    .generateDefaultSensitiveConfig()
+                    .copy(cloudflareTunnelToken = "cloudflare-token")
+            sensitiveRepository.save(expectedSensitiveConfig)
+            val bootstrapper =
+                AppConfigBootstrapper(
+                    plainRepository = plainRepository,
+                    sensitiveRepository = sensitiveRepository,
+                    generator = FixedSensitiveConfigGenerator,
+                )
 
-        val result = bootstrapper.loadOrCreate()
+            val result = bootstrapper.loadOrCreate()
 
-        val ready = assertIs<AppConfigBootstrapResult.Ready>(result)
-        assertFalse(ready.createdDefaultSecrets)
-        assertTrue(ready.reconciledPlainConfig)
-        assertEquals(
-            AppConfig.default().copy(
-                cloudflare = AppConfig.default().cloudflare.copy(tunnelTokenPresent = true),
-            ),
-            ready.plainConfig,
-        )
-        assertEquals(expectedSensitiveConfig, ready.sensitiveConfig)
-        assertEquals(ready.plainConfig, plainRepository.load())
-    }
+            val ready = assertIs<AppConfigBootstrapResult.Ready>(result)
+            assertFalse(ready.createdDefaultSecrets)
+            assertTrue(ready.reconciledPlainConfig)
+            assertEquals(
+                AppConfig.default().copy(
+                    cloudflare = AppConfig.default().cloudflare.copy(tunnelTokenPresent = true),
+                ),
+                ready.plainConfig,
+            )
+            assertEquals(expectedSensitiveConfig, ready.sensitiveConfig)
+            assertEquals(ready.plainConfig, plainRepository.load())
+        }
 
     @Test
     fun `invalid existing sensitive secrets are reported without overwriting them`() =
         withPlainRepository { plainRepository, _ ->
-            val sensitiveStore = BootstrapInMemorySensitiveKeyValueStore(
-                SensitiveConfigSecretKeys.proxyAuthCredential to BootstrapReversibleTestCipher.encrypt("missing-separator"),
-                SensitiveConfigSecretKeys.managementApiToken to BootstrapReversibleTestCipher.encrypt("management-token"),
-            )
-            val bootstrapper = AppConfigBootstrapper(
-                plainRepository = plainRepository,
-                sensitiveRepository = SensitiveConfigRepository(
-                    store = sensitiveStore,
-                    cipher = BootstrapReversibleTestCipher,
-                ),
-                generator = FixedSensitiveConfigGenerator,
-            )
+            val sensitiveStore =
+                BootstrapInMemorySensitiveKeyValueStore(
+                    SensitiveConfigSecretKeys.proxyAuthCredential to BootstrapReversibleTestCipher.encrypt("missing-separator"),
+                    SensitiveConfigSecretKeys.managementApiToken to BootstrapReversibleTestCipher.encrypt("management-token"),
+                )
+            val bootstrapper =
+                AppConfigBootstrapper(
+                    plainRepository = plainRepository,
+                    sensitiveRepository =
+                        SensitiveConfigRepository(
+                            store = sensitiveStore,
+                            cipher = BootstrapReversibleTestCipher,
+                        ),
+                    generator = FixedSensitiveConfigGenerator,
+                )
 
             val result = bootstrapper.loadOrCreate()
 
@@ -148,18 +163,21 @@ class AppConfigBootstrapperTest {
         withPlainRepository { plainRepository, _ ->
             val existingProxyCredential = BootstrapReversibleTestCipher.encrypt("existing-user:existing-pass")
             val existingCloudflareToken = BootstrapReversibleTestCipher.encrypt("existing-cloudflare-token")
-            val sensitiveStore = BootstrapInMemorySensitiveKeyValueStore(
-                SensitiveConfigSecretKeys.proxyAuthCredential to existingProxyCredential,
-                SensitiveConfigSecretKeys.cloudflareTunnelToken to existingCloudflareToken,
-            )
-            val bootstrapper = AppConfigBootstrapper(
-                plainRepository = plainRepository,
-                sensitiveRepository = SensitiveConfigRepository(
-                    store = sensitiveStore,
-                    cipher = BootstrapReversibleTestCipher,
-                ),
-                generator = FixedSensitiveConfigGenerator,
-            )
+            val sensitiveStore =
+                BootstrapInMemorySensitiveKeyValueStore(
+                    SensitiveConfigSecretKeys.proxyAuthCredential to existingProxyCredential,
+                    SensitiveConfigSecretKeys.cloudflareTunnelToken to existingCloudflareToken,
+                )
+            val bootstrapper =
+                AppConfigBootstrapper(
+                    plainRepository = plainRepository,
+                    sensitiveRepository =
+                        SensitiveConfigRepository(
+                            store = sensitiveStore,
+                            cipher = BootstrapReversibleTestCipher,
+                        ),
+                    generator = FixedSensitiveConfigGenerator,
+                )
 
             val result = bootstrapper.loadOrCreate()
 
@@ -175,16 +193,15 @@ class AppConfigBootstrapperTest {
         }
 }
 
-private fun withPlainRepository(
-    block: suspend (PlainConfigDataStoreRepository, DataStore<Preferences>) -> Unit,
-) {
+private fun withPlainRepository(block: suspend (PlainConfigDataStoreRepository, DataStore<Preferences>) -> Unit) {
     val storeFile = File.createTempFile("cellularproxy-bootstrap-config", ".preferences_pb")
     storeFile.delete()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-        scope = scope,
-        produceFile = { storeFile },
-    )
+    val dataStore: DataStore<Preferences> =
+        PreferenceDataStoreFactory.create(
+            scope = scope,
+            produceFile = { storeFile },
+        )
     val repository = PlainConfigDataStoreRepository(dataStore)
 
     try {
@@ -198,10 +215,11 @@ private fun withPlainRepository(
 }
 
 private object FixedSensitiveConfigGenerator : SensitiveConfigGenerator {
-    override fun generateDefaultSensitiveConfig(): SensitiveConfig = SensitiveConfig(
-        proxyCredential = ProxyCredential(username = "generated-proxy", password = "generated-password"),
-        managementApiToken = "generated-management-token",
-    )
+    override fun generateDefaultSensitiveConfig(): SensitiveConfig =
+        SensitiveConfig(
+            proxyCredential = ProxyCredential(username = "generated-proxy", password = "generated-password"),
+            managementApiToken = "generated-management-token",
+        )
 }
 
 private class BootstrapInMemorySensitiveKeyValueStore(

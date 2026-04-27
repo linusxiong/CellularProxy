@@ -11,9 +11,7 @@ class CloudflareTunnelStopCoordinator(
     private val controlPlane: CloudflareTunnelControlPlane,
     private val sessionRegistry: CloudflareTunnelEdgeSessionStore? = null,
 ) {
-    fun stopIfCurrent(
-        expectedSnapshot: CloudflareTunnelControlPlaneSnapshot,
-    ): CloudflareTunnelStopCoordinatorResult =
+    fun stopIfCurrent(expectedSnapshot: CloudflareTunnelControlPlaneSnapshot): CloudflareTunnelStopCoordinatorResult =
         stopIfCurrent(
             expectedSnapshot = expectedSnapshot,
             activeConnectionProvider = { sessionRegistry?.takeActiveConnection() },
@@ -33,30 +31,31 @@ class CloudflareTunnelStopCoordinator(
         activeConnectionProvider: () -> CloudflareTunnelEdgeConnection?,
     ): CloudflareTunnelStopCoordinatorResult {
         var connectionToClose: CloudflareTunnelEdgeConnection? = null
-        val result = synchronized(controlPlane) {
-            val currentSnapshot = controlPlane.snapshot()
-            if (currentSnapshot != expectedSnapshot) {
-                return@synchronized CloudflareTunnelStopCoordinatorResult.Stale(
-                    expectedSnapshot = expectedSnapshot,
-                    actualSnapshot = currentSnapshot,
-                )
-            }
-            if (!expectedSnapshot.status.state.isStoppableTunnelState()) {
-                return@synchronized CloudflareTunnelStopCoordinatorResult.NoAction(currentSnapshot)
-            }
-
-            connectionToClose = activeConnectionProvider()
-
-            when (val guarded = controlPlane.apply(expectedSnapshot, CloudflareTunnelEvent.StopRequested)) {
-                is CloudflareTunnelGuardedTransitionResult.Evaluated ->
-                    CloudflareTunnelStopCoordinatorResult.Applied(guarded.transition)
-                is CloudflareTunnelGuardedTransitionResult.Stale ->
-                    CloudflareTunnelStopCoordinatorResult.Stale(
-                        expectedSnapshot = guarded.expectedSnapshot,
-                        actualSnapshot = guarded.actualSnapshot,
+        val result =
+            synchronized(controlPlane) {
+                val currentSnapshot = controlPlane.snapshot()
+                if (currentSnapshot != expectedSnapshot) {
+                    return@synchronized CloudflareTunnelStopCoordinatorResult.Stale(
+                        expectedSnapshot = expectedSnapshot,
+                        actualSnapshot = currentSnapshot,
                     )
+                }
+                if (!expectedSnapshot.status.state.isStoppableTunnelState()) {
+                    return@synchronized CloudflareTunnelStopCoordinatorResult.NoAction(currentSnapshot)
+                }
+
+                connectionToClose = activeConnectionProvider()
+
+                when (val guarded = controlPlane.apply(expectedSnapshot, CloudflareTunnelEvent.StopRequested)) {
+                    is CloudflareTunnelGuardedTransitionResult.Evaluated ->
+                        CloudflareTunnelStopCoordinatorResult.Applied(guarded.transition)
+                    is CloudflareTunnelGuardedTransitionResult.Stale ->
+                        CloudflareTunnelStopCoordinatorResult.Stale(
+                            expectedSnapshot = guarded.expectedSnapshot,
+                            actualSnapshot = guarded.actualSnapshot,
+                        )
+                }
             }
-        }
         connectionToClose?.closeSuppressingExceptions()
         return result
     }

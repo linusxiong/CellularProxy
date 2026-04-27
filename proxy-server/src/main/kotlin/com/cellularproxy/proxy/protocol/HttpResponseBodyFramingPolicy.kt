@@ -4,18 +4,28 @@ import java.util.Locale
 
 sealed interface HttpResponseBodyFraming {
     data object NoBody : HttpResponseBodyFraming
-    data class FixedLength(val contentLength: Long) : HttpResponseBodyFraming {
+
+    data class FixedLength(
+        val contentLength: Long,
+    ) : HttpResponseBodyFraming {
         init {
             require(contentLength >= 0) { "Content length must be non-negative" }
         }
     }
+
     data object Chunked : HttpResponseBodyFraming
+
     data object CloseDelimited : HttpResponseBodyFraming
 }
 
 sealed interface HttpResponseBodyFramingResult {
-    data class Accepted(val framing: HttpResponseBodyFraming) : HttpResponseBodyFramingResult
-    data class Rejected(val reason: HttpResponseBodyFramingRejectionReason) : HttpResponseBodyFramingResult
+    data class Accepted(
+        val framing: HttpResponseBodyFraming,
+    ) : HttpResponseBodyFramingResult
+
+    data class Rejected(
+        val reason: HttpResponseBodyFramingRejectionReason,
+    ) : HttpResponseBodyFramingResult
 }
 
 enum class HttpResponseBodyFramingRejectionReason {
@@ -54,8 +64,9 @@ object HttpResponseBodyFramingPolicy {
                 return HttpResponseBodyFramingResult.Rejected(HttpResponseBodyFramingRejectionReason.InvalidContentLength)
             }
 
-            val parsedContentLength = contentLength.toLongOrNull()
-                ?: return HttpResponseBodyFramingResult.Rejected(HttpResponseBodyFramingRejectionReason.InvalidContentLength)
+            val parsedContentLength =
+                contentLength.toLongOrNull()
+                    ?: return HttpResponseBodyFramingResult.Rejected(HttpResponseBodyFramingRejectionReason.InvalidContentLength)
 
             return HttpResponseBodyFramingResult.Accepted(
                 HttpResponseBodyFraming.FixedLength(parsedContentLength),
@@ -73,13 +84,13 @@ object HttpResponseBodyFramingPolicy {
     }
 
     private fun List<String>.isSupportedChunkedTransferEncoding(): Boolean {
-        val codings = flatMap { value -> value.split(',') }
-            .map { coding -> coding.trim().lowercase(Locale.US) }
+        val codings =
+            flatMap { value -> value.split(',') }
+                .map { coding -> coding.trim().lowercase(Locale.US) }
         return codings == listOf(BODY_FRAMING_CHUNKED_TRANSFER_CODING)
     }
 
-    private fun String.isAsciiDecimalDigits(): Boolean =
-        isNotEmpty() && all { it in '0'..'9' }
+    private fun String.isAsciiDecimalDigits(): Boolean = isNotEmpty() && all { it in '0'..'9' }
 
     private fun Int.forbidsResponseBody(): Boolean =
         this in BODY_FRAMING_INFORMATIONAL_STATUS_RANGE ||

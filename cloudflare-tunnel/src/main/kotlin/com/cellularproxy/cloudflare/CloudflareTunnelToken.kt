@@ -1,14 +1,14 @@
 package com.cellularproxy.cloudflare
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.util.Base64
 import java.util.UUID
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonPrimitive
 
 class CloudflareTunnelCredentials internal constructor(
     val accountTag: String,
@@ -19,15 +19,13 @@ class CloudflareTunnelCredentials internal constructor(
     val tunnelSecret: ByteArray = tunnelSecret.copyOf()
         get() = field.copyOf()
 
-    override fun toString(): String =
-        "CloudflareTunnelCredentials(redacted=true)"
+    override fun toString(): String = "CloudflareTunnelCredentials(redacted=true)"
 }
 
 class CloudflareTunnelToken private constructor(
     val credentials: CloudflareTunnelCredentials,
 ) {
-    override fun toString(): String =
-        "CloudflareTunnelToken(redacted=true)"
+    override fun toString(): String = "CloudflareTunnelToken(redacted=true)"
 
     companion object {
         fun parse(rawToken: String): CloudflareTunnelTokenParseResult {
@@ -40,23 +38,27 @@ class CloudflareTunnelToken private constructor(
             if (decodedBytes == null) {
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.NotBase64)
             }
-            val decoded = decodedBytes.decodeStrictUtf8()
-                ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.NotJsonObject)
+            val decoded =
+                decodedBytes.decodeStrictUtf8()
+                    ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.NotJsonObject)
 
-            val jsonObject = try {
-                Json.parseToJsonElement(decoded) as? JsonObject
-            } catch (_: IllegalArgumentException) {
-                null
-            } ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.NotJsonObject)
+            val jsonObject =
+                try {
+                    Json.parseToJsonElement(decoded) as? JsonObject
+                } catch (_: IllegalArgumentException) {
+                    null
+                } ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.NotJsonObject)
 
-            val accountTag = jsonObject.stringField("a")
-                ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingAccountTag)
+            val accountTag =
+                jsonObject.stringField("a")
+                    ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingAccountTag)
             if (accountTag.isBlank()) {
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingAccountTag)
             }
 
-            val tunnelSecretText = jsonObject.stringField("s")
-                ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingTunnelSecret)
+            val tunnelSecretText =
+                jsonObject.stringField("s")
+                    ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingTunnelSecret)
             if (tunnelSecretText.isBlank()) {
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingTunnelSecret)
             }
@@ -68,20 +70,23 @@ class CloudflareTunnelToken private constructor(
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.InvalidTunnelSecret)
             }
 
-            val tunnelIdText = jsonObject.stringField("t")
-                ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingTunnelId)
-            val tunnelId = try {
-                UUID.fromString(tunnelIdText)
-            } catch (_: IllegalArgumentException) {
-                return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.InvalidTunnelId)
-            }
+            val tunnelIdText =
+                jsonObject.stringField("t")
+                    ?: return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingTunnelId)
+            val tunnelId =
+                try {
+                    UUID.fromString(tunnelIdText)
+                } catch (_: IllegalArgumentException) {
+                    return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.InvalidTunnelId)
+                }
 
-            val credentials = CloudflareTunnelCredentials(
-                accountTag = accountTag,
-                tunnelId = tunnelId,
-                tunnelSecret = tunnelSecret,
-                endpoint = jsonObject.stringField("e"),
-            )
+            val credentials =
+                CloudflareTunnelCredentials(
+                    accountTag = accountTag,
+                    tunnelId = tunnelId,
+                    tunnelSecret = tunnelSecret,
+                    endpoint = jsonObject.stringField("e"),
+                )
 
             return CloudflareTunnelTokenParseResult.Valid(
                 CloudflareTunnelToken(credentials = credentials),
@@ -94,15 +99,13 @@ sealed interface CloudflareTunnelTokenParseResult {
     class Valid(
         val token: CloudflareTunnelToken,
     ) : CloudflareTunnelTokenParseResult {
-        override fun toString(): String =
-            "CloudflareTunnelTokenParseResult.Valid(token=<redacted>)"
+        override fun toString(): String = "CloudflareTunnelTokenParseResult.Valid(token=<redacted>)"
     }
 
     class Invalid(
         val reason: CloudflareTunnelTokenInvalidReason,
     ) : CloudflareTunnelTokenParseResult {
-        override fun toString(): String =
-            "CloudflareTunnelTokenParseResult.Invalid(reason=$reason)"
+        override fun toString(): String = "CloudflareTunnelTokenParseResult.Invalid(reason=$reason)"
     }
 }
 
@@ -125,7 +128,8 @@ private fun JsonObject.stringField(name: String): String? =
 
 private fun ByteArray.decodeStrictUtf8(): String? =
     try {
-        Charsets.UTF_8.newDecoder()
+        Charsets.UTF_8
+            .newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
             .decode(ByteBuffer.wrap(this))

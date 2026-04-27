@@ -1,8 +1,8 @@
 package com.cellularproxy.root
 
 import com.cellularproxy.shared.logging.LogRedactionSecrets
-import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootCommandAuditPhase
+import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootCommandCategory
 import com.cellularproxy.shared.root.RootCommandResult
 
@@ -18,11 +18,9 @@ class RootShellCommand private constructor(
             category == other.category &&
             argv == other.argv
 
-    override fun hashCode(): Int =
-        31 * category.hashCode() + argv.hashCode()
+    override fun hashCode(): Int = 31 * category.hashCode() + argv.hashCode()
 
-    override fun toString(): String =
-        "RootShellCommand(category=$category, argv=$argv)"
+    override fun toString(): String = "RootShellCommand(category=$category, argv=$argv)"
 
     companion object {
         internal fun trusted(
@@ -128,38 +126,40 @@ class RootCommandExecutor(
 
         val started = RootCommandAuditRecord.started(command.category)
         recordAudit(started)
-        val processResult = try {
-            processExecutor.execute(
-                command = command,
-                timeoutMillis = timeoutMillis,
-            )
-        } catch (exception: Exception) {
-            recordAudit(
-                RootCommandAuditRecord.failedToStart(
-                    category = command.category,
-                    reason = "Root command process execution failed: ${exception::class.simpleName ?: "Exception"}",
-                    secrets = secrets,
-                ),
-            )
-            throw exception
-        }
-        val result = when (processResult) {
-            is RootCommandProcessResult.Completed ->
-                RootCommandResult.completed(
-                    category = command.category,
-                    exitCode = processResult.exitCode,
-                    stdout = processResult.stdout,
-                    stderr = processResult.stderr,
-                    secrets = secrets,
+        val processResult =
+            try {
+                processExecutor.execute(
+                    command = command,
+                    timeoutMillis = timeoutMillis,
                 )
-            is RootCommandProcessResult.TimedOut ->
-                RootCommandResult.timedOut(
-                    category = command.category,
-                    stdout = processResult.stdout,
-                    stderr = processResult.stderr,
-                    secrets = secrets,
+            } catch (exception: Exception) {
+                recordAudit(
+                    RootCommandAuditRecord.failedToStart(
+                        category = command.category,
+                        reason = "Root command process execution failed: ${exception::class.simpleName ?: "Exception"}",
+                        secrets = secrets,
+                    ),
                 )
-        }
+                throw exception
+            }
+        val result =
+            when (processResult) {
+                is RootCommandProcessResult.Completed ->
+                    RootCommandResult.completed(
+                        category = command.category,
+                        exitCode = processResult.exitCode,
+                        stdout = processResult.stdout,
+                        stderr = processResult.stderr,
+                        secrets = secrets,
+                    )
+                is RootCommandProcessResult.TimedOut ->
+                    RootCommandResult.timedOut(
+                        category = command.category,
+                        stdout = processResult.stdout,
+                        stderr = processResult.stderr,
+                        secrets = secrets,
+                    )
+            }
         val completed = RootCommandAuditRecord.completed(result)
         recordAudit(completed)
 
@@ -232,7 +232,8 @@ private val ANDROID_PACKAGE_NAME =
     Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
 
 private val RootCommandProcessResult.rawStdout: String
-    get() = when (this) {
-        is RootCommandProcessResult.Completed -> stdout
-        is RootCommandProcessResult.TimedOut -> stdout
-    }
+    get() =
+        when (this) {
+            is RootCommandProcessResult.Completed -> stdout
+            is RootCommandProcessResult.TimedOut -> stdout
+        }

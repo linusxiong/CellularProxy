@@ -9,31 +9,35 @@ import kotlin.test.assertEquals
 class ProxyServiceStopStateMachineTest {
     @Test
     fun `stop request moves running proxy to stopping while preserving status context`() {
-        val status = ProxyServiceStatus.running(
-            listenHost = "0.0.0.0",
-            listenPort = 8080,
-            configuredRoute = RouteTarget.Cellular,
-            boundRoute = NetworkDescriptor(
-                id = "cell-1",
-                category = NetworkCategory.Cellular,
-                displayName = "Carrier LTE",
-                isAvailable = true,
-            ),
-            publicIp = "198.51.100.23",
-            hasHighSecurityRisk = true,
-            metrics = ProxyTrafficMetrics(
-                activeConnections = 2,
-                totalConnections = 5,
-                rejectedConnections = 1,
-                bytesReceived = 42,
-                bytesSent = 99,
-            ),
-        )
+        val status =
+            ProxyServiceStatus.running(
+                listenHost = "0.0.0.0",
+                listenPort = 8080,
+                configuredRoute = RouteTarget.Cellular,
+                boundRoute =
+                    NetworkDescriptor(
+                        id = "cell-1",
+                        category = NetworkCategory.Cellular,
+                        displayName = "Carrier LTE",
+                        isAvailable = true,
+                    ),
+                publicIp = "198.51.100.23",
+                hasHighSecurityRisk = true,
+                metrics =
+                    ProxyTrafficMetrics(
+                        activeConnections = 2,
+                        totalConnections = 5,
+                        rejectedConnections = 1,
+                        bytesReceived = 42,
+                        bytesSent = 99,
+                    ),
+            )
 
-        val result = ProxyServiceStopStateMachine.transition(
-            current = status,
-            event = ProxyServiceStopEvent.StopRequested,
-        )
+        val result =
+            ProxyServiceStopStateMachine.transition(
+                current = status,
+                event = ProxyServiceStopEvent.StopRequested,
+            )
 
         assertEquals(ProxyServiceStopTransitionDisposition.Accepted, result.disposition)
         assertEquals(true, result.accepted)
@@ -44,10 +48,11 @@ class ProxyServiceStopStateMachineTest {
     fun `stop request moves starting proxy to stopping`() {
         val status = ProxyServiceStatus(state = ProxyServiceState.Starting)
 
-        val result = ProxyServiceStopStateMachine.transition(
-            current = status,
-            event = ProxyServiceStopEvent.StopRequested,
-        )
+        val result =
+            ProxyServiceStopStateMachine.transition(
+                current = status,
+                event = ProxyServiceStopEvent.StopRequested,
+            )
 
         assertEquals(ProxyServiceStopTransitionDisposition.Accepted, result.disposition)
         assertEquals(ProxyServiceState.Stopping, result.status.state)
@@ -55,15 +60,17 @@ class ProxyServiceStopStateMachineTest {
 
     @Test
     fun `stop request is duplicate while service is already stopping`() {
-        val status = ProxyServiceStatus(
-            state = ProxyServiceState.Stopping,
-            metrics = ProxyTrafficMetrics(activeConnections = 1, totalConnections = 3),
-        )
+        val status =
+            ProxyServiceStatus(
+                state = ProxyServiceState.Stopping,
+                metrics = ProxyTrafficMetrics(activeConnections = 1, totalConnections = 3),
+            )
 
-        val result = ProxyServiceStopStateMachine.transition(
-            current = status,
-            event = ProxyServiceStopEvent.StopRequested,
-        )
+        val result =
+            ProxyServiceStopStateMachine.transition(
+                current = status,
+                event = ProxyServiceStopEvent.StopRequested,
+            )
 
         assertEquals(ProxyServiceStopTransitionDisposition.Duplicate, result.disposition)
         assertEquals(false, result.accepted)

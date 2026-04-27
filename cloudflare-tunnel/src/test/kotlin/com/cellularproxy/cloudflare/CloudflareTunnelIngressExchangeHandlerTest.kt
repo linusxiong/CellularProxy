@@ -4,33 +4,37 @@ import com.cellularproxy.shared.management.HttpMethod
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class CloudflareTunnelIngressExchangeHandlerTest {
     @Test
     fun `forwards allowed origin-form requests to local management handler with original target`() {
-        val handler = RecordingCloudflareLocalManagementHandler(
-            CloudflareTunnelResponse.json(statusCode = 200, body = """{"ok":true}"""),
-        )
+        val handler =
+            RecordingCloudflareLocalManagementHandler(
+                CloudflareTunnelResponse.json(statusCode = 200, body = """{"ok":true}"""),
+            )
 
-        val health = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Get,
-            target = "/health",
-            localManagementHandler = handler,
-        )
-        val status = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Get,
-            target = "/api/status?verbose=true",
-            localManagementHandler = handler,
-        )
-        val command = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Post,
-            target = "/api/cloudflare/start",
-            localManagementHandler = handler,
-        )
+        val health =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Get,
+                target = "/health",
+                localManagementHandler = handler,
+            )
+        val status =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Get,
+                target = "/api/status?verbose=true",
+                localManagementHandler = handler,
+            )
+        val command =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                localManagementHandler = handler,
+            )
 
         assertIs<CloudflareTunnelIngressResult.Forwarded>(health)
         assertIs<CloudflareTunnelIngressResult.Forwarded>(status)
@@ -42,22 +46,25 @@ class CloudflareTunnelIngressExchangeHandlerTest {
 
     @Test
     fun `keeps legacy three-argument JVM handle overload for no-body requests`() {
-        val overload = CloudflareTunnelIngressExchangeHandler::class.java.getMethod(
-            "handle",
-            HttpMethod::class.java,
-            String::class.java,
-            CloudflareLocalManagementHandler::class.java,
-        )
-        val handler = RecordingCloudflareLocalManagementHandler(
-            CloudflareTunnelResponse.empty(statusCode = 204),
-        )
+        val overload =
+            CloudflareTunnelIngressExchangeHandler::class.java.getMethod(
+                "handle",
+                HttpMethod::class.java,
+                String::class.java,
+                CloudflareLocalManagementHandler::class.java,
+            )
+        val handler =
+            RecordingCloudflareLocalManagementHandler(
+                CloudflareTunnelResponse.empty(statusCode = 204),
+            )
 
-        val result = overload.invoke(
-            CloudflareTunnelIngressExchangeHandler,
-            HttpMethod.Get,
-            "/health",
-            handler,
-        )
+        val result =
+            overload.invoke(
+                CloudflareTunnelIngressExchangeHandler,
+                HttpMethod.Get,
+                "/health",
+                handler,
+            )
 
         assertIs<CloudflareTunnelIngressResult.Forwarded>(result)
         val request = handler.requests.single()
@@ -67,23 +74,26 @@ class CloudflareTunnelIngressExchangeHandlerTest {
 
     @Test
     fun `forwards allowed origin-form requests with duplicate-preserving headers and request body`() {
-        val handler = RecordingCloudflareLocalManagementHandler(
-            CloudflareTunnelResponse.empty(statusCode = 202),
-        )
-        val headers = linkedMapOf(
-            "Authorization" to listOf("Bearer management-token"),
-            "X-Cloudflare-Request" to listOf("first", "second"),
-            "Content-Type" to listOf("application/json"),
-        )
+        val handler =
+            RecordingCloudflareLocalManagementHandler(
+                CloudflareTunnelResponse.empty(statusCode = 202),
+            )
+        val headers =
+            linkedMapOf(
+                "Authorization" to listOf("Bearer management-token"),
+                "X-Cloudflare-Request" to listOf("first", "second"),
+                "Content-Type" to listOf("application/json"),
+            )
         val body = """{"enabled":true}""".toByteArray()
 
-        val result = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Post,
-            target = "/api/cloudflare/start",
-            requestHeaders = headers,
-            requestBody = body,
-            localManagementHandler = handler,
-        )
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                requestHeaders = headers,
+                requestBody = body,
+                localManagementHandler = handler,
+            )
 
         assertIs<CloudflareTunnelIngressResult.Forwarded>(result)
         val request = handler.requests.single()
@@ -97,21 +107,24 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     fun `forwarded management request headers are defensive and preserve order`() {
         lateinit var capturedRequest: CloudflareLocalManagementRequest
         val duplicateValues = mutableListOf("first", "second")
-        val headers = linkedMapOf<String, List<String>>(
-            "Authorization" to mutableListOf("Bearer management-token"),
-            "X-Cloudflare-Request" to duplicateValues,
-            "Content-Type" to mutableListOf("application/json"),
-        )
+        val headers =
+            linkedMapOf<String, List<String>>(
+                "Authorization" to mutableListOf("Bearer management-token"),
+                "X-Cloudflare-Request" to duplicateValues,
+                "Content-Type" to mutableListOf("application/json"),
+            )
 
-        val result = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Post,
-            target = "/api/cloudflare/start",
-            requestHeaders = headers,
-            localManagementHandler = CloudflareLocalManagementHandler { request ->
-                capturedRequest = request
-                CloudflareTunnelResponse.empty(statusCode = 202)
-            },
-        )
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                requestHeaders = headers,
+                localManagementHandler =
+                    CloudflareLocalManagementHandler { request ->
+                        capturedRequest = request
+                        CloudflareTunnelResponse.empty(statusCode = 202)
+                    },
+            )
 
         assertIs<CloudflareTunnelIngressResult.Forwarded>(result)
         headers["Added-Later"] = listOf("mutated")
@@ -134,16 +147,18 @@ class CloudflareTunnelIngressExchangeHandlerTest {
         lateinit var capturedRequest: CloudflareLocalManagementRequest
         val originalBody = byteArrayOf(1, 2, 3)
 
-        val result = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Post,
-            target = "/api/cloudflare/start",
-            requestHeaders = emptyMap(),
-            requestBody = originalBody,
-            localManagementHandler = CloudflareLocalManagementHandler { request ->
-                capturedRequest = request
-                CloudflareTunnelResponse.empty(statusCode = 202)
-            },
-        )
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                requestHeaders = emptyMap(),
+                requestBody = originalBody,
+                localManagementHandler =
+                    CloudflareLocalManagementHandler { request ->
+                        capturedRequest = request
+                        CloudflareTunnelResponse.empty(statusCode = 202)
+                    },
+            )
 
         assertIs<CloudflareTunnelIngressResult.Forwarded>(result)
         originalBody[0] = 9
@@ -157,11 +172,12 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     fun `rejects explicit proxy-form requests without invoking local management handler`() {
         val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
 
-        val result = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Get,
-            target = "http://127.0.0.1:8080/api/status?token=secret",
-            localManagementHandler = handler,
-        )
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Get,
+                target = "http://127.0.0.1:8080/api/status?token=secret",
+                localManagementHandler = handler,
+            )
 
         val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
         assertEquals(403, rejected.response.statusCode)
@@ -174,11 +190,12 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     fun `rejects CONNECT authority requests without invoking local management handler`() {
         val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
 
-        val result = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Connect,
-            target = "example.com:443",
-            localManagementHandler = handler,
-        )
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Connect,
+                target = "example.com:443",
+                localManagementHandler = handler,
+            )
 
         val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
         assertEquals(403, rejected.response.statusCode)
@@ -189,11 +206,12 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     fun `rejects non-management origin-form requests without invoking local management handler`() {
         val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
 
-        val result = CloudflareTunnelIngressExchangeHandler.handle(
-            method = HttpMethod.Get,
-            target = "/proxy?token=secret",
-            localManagementHandler = handler,
-        )
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Get,
+                target = "/proxy?token=secret",
+                localManagementHandler = handler,
+            )
 
         val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
         assertEquals(403, rejected.response.statusCode)
@@ -203,21 +221,23 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     @Test
     fun `rejects malformed origin-form targets without invoking local management handler`() {
         val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
-        val targets = listOf(
-            "/api/status#fragment",
-            "/api/status?verbose=true#fragment",
-            "/api/status token",
-            "/api/status\r\nHeader: injected",
-            "api/status",
-            "*",
-        )
+        val targets =
+            listOf(
+                "/api/status#fragment",
+                "/api/status?verbose=true#fragment",
+                "/api/status token",
+                "/api/status\r\nHeader: injected",
+                "api/status",
+                "*",
+            )
 
         targets.forEach { target ->
-            val result = CloudflareTunnelIngressExchangeHandler.handle(
-                method = HttpMethod.Get,
-                target = target,
-                localManagementHandler = handler,
-            )
+            val result =
+                CloudflareTunnelIngressExchangeHandler.handle(
+                    method = HttpMethod.Get,
+                    target = target,
+                    localManagementHandler = handler,
+                )
 
             assertIs<CloudflareTunnelIngressResult.Rejected>(result)
         }
@@ -227,25 +247,29 @@ class CloudflareTunnelIngressExchangeHandlerTest {
 
     @Test
     fun `rejection responses and result diagnostics do not echo sensitive targets`() {
-        val sensitiveTargets = listOf(
-            "http://user:pass@example.com/api/status?token=secret",
-            "example.com:443",
-            "/proxy?token=secret",
-        )
+        val sensitiveTargets =
+            listOf(
+                "http://user:pass@example.com/api/status?token=secret",
+                "example.com:443",
+                "/proxy?token=secret",
+            )
 
         sensitiveTargets.forEach { target ->
-            val result = CloudflareTunnelIngressExchangeHandler.handle(
-                method = if (target == "example.com:443") HttpMethod.Connect else HttpMethod.Get,
-                target = target,
-                requestHeaders = linkedMapOf(
-                    "Authorization" to listOf("Bearer header-secret"),
-                    "X-Diagnostic" to listOf("diagnostic-secret"),
-                ),
-                requestBody = "body-secret".toByteArray(),
-                localManagementHandler = CloudflareLocalManagementHandler {
-                    error("handler must not be invoked")
-                },
-            )
+            val result =
+                CloudflareTunnelIngressExchangeHandler.handle(
+                    method = if (target == "example.com:443") HttpMethod.Connect else HttpMethod.Get,
+                    target = target,
+                    requestHeaders =
+                        linkedMapOf(
+                            "Authorization" to listOf("Bearer header-secret"),
+                            "X-Diagnostic" to listOf("diagnostic-secret"),
+                        ),
+                    requestBody = "body-secret".toByteArray(),
+                    localManagementHandler =
+                        CloudflareLocalManagementHandler {
+                            error("handler must not be invoked")
+                        },
+                )
 
             val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
             val rendered = "${rejected.response} $rejected"
@@ -262,12 +286,13 @@ class CloudflareTunnelIngressExchangeHandlerTest {
 
     @Test
     fun `response diagnostics do not echo reason phrases or body values`() {
-        val response = CloudflareTunnelResponse(
-            statusCode = 418,
-            reasonPhrase = "token secret",
-            headers = linkedMapOf("Content-Length" to "11"),
-            body = "body secret",
-        )
+        val response =
+            CloudflareTunnelResponse(
+                statusCode = 418,
+                reasonPhrase = "token secret",
+                headers = linkedMapOf("Content-Length" to "11"),
+                body = "body secret",
+            )
 
         val rendered = response.toString()
 
@@ -278,10 +303,11 @@ class CloudflareTunnelIngressExchangeHandlerTest {
 
     @Test
     fun `responses render safe HTTP wire bytes with CRLF framing`() {
-        val response = CloudflareTunnelResponse.json(
-            statusCode = 200,
-            body = """{"message":"ok"}""",
-        )
+        val response =
+            CloudflareTunnelResponse.json(
+                statusCode = 200,
+                body = """{"message":"ok"}""",
+            )
 
         val rendered = response.toHttpString()
 
@@ -301,16 +327,24 @@ class CloudflareTunnelIngressExchangeHandlerTest {
 
     @Test
     fun `response bytes use UTF-8 content length and are defensive snapshots`() {
-        val response = CloudflareTunnelResponse.json(
-            statusCode = 200,
-            body = "{\"message\":\"caf\u00e9\"}",
-        )
+        val response =
+            CloudflareTunnelResponse.json(
+                statusCode = 200,
+                body = "{\"message\":\"caf\u00e9\"}",
+            )
 
         val first = response.toByteArray()
         first[first.lastIndex] = '!'.code.toByte()
 
         assertEquals("19", response.headers["Content-Length"])
-        assertEquals('}', response.toByteArray().last().toInt().toChar())
+        assertEquals(
+            '}',
+            response
+                .toByteArray()
+                .last()
+                .toInt()
+                .toChar(),
+        )
     }
 
     @Test

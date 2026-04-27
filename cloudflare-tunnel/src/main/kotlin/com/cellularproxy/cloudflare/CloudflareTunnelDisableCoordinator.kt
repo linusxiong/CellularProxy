@@ -12,31 +12,30 @@ class CloudflareTunnelDisableCoordinator(
     private val controlPlane: CloudflareTunnelControlPlane,
     private val sessionRegistry: CloudflareTunnelEdgeSessionStore? = null,
 ) {
-    fun disableIfCurrent(
-        expectedSnapshot: CloudflareTunnelControlPlaneSnapshot,
-    ): CloudflareTunnelDisableCoordinatorResult {
+    fun disableIfCurrent(expectedSnapshot: CloudflareTunnelControlPlaneSnapshot): CloudflareTunnelDisableCoordinatorResult {
         var connectionToClose: CloudflareTunnelEdgeConnection? = null
-        val result = synchronized(controlPlane) {
-            val currentSnapshot = controlPlane.snapshot()
-            if (currentSnapshot != expectedSnapshot) {
-                return@synchronized CloudflareTunnelDisableCoordinatorResult.Stale(
-                    expectedSnapshot = expectedSnapshot,
-                    actualSnapshot = currentSnapshot,
-                )
-            }
-
-            connectionToClose = sessionRegistry?.takeActiveConnection()
-
-            when (val guarded = controlPlane.apply(expectedSnapshot, CloudflareTunnelEvent.DisableRequested)) {
-                is CloudflareTunnelGuardedTransitionResult.Evaluated ->
-                    CloudflareTunnelDisableCoordinatorResult.Applied(guarded.transition)
-                is CloudflareTunnelGuardedTransitionResult.Stale ->
-                    CloudflareTunnelDisableCoordinatorResult.Stale(
-                        expectedSnapshot = guarded.expectedSnapshot,
-                        actualSnapshot = guarded.actualSnapshot,
+        val result =
+            synchronized(controlPlane) {
+                val currentSnapshot = controlPlane.snapshot()
+                if (currentSnapshot != expectedSnapshot) {
+                    return@synchronized CloudflareTunnelDisableCoordinatorResult.Stale(
+                        expectedSnapshot = expectedSnapshot,
+                        actualSnapshot = currentSnapshot,
                     )
+                }
+
+                connectionToClose = sessionRegistry?.takeActiveConnection()
+
+                when (val guarded = controlPlane.apply(expectedSnapshot, CloudflareTunnelEvent.DisableRequested)) {
+                    is CloudflareTunnelGuardedTransitionResult.Evaluated ->
+                        CloudflareTunnelDisableCoordinatorResult.Applied(guarded.transition)
+                    is CloudflareTunnelGuardedTransitionResult.Stale ->
+                        CloudflareTunnelDisableCoordinatorResult.Stale(
+                            expectedSnapshot = guarded.expectedSnapshot,
+                            actualSnapshot = guarded.actualSnapshot,
+                        )
+                }
             }
-        }
         connectionToClose?.closeSuppressingExceptions()
         return result
     }
@@ -63,7 +62,8 @@ private fun CloudflareTunnelControlPlaneTransitionResult.isDisableRequestResult(
     status == CloudflareTunnelStatus.disabled() &&
         disposition in DISABLE_REQUEST_DISPOSITIONS
 
-private val DISABLE_REQUEST_DISPOSITIONS = setOf(
-    CloudflareTunnelTransitionDisposition.Accepted,
-    CloudflareTunnelTransitionDisposition.Duplicate,
-)
+private val DISABLE_REQUEST_DISPOSITIONS =
+    setOf(
+        CloudflareTunnelTransitionDisposition.Accepted,
+        CloudflareTunnelTransitionDisposition.Duplicate,
+    )

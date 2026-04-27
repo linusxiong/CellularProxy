@@ -53,13 +53,14 @@ class ManagementApiStateHandler(
 
     private fun renderStatus(): ManagementApiResponse {
         val rootOperationsEnabled = callbacks.rootOperationsEnabled()
-        val status = callbacks.status().let { currentStatus ->
-            if (rootOperationsEnabled) {
-                currentStatus
-            } else {
-                currentStatus.copy(rootAvailability = RootAvailabilityStatus.Unknown)
+        val status =
+            callbacks.status().let { currentStatus ->
+                if (rootOperationsEnabled) {
+                    currentStatus
+                } else {
+                    currentStatus.copy(rootAvailability = RootAvailabilityStatus.Unknown)
+                }
             }
-        }
         return ManagementApiReadOnlyResponses.status(
             status = status,
             secrets = secrets,

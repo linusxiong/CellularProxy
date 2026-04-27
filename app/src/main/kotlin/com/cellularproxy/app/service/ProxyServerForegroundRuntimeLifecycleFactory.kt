@@ -14,11 +14,11 @@ import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyBoundClientConnectionHandler
 import com.cellularproxy.proxy.server.ProxyClientStreamExchangeHandler
 import com.cellularproxy.proxy.server.ProxyServerRuntime
-import com.cellularproxy.proxy.server.ProxyServerRuntimeResult
 import com.cellularproxy.proxy.server.ProxyServerRuntimeManagementCallbacks
+import com.cellularproxy.proxy.server.ProxyServerRuntimeResult
+import com.cellularproxy.proxy.server.ProxyServerRuntimeStartupResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
-import com.cellularproxy.proxy.server.ProxyServerRuntimeStartupResult
 import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
@@ -30,8 +30,8 @@ import com.cellularproxy.shared.proxy.ProxyServiceStartupPolicy
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
-import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
@@ -60,10 +60,11 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             plainConfig = plainConfig,
             sensitiveConfig = sensitiveConfig,
             observedNetworks = observedNetworks,
-            socketProvider = RouteBoundSocketProvider(
-                observedNetworks = observedNetworks,
-                connector = socketConnector,
-            ),
+            socketProvider =
+                RouteBoundSocketProvider(
+                    observedNetworks = observedNetworks,
+                    connector = socketConnector,
+                ),
             managementHandler = managementHandler,
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
@@ -103,10 +104,11 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             plainConfig = plainConfig,
             sensitiveConfig = sensitiveConfig,
             observedNetworks = observedNetworks,
-            socketProvider = RouteBoundSocketProvider(
-                observedNetworks = observedNetworks,
-                connector = socketConnector,
-            ),
+            socketProvider =
+                RouteBoundSocketProvider(
+                    observedNetworks = observedNetworks,
+                    connector = socketConnector,
+                ),
             managementHandlerReference = managementHandlerReference,
             publicIp = publicIp,
             cloudflareStatus = cloudflareStatus,
@@ -165,28 +167,31 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             recordManagementAudit = recordManagementAudit,
             bindListener = bindListener,
             installRuntimeManagementHandler = { runtime ->
-                val rotateMobileDataIfRootEnabled = rotateMobileData.guardRootOperations(
-                    rootOperationsEnabled = rootOperationsEnabled,
-                    operation = RotationOperation.MobileData,
-                )
-                val rotateAirplaneModeIfRootEnabled = rotateAirplaneMode.guardRootOperations(
-                    rootOperationsEnabled = rootOperationsEnabled,
-                    operation = RotationOperation.AirplaneMode,
-                )
+                val rotateMobileDataIfRootEnabled =
+                    rotateMobileData.guardRootOperations(
+                        rootOperationsEnabled = rootOperationsEnabled,
+                        operation = RotationOperation.MobileData,
+                    )
+                val rotateAirplaneModeIfRootEnabled =
+                    rotateAirplaneMode.guardRootOperations(
+                        rootOperationsEnabled = rootOperationsEnabled,
+                        operation = RotationOperation.AirplaneMode,
+                    )
                 managementHandlerReference.install(
                     ManagementApiStateHandler(
-                        callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                            runtime = runtime,
-                            networks = observedNetworks,
-                            publicIp = publicIp,
-                            cloudflareStatus = cloudflareStatus,
-                            cloudflareStart = cloudflareStart,
-                            cloudflareStop = cloudflareStop,
-                            rootOperationsEnabled = rootOperationsEnabled,
-                            rootAvailability = rootAvailability,
-                            rotateMobileData = rotateMobileDataIfRootEnabled,
-                            rotateAirplaneMode = rotateAirplaneModeIfRootEnabled,
-                        ),
+                        callbacks =
+                            ProxyServerRuntimeManagementCallbacks.create(
+                                runtime = runtime,
+                                networks = observedNetworks,
+                                publicIp = publicIp,
+                                cloudflareStatus = cloudflareStatus,
+                                cloudflareStart = cloudflareStart,
+                                cloudflareStop = cloudflareStop,
+                                rootOperationsEnabled = rootOperationsEnabled,
+                                rootAvailability = rootAvailability,
+                                rotateMobileData = rotateMobileDataIfRootEnabled,
+                                rotateAirplaneMode = rotateAirplaneModeIfRootEnabled,
+                            ),
                         secrets = sensitiveConfig.logRedactionSecrets(),
                     ),
                 )
@@ -210,23 +215,26 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             ProxyServerSocketBinder::bind,
         installRuntimeManagementHandler: (RunningProxyServerRuntime) -> Closeable? = { null },
     ): ProxyServerForegroundRuntimeLifecycle {
-        val outboundConnectors = ProxyRuntimeOutboundConnectorFactory.create(
-            route = plainConfig.network.defaultRoutePolicy,
-            socketProvider = socketProvider,
-            connectTimeoutMillis = outboundConnectTimeoutMillis,
-        )
+        val outboundConnectors =
+            ProxyRuntimeOutboundConnectorFactory.create(
+                route = plainConfig.network.defaultRoutePolicy,
+                socketProvider = socketProvider,
+                connectTimeoutMillis = outboundConnectTimeoutMillis,
+            )
         return create(
             plainConfig = plainConfig,
             sensitiveConfig = sensitiveConfig,
             observedNetworks = observedNetworks,
-            connectionHandler = ProxyBoundClientConnectionHandler(
-                exchangeHandler = ProxyClientStreamExchangeHandler(
-                    httpConnector = outboundConnectors.httpConnector,
-                    connectConnector = outboundConnectors.connectConnector,
-                    managementHandler = managementHandler,
-                    recordManagementAudit = { recordManagementAudit(it.toAppManagementAuditRecord()) },
+            connectionHandler =
+                ProxyBoundClientConnectionHandler(
+                    exchangeHandler =
+                        ProxyClientStreamExchangeHandler(
+                            httpConnector = outboundConnectors.httpConnector,
+                            connectConnector = outboundConnectors.connectConnector,
+                            managementHandler = managementHandler,
+                            recordManagementAudit = { recordManagementAudit(it.toAppManagementAuditRecord()) },
+                        ),
                 ),
-            ),
             workerExecutor = workerExecutor,
             queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
             acceptLoopExecutor = acceptLoopExecutor,
@@ -254,18 +262,21 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         ProxyServerForegroundRuntimeLifecycle(
             startRuntime = startRuntime@{
                 val runtimeConfig = plainConfig.reconcileCloudflareTokenPresence(sensitiveConfig)
-                val effectiveRuntimeConfig = runtimeConfig.copy(
-                    proxy = runtimeConfig.proxy.copy(
-                        maxConcurrentConnections = maxConcurrentConnections,
-                    ),
-                )
+                val effectiveRuntimeConfig =
+                    runtimeConfig.copy(
+                        proxy =
+                            runtimeConfig.proxy.copy(
+                                maxConcurrentConnections = maxConcurrentConnections,
+                            ),
+                    )
                 val startupNetworks = observedNetworks()
                 when (
-                    val startup = ProxyServiceStartupPolicy.evaluate(
-                        config = effectiveRuntimeConfig,
-                        managementApiTokenPresent = true,
-                        observedNetworks = startupNetworks,
-                    )
+                    val startup =
+                        ProxyServiceStartupPolicy.evaluate(
+                            config = effectiveRuntimeConfig,
+                            managementApiTokenPresent = true,
+                            observedNetworks = startupNetworks,
+                        )
                 ) {
                     is ProxyServiceStartupDecision.Failed ->
                         return@startRuntime ProxyServerRuntimeResult.StartupFailed(
@@ -281,11 +292,12 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                     config = effectiveRuntimeConfig,
                     managementApiTokenPresent = true,
                     observedNetworks = startupNetworks,
-                    ingressConfig = ProxyRuntimeIngressConfigFactory.from(
-                        plainConfig = effectiveRuntimeConfig,
-                        sensitiveConfig = sensitiveConfig,
-                        maxConcurrentConnections = maxConcurrentConnections,
-                    ),
+                    ingressConfig =
+                        ProxyRuntimeIngressConfigFactory.from(
+                            plainConfig = effectiveRuntimeConfig,
+                            sensitiveConfig = sensitiveConfig,
+                            maxConcurrentConnections = maxConcurrentConnections,
+                        ),
                     connectionHandler = connectionHandler,
                     workerExecutor = workerExecutor,
                     queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
@@ -298,13 +310,12 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         )
 }
 
-private fun AppConfig.reconcileCloudflareTokenPresence(
-    sensitiveConfig: SensitiveConfig,
-): AppConfig =
+private fun AppConfig.reconcileCloudflareTokenPresence(sensitiveConfig: SensitiveConfig): AppConfig =
     copy(
-        cloudflare = cloudflare.copy(
-            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
-        ),
+        cloudflare =
+            cloudflare.copy(
+                tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
+            ),
     )
 
 private fun SensitiveConfig.logRedactionSecrets(): LogRedactionSecrets =
@@ -317,12 +328,13 @@ private fun SensitiveConfig.logRedactionSecrets(): LogRedactionSecrets =
 private fun ManagementApiStreamAuditEvent.toAppManagementAuditRecord(): ManagementApiAuditRecord =
     ManagementApiAuditRecord(
         operation = operation,
-        outcome = when (outcome) {
-            ManagementApiStreamAuditOutcome.Responded -> ManagementApiAuditOutcome.Responded
-            ManagementApiStreamAuditOutcome.RouteRejected -> ManagementApiAuditOutcome.RouteRejected
-            ManagementApiStreamAuditOutcome.HandlerFailed -> ManagementApiAuditOutcome.HandlerFailed
-            ManagementApiStreamAuditOutcome.AuthorizationRejected -> ManagementApiAuditOutcome.AuthorizationRejected
-        },
+        outcome =
+            when (outcome) {
+                ManagementApiStreamAuditOutcome.Responded -> ManagementApiAuditOutcome.Responded
+                ManagementApiStreamAuditOutcome.RouteRejected -> ManagementApiAuditOutcome.RouteRejected
+                ManagementApiStreamAuditOutcome.HandlerFailed -> ManagementApiAuditOutcome.HandlerFailed
+                ManagementApiStreamAuditOutcome.AuthorizationRejected -> ManagementApiAuditOutcome.AuthorizationRejected
+            },
         statusCode = statusCode,
         disposition = disposition,
     )
@@ -339,16 +351,15 @@ private fun (() -> RotationTransitionResult).guardRootOperations(
         }
     }
 
-private fun rootOperationsDisabledRotationTransition(
-    operation: RotationOperation,
-): RotationTransitionResult =
+private fun rootOperationsDisabledRotationTransition(operation: RotationOperation): RotationTransitionResult =
     RotationTransitionResult(
         disposition = RotationTransitionDisposition.Rejected,
-        status = RotationStatus(
-            state = RotationState.Failed,
-            operation = operation,
-            failureReason = RotationFailureReason.RootOperationsDisabled,
-        ),
+        status =
+            RotationStatus(
+                state = RotationState.Failed,
+                operation = operation,
+                failureReason = RotationFailureReason.RootOperationsDisabled,
+            ),
     )
 
 private const val DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L

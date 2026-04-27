@@ -22,21 +22,21 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
-import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
+import kotlinx.coroutines.runBlocking
 import java.io.Closeable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.runBlocking
 
 class CellularProxyRuntimeCompositionInstallation internal constructor(
     val installResult: ProxyServerForegroundRuntimeInstallResult,
@@ -57,12 +57,13 @@ object CellularProxyRuntimeCompositionInstaller {
     fun install(context: Context): CellularProxyRuntimeCompositionInstallation {
         val appContext = context.applicationContext
         val plainRepository = CellularProxyPlainConfigStore.repository(appContext)
-        val bootstrapResult = runBlocking {
-            AppConfigBootstrapper(
-                plainRepository = plainRepository,
-                sensitiveRepository = SensitiveConfigRepositoryFactory.create(appContext),
-            ).loadOrCreate()
-        }
+        val bootstrapResult =
+            runBlocking {
+                AppConfigBootstrapper(
+                    plainRepository = plainRepository,
+                    sensitiveRepository = SensitiveConfigRepositoryFactory.create(appContext),
+                ).loadOrCreate()
+            }
         val routeMonitor = AndroidNetworkRouteMonitor.create(appContext)
         val rootOperationsEnabled = { runBlocking { plainRepository.load().root.operationsEnabled } }
         val rootAuditLog = CellularProxyRootAuditStore.rootCommandAuditLog(appContext)
@@ -74,16 +75,19 @@ object CellularProxyRuntimeCompositionInstaller {
             socketConnector = AndroidBoundNetworkSocketConnector.create(appContext),
             executorResources = RuntimeCompositionExecutorResources.create(),
             rootOperationsEnabled = rootOperationsEnabled,
-            rootAvailability = createRootAvailabilityProvider(
-                rootOperationsEnabled = rootOperationsEnabled,
-                recordRootAudit = nonFatalRootAuditRecorder(
-                    recordRootAudit = rootAuditLog::record,
-                    reportRootAuditFailure = ::logRootAuditFailure,
+            rootAvailability =
+                createRootAvailabilityProvider(
+                    rootOperationsEnabled = rootOperationsEnabled,
+                    recordRootAudit =
+                        nonFatalRootAuditRecorder(
+                            recordRootAudit = rootAuditLog::record,
+                            reportRootAuditFailure = ::logRootAuditFailure,
+                        ),
                 ),
-            ),
-            recordManagementAudit = nonFatalManagementAuditRecorder(
-                recordManagementAudit = managementAuditLog::record,
-            ),
+            recordManagementAudit =
+                nonFatalManagementAuditRecorder(
+                    recordManagementAudit = managementAuditLog::record,
+                ),
         )
     }
 
@@ -162,41 +166,43 @@ object CellularProxyRuntimeCompositionInstaller {
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
     ): CellularProxyRuntimeCompositionInstallation {
-        val installResult = try {
-            ProxyServerForegroundRuntimeInstaller.install(
-                bootstrapResult = bootstrapResult,
-                observedNetworks = observedNetworks,
-                socketConnector = socketConnector,
-                publicIp = publicIp,
-                cloudflareStatus = cloudflareStatus,
-                cloudflareStart = cloudflareStart,
-                cloudflareStop = cloudflareStop,
-                rotateMobileData = rotateMobileData,
-                rotateAirplaneMode = rotateAirplaneMode,
-                rootOperationsEnabled = rootOperationsEnabled,
-                rootAvailability = rootAvailability,
-                workerExecutor = executorResources.workerExecutor,
-                queuedClientTimeoutExecutor = executorResources.queuedClientTimeoutExecutor,
-                acceptLoopExecutor = executorResources.acceptLoopExecutor,
-                maxConcurrentConnections = maxConcurrentConnections,
-                outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
-                recordMetricEvent = recordMetricEvent,
-                recordManagementAudit = recordManagementAudit,
-                bindListener = bindListener,
-            )
-        } catch (throwable: Throwable) {
+        val installResult =
+            try {
+                ProxyServerForegroundRuntimeInstaller.install(
+                    bootstrapResult = bootstrapResult,
+                    observedNetworks = observedNetworks,
+                    socketConnector = socketConnector,
+                    publicIp = publicIp,
+                    cloudflareStatus = cloudflareStatus,
+                    cloudflareStart = cloudflareStart,
+                    cloudflareStop = cloudflareStop,
+                    rotateMobileData = rotateMobileData,
+                    rotateAirplaneMode = rotateAirplaneMode,
+                    rootOperationsEnabled = rootOperationsEnabled,
+                    rootAvailability = rootAvailability,
+                    workerExecutor = executorResources.workerExecutor,
+                    queuedClientTimeoutExecutor = executorResources.queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = executorResources.acceptLoopExecutor,
+                    maxConcurrentConnections = maxConcurrentConnections,
+                    outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
+                    recordMetricEvent = recordMetricEvent,
+                    recordManagementAudit = recordManagementAudit,
+                    bindListener = bindListener,
+                )
+            } catch (throwable: Throwable) {
+                RuntimeCompositionCleanup(
+                    installResult = null,
+                    routeMonitor = routeMonitor,
+                    executorResources = executorResources,
+                ).close()
+                throw throwable
+            }
+        val cleanup =
             RuntimeCompositionCleanup(
-                installResult = null,
+                installResult = installResult,
                 routeMonitor = routeMonitor,
                 executorResources = executorResources,
-            ).close()
-            throw throwable
-        }
-        val cleanup = RuntimeCompositionCleanup(
-            installResult = installResult,
-            routeMonitor = routeMonitor,
-            executorResources = executorResources,
-        )
+            )
         if (installResult is ProxyServerForegroundRuntimeInstallResult.InvalidSensitiveConfig) {
             cleanup.close()
         }
@@ -242,6 +248,7 @@ private class RuntimeCompositionCleanup(
         }
 
         var firstFailure: Throwable? = null
+
         fun closeOwned(close: () -> Unit) {
             try {
                 close()
@@ -270,16 +277,15 @@ private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult =
         status = CloudflareTunnelStatus.disabled(),
     )
 
-internal fun unavailableRotationExecutionTransition(
-    operation: RotationOperation,
-): RotationTransitionResult =
+internal fun unavailableRotationExecutionTransition(operation: RotationOperation): RotationTransitionResult =
     RotationTransitionResult(
         disposition = RotationTransitionDisposition.Rejected,
-        status = RotationStatus(
-            state = RotationState.Failed,
-            operation = operation,
-            failureReason = RotationFailureReason.ExecutionUnavailable,
-        ),
+        status =
+            RotationStatus(
+                state = RotationState.Failed,
+                operation = operation,
+                failureReason = RotationFailureReason.ExecutionUnavailable,
+            ),
     )
 
 internal fun createRootAvailabilityProvider(
@@ -287,12 +293,13 @@ internal fun createRootAvailabilityProvider(
     processExecutor: RootCommandProcessExecutor = BlockingRootCommandProcessExecutor(),
     recordRootAudit: (RootCommandAuditRecord) -> Unit = {},
 ): () -> RootAvailabilityStatus {
-    val checker = RootAvailabilityChecker(
-        RootCommandExecutor(
-            processExecutor = processExecutor,
-            recordAudit = recordRootAudit,
-        ),
-    )
+    val checker =
+        RootAvailabilityChecker(
+            RootCommandExecutor(
+                processExecutor = processExecutor,
+                recordAudit = recordRootAudit,
+            ),
+        )
     return {
         if (rootOperationsEnabled()) {
             checker.check(ROOT_AVAILABILITY_CHECK_TIMEOUT_MILLIS).status

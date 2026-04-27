@@ -17,31 +17,36 @@ import kotlin.test.assertIs
 
 class ProxyIngressStreamPreflightTest {
     private val credential = ProxyCredential(username = "proxy-user", password = "proxy-pass")
-    private val config = ProxyIngressPreflightConfig(
-        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
-        requestAdmission = ProxyRequestAdmissionConfig(
-            proxyAuthentication = ProxyAuthenticationConfig(
-                authEnabled = true,
-                credential = credential,
-            ),
-            managementApiToken = "management-token",
-        ),
-    )
+    private val config =
+        ProxyIngressPreflightConfig(
+            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = true,
+                            credential = credential,
+                        ),
+                    managementApiToken = "management-token",
+                ),
+        )
 
     @Test
     fun `accepts complete stream header block without consuming request body bytes`() {
-        val headerBlock = "POST http://example.com/upload HTTP/1.1\r\n" +
-            "Host: example.com\r\n" +
-            "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-            "Content-Length: 4\r\n" +
-            "\r\n"
+        val headerBlock =
+            "POST http://example.com/upload HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                "Content-Length: 4\r\n" +
+                "\r\n"
         val input = ByteArrayInputStream((headerBlock + "body").toByteArray(Charsets.US_ASCII))
 
-        val decision = ProxyIngressStreamPreflight.evaluate(
-            config = config,
-            activeConnections = 1,
-            input = input,
-        )
+        val decision =
+            ProxyIngressStreamPreflight.evaluate(
+                config = config,
+                activeConnections = 1,
+                input = input,
+            )
 
         val accepted = assertIs<ProxyIngressStreamPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.HttpProxy>(accepted.request)
@@ -61,11 +66,12 @@ class ProxyIngressStreamPreflightTest {
     fun `rejects at capacity before reading from the stream`() {
         val input = ByteArrayInputStream("not a request".toByteArray(Charsets.US_ASCII))
 
-        val decision = ProxyIngressStreamPreflight.evaluate(
-            config = config,
-            activeConnections = 2,
-            input = input,
-        )
+        val decision =
+            ProxyIngressStreamPreflight.evaluate(
+                config = config,
+                activeConnections = 2,
+                input = input,
+            )
 
         val rejected = assertIs<ProxyIngressStreamPreflightDecision.Rejected>(decision)
         assertIs<ProxyServerFailure.ConnectionLimit>(rejected.failure)
@@ -75,16 +81,18 @@ class ProxyIngressStreamPreflightTest {
 
     @Test
     fun `allows management stream requests while paused even when proxy connection capacity is full`() {
-        val headerBlock = "GET /api/status HTTP/1.1\r\n" +
-            "Authorization: Bearer management-token\r\n" +
-            "\r\n"
+        val headerBlock =
+            "GET /api/status HTTP/1.1\r\n" +
+                "Authorization: Bearer management-token\r\n" +
+                "\r\n"
         val input = ByteArrayInputStream(headerBlock.toByteArray(Charsets.US_ASCII))
 
-        val decision = ProxyIngressStreamPreflight.evaluate(
-            config = config.copy(proxyRequestsPaused = true),
-            activeConnections = 2,
-            input = input,
-        )
+        val decision =
+            ProxyIngressStreamPreflight.evaluate(
+                config = config.copy(proxyRequestsPaused = true),
+                activeConnections = 2,
+                input = input,
+            )
 
         val accepted = assertIs<ProxyIngressStreamPreflightDecision.Accepted>(decision)
         val request = assertIs<ParsedProxyRequest.Management>(accepted.request)
@@ -98,11 +106,12 @@ class ProxyIngressStreamPreflightTest {
     fun `maps incomplete stream header blocks to safe bad request responses`() {
         val input = ByteArrayInputStream("GET http://example.com/ HTTP/1.1\r\nHost: example.com".toByteArray(Charsets.US_ASCII))
 
-        val decision = ProxyIngressStreamPreflight.evaluate(
-            config = config,
-            activeConnections = 0,
-            input = input,
-        )
+        val decision =
+            ProxyIngressStreamPreflight.evaluate(
+                config = config,
+                activeConnections = 0,
+                input = input,
+            )
 
         val rejected = assertIs<ProxyIngressStreamPreflightDecision.Rejected>(decision)
         val failure = assertIs<ProxyServerFailure.HeaderBlockParse>(rejected.failure)
@@ -113,40 +122,42 @@ class ProxyIngressStreamPreflightTest {
 
     @Test
     fun `maps malformed stream header encoding without exposing raw bytes`() {
-        val invalidUtf8HeaderBlock = byteArrayOf(
-            'G'.code.toByte(),
-            'E'.code.toByte(),
-            'T'.code.toByte(),
-            ' '.code.toByte(),
-            '/'.code.toByte(),
-            ' '.code.toByte(),
-            'H'.code.toByte(),
-            'T'.code.toByte(),
-            'T'.code.toByte(),
-            'P'.code.toByte(),
-            '/'.code.toByte(),
-            '1'.code.toByte(),
-            '.'.code.toByte(),
-            '1'.code.toByte(),
-            '\r'.code.toByte(),
-            '\n'.code.toByte(),
-            'X'.code.toByte(),
-            ':'.code.toByte(),
-            ' '.code.toByte(),
-            0xC3.toByte(),
-            0x28.toByte(),
-            '\r'.code.toByte(),
-            '\n'.code.toByte(),
-            '\r'.code.toByte(),
-            '\n'.code.toByte(),
-        )
+        val invalidUtf8HeaderBlock =
+            byteArrayOf(
+                'G'.code.toByte(),
+                'E'.code.toByte(),
+                'T'.code.toByte(),
+                ' '.code.toByte(),
+                '/'.code.toByte(),
+                ' '.code.toByte(),
+                'H'.code.toByte(),
+                'T'.code.toByte(),
+                'T'.code.toByte(),
+                'P'.code.toByte(),
+                '/'.code.toByte(),
+                '1'.code.toByte(),
+                '.'.code.toByte(),
+                '1'.code.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+                'X'.code.toByte(),
+                ':'.code.toByte(),
+                ' '.code.toByte(),
+                0xC3.toByte(),
+                0x28.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+            )
         val input = ByteArrayInputStream(invalidUtf8HeaderBlock + "NEXT".toByteArray(Charsets.US_ASCII))
 
-        val decision = ProxyIngressStreamPreflight.evaluate(
-            config = config,
-            activeConnections = 0,
-            input = input,
-        )
+        val decision =
+            ProxyIngressStreamPreflight.evaluate(
+                config = config,
+                activeConnections = 0,
+                input = input,
+            )
 
         val rejected = assertIs<ProxyIngressStreamPreflightDecision.Rejected>(decision)
         val failure = assertIs<ProxyServerFailure.HeaderBlockParse>(rejected.failure)

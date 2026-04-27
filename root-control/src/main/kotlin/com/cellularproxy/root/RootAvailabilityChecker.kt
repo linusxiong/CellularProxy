@@ -12,11 +12,9 @@ class RootAvailabilityChecker(
     override fun check(
         timeoutMillis: Long,
         secrets: LogRedactionSecrets,
-    ): RootAvailabilityCheckResult =
-        checkInternal(timeoutMillis = timeoutMillis, secrets = secrets)
+    ): RootAvailabilityCheckResult = checkInternal(timeoutMillis = timeoutMillis, secrets = secrets)
 
-    fun check(timeoutMillis: Long): RootAvailabilityCheckResult =
-        check(timeoutMillis = timeoutMillis, secrets = LogRedactionSecrets())
+    fun check(timeoutMillis: Long): RootAvailabilityCheckResult = check(timeoutMillis = timeoutMillis, secrets = LogRedactionSecrets())
 
     private fun checkInternal(
         timeoutMillis: Long,
@@ -24,24 +22,25 @@ class RootAvailabilityChecker(
     ): RootAvailabilityCheckResult {
         require(timeoutMillis > 0) { "Root availability timeout must be positive" }
 
-        val execution = try {
-            executor.execute(
-                command = RootShellCommands.rootAvailabilityCheck(),
-                timeoutMillis = timeoutMillis,
-                secrets = secrets,
-            )
-        } catch (exception: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw exception
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (_: Exception) {
-            return RootAvailabilityCheckResult(
-                status = RootAvailabilityStatus.Unavailable,
-                execution = null,
-                failureReason = RootAvailabilityCheckFailure.ProcessExecutionFailed,
-            )
-        }
+        val execution =
+            try {
+                executor.execute(
+                    command = RootShellCommands.rootAvailabilityCheck(),
+                    timeoutMillis = timeoutMillis,
+                    secrets = secrets,
+                )
+            } catch (exception: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw exception
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                return RootAvailabilityCheckResult(
+                    status = RootAvailabilityStatus.Unavailable,
+                    execution = null,
+                    failureReason = RootAvailabilityCheckFailure.ProcessExecutionFailed,
+                )
+            }
 
         return when (execution.result.outcome) {
             RootCommandOutcome.Success -> {

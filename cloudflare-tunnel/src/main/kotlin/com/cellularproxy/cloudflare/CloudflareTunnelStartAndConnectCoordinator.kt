@@ -11,11 +11,12 @@ class CloudflareTunnelStartAndConnectCoordinator(
     sessionRegistry: CloudflareTunnelEdgeSessionStore? = null,
 ) {
     private val startCoordinator = CloudflareTunnelStartCoordinator(controlPlane)
-    private val connectionCoordinator = CloudflareTunnelConnectionCoordinator(
-        controlPlane = controlPlane,
-        connector = connector,
-        sessionRegistry = sessionRegistry,
-    )
+    private val connectionCoordinator =
+        CloudflareTunnelConnectionCoordinator(
+            controlPlane = controlPlane,
+            connector = connector,
+            sessionRegistry = sessionRegistry,
+        )
 
     fun startAndConnectIfEnabled(
         enabled: Boolean,
@@ -26,10 +27,11 @@ class CloudflareTunnelStartAndConnectCoordinator(
                 if (startResult.transition.isAcceptedStarting()) {
                     CloudflareTunnelStartAndConnectCoordinatorResult.ConnectionAttempted(
                         startTransition = startResult.transition,
-                        connectionResult = connectionCoordinator.connectIfStarting(
-                            expectedSnapshot = startResult.transition.snapshot,
-                            credentials = startResult.credentials,
-                        ),
+                        connectionResult =
+                            connectionCoordinator.connectIfStarting(
+                                expectedSnapshot = startResult.transition.snapshot,
+                                credentials = startResult.credentials,
+                            ),
                     )
                 } else {
                     CloudflareTunnelStartAndConnectCoordinatorResult.NoConnectionAttempt(startResult)

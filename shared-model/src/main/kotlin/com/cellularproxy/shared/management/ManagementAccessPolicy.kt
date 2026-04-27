@@ -13,7 +13,10 @@ data class ManagementAccessDecision(
 )
 
 object ManagementAccessPolicy {
-    fun evaluate(method: HttpMethod, originTarget: String): ManagementAccessDecision {
+    fun evaluate(
+        method: HttpMethod,
+        originTarget: String,
+    ): ManagementAccessDecision {
         val path = originTarget.pathComponent()
         val isPublicHealth = method == HttpMethod.Get && path == HEALTH_PATH
         val isApiMethod = method == HttpMethod.Get || method == HttpMethod.Post
@@ -35,19 +38,23 @@ enum class CloudflareIngressDecision {
 }
 
 sealed interface ManagementIngressRequest {
-    data class OriginForm(val method: HttpMethod, val path: String) : ManagementIngressRequest {
-        override fun toString(): String =
-            "OriginForm(method=$method, path=<redacted>)"
+    data class OriginForm(
+        val method: HttpMethod,
+        val path: String,
+    ) : ManagementIngressRequest {
+        override fun toString(): String = "OriginForm(method=$method, path=<redacted>)"
     }
 
-    data class ExplicitProxyForm(val target: String) : ManagementIngressRequest {
-        override fun toString(): String =
-            "ExplicitProxyForm(target=<redacted>)"
+    data class ExplicitProxyForm(
+        val target: String,
+    ) : ManagementIngressRequest {
+        override fun toString(): String = "ExplicitProxyForm(target=<redacted>)"
     }
 
-    data class ConnectAuthority(val authority: String) : ManagementIngressRequest {
-        override fun toString(): String =
-            "ConnectAuthority(authority=<redacted>)"
+    data class ConnectAuthority(
+        val authority: String,
+    ) : ManagementIngressRequest {
+        override fun toString(): String = "ConnectAuthority(authority=<redacted>)"
     }
 
     data object MalformedTarget : ManagementIngressRequest
@@ -55,14 +62,15 @@ sealed interface ManagementIngressRequest {
 
 object CloudflareManagementIngressPolicy {
     fun evaluate(request: ManagementIngressRequest): CloudflareIngressDecision {
-        val shouldForward = when (request) {
-            is ManagementIngressRequest.OriginForm ->
-                ManagementAccessPolicy.evaluate(request.method, request.path).isManagementRequest
-            is ManagementIngressRequest.ExplicitProxyForm,
-            is ManagementIngressRequest.ConnectAuthority,
-            ManagementIngressRequest.MalformedTarget,
-            -> false
-        }
+        val shouldForward =
+            when (request) {
+                is ManagementIngressRequest.OriginForm ->
+                    ManagementAccessPolicy.evaluate(request.method, request.path).isManagementRequest
+                is ManagementIngressRequest.ExplicitProxyForm,
+                is ManagementIngressRequest.ConnectAuthority,
+                ManagementIngressRequest.MalformedTarget,
+                -> false
+            }
 
         return if (shouldForward) {
             CloudflareIngressDecision.Forward
@@ -81,10 +89,11 @@ private fun String.pathComponent(): String {
     return substring(0, minOf(queryStart, fragmentStart))
 }
 
-private val HIGH_IMPACT_ENDPOINTS = setOf(
-    HttpMethod.Post to "/api/cloudflare/start",
-    HttpMethod.Post to "/api/cloudflare/stop",
-    HttpMethod.Post to "/api/rotate/mobile-data",
-    HttpMethod.Post to "/api/rotate/airplane-mode",
-    HttpMethod.Post to "/api/service/stop",
-)
+private val HIGH_IMPACT_ENDPOINTS =
+    setOf(
+        HttpMethod.Post to "/api/cloudflare/start",
+        HttpMethod.Post to "/api/cloudflare/stop",
+        HttpMethod.Post to "/api/rotate/mobile-data",
+        HttpMethod.Post to "/api/rotate/airplane-mode",
+        HttpMethod.Post to "/api/service/stop",
+    )

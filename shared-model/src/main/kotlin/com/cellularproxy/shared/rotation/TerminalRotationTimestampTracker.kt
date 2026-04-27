@@ -5,14 +5,16 @@ import java.util.concurrent.atomic.AtomicLong
 class TerminalRotationTimestampTracker(
     initialLastTerminalElapsedMillis: Long? = null,
 ) {
-    private val lastTerminalElapsedMillisReference = AtomicLong(
-        initialLastTerminalElapsedMillis ?: NO_TERMINAL_ROTATION_RECORDED,
-    )
+    private val lastTerminalElapsedMillisReference =
+        AtomicLong(
+            initialLastTerminalElapsedMillis ?: NO_TERMINAL_ROTATION_RECORDED,
+        )
 
     val lastTerminalElapsedMillis: Long?
-        get() = lastTerminalElapsedMillisReference.get().takeUnless {
-            it == NO_TERMINAL_ROTATION_RECORDED
-        }
+        get() =
+            lastTerminalElapsedMillisReference.get().takeUnless {
+                it == NO_TERMINAL_ROTATION_RECORDED
+            }
 
     init {
         require(initialLastTerminalElapsedMillis == null || initialLastTerminalElapsedMillis >= 0) {
@@ -43,9 +45,10 @@ class TerminalRotationTimestampTracker(
                     record(nowElapsedMillis)
                 }
             }
-            else -> TerminalRotationTimestampObservation.NotRecorded(
-                TerminalRotationTimestampNotRecordedReason.NotTerminal,
-            )
+            else ->
+                TerminalRotationTimestampObservation.NotRecorded(
+                    TerminalRotationTimestampNotRecordedReason.NotTerminal,
+                )
         }
     }
 

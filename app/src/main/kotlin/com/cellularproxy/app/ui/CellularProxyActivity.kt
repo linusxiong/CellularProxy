@@ -25,9 +25,9 @@ import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlinx.coroutines.runBlocking
 
 class CellularProxyActivity : Activity() {
     private val settingsRepository by lazy {
@@ -40,6 +40,7 @@ class CellularProxyActivity : Activity() {
         SecureRandomSensitiveConfigGenerator()
     }
     private val settingsWorker: ExecutorService = Executors.newSingleThreadExecutor()
+
     @Volatile
     private var destroyed = false
 
@@ -85,224 +86,252 @@ class CellularProxyActivity : Activity() {
                     textSize = 16f
                     gravity = Gravity.CENTER_HORIZONTAL
                 },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
-            val endpointLabel = TextView(context).apply {
-                text = getString(
-                    R.string.dashboard_current_endpoint,
-                    initialSettings.listenHost,
-                    initialSettings.listenPort,
-                )
-                textSize = 14f
-                gravity = Gravity.CENTER_HORIZONTAL
-            }
+            val endpointLabel =
+                TextView(context).apply {
+                    text =
+                        getString(
+                            R.string.dashboard_current_endpoint,
+                            initialSettings.listenHost,
+                            initialSettings.listenPort,
+                        )
+                    textSize = 14f
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
             addView(
                 endpointLabel,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
-            val listenHostInput = addLabeledTextInput(
-                label = getString(R.string.settings_listen_host),
-                value = initialSettings.listenHost,
-                topMargin = spacing * 2,
-            ).apply { isEnabled = false }
-            val listenPortInput = addLabeledTextInput(
-                label = getString(R.string.settings_listen_port),
-                value = initialSettings.listenPort,
-                topMargin = spacing,
-            ).apply { isEnabled = false }
-            val proxyAuthInput = CheckBox(context).apply {
-                text = getString(R.string.settings_proxy_auth_enabled)
-                isChecked = initialSettings.authEnabled
-                isEnabled = false
-            }
+            val listenHostInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_listen_host),
+                    value = initialSettings.listenHost,
+                    topMargin = spacing * 2,
+                ).apply { isEnabled = false }
+            val listenPortInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_listen_port),
+                    value = initialSettings.listenPort,
+                    topMargin = spacing,
+                ).apply { isEnabled = false }
+            val proxyAuthInput =
+                CheckBox(context).apply {
+                    text = getString(R.string.settings_proxy_auth_enabled)
+                    isChecked = initialSettings.authEnabled
+                    isEnabled = false
+                }
             addView(
                 proxyAuthInput,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
-            val maxConcurrentConnectionsInput = addLabeledTextInput(
-                label = getString(R.string.settings_max_concurrent_connections),
-                value = initialSettings.maxConcurrentConnections,
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_NUMBER
-                isEnabled = false
-            }
-            val proxyUsernameInput = addLabeledTextInput(
-                label = getString(R.string.settings_proxy_username),
-                value = "",
-                topMargin = spacing,
-            ).apply { isEnabled = false }
-            val proxyPasswordInput = addLabeledTextInput(
-                label = getString(R.string.settings_proxy_password),
-                value = "",
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                isEnabled = false
-            }
-            val managementApiTokenInput = addLabeledTextInput(
-                label = getString(R.string.settings_management_api_token),
-                value = "",
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                isEnabled = false
-            }
-            val strictIpChangeRequiredInput = CheckBox(context).apply {
-                text = getString(R.string.settings_strict_ip_change_required)
-                isChecked = initialSettings.strictIpChangeRequired
-                isEnabled = false
-            }
+            val maxConcurrentConnectionsInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_max_concurrent_connections),
+                    value = initialSettings.maxConcurrentConnections,
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_NUMBER
+                    isEnabled = false
+                }
+            val proxyUsernameInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_proxy_username),
+                    value = "",
+                    topMargin = spacing,
+                ).apply { isEnabled = false }
+            val proxyPasswordInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_proxy_password),
+                    value = "",
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    isEnabled = false
+                }
+            val managementApiTokenInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_management_api_token),
+                    value = "",
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    isEnabled = false
+                }
+            val strictIpChangeRequiredInput =
+                CheckBox(context).apply {
+                    text = getString(R.string.settings_strict_ip_change_required)
+                    isChecked = initialSettings.strictIpChangeRequired
+                    isEnabled = false
+                }
             addView(
                 strictIpChangeRequiredInput,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
-            val mobileDataOffDelayInput = addLabeledTextInput(
-                label = getString(R.string.settings_mobile_data_off_delay_seconds),
-                value = initialSettings.mobileDataOffDelaySeconds,
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_NUMBER
-                isEnabled = false
-            }
-            val networkReturnTimeoutInput = addLabeledTextInput(
-                label = getString(R.string.settings_network_return_timeout_seconds),
-                value = initialSettings.networkReturnTimeoutSeconds,
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_NUMBER
-                isEnabled = false
-            }
-            val cooldownInput = addLabeledTextInput(
-                label = getString(R.string.settings_rotation_cooldown_seconds),
-                value = initialSettings.cooldownSeconds,
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_NUMBER
-                isEnabled = false
-            }
-            val rootOperationsEnabledInput = CheckBox(context).apply {
-                text = getString(R.string.settings_root_operations_enabled)
-                isChecked = initialSettings.rootOperationsEnabled
-                isEnabled = false
-            }
+            val mobileDataOffDelayInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_mobile_data_off_delay_seconds),
+                    value = initialSettings.mobileDataOffDelaySeconds,
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_NUMBER
+                    isEnabled = false
+                }
+            val networkReturnTimeoutInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_network_return_timeout_seconds),
+                    value = initialSettings.networkReturnTimeoutSeconds,
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_NUMBER
+                    isEnabled = false
+                }
+            val cooldownInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_rotation_cooldown_seconds),
+                    value = initialSettings.cooldownSeconds,
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_NUMBER
+                    isEnabled = false
+                }
+            val rootOperationsEnabledInput =
+                CheckBox(context).apply {
+                    text = getString(R.string.settings_root_operations_enabled)
+                    isChecked = initialSettings.rootOperationsEnabled
+                    isEnabled = false
+                }
             addView(
                 rootOperationsEnabledInput,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
-            val cloudflareEnabledInput = CheckBox(context).apply {
-                text = getString(R.string.settings_cloudflare_enabled)
-                isChecked = initialSettings.cloudflareEnabled
-                isEnabled = false
-            }
+            val cloudflareEnabledInput =
+                CheckBox(context).apply {
+                    text = getString(R.string.settings_cloudflare_enabled)
+                    isChecked = initialSettings.cloudflareEnabled
+                    isEnabled = false
+                }
             addView(
                 cloudflareEnabledInput,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
-            val cloudflareTunnelTokenInput = addLabeledTextInput(
-                label = getString(R.string.settings_cloudflare_tunnel_token),
-                value = "",
-                topMargin = spacing,
-            ).apply {
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                isEnabled = false
-            }
-            val cloudflareHostnameLabelInput = addLabeledTextInput(
-                label = getString(R.string.settings_cloudflare_hostname_label),
-                value = initialSettings.cloudflareHostnameLabel,
-                topMargin = spacing,
-            ).apply { isEnabled = false }
-            val routeInput = addRouteSpinner(
-                selectedRoute = initialSettings.route,
-                topMargin = spacing,
-            ).apply { isEnabled = false }
-            val saveButton = Button(context).apply {
-                text = getString(R.string.settings_save)
-                isEnabled = false
-                setOnClickListener {
-                    saveSettings(
-                        endpointLabel = endpointLabel,
-                        listenHostInput = listenHostInput,
-                        listenPortInput = listenPortInput,
-                        proxyAuthInput = proxyAuthInput,
-                        maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
-                        proxyUsernameInput = proxyUsernameInput,
-                        proxyPasswordInput = proxyPasswordInput,
-                        managementApiTokenInput = managementApiTokenInput,
-                        strictIpChangeRequiredInput = strictIpChangeRequiredInput,
-                        mobileDataOffDelayInput = mobileDataOffDelayInput,
-                        networkReturnTimeoutInput = networkReturnTimeoutInput,
-                        cooldownInput = cooldownInput,
-                        rootOperationsEnabledInput = rootOperationsEnabledInput,
-                        cloudflareEnabledInput = cloudflareEnabledInput,
-                        cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
-                        cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
-                        routeInput = routeInput,
-                        saveButton = this,
-                        startButton = null,
-                        startAfterSave = false,
-                    )
+            val cloudflareTunnelTokenInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_cloudflare_tunnel_token),
+                    value = "",
+                    topMargin = spacing,
+                ).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    isEnabled = false
                 }
-            }
+            val cloudflareHostnameLabelInput =
+                addLabeledTextInput(
+                    label = getString(R.string.settings_cloudflare_hostname_label),
+                    value = initialSettings.cloudflareHostnameLabel,
+                    topMargin = spacing,
+                ).apply { isEnabled = false }
+            val routeInput =
+                addRouteSpinner(
+                    selectedRoute = initialSettings.route,
+                    topMargin = spacing,
+                ).apply { isEnabled = false }
+            val saveButton =
+                Button(context).apply {
+                    text = getString(R.string.settings_save)
+                    isEnabled = false
+                    setOnClickListener {
+                        saveSettings(
+                            endpointLabel = endpointLabel,
+                            listenHostInput = listenHostInput,
+                            listenPortInput = listenPortInput,
+                            proxyAuthInput = proxyAuthInput,
+                            maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
+                            proxyUsernameInput = proxyUsernameInput,
+                            proxyPasswordInput = proxyPasswordInput,
+                            managementApiTokenInput = managementApiTokenInput,
+                            strictIpChangeRequiredInput = strictIpChangeRequiredInput,
+                            mobileDataOffDelayInput = mobileDataOffDelayInput,
+                            networkReturnTimeoutInput = networkReturnTimeoutInput,
+                            cooldownInput = cooldownInput,
+                            rootOperationsEnabledInput = rootOperationsEnabledInput,
+                            cloudflareEnabledInput = cloudflareEnabledInput,
+                            cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
+                            cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
+                            routeInput = routeInput,
+                            saveButton = this,
+                            startButton = null,
+                            startAfterSave = false,
+                        )
+                    }
+                }
             addView(
                 saveButton,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing * 2),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing * 2),
             )
-            val startButton = Button(context).apply {
-                text = getString(R.string.dashboard_start_proxy)
-                isEnabled = false
-                setOnClickListener {
-                    saveSettings(
-                        endpointLabel = endpointLabel,
-                        listenHostInput = listenHostInput,
-                        listenPortInput = listenPortInput,
-                        proxyAuthInput = proxyAuthInput,
-                        maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
-                        proxyUsernameInput = proxyUsernameInput,
-                        proxyPasswordInput = proxyPasswordInput,
-                        managementApiTokenInput = managementApiTokenInput,
-                        strictIpChangeRequiredInput = strictIpChangeRequiredInput,
-                        mobileDataOffDelayInput = mobileDataOffDelayInput,
-                        networkReturnTimeoutInput = networkReturnTimeoutInput,
-                        cooldownInput = cooldownInput,
-                        rootOperationsEnabledInput = rootOperationsEnabledInput,
-                        cloudflareEnabledInput = cloudflareEnabledInput,
-                        cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
-                        cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
-                        routeInput = routeInput,
-                        saveButton = saveButton,
-                        startButton = this,
-                        startAfterSave = true,
-                    )
+            val startButton =
+                Button(context).apply {
+                    text = getString(R.string.dashboard_start_proxy)
+                    isEnabled = false
+                    setOnClickListener {
+                        saveSettings(
+                            endpointLabel = endpointLabel,
+                            listenHostInput = listenHostInput,
+                            listenPortInput = listenPortInput,
+                            proxyAuthInput = proxyAuthInput,
+                            maxConcurrentConnectionsInput = maxConcurrentConnectionsInput,
+                            proxyUsernameInput = proxyUsernameInput,
+                            proxyPasswordInput = proxyPasswordInput,
+                            managementApiTokenInput = managementApiTokenInput,
+                            strictIpChangeRequiredInput = strictIpChangeRequiredInput,
+                            mobileDataOffDelayInput = mobileDataOffDelayInput,
+                            networkReturnTimeoutInput = networkReturnTimeoutInput,
+                            cooldownInput = cooldownInput,
+                            rootOperationsEnabledInput = rootOperationsEnabledInput,
+                            cloudflareEnabledInput = cloudflareEnabledInput,
+                            cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
+                            cloudflareHostnameLabelInput = cloudflareHostnameLabelInput,
+                            routeInput = routeInput,
+                            saveButton = saveButton,
+                            startButton = this,
+                            startAfterSave = true,
+                        )
+                    }
                 }
-            }
             addView(
                 startButton,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
             addView(
                 Button(context).apply {
@@ -311,10 +340,11 @@ class CellularProxyActivity : Activity() {
                         startService(commandIntent(ForegroundServiceActions.STOP_PROXY))
                     }
                 },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).withTopMargin(spacing),
+                LinearLayout
+                    .LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).withTopMargin(spacing),
             )
             loadSettingsAsync(
                 initialSettings = initialSettings,
@@ -351,15 +381,17 @@ class CellularProxyActivity : Activity() {
                 text = label
                 textSize = 14f
             },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).withTopMargin(topMargin),
+            LinearLayout
+                .LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).withTopMargin(topMargin),
         )
-        val input = EditText(context).apply {
-            setText(value)
-            setSingleLine(true)
-        }
+        val input =
+            EditText(context).apply {
+                setText(value)
+                setSingleLine(true)
+            }
         addView(
             input,
             LinearLayout.LayoutParams(
@@ -379,22 +411,25 @@ class CellularProxyActivity : Activity() {
                 text = getString(R.string.settings_route_policy)
                 textSize = 14f
             },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).withTopMargin(topMargin),
+            LinearLayout
+                .LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).withTopMargin(topMargin),
         )
         val routes = RouteTarget.entries
-        val spinner = Spinner(context).apply {
-            adapter = ArrayAdapter(
-                context,
-                android.R.layout.simple_spinner_item,
-                routes.map(RouteTarget::displayLabel),
-            ).also { adapter ->
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        val spinner =
+            Spinner(context).apply {
+                adapter =
+                    ArrayAdapter(
+                        context,
+                        android.R.layout.simple_spinner_item,
+                        routes.map(RouteTarget::displayLabel),
+                    ).also { adapter ->
+                        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                    }
+                setSelection(routes.indexOf(selectedRoute).coerceAtLeast(0))
             }
-            setSelection(routes.indexOf(selectedRoute).coerceAtLeast(0))
-        }
         addView(
             spinner,
             LinearLayout.LayoutParams(
@@ -428,15 +463,17 @@ class CellularProxyActivity : Activity() {
         startButton: Button,
     ) {
         settingsWorker.execute {
-            val loaded = runCatching {
-                ProxySettingsFormState.from(runBlocking { settingsRepository.load() })
-            }.getOrNull() ?: return@execute
+            val loaded =
+                runCatching {
+                    ProxySettingsFormState.from(runBlocking { settingsRepository.load() })
+                }.getOrNull() ?: return@execute
             runOnLiveActivityUiThread {
-                endpointLabel.text = getString(
-                    R.string.dashboard_current_endpoint,
-                    loaded.listenHost,
-                    loaded.listenPort,
-                )
+                endpointLabel.text =
+                    getString(
+                        R.string.dashboard_current_endpoint,
+                        loaded.listenHost,
+                        loaded.listenPort,
+                    )
                 listenHostInput.setText(loaded.listenHost)
                 listenPortInput.setText(loaded.listenPort)
                 proxyAuthInput.isChecked = loaded.authEnabled
@@ -496,58 +533,61 @@ class CellularProxyActivity : Activity() {
         saveButton.isEnabled = false
         startButton?.isEnabled = false
         val route = RouteTarget.entries[routeInput.selectedItemPosition.coerceIn(RouteTarget.entries.indices)]
-        val form = ProxySettingsFormState(
-            listenHost = listenHostInput.text.toString(),
-            listenPort = listenPortInput.text.toString(),
-            authEnabled = proxyAuthInput.isChecked,
-            maxConcurrentConnections = maxConcurrentConnectionsInput.text.toString(),
-            route = route,
-            proxyUsername = proxyUsernameInput.text.toString(),
-            proxyPassword = proxyPasswordInput.text.toString(),
-            managementApiToken = managementApiTokenInput.text.toString(),
-            strictIpChangeRequired = strictIpChangeRequiredInput.isChecked,
-            mobileDataOffDelaySeconds = mobileDataOffDelayInput.text.toString(),
-            networkReturnTimeoutSeconds = networkReturnTimeoutInput.text.toString(),
-            cooldownSeconds = cooldownInput.text.toString(),
-            rootOperationsEnabled = rootOperationsEnabledInput.isChecked,
-            cloudflareEnabled = cloudflareEnabledInput.isChecked,
-            cloudflareTunnelToken = cloudflareTunnelTokenInput.text.toString(),
-            cloudflareHostnameLabel = cloudflareHostnameLabelInput.text.toString(),
-        )
-        settingsWorker.execute {
-            val controller = ProxySettingsFormController(
-                loadConfig = { runBlocking { settingsRepository.load() } },
-                saveConfig = { config -> runBlocking { settingsRepository.save(config) } },
-                loadSensitiveConfig = { loadOrCreateSensitiveConfig() },
-                saveSensitiveConfig = sensitiveRepository::save,
+        val form =
+            ProxySettingsFormState(
+                listenHost = listenHostInput.text.toString(),
+                listenPort = listenPortInput.text.toString(),
+                authEnabled = proxyAuthInput.isChecked,
+                maxConcurrentConnections = maxConcurrentConnectionsInput.text.toString(),
+                route = route,
+                proxyUsername = proxyUsernameInput.text.toString(),
+                proxyPassword = proxyPasswordInput.text.toString(),
+                managementApiToken = managementApiTokenInput.text.toString(),
+                strictIpChangeRequired = strictIpChangeRequiredInput.isChecked,
+                mobileDataOffDelaySeconds = mobileDataOffDelayInput.text.toString(),
+                networkReturnTimeoutSeconds = networkReturnTimeoutInput.text.toString(),
+                cooldownSeconds = cooldownInput.text.toString(),
+                rootOperationsEnabled = rootOperationsEnabledInput.isChecked,
+                cloudflareEnabled = cloudflareEnabledInput.isChecked,
+                cloudflareTunnelToken = cloudflareTunnelTokenInput.text.toString(),
+                cloudflareHostnameLabel = cloudflareHostnameLabelInput.text.toString(),
             )
-            val result = runCatching {
-                controller.save(form)
-            }
+        settingsWorker.execute {
+            val controller =
+                ProxySettingsFormController(
+                    loadConfig = { runBlocking { settingsRepository.load() } },
+                    saveConfig = { config -> runBlocking { settingsRepository.save(config) } },
+                    loadSensitiveConfig = { loadOrCreateSensitiveConfig() },
+                    saveSensitiveConfig = sensitiveRepository::save,
+                )
+            val result =
+                runCatching {
+                    controller.save(form)
+                }
             runOnLiveActivityUiThread {
                 result
                     .onSuccess { saveResult ->
-                            handleSettingsSaveResult(
-                                endpointLabel = endpointLabel,
-                                result = saveResult,
-                                proxyUsernameInput = proxyUsernameInput,
-                                proxyPasswordInput = proxyPasswordInput,
-                                managementApiTokenInput = managementApiTokenInput,
-                                cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
-                                saveButton = saveButton,
-                                startButton = startButton,
-                                startAfterSave = startAfterSave,
-                            )
-                        }
-                    .onFailure {
-                        Toast.makeText(
-                            this,
-                            getString(R.string.settings_save_failed),
+                        handleSettingsSaveResult(
+                            endpointLabel = endpointLabel,
+                            result = saveResult,
+                            proxyUsernameInput = proxyUsernameInput,
+                            proxyPasswordInput = proxyPasswordInput,
+                            managementApiTokenInput = managementApiTokenInput,
+                            cloudflareTunnelTokenInput = cloudflareTunnelTokenInput,
+                            saveButton = saveButton,
+                            startButton = startButton,
+                            startAfterSave = startAfterSave,
+                        )
+                    }.onFailure {
+                        Toast
+                            .makeText(
+                                this,
+                                getString(R.string.settings_save_failed),
                                 Toast.LENGTH_SHORT,
                             ).show()
-                            saveButton.isEnabled = true
-                            startButton?.isEnabled = true
-                        }
+                        saveButton.isEnabled = true
+                        startButton?.isEnabled = true
+                    }
             }
         }
     }
@@ -565,33 +605,38 @@ class CellularProxyActivity : Activity() {
     ) {
         when (result) {
             is ProxySettingsSaveResult.Invalid -> {
-                val message = when {
-                    result.invalidProxyCredential -> getString(R.string.settings_invalid_proxy_credential)
-                    result.invalidManagementApiToken -> getString(R.string.settings_invalid_management_api_token)
-                    result.invalidCloudflareTunnelToken -> getString(R.string.settings_invalid_cloudflare_tunnel_token)
-                    result.invalidMaxConcurrentConnections -> getString(R.string.settings_invalid_max_concurrent_connections)
-                    result.invalidRotationTiming -> getString(R.string.settings_invalid_rotation_timing)
-                    else -> getString(R.string.settings_invalid)
-                }
-                Toast.makeText(
-                    this,
-                    message,
-                    Toast.LENGTH_SHORT,
-                ).show()
+                val message =
+                    when {
+                        result.invalidProxyCredential -> getString(R.string.settings_invalid_proxy_credential)
+                        result.invalidManagementApiToken -> getString(R.string.settings_invalid_management_api_token)
+                        result.invalidCloudflareTunnelToken -> getString(R.string.settings_invalid_cloudflare_tunnel_token)
+                        result.invalidMaxConcurrentConnections -> getString(R.string.settings_invalid_max_concurrent_connections)
+                        result.invalidRotationTiming -> getString(R.string.settings_invalid_rotation_timing)
+                        else -> getString(R.string.settings_invalid)
+                    }
+                Toast
+                    .makeText(
+                        this,
+                        message,
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 saveButton.isEnabled = true
                 startButton?.isEnabled = true
             }
             is ProxySettingsSaveResult.Saved -> {
-                endpointLabel.text = getString(
-                    R.string.dashboard_current_endpoint,
-                    result.config.proxy.listenHost,
-                    result.config.proxy.listenPort.toString(),
-                )
-                val message = if (ProxySettingsFormWarning.BroadUnauthenticatedProxy in result.warnings) {
-                    getString(R.string.settings_saved_with_broad_auth_warning)
-                } else {
-                    getString(R.string.settings_saved)
-                }
+                endpointLabel.text =
+                    getString(
+                        R.string.dashboard_current_endpoint,
+                        result.config.proxy.listenHost,
+                        result.config.proxy.listenPort
+                            .toString(),
+                    )
+                val message =
+                    if (ProxySettingsFormWarning.BroadUnauthenticatedProxy in result.warnings) {
+                        getString(R.string.settings_saved_with_broad_auth_warning)
+                    } else {
+                        getString(R.string.settings_saved)
+                    }
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                 proxyUsernameInput.setText("")
                 proxyPasswordInput.setText("")
@@ -609,14 +654,14 @@ class CellularProxyActivity : Activity() {
     private fun loadOrCreateSensitiveConfig(): SensitiveConfig =
         when (val result = sensitiveRepository.load()) {
             is SensitiveConfigLoadResult.Loaded -> result.config
-            SensitiveConfigLoadResult.MissingRequiredSecrets -> sensitiveConfigGenerator
-                .generateDefaultSensitiveConfig()
-                .also(sensitiveRepository::save)
+            SensitiveConfigLoadResult.MissingRequiredSecrets ->
+                sensitiveConfigGenerator
+                    .generateDefaultSensitiveConfig()
+                    .also(sensitiveRepository::save)
             is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
         }
 
-    private fun commandIntent(action: String): Intent =
-        Intent(this, CellularProxyForegroundService::class.java).setAction(action)
+    private fun commandIntent(action: String): Intent = Intent(this, CellularProxyForegroundService::class.java).setAction(action)
 
     private fun runOnLiveActivityUiThread(action: () -> Unit) {
         runOnUiThread {
@@ -633,9 +678,10 @@ private fun LinearLayout.LayoutParams.withTopMargin(topMarginPx: Int): LinearLay
     }
 
 private val RouteTarget.displayLabel: String
-    get() = when (this) {
-        RouteTarget.WiFi -> "Wi-Fi"
-        RouteTarget.Cellular -> "Cellular"
-        RouteTarget.Vpn -> "VPN"
-        RouteTarget.Automatic -> "Automatic"
-    }
+    get() =
+        when (this) {
+            RouteTarget.WiFi -> "Wi-Fi"
+            RouteTarget.Cellular -> "Cellular"
+            RouteTarget.Vpn -> "VPN"
+            RouteTarget.Automatic -> "Automatic"
+        }

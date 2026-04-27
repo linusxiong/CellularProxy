@@ -9,11 +9,12 @@ import kotlin.time.Duration.Companion.seconds
 class RotationToggleDelayPolicyTest {
     @Test
     fun `rotation toggle delay elapses after configured wait time`() {
-        val decision = RotationToggleDelayPolicy.evaluate(
-            delayStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 4_000,
-            toggleDelay = 3.seconds,
-        )
+        val decision =
+            RotationToggleDelayPolicy.evaluate(
+                delayStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 4_000,
+                toggleDelay = 3.seconds,
+            )
 
         assertEquals(RotationToggleDelayDecision.Elapsed, decision)
         assertEquals(RotationEvent.ToggleDelayElapsed, decision.event)
@@ -21,11 +22,12 @@ class RotationToggleDelayPolicyTest {
 
     @Test
     fun `rotation toggle delay waits while configured wait time remains`() {
-        val decision = RotationToggleDelayPolicy.evaluate(
-            delayStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 2_250,
-            toggleDelay = 3.seconds,
-        )
+        val decision =
+            RotationToggleDelayPolicy.evaluate(
+                delayStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 2_250,
+                toggleDelay = 3.seconds,
+            )
 
         assertEquals(
             RotationToggleDelayDecision.Waiting(
@@ -38,11 +40,12 @@ class RotationToggleDelayPolicyTest {
 
     @Test
     fun `zero rotation toggle delay elapses immediately`() {
-        val decision = RotationToggleDelayPolicy.evaluate(
-            delayStartedElapsedMillis = 1_000,
-            nowElapsedMillis = 1_000,
-            toggleDelay = 0.seconds,
-        )
+        val decision =
+            RotationToggleDelayPolicy.evaluate(
+                delayStartedElapsedMillis = 1_000,
+                nowElapsedMillis = 1_000,
+                toggleDelay = 0.seconds,
+            )
 
         assertEquals(RotationToggleDelayDecision.Elapsed, decision)
         assertEquals(RotationEvent.ToggleDelayElapsed, decision.event)
@@ -50,11 +53,12 @@ class RotationToggleDelayPolicyTest {
 
     @Test
     fun `rotation toggle delay fails closed when delay start time is observed in the future`() {
-        val decision = RotationToggleDelayPolicy.evaluate(
-            delayStartedElapsedMillis = 5_000,
-            nowElapsedMillis = 4_000,
-            toggleDelay = 3.seconds,
-        )
+        val decision =
+            RotationToggleDelayPolicy.evaluate(
+                delayStartedElapsedMillis = 5_000,
+                nowElapsedMillis = 4_000,
+                toggleDelay = 3.seconds,
+            )
 
         assertEquals(
             RotationToggleDelayDecision.Waiting(

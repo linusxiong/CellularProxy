@@ -47,46 +47,48 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotateMobileData = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rotateAirplaneMode = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rootOperationsEnabled = { false },
-                rootAvailability = { RootAvailabilityStatus.Unknown },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotateMobileData = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rotateAirplaneMode = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rootOperationsEnabled = { false },
+                    rootAvailability = { RootAvailabilityStatus.Unknown },
+                )
 
             assertEquals(ProxyServiceState.Running, callbacks.healthStatus().state)
             assertEquals(ProxyServiceState.Running, callbacks.status().state)
@@ -98,9 +100,10 @@ class ProxyServerRuntimeManagementCallbacksTest {
             assertEquals(ProxyServiceState.Stopping, callbacks.status().state)
             assertTrue(listener.isClosed)
 
-            val stopped = assertIs<ProxyServerRuntimeStopResult.Finished>(
-                running.awaitStopped(timeoutMillis = 1_000),
-            )
+            val stopped =
+                assertIs<ProxyServerRuntimeStopResult.Finished>(
+                    running.awaitStopped(timeoutMillis = 1_000),
+                )
             assertIs<ProxyBoundServerAcceptLoopResult.Stopped>(stopped.result)
             assertEquals(ProxyServiceState.Stopped, callbacks.status().state)
         } finally {
@@ -121,44 +124,50 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
             val network = NetworkDescriptor("cell-1", NetworkCategory.Cellular, "Carrier LTE", true)
-            val cloudflareStart = CloudflareTunnelTransitionResult(
-                CloudflareTunnelTransitionDisposition.Accepted,
-                CloudflareTunnelStatus.starting(),
-            )
-            val cloudflareStop = CloudflareTunnelTransitionResult(
-                CloudflareTunnelTransitionDisposition.Duplicate,
-                CloudflareTunnelStatus.stopped(),
-            )
-            val mobileRotation = RotationTransitionResult(
-                RotationTransitionDisposition.Accepted,
-                RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
-            )
-            val airplaneRotation = RotationTransitionResult(
-                RotationTransitionDisposition.Duplicate,
-                RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
-            )
+            val cloudflareStart =
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Accepted,
+                    CloudflareTunnelStatus.starting(),
+                )
+            val cloudflareStop =
+                CloudflareTunnelTransitionResult(
+                    CloudflareTunnelTransitionDisposition.Duplicate,
+                    CloudflareTunnelStatus.stopped(),
+                )
+            val mobileRotation =
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Accepted,
+                    RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
+                )
+            val airplaneRotation =
+                RotationTransitionResult(
+                    RotationTransitionDisposition.Duplicate,
+                    RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
+                )
 
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { listOf(network) },
-                publicIp = { "203.0.113.42" },
-                cloudflareStatus = { CloudflareTunnelStatus.connected() },
-                cloudflareStart = { cloudflareStart },
-                cloudflareStop = { cloudflareStop },
-                rotateMobileData = { mobileRotation },
-                rotateAirplaneMode = { airplaneRotation },
-                rootOperationsEnabled = { true },
-                rootAvailability = { RootAvailabilityStatus.Available },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { listOf(network) },
+                    publicIp = { "203.0.113.42" },
+                    cloudflareStatus = { CloudflareTunnelStatus.connected() },
+                    cloudflareStart = { cloudflareStart },
+                    cloudflareStop = { cloudflareStop },
+                    rotateMobileData = { mobileRotation },
+                    rotateAirplaneMode = { airplaneRotation },
+                    rootOperationsEnabled = { true },
+                    rootAvailability = { RootAvailabilityStatus.Available },
+                )
 
             assertEquals(listOf(network), callbacks.networks())
             assertEquals("203.0.113.42", callbacks.publicIp())
@@ -189,47 +198,49 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
             var rootAvailability = RootAvailabilityStatus.Unavailable
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotateMobileData = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rotateAirplaneMode = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rootOperationsEnabled = { true },
-                rootAvailability = { rootAvailability },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotateMobileData = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rotateAirplaneMode = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rootOperationsEnabled = { true },
+                    rootAvailability = { rootAvailability },
+                )
 
             assertEquals(RootAvailabilityStatus.Unavailable, callbacks.status().rootAvailability)
 
@@ -255,46 +266,48 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotateMobileData = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rotateAirplaneMode = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rootOperationsEnabled = { false },
-                rootAvailability = { RootAvailabilityStatus.Available },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotateMobileData = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rotateAirplaneMode = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rootOperationsEnabled = { false },
+                    rootAvailability = { RootAvailabilityStatus.Available },
+                )
 
             assertEquals(RootAvailabilityStatus.Unknown, callbacks.status().rootAvailability)
         } finally {
@@ -316,50 +329,52 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
             var mobileDataRotationCalls = 0
             var airplaneModeRotationCalls = 0
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotateMobileData = {
-                    mobileDataRotationCalls += 1
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Accepted,
-                        RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
-                    )
-                },
-                rotateAirplaneMode = {
-                    airplaneModeRotationCalls += 1
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Accepted,
-                        RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
-                    )
-                },
-                rootOperationsEnabled = { false },
-                rootAvailability = { RootAvailabilityStatus.Unknown },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotateMobileData = {
+                        mobileDataRotationCalls += 1
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Accepted,
+                            RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
+                        )
+                    },
+                    rotateAirplaneMode = {
+                        airplaneModeRotationCalls += 1
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Accepted,
+                            RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
+                        )
+                    },
+                    rootOperationsEnabled = { false },
+                    rootAvailability = { RootAvailabilityStatus.Unknown },
+                )
 
             val mobileStart = callbacks.rotateMobileData()
             val airplaneStart = callbacks.rotateAirplaneMode()
@@ -389,38 +404,40 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
             val controlPlane = RotationControlPlane()
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotationControlPlane = controlPlane,
-                nowElapsedMillis = { 10_000 },
-                rotationCooldown = 180.seconds,
-                rootOperationsEnabled = { true },
-                rootAvailability = { RootAvailabilityStatus.Available },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotationControlPlane = controlPlane,
+                    nowElapsedMillis = { 10_000 },
+                    rotationCooldown = 180.seconds,
+                    rootOperationsEnabled = { true },
+                    rootAvailability = { RootAvailabilityStatus.Available },
+                )
 
             val mobileStart = callbacks.rotateMobileData()
             val duplicateAirplaneStart = callbacks.rotateAirplaneMode()
@@ -452,38 +469,40 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
             val controlPlane = RotationControlPlane()
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotationControlPlane = controlPlane,
-                nowElapsedMillis = { 10_000 },
-                rotationCooldown = 180.seconds,
-                rootOperationsEnabled = { false },
-                rootAvailability = { RootAvailabilityStatus.Unknown },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotationControlPlane = controlPlane,
+                    nowElapsedMillis = { 10_000 },
+                    rotationCooldown = 180.seconds,
+                    rootOperationsEnabled = { false },
+                    rootAvailability = { RootAvailabilityStatus.Unknown },
+                )
 
             val mobileStart = callbacks.rotateMobileData()
             val airplaneStart = callbacks.rotateAirplaneMode()
@@ -516,38 +535,40 @@ class ProxyServerRuntimeManagementCallbacksTest {
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         val backingSocket = ServerSocket(0)
         val listener = BoundProxyServerSocket(backingSocket, LOOPBACK_HOST)
-        val running = startRuntime(
-            listener = listener,
-            acceptLoopExecutor = acceptLoopExecutor,
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-        )
+        val running =
+            startRuntime(
+                listener = listener,
+                acceptLoopExecutor = acceptLoopExecutor,
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            )
 
         try {
             val controlPlane = RotationControlPlane(initialLastTerminalElapsedMillis = 10_000)
-            val callbacks = ProxyServerRuntimeManagementCallbacks.create(
-                runtime = running,
-                networks = { emptyList() },
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotationControlPlane = controlPlane,
-                nowElapsedMillis = { 10_100 },
-                rotationCooldown = 180.seconds,
-                rootOperationsEnabled = { true },
-                rootAvailability = { RootAvailabilityStatus.Available },
-            )
+            val callbacks =
+                ProxyServerRuntimeManagementCallbacks.create(
+                    runtime = running,
+                    networks = { emptyList() },
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotationControlPlane = controlPlane,
+                    nowElapsedMillis = { 10_100 },
+                    rotationCooldown = 180.seconds,
+                    rootOperationsEnabled = { true },
+                    rootAvailability = { RootAvailabilityStatus.Available },
+                )
 
             val mobileStart = callbacks.rotateMobileData()
 
@@ -577,9 +598,10 @@ class ProxyServerRuntimeManagementCallbacksTest {
     ): RunningProxyServerRuntime =
         assertIs<ProxyServerRuntimeResult.Running>(
             ProxyServerRuntime.start(
-                config = AppConfig.default().copy(
-                    proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
-                ),
+                config =
+                    AppConfig.default().copy(
+                        proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                    ),
                 managementApiTokenPresent = true,
                 observedNetworks = listOf(wifiRoute()),
                 ingressConfig = ingressConfig(),
@@ -594,33 +616,37 @@ class ProxyServerRuntimeManagementCallbacksTest {
     private fun ingressConfig(): ProxyIngressPreflightConfig =
         ProxyIngressPreflightConfig(
             connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
-            requestAdmission = ProxyRequestAdmissionConfig(
-                proxyAuthentication = ProxyAuthenticationConfig(
-                    authEnabled = false,
-                    credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = false,
+                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        ),
+                    managementApiToken = "management-token",
                 ),
-                managementApiToken = "management-token",
-            ),
         )
 
     private fun connectionHandler(): ProxyBoundClientConnectionHandler =
         ProxyBoundClientConnectionHandler(
-            exchangeHandler = ProxyClientStreamExchangeHandler(
-                httpConnector = {
-                    OutboundHttpOriginOpenResult.Failed(
-                        OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
-                    )
-                },
-                connectConnector = {
-                    OutboundConnectTunnelOpenResult.Failed(
-                        OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
-                    )
-                },
-                managementHandler = object : ManagementApiHandler {
-                    override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-                        ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-            ),
+            exchangeHandler =
+                ProxyClientStreamExchangeHandler(
+                    httpConnector = {
+                        OutboundHttpOriginOpenResult.Failed(
+                            OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
+                        )
+                    },
+                    connectConnector = {
+                        OutboundConnectTunnelOpenResult.Failed(
+                            OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
+                        )
+                    },
+                    managementHandler =
+                        object : ManagementApiHandler {
+                            override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
+                                ManagementApiResponse.json(statusCode = 200, body = "{}")
+                        },
+                ),
         )
 
     private fun wifiRoute(): NetworkDescriptor =

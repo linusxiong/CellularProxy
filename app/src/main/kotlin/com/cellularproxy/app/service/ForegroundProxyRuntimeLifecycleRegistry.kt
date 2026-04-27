@@ -15,33 +15,36 @@ internal object ForegroundProxyRuntimeLifecycleRegistry {
 
     fun install(lifecycle: ForegroundProxyRuntimeLifecycle): Closeable {
         val newEntry = InstalledForegroundProxyRuntimeLifecycleEntry(lifecycle)
-        val previous = synchronized(lock) {
-            val previousEntry = currentEntry
-            currentEntry = newEntry
-            foregroundProxyRuntimeLifecycle = lifecycle
-            previousEntry
-        }
+        val previous =
+            synchronized(lock) {
+                val previousEntry = currentEntry
+                currentEntry = newEntry
+                foregroundProxyRuntimeLifecycle = lifecycle
+                previousEntry
+            }
         previous.closeAndRecordFailure()
         return InstalledForegroundProxyRuntimeLifecycleRegistration(newEntry)
     }
 
     fun resetForTesting() {
-        val previous = synchronized(lock) {
-            val previousEntry = currentEntry
-            currentEntry = InstalledForegroundProxyRuntimeLifecycleEntry(UninstalledForegroundProxyRuntimeLifecycle)
-            foregroundProxyRuntimeLifecycle = UninstalledForegroundProxyRuntimeLifecycle
-            closeFailures.clear()
-            previousEntry
-        }
+        val previous =
+            synchronized(lock) {
+                val previousEntry = currentEntry
+                currentEntry = InstalledForegroundProxyRuntimeLifecycleEntry(UninstalledForegroundProxyRuntimeLifecycle)
+                foregroundProxyRuntimeLifecycle = UninstalledForegroundProxyRuntimeLifecycle
+                closeFailures.clear()
+                previousEntry
+            }
         previous.closeAndRecordFailure()
     }
 
     fun throwPendingCloseFailures() {
-        val failure = synchronized(lock) {
-            val firstFailure = closeFailures.firstOrNull() ?: return
-            closeFailures.clear()
-            firstFailure
-        }
+        val failure =
+            synchronized(lock) {
+                val firstFailure = closeFailures.firstOrNull() ?: return
+                closeFailures.clear()
+                firstFailure
+            }
         throw failure
     }
 
@@ -69,10 +72,11 @@ internal object ForegroundProxyRuntimeLifecycleRegistry {
 
 object ForegroundProxyRuntimeLifecycleInstaller {
     fun install(delegate: ForegroundProxyRuntimeLifecycle): Closeable {
-        val lifecycle = when (delegate) {
-            is SynchronousForegroundProxyRuntimeLifecycle -> delegate
-            else -> ExecutorForegroundProxyRuntimeLifecycle.create(delegate)
-        }
+        val lifecycle =
+            when (delegate) {
+                is SynchronousForegroundProxyRuntimeLifecycle -> delegate
+                else -> ExecutorForegroundProxyRuntimeLifecycle.create(delegate)
+            }
         return ForegroundProxyRuntimeLifecycleRegistry.install(lifecycle)
     }
 }

@@ -7,13 +7,14 @@ import kotlin.test.assertFalse
 class LogRedactorTest {
     @Test
     fun `redacts sensitive headers without changing non-sensitive headers`() {
-        val message = """
+        val message =
+            """
             Authorization: Bearer management-token
             Proxy-Authorization: Basic proxy-secret
             Cookie: session=clear
             Set-Cookie: session=clear
             Host: example.test
-        """.trimIndent()
+            """.trimIndent()
 
         val redacted = LogRedactor.redact(message)
 
@@ -79,17 +80,19 @@ class LogRedactorTest {
 
     @Test
     fun `redacts configured management proxy and cloudflare secrets`() {
-        val secrets = LogRedactionSecrets(
-            managementApiToken = "management-token",
-            proxyCredential = "proxy-user:proxy-password",
-            cloudflareTunnelToken = "cloudflare-token",
-        )
-        val message = """
+        val secrets =
+            LogRedactionSecrets(
+                managementApiToken = "management-token",
+                proxyCredential = "proxy-user:proxy-password",
+                cloudflareTunnelToken = "cloudflare-token",
+            )
+        val message =
+            """
             management=management-token
             proxy=proxy-user:proxy-password
             tunnel=cloudflare-token
             ordinary=visible
-        """.trimIndent()
+            """.trimIndent()
 
         val redacted = LogRedactor.redact(message, secrets)
 
@@ -109,21 +112,23 @@ class LogRedactorTest {
 
     @Test
     fun `ignores blank configured secrets`() {
-        val secrets = LogRedactionSecrets(
-            managementApiToken = "",
-            proxyCredential = " ",
-            cloudflareTunnelToken = null,
-        )
+        val secrets =
+            LogRedactionSecrets(
+                managementApiToken = "",
+                proxyCredential = " ",
+                cloudflareTunnelToken = null,
+            )
 
         assertEquals("ordinary log line", LogRedactor.redact("ordinary log line", secrets))
     }
 
     @Test
     fun `redacts overlapping configured secrets using the longest value first`() {
-        val secrets = LogRedactionSecrets(
-            managementApiToken = "abc123",
-            proxyCredential = "abc",
-        )
+        val secrets =
+            LogRedactionSecrets(
+                managementApiToken = "abc123",
+                proxyCredential = "abc",
+            )
 
         val redacted = LogRedactor.redact("token=abc123 prefix=abc", secrets)
 
@@ -134,10 +139,11 @@ class LogRedactorTest {
     fun `redacts configured secrets inside url queries without leaking redaction delimiters`() {
         val secrets = LogRedactionSecrets(managementApiToken = "raw-token")
 
-        val redacted = LogRedactor.redact(
-            "url=https://edge.example.test/cdn-cgi?token=raw-token",
-            secrets,
-        )
+        val redacted =
+            LogRedactor.redact(
+                "url=https://edge.example.test/cdn-cgi?token=raw-token",
+                secrets,
+            )
 
         assertEquals("url=https://edge.example.test/cdn-cgi?[REDACTED]", redacted)
     }

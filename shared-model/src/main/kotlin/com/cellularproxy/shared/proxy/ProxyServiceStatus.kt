@@ -45,13 +45,14 @@ data class ProxyServiceStatus(
             cloudflare: CloudflareTunnelStatus = CloudflareTunnelStatus.disabled(),
             rootAvailability: RootAvailabilityStatus = RootAvailabilityStatus.Unknown,
             metrics: ProxyTrafficMetrics = ProxyTrafficMetrics(),
-        ): ProxyServiceStatus = ProxyServiceStatus(
-            state = ProxyServiceState.Stopped,
-            configuredRoute = configuredRoute,
-            cloudflare = cloudflare,
-            rootAvailability = rootAvailability,
-            metrics = metrics,
-        )
+        ): ProxyServiceStatus =
+            ProxyServiceStatus(
+                state = ProxyServiceState.Stopped,
+                configuredRoute = configuredRoute,
+                cloudflare = cloudflare,
+                rootAvailability = rootAvailability,
+                metrics = metrics,
+            )
 
         fun running(
             listenHost: String,
@@ -63,18 +64,19 @@ data class ProxyServiceStatus(
             cloudflare: CloudflareTunnelStatus = CloudflareTunnelStatus.disabled(),
             rootAvailability: RootAvailabilityStatus = RootAvailabilityStatus.Unknown,
             metrics: ProxyTrafficMetrics = ProxyTrafficMetrics(),
-        ): ProxyServiceStatus = ProxyServiceStatus(
-            state = ProxyServiceState.Running,
-            listenHost = listenHost,
-            listenPort = listenPort,
-            configuredRoute = configuredRoute,
-            boundRoute = boundRoute,
-            publicIp = publicIp,
-            hasHighSecurityRisk = hasHighSecurityRisk,
-            cloudflare = cloudflare,
-            rootAvailability = rootAvailability,
-            metrics = metrics,
-        )
+        ): ProxyServiceStatus =
+            ProxyServiceStatus(
+                state = ProxyServiceState.Running,
+                listenHost = listenHost,
+                listenPort = listenPort,
+                configuredRoute = configuredRoute,
+                boundRoute = boundRoute,
+                publicIp = publicIp,
+                hasHighSecurityRisk = hasHighSecurityRisk,
+                cloudflare = cloudflare,
+                rootAvailability = rootAvailability,
+                metrics = metrics,
+            )
 
         fun failed(
             startupError: ProxyStartupError,
@@ -82,14 +84,15 @@ data class ProxyServiceStatus(
             cloudflare: CloudflareTunnelStatus = CloudflareTunnelStatus.disabled(),
             rootAvailability: RootAvailabilityStatus = RootAvailabilityStatus.Unknown,
             metrics: ProxyTrafficMetrics = ProxyTrafficMetrics(),
-        ): ProxyServiceStatus = ProxyServiceStatus(
-            state = ProxyServiceState.Failed,
-            configuredRoute = configuredRoute,
-            cloudflare = cloudflare,
-            rootAvailability = rootAvailability,
-            metrics = metrics,
-            startupError = startupError,
-        )
+        ): ProxyServiceStatus =
+            ProxyServiceStatus(
+                state = ProxyServiceState.Failed,
+                configuredRoute = configuredRoute,
+                cloudflare = cloudflare,
+                rootAvailability = rootAvailability,
+                metrics = metrics,
+                startupError = startupError,
+            )
     }
 }
 

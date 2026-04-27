@@ -7,7 +7,6 @@ import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
 import com.cellularproxy.proxy.management.ManagementApiOperation
-import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
@@ -42,49 +41,51 @@ class ProxyServerForegroundRuntimeInstallerTest {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
-        val result = ProxyServerForegroundRuntimeInstaller.install(
-            bootstrapResult = AppConfigBootstrapResult.Ready(
-                plainConfig = loopbackAppConfig(),
-                sensitiveConfig = sensitiveConfig,
-                createdDefaultSecrets = false,
-                reconciledPlainConfig = false,
-            ),
-            observedNetworks = { listOf(wifiRoute()) },
-            socketConnector = UnavailableBoundNetworkSocketConnector,
-            publicIp = { "203.0.113.42" },
-            cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-            cloudflareStart = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            cloudflareStop = {
-                CloudflareTunnelTransitionResult(
-                    CloudflareTunnelTransitionDisposition.Ignored,
-                    CloudflareTunnelStatus.disabled(),
-                )
-            },
-            rotateMobileData = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rotateAirplaneMode = {
-                RotationTransitionResult(
-                    RotationTransitionDisposition.Ignored,
-                    RotationStatus.idle(),
-                )
-            },
-            rootAvailability = { RootAvailabilityStatus.Available },
-            workerExecutor = workerExecutor,
-            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-            acceptLoopExecutor = acceptLoopExecutor,
-            bindListener = { listenHost: String, _: Int, backlog: Int ->
-                ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-            },
-        )
+        val result =
+            ProxyServerForegroundRuntimeInstaller.install(
+                bootstrapResult =
+                    AppConfigBootstrapResult.Ready(
+                        plainConfig = loopbackAppConfig(),
+                        sensitiveConfig = sensitiveConfig,
+                        createdDefaultSecrets = false,
+                        reconciledPlainConfig = false,
+                    ),
+                observedNetworks = { listOf(wifiRoute()) },
+                socketConnector = UnavailableBoundNetworkSocketConnector,
+                publicIp = { "203.0.113.42" },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Available },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
         try {
             val installed = assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(result)
@@ -121,43 +122,45 @@ class ProxyServerForegroundRuntimeInstallerTest {
         val workerExecutor = Executors.newSingleThreadExecutor()
         val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
         try {
-            val result = ProxyServerForegroundRuntimeInstaller.install(
-                bootstrapResult = AppConfigBootstrapResult.InvalidSensitiveConfig(
-                    SensitiveConfigInvalidReason.UndecryptableSecret,
-                ),
-                observedNetworks = { listOf(wifiRoute()) },
-                socketConnector = UnavailableBoundNetworkSocketConnector,
-                publicIp = { null },
-                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
-                cloudflareStart = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                cloudflareStop = {
-                    CloudflareTunnelTransitionResult(
-                        CloudflareTunnelTransitionDisposition.Ignored,
-                        CloudflareTunnelStatus.disabled(),
-                    )
-                },
-                rotateMobileData = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rotateAirplaneMode = {
-                    RotationTransitionResult(
-                        RotationTransitionDisposition.Ignored,
-                        RotationStatus.idle(),
-                    )
-                },
-                rootAvailability = { RootAvailabilityStatus.Unknown },
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-            )
+            val result =
+                ProxyServerForegroundRuntimeInstaller.install(
+                    bootstrapResult =
+                        AppConfigBootstrapResult.InvalidSensitiveConfig(
+                            SensitiveConfigInvalidReason.UndecryptableSecret,
+                        ),
+                    observedNetworks = { listOf(wifiRoute()) },
+                    socketConnector = UnavailableBoundNetworkSocketConnector,
+                    publicIp = { null },
+                    cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                    cloudflareStart = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    cloudflareStop = {
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Ignored,
+                            CloudflareTunnelStatus.disabled(),
+                        )
+                    },
+                    rotateMobileData = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rotateAirplaneMode = {
+                        RotationTransitionResult(
+                            RotationTransitionDisposition.Ignored,
+                            RotationStatus.idle(),
+                        )
+                    },
+                    rootAvailability = { RootAvailabilityStatus.Unknown },
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                )
 
             assertEquals(
                 ProxyServerForegroundRuntimeInstallResult.InvalidSensitiveConfig(
@@ -179,20 +182,23 @@ class ProxyServerForegroundRuntimeInstallerTest {
         }
     }
 
-    private val sensitiveConfig = SensitiveConfig(
-        proxyCredential = ProxyCredential(
-            username = "proxy-user",
-            password = "proxy-password",
-        ),
-        managementApiToken = "management-token",
-    )
+    private val sensitiveConfig =
+        SensitiveConfig(
+            proxyCredential =
+                ProxyCredential(
+                    username = "proxy-user",
+                    password = "proxy-password",
+                ),
+            managementApiToken = "management-token",
+        )
 
     private fun loopbackAppConfig(): AppConfig =
         AppConfig.default().copy(
-            proxy = AppConfig.default().proxy.copy(
-                listenHost = "127.0.0.1",
-                listenPort = 8080,
-            ),
+            proxy =
+                AppConfig.default().proxy.copy(
+                    listenHost = "127.0.0.1",
+                    listenPort = 8080,
+                ),
         )
 
     private fun wifiRoute(): NetworkDescriptor =
@@ -210,6 +216,5 @@ private object UnavailableBoundNetworkSocketConnector : BoundNetworkSocketConnec
         host: String,
         port: Int,
         timeoutMillis: Long,
-    ): BoundSocketConnectResult =
-        BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
+    ): BoundSocketConnectResult = BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
 }

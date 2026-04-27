@@ -18,21 +18,24 @@ class ManagementApiStreamExchangeHandlerTest {
     @Test
     fun `writes dispatched management response and preserves audit metadata`() {
         val output = ByteArrayOutputStream()
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            )
 
-        val result = ManagementApiStreamExchangeHandler(handler).handle(
-            accepted = accepted(
-                ParsedProxyRequest.Management(
-                    method = HttpMethod.Post,
-                    originTarget = "/api/service/stop",
-                    requiresToken = true,
-                    requiresAuditLog = true,
-                ),
-            ),
-            clientOutput = output,
-        )
+        val result =
+            ManagementApiStreamExchangeHandler(handler).handle(
+                accepted =
+                    accepted(
+                        ParsedProxyRequest.Management(
+                            method = HttpMethod.Post,
+                            originTarget = "/api/service/stop",
+                            requiresToken = true,
+                            requiresAuditLog = true,
+                        ),
+                    ),
+                clientOutput = output,
+            )
 
         val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(result)
         assertEquals(202, responded.statusCode)
@@ -49,17 +52,19 @@ class ManagementApiStreamExchangeHandlerTest {
         val output = ByteArrayOutputStream()
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
 
-        val result = ManagementApiStreamExchangeHandler(handler).handle(
-            accepted = accepted(
-                ParsedProxyRequest.Management(
-                    method = HttpMethod.Post,
-                    originTarget = "/api/service/stop?reason=remote",
-                    requiresToken = true,
-                    requiresAuditLog = true,
-                ),
-            ),
-            clientOutput = output,
-        )
+        val result =
+            ManagementApiStreamExchangeHandler(handler).handle(
+                accepted =
+                    accepted(
+                        ParsedProxyRequest.Management(
+                            method = HttpMethod.Post,
+                            originTarget = "/api/service/stop?reason=remote",
+                            requiresToken = true,
+                            requiresAuditLog = true,
+                        ),
+                    ),
+                clientOutput = output,
+            )
 
         val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(result)
         assertEquals(400, responded.statusCode)
@@ -77,17 +82,19 @@ class ManagementApiStreamExchangeHandlerTest {
         val output = ByteArrayOutputStream()
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
 
-        val result = ManagementApiStreamExchangeHandler(handler).handle(
-            accepted = accepted(
-                ParsedProxyRequest.HttpProxy(
-                    method = "GET",
-                    host = "origin.example",
-                    port = 80,
-                    originTarget = "/",
-                ),
-            ),
-            clientOutput = output,
-        )
+        val result =
+            ManagementApiStreamExchangeHandler(handler).handle(
+                accepted =
+                    accepted(
+                        ParsedProxyRequest.HttpProxy(
+                            method = "GET",
+                            host = "origin.example",
+                            port = 80,
+                            originTarget = "/",
+                        ),
+                    ),
+                clientOutput = output,
+            )
 
         assertEquals(
             ManagementApiStreamExchangeHandlingResult.UnsupportedAcceptedRequest(
@@ -104,19 +111,21 @@ class ManagementApiStreamExchangeHandlerTest {
         val output = ByteArrayOutputStream()
         val failure = IOException("state backend unavailable")
 
-        val thrown = assertFailsWith<ManagementApiHandlerException> {
-            ManagementApiStreamExchangeHandler(ManagementApiHandler { throw failure }).handle(
-                accepted = accepted(
-                    ParsedProxyRequest.Management(
-                        method = HttpMethod.Post,
-                        originTarget = "/api/rotate/mobile-data",
-                        requiresToken = true,
-                        requiresAuditLog = true,
-                    ),
-                ),
-                clientOutput = output,
-            )
-        }
+        val thrown =
+            assertFailsWith<ManagementApiHandlerException> {
+                ManagementApiStreamExchangeHandler(ManagementApiHandler { throw failure }).handle(
+                    accepted =
+                        accepted(
+                            ParsedProxyRequest.Management(
+                                method = HttpMethod.Post,
+                                originTarget = "/api/rotate/mobile-data",
+                                requiresToken = true,
+                                requiresAuditLog = true,
+                            ),
+                        ),
+                    clientOutput = output,
+                )
+            }
 
         assertEquals(ManagementApiOperation.RotateMobileData, thrown.operation)
         assertTrue(thrown.requiresAuditLog)
@@ -137,10 +146,11 @@ class ManagementApiStreamExchangeHandlerTest {
 
     private fun accepted(request: ParsedProxyRequest): ProxyIngressStreamPreflightDecision.Accepted =
         ProxyIngressStreamPreflightDecision.Accepted(
-            httpRequest = ParsedHttpRequest(
-                request = request,
-                headers = emptyMap(),
-            ),
+            httpRequest =
+                ParsedHttpRequest(
+                    request = request,
+                    headers = emptyMap(),
+                ),
             activeConnectionsAfterAdmission = 1,
             requiresAuditLog = request is ParsedProxyRequest.Management && request.requiresAuditLog,
             headerBytesRead = 32,

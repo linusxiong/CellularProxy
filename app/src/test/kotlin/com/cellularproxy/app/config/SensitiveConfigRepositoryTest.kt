@@ -12,15 +12,17 @@ class SensitiveConfigRepositoryTest {
     @Test
     fun `saves and loads sensitive configuration through encrypted store values`() {
         val backingStore = InMemorySensitiveKeyValueStore()
-        val repository = SensitiveConfigRepository(
-            store = backingStore,
-            cipher = ReversibleTestCipher,
-        )
-        val config = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-            managementApiToken = "management-token",
-            cloudflareTunnelToken = "cloudflare-token",
-        )
+        val repository =
+            SensitiveConfigRepository(
+                store = backingStore,
+                cipher = ReversibleTestCipher,
+            )
+        val config =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                managementApiToken = "management-token",
+                cloudflareTunnelToken = "cloudflare-token",
+            )
 
         repository.save(config)
 
@@ -45,10 +47,11 @@ class SensitiveConfigRepositoryTest {
     @Test
     fun `saving without Cloudflare tunnel token clears stale token value`() {
         val backingStore = InMemorySensitiveKeyValueStore()
-        val repository = SensitiveConfigRepository(
-            store = backingStore,
-            cipher = ReversibleTestCipher,
-        )
+        val repository =
+            SensitiveConfigRepository(
+                store = backingStore,
+                cipher = ReversibleTestCipher,
+            )
 
         repository.save(sensitiveConfig(cloudflareTunnelToken = "old-cloudflare-token"))
         repository.save(sensitiveConfig(cloudflareTunnelToken = null))
@@ -60,10 +63,11 @@ class SensitiveConfigRepositoryTest {
 
     @Test
     fun `missing required secrets produce missing result`() {
-        val repository = SensitiveConfigRepository(
-            store = InMemorySensitiveKeyValueStore(),
-            cipher = ReversibleTestCipher,
-        )
+        val repository =
+            SensitiveConfigRepository(
+                store = InMemorySensitiveKeyValueStore(),
+                cipher = ReversibleTestCipher,
+            )
 
         assertEquals(SensitiveConfigLoadResult.MissingRequiredSecrets, repository.load())
     }
@@ -81,10 +85,11 @@ class SensitiveConfigRepositoryTest {
                 SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt("cloudflare-token"),
             ),
         ).forEach { backingStore ->
-            val repository = SensitiveConfigRepository(
-                store = backingStore,
-                cipher = ReversibleTestCipher,
-            )
+            val repository =
+                SensitiveConfigRepository(
+                    store = backingStore,
+                    cipher = ReversibleTestCipher,
+                )
 
             assertEquals(
                 SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.PartiallyMissingRequiredSecrets),
@@ -95,13 +100,15 @@ class SensitiveConfigRepositoryTest {
 
     @Test
     fun `corrupt encrypted proxy credential produces invalid result`() {
-        val repository = SensitiveConfigRepository(
-            store = InMemorySensitiveKeyValueStore(
-                SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("missing-separator"),
-                SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("management-token"),
-            ),
-            cipher = ReversibleTestCipher,
-        )
+        val repository =
+            SensitiveConfigRepository(
+                store =
+                    InMemorySensitiveKeyValueStore(
+                        SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("missing-separator"),
+                        SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("management-token"),
+                    ),
+                cipher = ReversibleTestCipher,
+            )
 
         assertEquals(
             SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidProxyCredential),
@@ -126,10 +133,11 @@ class SensitiveConfigRepositoryTest {
                 SensitiveConfigSecretKeys.cloudflareTunnelToken to "not-encrypted",
             ),
         ).forEach { backingStore ->
-            val repository = SensitiveConfigRepository(
-                store = backingStore,
-                cipher = ReversibleTestCipher,
-            )
+            val repository =
+                SensitiveConfigRepository(
+                    store = backingStore,
+                    cipher = ReversibleTestCipher,
+                )
 
             assertEquals(
                 SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
@@ -140,21 +148,25 @@ class SensitiveConfigRepositoryTest {
 
     @Test
     fun `blank decrypted tokens produce typed invalid results`() {
-        val blankManagementTokenRepository = SensitiveConfigRepository(
-            store = InMemorySensitiveKeyValueStore(
-                SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("proxy-user:proxy-pass"),
-                SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt(" "),
-            ),
-            cipher = ReversibleTestCipher,
-        )
-        val blankCloudflareTokenRepository = SensitiveConfigRepository(
-            store = InMemorySensitiveKeyValueStore(
-                SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("proxy-user:proxy-pass"),
-                SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("management-token"),
-                SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt(" "),
-            ),
-            cipher = ReversibleTestCipher,
-        )
+        val blankManagementTokenRepository =
+            SensitiveConfigRepository(
+                store =
+                    InMemorySensitiveKeyValueStore(
+                        SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("proxy-user:proxy-pass"),
+                        SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt(" "),
+                    ),
+                cipher = ReversibleTestCipher,
+            )
+        val blankCloudflareTokenRepository =
+            SensitiveConfigRepository(
+                store =
+                    InMemorySensitiveKeyValueStore(
+                        SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("proxy-user:proxy-pass"),
+                        SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("management-token"),
+                        SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt(" "),
+                    ),
+                cipher = ReversibleTestCipher,
+            )
 
         assertEquals(
             SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidManagementApiToken),
@@ -168,14 +180,16 @@ class SensitiveConfigRepositoryTest {
 
     @Test
     fun `proxy passwords containing colon round trip correctly`() {
-        val repository = SensitiveConfigRepository(
-            store = InMemorySensitiveKeyValueStore(),
-            cipher = ReversibleTestCipher,
-        )
-        val config = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy:pass:with:colon"),
-            managementApiToken = "management-token",
-        )
+        val repository =
+            SensitiveConfigRepository(
+                store = InMemorySensitiveKeyValueStore(),
+                cipher = ReversibleTestCipher,
+            )
+        val config =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy:pass:with:colon"),
+                managementApiToken = "management-token",
+            )
 
         repository.save(config)
 
@@ -185,15 +199,17 @@ class SensitiveConfigRepositoryTest {
 
     @Test
     fun `save commits repository secrets through one atomic replace operation`() {
-        val backingStore = InMemorySensitiveKeyValueStore(
-            SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("old-user:old-pass"),
-            SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("old-token"),
-            SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt("stale-cloudflare-token"),
-        )
-        val repository = SensitiveConfigRepository(
-            store = backingStore,
-            cipher = ReversibleTestCipher,
-        )
+        val backingStore =
+            InMemorySensitiveKeyValueStore(
+                SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("old-user:old-pass"),
+                SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("old-token"),
+                SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt("stale-cloudflare-token"),
+            )
+        val repository =
+            SensitiveConfigRepository(
+                store = backingStore,
+                cipher = ReversibleTestCipher,
+            )
 
         repository.save(sensitiveConfig(cloudflareTunnelToken = null))
 
@@ -214,16 +230,18 @@ class SensitiveConfigRepositoryTest {
     @Test
     fun `clear removes only repository-owned secret keys`() {
         val foreignKey = "other.secret"
-        val backingStore = InMemorySensitiveKeyValueStore(
-            SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("proxy-user:proxy-pass"),
-            SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("management-token"),
-            SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt("cloudflare-token"),
-            foreignKey to ReversibleTestCipher.encrypt("foreign-value"),
-        )
-        val repository = SensitiveConfigRepository(
-            store = backingStore,
-            cipher = ReversibleTestCipher,
-        )
+        val backingStore =
+            InMemorySensitiveKeyValueStore(
+                SensitiveConfigSecretKeys.proxyAuthCredential to ReversibleTestCipher.encrypt("proxy-user:proxy-pass"),
+                SensitiveConfigSecretKeys.managementApiToken to ReversibleTestCipher.encrypt("management-token"),
+                SensitiveConfigSecretKeys.cloudflareTunnelToken to ReversibleTestCipher.encrypt("cloudflare-token"),
+                foreignKey to ReversibleTestCipher.encrypt("foreign-value"),
+            )
+        val repository =
+            SensitiveConfigRepository(
+                store = backingStore,
+                cipher = ReversibleTestCipher,
+            )
 
         repository.clear()
 
@@ -233,10 +251,11 @@ class SensitiveConfigRepositoryTest {
     @Test
     fun `sensitive config diagnostics redact raw secrets`() {
         val config = sensitiveConfig(cloudflareTunnelToken = "cloudflare-token")
-        val rendered = listOf(
-            config.toString(),
-            SensitiveConfigLoadResult.Loaded(config).toString(),
-        ).joinToString(separator = "\n")
+        val rendered =
+            listOf(
+                config.toString(),
+                SensitiveConfigLoadResult.Loaded(config).toString(),
+            ).joinToString(separator = "\n")
 
         assertTrue("[REDACTED]" in rendered)
         assertFalse("proxy-user" in rendered)
@@ -245,11 +264,12 @@ class SensitiveConfigRepositoryTest {
         assertFalse("cloudflare-token" in rendered)
     }
 
-    private fun sensitiveConfig(cloudflareTunnelToken: String?) = SensitiveConfig(
-        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-        managementApiToken = "management-token",
-        cloudflareTunnelToken = cloudflareTunnelToken,
-    )
+    private fun sensitiveConfig(cloudflareTunnelToken: String?) =
+        SensitiveConfig(
+            proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+            managementApiToken = "management-token",
+            cloudflareTunnelToken = cloudflareTunnelToken,
+        )
 }
 
 private class InMemorySensitiveKeyValueStore(

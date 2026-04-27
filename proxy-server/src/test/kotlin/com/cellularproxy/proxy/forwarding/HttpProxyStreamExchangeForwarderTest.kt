@@ -1,10 +1,10 @@
 package com.cellularproxy.proxy.forwarding
 
+import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import com.cellularproxy.proxy.protocol.HttpRequestBodyFramingRejectionReason
 import com.cellularproxy.proxy.protocol.HttpResponseBodyFramingRejectionReason
 import com.cellularproxy.proxy.protocol.ParsedHttpRequest
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
-import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test
@@ -14,48 +14,53 @@ import kotlin.test.assertIs
 class HttpProxyStreamExchangeForwarderTest {
     @Test
     fun `forwards accepted fixed-length request and fixed-length origin response`() {
-        val accepted = accepted(
-            httpProxyRequest(
-                method = "POST",
-                originTarget = "/upload",
-                headers = linkedMapOf(
-                    "content-length" to listOf("4"),
-                    "proxy-authorization" to listOf("Basic secret"),
+        val accepted =
+            accepted(
+                httpProxyRequest(
+                    method = "POST",
+                    originTarget = "/upload",
+                    headers =
+                        linkedMapOf(
+                            "content-length" to listOf("4"),
+                            "proxy-authorization" to listOf("Basic secret"),
+                        ),
                 ),
-            ),
-        )
+            )
         val clientInput = ByteArrayInputStream("dataNEXT".toByteArray(Charsets.US_ASCII))
         val originInputHeader = "HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n"
         val originInput = ByteArrayInputStream((originInputHeader + "OKNEXT").toByteArray(Charsets.US_ASCII))
         val originOutput = ByteArrayOutputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyStreamExchangeForwarder.forward(
-            accepted = accepted,
-            clientInput = clientInput,
-            originInput = originInput,
-            originOutput = originOutput,
-            clientOutput = clientOutput,
-            bufferSize = 2,
-        )
+        val result =
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = originInput,
+                originOutput = originOutput,
+                clientOutput = clientOutput,
+                bufferSize = 2,
+            )
 
         assertEquals(
             HttpProxyStreamExchangeForwardingResult.Forwarded(
                 host = "origin.example",
                 port = 80,
-                requestHeaderBytesWritten = (
-                    "POST /upload HTTP/1.1\r\n" +
-                        "host: origin.example\r\n" +
-                        "content-length: 4\r\n" +
-                        "\r\n"
+                requestHeaderBytesWritten =
+                    (
+                        "POST /upload HTTP/1.1\r\n" +
+                            "host: origin.example\r\n" +
+                            "content-length: 4\r\n" +
+                            "\r\n"
                     ).toByteArray(Charsets.UTF_8).size,
                 requestBodyBytesWritten = 4,
                 responseStatusCode = 200,
                 responseHeaderBytesRead = originInputHeader.toByteArray(Charsets.UTF_8).size,
-                responseHeaderBytesWritten = (
-                    "HTTP/1.1 200 OK\r\n" +
-                        "content-length: 2\r\n" +
-                        "\r\n"
+                responseHeaderBytesWritten =
+                    (
+                        "HTTP/1.1 200 OK\r\n" +
+                            "content-length: 2\r\n" +
+                            "\r\n"
                     ).toByteArray(Charsets.UTF_8).size,
                 responseBodyBytesWritten = 2,
                 mustCloseClientConnection = false,
@@ -83,21 +88,23 @@ class HttpProxyStreamExchangeForwarderTest {
 
     @Test
     fun `returns request forwarding failure without reading origin response`() {
-        val accepted = accepted(
-            httpProxyRequest(headers = linkedMapOf("transfer-encoding" to listOf("chunked"))),
-        )
+        val accepted =
+            accepted(
+                httpProxyRequest(headers = linkedMapOf("transfer-encoding" to listOf("chunked"))),
+            )
         val clientInput = ByteArrayInputStream("4\r\ndata\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII))
         val originInput = ByteArrayInputStream("HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n".toByteArray(Charsets.US_ASCII))
         val originOutput = ByteArrayOutputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyStreamExchangeForwarder.forward(
-            accepted = accepted,
-            clientInput = clientInput,
-            originInput = originInput,
-            originOutput = originOutput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = originInput,
+                originOutput = originOutput,
+                clientOutput = clientOutput,
+            )
 
         val failed = assertIs<HttpProxyStreamExchangeForwardingResult.RequestForwardingFailed>(result)
         assertEquals(
@@ -123,13 +130,14 @@ class HttpProxyStreamExchangeForwarderTest {
         val originOutput = ByteArrayOutputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyStreamExchangeForwarder.forward(
-            accepted = accepted,
-            clientInput = clientInput,
-            originInput = originInput,
-            originOutput = originOutput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = originInput,
+                originOutput = originOutput,
+                clientOutput = clientOutput,
+            )
 
         assertEquals(
             HttpProxyStreamExchangeForwardingResult.OriginResponsePreflightRejected(
@@ -156,13 +164,14 @@ class HttpProxyStreamExchangeForwarderTest {
         val originOutput = ByteArrayOutputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyStreamExchangeForwarder.forward(
-            accepted = accepted,
-            clientInput = clientInput,
-            originInput = originInput,
-            originOutput = originOutput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = originInput,
+                originOutput = originOutput,
+                clientOutput = clientOutput,
+            )
 
         val failed = assertIs<HttpProxyStreamExchangeForwardingResult.RequestForwardingFailed>(result)
         assertIs<HttpProxyRequestStreamForwardingResult.BodyCopyFailed>(failed.result)
@@ -187,13 +196,14 @@ class HttpProxyStreamExchangeForwarderTest {
         val originOutput = ByteArrayOutputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyStreamExchangeForwarder.forward(
-            accepted = accepted,
-            clientInput = clientInput,
-            originInput = originInput,
-            originOutput = originOutput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = originInput,
+                originOutput = originOutput,
+                clientOutput = clientOutput,
+            )
 
         val failed = assertIs<HttpProxyStreamExchangeForwardingResult.ResponseForwardingFailed>(result)
         assertEquals(originInputHeader.toByteArray(Charsets.UTF_8).size, failed.responseHeaderBytesRead)
@@ -216,13 +226,14 @@ class HttpProxyStreamExchangeForwarderTest {
         val originOutput = ByteArrayOutputStream()
         val clientOutput = ByteArrayOutputStream()
 
-        val result = HttpProxyStreamExchangeForwarder.forward(
-            accepted = accepted,
-            clientInput = clientInput,
-            originInput = originInput,
-            originOutput = originOutput,
-            clientOutput = clientOutput,
-        )
+        val result =
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = originInput,
+                originOutput = originOutput,
+                clientOutput = clientOutput,
+            )
 
         val failed = assertIs<HttpProxyStreamExchangeForwardingResult.ResponseForwardingFailed>(result)
         assertEquals(originInputHeader.toByteArray(Charsets.UTF_8).size, failed.responseHeaderBytesRead)
@@ -244,12 +255,13 @@ class HttpProxyStreamExchangeForwarderTest {
         headers: Map<String, List<String>> = emptyMap(),
     ): ParsedHttpRequest =
         ParsedHttpRequest(
-            request = ParsedProxyRequest.HttpProxy(
-                method = method,
-                host = "origin.example",
-                port = 80,
-                originTarget = originTarget,
-            ),
+            request =
+                ParsedProxyRequest.HttpProxy(
+                    method = method,
+                    host = "origin.example",
+                    port = 80,
+                    originTarget = originTarget,
+                ),
             headers = headers,
         )
 

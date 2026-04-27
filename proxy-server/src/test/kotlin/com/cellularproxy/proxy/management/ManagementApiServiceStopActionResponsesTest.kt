@@ -12,15 +12,17 @@ import kotlin.test.assertEquals
 class ManagementApiServiceStopActionResponsesTest {
     @Test
     fun `accepted service stop transition renders accepted response`() {
-        val response = ManagementApiServiceStopActionResponses.transition(
-            ProxyServiceStopTransitionResult(
-                disposition = ProxyServiceStopTransitionDisposition.Accepted,
-                status = ProxyServiceStatus(
-                    state = ProxyServiceState.Stopping,
-                    metrics = ProxyTrafficMetrics(activeConnections = 2, totalConnections = 5),
+        val response =
+            ManagementApiServiceStopActionResponses.transition(
+                ProxyServiceStopTransitionResult(
+                    disposition = ProxyServiceStopTransitionDisposition.Accepted,
+                    status =
+                        ProxyServiceStatus(
+                            state = ProxyServiceState.Stopping,
+                            metrics = ProxyTrafficMetrics(activeConnections = 2, totalConnections = 5),
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(202, response.statusCode)
         assertEquals(
@@ -31,15 +33,17 @@ class ManagementApiServiceStopActionResponsesTest {
 
     @Test
     fun `duplicate service stop transition renders conflict response`() {
-        val response = ManagementApiServiceStopActionResponses.transition(
-            ProxyServiceStopTransitionResult(
-                disposition = ProxyServiceStopTransitionDisposition.Duplicate,
-                status = ProxyServiceStatus(
-                    state = ProxyServiceState.Stopping,
-                    metrics = ProxyTrafficMetrics(activeConnections = 1, totalConnections = 3),
+        val response =
+            ManagementApiServiceStopActionResponses.transition(
+                ProxyServiceStopTransitionResult(
+                    disposition = ProxyServiceStopTransitionDisposition.Duplicate,
+                    status =
+                        ProxyServiceStatus(
+                            state = ProxyServiceState.Stopping,
+                            metrics = ProxyTrafficMetrics(activeConnections = 1, totalConnections = 3),
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -50,12 +54,13 @@ class ManagementApiServiceStopActionResponsesTest {
 
     @Test
     fun `ignored service stop transition renders terminal state without startup detail`() {
-        val response = ManagementApiServiceStopActionResponses.transition(
-            ProxyServiceStopTransitionResult(
-                disposition = ProxyServiceStopTransitionDisposition.Ignored,
-                status = ProxyServiceStatus.failed(ProxyStartupError.PortAlreadyInUse),
-            ),
-        )
+        val response =
+            ManagementApiServiceStopActionResponses.transition(
+                ProxyServiceStopTransitionResult(
+                    disposition = ProxyServiceStopTransitionDisposition.Ignored,
+                    status = ProxyServiceStatus.failed(ProxyStartupError.PortAlreadyInUse),
+                ),
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(

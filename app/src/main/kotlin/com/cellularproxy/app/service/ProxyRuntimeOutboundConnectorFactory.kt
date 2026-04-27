@@ -34,52 +34,56 @@ object ProxyRuntimeOutboundConnectorFactory {
         require(connectTimeoutMillis > 0) { "Outbound connect timeout must be positive" }
 
         return ProxyRuntimeOutboundConnectors(
-            httpConnector = OutboundHttpOriginConnector { request ->
-                when (
-                    val result = socketProvider.connectBlocking(
-                        route = route,
-                        host = request.host,
-                        port = request.port,
-                        timeoutMillis = connectTimeoutMillis,
-                    )
-                ) {
-                    is BoundSocketConnectResult.Connected ->
-                        OutboundHttpOriginOpenResult.Connected(
-                            OutboundHttpOriginConnection(
-                                input = result.socket.getInputStream(),
-                                output = result.socket.getOutputStream(),
+            httpConnector =
+                OutboundHttpOriginConnector { request ->
+                    when (
+                        val result =
+                            socketProvider.connectBlocking(
+                                route = route,
                                 host = request.host,
                                 port = request.port,
-                            ),
-                        )
-                    is BoundSocketConnectResult.Failed ->
-                        OutboundHttpOriginOpenResult.Failed(result.reason.toHttpOriginFailure())
-                }
-            },
-            connectConnector = OutboundConnectTunnelConnector { request ->
-                when (
-                    val result = socketProvider.connectBlocking(
-                        route = route,
-                        host = request.host,
-                        port = request.port,
-                        timeoutMillis = connectTimeoutMillis,
-                    )
-                ) {
-                    is BoundSocketConnectResult.Connected ->
-                        OutboundConnectTunnelOpenResult.Connected(
-                            OutboundConnectTunnelConnection(
-                                input = result.socket.getInputStream(),
-                                output = result.socket.getOutputStream(),
+                                timeoutMillis = connectTimeoutMillis,
+                            )
+                    ) {
+                        is BoundSocketConnectResult.Connected ->
+                            OutboundHttpOriginOpenResult.Connected(
+                                OutboundHttpOriginConnection(
+                                    input = result.socket.getInputStream(),
+                                    output = result.socket.getOutputStream(),
+                                    host = request.host,
+                                    port = request.port,
+                                ),
+                            )
+                        is BoundSocketConnectResult.Failed ->
+                            OutboundHttpOriginOpenResult.Failed(result.reason.toHttpOriginFailure())
+                    }
+                },
+            connectConnector =
+                OutboundConnectTunnelConnector { request ->
+                    when (
+                        val result =
+                            socketProvider.connectBlocking(
+                                route = route,
                                 host = request.host,
                                 port = request.port,
-                                shutdownInputAction = { result.socket.shutdownInputQuietly() },
-                                shutdownOutputAction = { result.socket.shutdownOutputQuietly() },
-                            ),
-                        )
-                    is BoundSocketConnectResult.Failed ->
-                        OutboundConnectTunnelOpenResult.Failed(result.reason.toConnectTunnelFailure())
-                }
-            },
+                                timeoutMillis = connectTimeoutMillis,
+                            )
+                    ) {
+                        is BoundSocketConnectResult.Connected ->
+                            OutboundConnectTunnelOpenResult.Connected(
+                                OutboundConnectTunnelConnection(
+                                    input = result.socket.getInputStream(),
+                                    output = result.socket.getOutputStream(),
+                                    host = request.host,
+                                    port = request.port,
+                                    shutdownInputAction = { result.socket.shutdownInputQuietly() },
+                                    shutdownOutputAction = { result.socket.shutdownOutputQuietly() },
+                                ),
+                            )
+                        is BoundSocketConnectResult.Failed ->
+                            OutboundConnectTunnelOpenResult.Failed(result.reason.toConnectTunnelFailure())
+                    }
+                },
         )
     }
 }

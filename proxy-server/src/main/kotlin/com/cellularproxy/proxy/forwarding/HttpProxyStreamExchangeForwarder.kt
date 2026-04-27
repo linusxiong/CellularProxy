@@ -81,39 +81,43 @@ object HttpProxyStreamExchangeForwarder {
         require(maxResponseChunkHeaderBytes > 0) { "Maximum response chunk header bytes must be positive" }
         require(maxResponseTrailerBytes >= 0) { "Maximum response trailer bytes must be non-negative" }
 
-        val requestResult = HttpProxyRequestStreamForwarder.forward(
-            accepted = accepted,
-            input = clientInput,
-            output = originOutput,
-            bufferSize = bufferSize,
-        )
+        val requestResult =
+            HttpProxyRequestStreamForwarder.forward(
+                accepted = accepted,
+                input = clientInput,
+                output = originOutput,
+                bufferSize = bufferSize,
+            )
         if (requestResult !is HttpProxyRequestStreamForwardingResult.Forwarded) {
             return HttpProxyStreamExchangeForwardingResult.RequestForwardingFailed(requestResult)
         }
 
-        val responsePreflightResult = OriginHttpResponseStreamPreflight.evaluate(
-            input = originInput,
-            maxHeaderBytes = maxOriginResponseHeaderBytes,
-        )
-        val acceptedResponse = when (responsePreflightResult) {
-            is OriginHttpResponseStreamPreflightResult.Accepted -> responsePreflightResult
-            is OriginHttpResponseStreamPreflightResult.Rejected ->
-                return HttpProxyStreamExchangeForwardingResult.OriginResponsePreflightRejected(
-                    reason = responsePreflightResult.reason,
-                    responseHeaderBytesRead = responsePreflightResult.headerBytesRead,
-                    requestBodyBytesWritten = requestResult.bodyBytesWritten,
-                )
-        }
+        val responsePreflightResult =
+            OriginHttpResponseStreamPreflight.evaluate(
+                input = originInput,
+                maxHeaderBytes = maxOriginResponseHeaderBytes,
+            )
+        val acceptedResponse =
+            when (responsePreflightResult) {
+                is OriginHttpResponseStreamPreflightResult.Accepted -> responsePreflightResult
+                is OriginHttpResponseStreamPreflightResult.Rejected ->
+                    return HttpProxyStreamExchangeForwardingResult.OriginResponsePreflightRejected(
+                        reason = responsePreflightResult.reason,
+                        responseHeaderBytesRead = responsePreflightResult.headerBytesRead,
+                        requestBodyBytesWritten = requestResult.bodyBytesWritten,
+                    )
+            }
 
-        val responseResult = HttpProxyResponseStreamForwarder.forward(
-            response = acceptedResponse.response,
-            requestMethod = accepted.httpRequest.request.methodForResponseFraming(),
-            input = originInput,
-            output = clientOutput,
-            bufferSize = bufferSize,
-            maxChunkHeaderBytes = maxResponseChunkHeaderBytes,
-            maxTrailerBytes = maxResponseTrailerBytes,
-        )
+        val responseResult =
+            HttpProxyResponseStreamForwarder.forward(
+                response = acceptedResponse.response,
+                requestMethod = accepted.httpRequest.request.methodForResponseFraming(),
+                input = originInput,
+                output = clientOutput,
+                bufferSize = bufferSize,
+                maxChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                maxTrailerBytes = maxResponseTrailerBytes,
+            )
 
         return when (responseResult) {
             is HttpProxyResponseStreamForwardingResult.Forwarded ->

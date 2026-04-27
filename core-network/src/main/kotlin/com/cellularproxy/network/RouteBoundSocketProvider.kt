@@ -37,17 +37,19 @@ class RouteBoundSocketProvider(
         require(port in VALID_PORT_RANGE) { "Port must be in range 1..65535" }
         require(timeoutMillis > 0) { "Timeout must be positive" }
 
-        val selectedNetwork = RouteSelector
-            .candidatesFor(route, observedNetworks())
-            .firstOrNull()
-            ?: return BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
+        val selectedNetwork =
+            RouteSelector
+                .candidatesFor(route, observedNetworks())
+                .firstOrNull()
+                ?: return BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
 
-        val result = connector.connect(
-            network = selectedNetwork,
-            host = host,
-            port = port,
-            timeoutMillis = timeoutMillis,
-        )
+        val result =
+            connector.connect(
+                network = selectedNetwork,
+                host = host,
+                port = port,
+                timeoutMillis = timeoutMillis,
+            )
 
         if (result is BoundSocketConnectResult.Connected && result.network != selectedNetwork) {
             result.socket.closeQuietly()

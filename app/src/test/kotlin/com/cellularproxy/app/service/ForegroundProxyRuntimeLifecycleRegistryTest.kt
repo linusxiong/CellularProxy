@@ -84,9 +84,10 @@ class ForegroundProxyRuntimeLifecycleRegistryTest {
         )
         assertEquals(1, second.closeCount)
 
-        val failure = assertFailsWith<IllegalStateException> {
-            ForegroundProxyRuntimeLifecycleRegistry.throwPendingCloseFailures()
-        }
+        val failure =
+            assertFailsWith<IllegalStateException> {
+                ForegroundProxyRuntimeLifecycleRegistry.throwPendingCloseFailures()
+            }
         assertEquals("close failed", failure.message)
     }
 
@@ -122,7 +123,9 @@ private open class RecordingRegistryRuntimeLifecycle : ForegroundProxyRuntimeLif
     override fun stopProxyRuntime() = Unit
 }
 
-private class CloseableRegistryRuntimeLifecycle : RecordingRegistryRuntimeLifecycle(), Closeable {
+private class CloseableRegistryRuntimeLifecycle :
+    RecordingRegistryRuntimeLifecycle(),
+    Closeable {
     var closeCount: Int = 0
         private set
 
@@ -131,7 +134,9 @@ private class CloseableRegistryRuntimeLifecycle : RecordingRegistryRuntimeLifecy
     }
 }
 
-private class ThrowingCloseRegistryRuntimeLifecycle : RecordingRegistryRuntimeLifecycle(), Closeable {
+private class ThrowingCloseRegistryRuntimeLifecycle :
+    RecordingRegistryRuntimeLifecycle(),
+    Closeable {
     var closeCount: Int = 0
         private set
 

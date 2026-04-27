@@ -83,10 +83,11 @@ class ManagementApiStreamExchangeHandler(
         accepted: ProxyIngressStreamPreflightDecision.Accepted,
         clientOutput: OutputStream,
     ): ManagementApiStreamExchangeHandlingResult {
-        val request = accepted.request as? ParsedProxyRequest.Management
-            ?: return ManagementApiStreamExchangeHandlingResult.UnsupportedAcceptedRequest(
-                ManagementApiStreamExchangeUnsupportedReason.NotManagementRequest,
-            )
+        val request =
+            accepted.request as? ParsedProxyRequest.Management
+                ?: return ManagementApiStreamExchangeHandlingResult.UnsupportedAcceptedRequest(
+                    ManagementApiStreamExchangeUnsupportedReason.NotManagementRequest,
+                )
 
         return try {
             when (val decision = ManagementApiDispatcher.dispatch(request = request, handler = handler)) {
@@ -130,13 +131,14 @@ class ManagementApiStreamExchangeHandler(
         clientOutput: OutputStream,
     ): ManagementApiStreamExchangeHandlingResult.Responded {
         val bytes = response.toByteArray()
-        val result = ManagementApiStreamExchangeHandlingResult.Responded(
-            operation = operation,
-            statusCode = response.statusCode,
-            responseBytesWritten = bytes.size,
-            requiresAuditLog = requiresAuditLog,
-            disposition = disposition,
-        )
+        val result =
+            ManagementApiStreamExchangeHandlingResult.Responded(
+                operation = operation,
+                statusCode = response.statusCode,
+                responseBytesWritten = bytes.size,
+                requiresAuditLog = requiresAuditLog,
+                disposition = disposition,
+            )
         if (requiresAuditLog) {
             recordManagementAuditSafely(result.toAuditEvent())
         }
@@ -159,10 +161,11 @@ class ManagementApiStreamExchangeHandler(
 private fun ManagementApiStreamExchangeHandlingResult.Responded.toAuditEvent(): ManagementApiStreamAuditEvent =
     ManagementApiStreamAuditEvent(
         operation = operation,
-        outcome = when (disposition) {
-            ManagementApiStreamExchangeDisposition.Routed -> ManagementApiStreamAuditOutcome.Responded
-            ManagementApiStreamExchangeDisposition.RouteRejected -> ManagementApiStreamAuditOutcome.RouteRejected
-        },
+        outcome =
+            when (disposition) {
+                ManagementApiStreamExchangeDisposition.Routed -> ManagementApiStreamAuditOutcome.Responded
+                ManagementApiStreamExchangeDisposition.RouteRejected -> ManagementApiStreamAuditOutcome.RouteRejected
+            },
         statusCode = statusCode,
         disposition = disposition,
     )

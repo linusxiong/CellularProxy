@@ -63,17 +63,18 @@ data class DashboardStatusModel(
             config: AppConfig,
             status: ProxyServiceStatus,
             cloudflare: DashboardCloudflareStatus,
-        ): Set<DashboardWarning> = buildSet {
-            if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
-                add(DashboardWarning.BroadUnauthenticatedProxy)
+        ): Set<DashboardWarning> =
+            buildSet {
+                if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
+                    add(DashboardWarning.BroadUnauthenticatedProxy)
+                }
+                if (cloudflare.state == DashboardCloudflareState.Failed) {
+                    add(DashboardWarning.CloudflareFailed)
+                }
+                if (status.startupError != null) {
+                    add(DashboardWarning.StartupFailed)
+                }
             }
-            if (cloudflare.state == DashboardCloudflareState.Failed) {
-                add(DashboardWarning.CloudflareFailed)
-            }
-            if (status.startupError != null) {
-                add(DashboardWarning.StartupFailed)
-            }
-        }
 
         private fun rootState(
             config: AppConfig,
@@ -142,35 +143,39 @@ enum class DashboardWarning {
     StartupFailed,
 }
 
-private fun ProxyServiceState.toDashboardServiceState(): DashboardServiceState = when (this) {
-    ProxyServiceState.Starting -> DashboardServiceState.Starting
-    ProxyServiceState.Running -> DashboardServiceState.Running
-    ProxyServiceState.Stopping -> DashboardServiceState.Stopping
-    ProxyServiceState.Stopped -> DashboardServiceState.Stopped
-    ProxyServiceState.Failed -> DashboardServiceState.Failed
-}
+private fun ProxyServiceState.toDashboardServiceState(): DashboardServiceState =
+    when (this) {
+        ProxyServiceState.Starting -> DashboardServiceState.Starting
+        ProxyServiceState.Running -> DashboardServiceState.Running
+        ProxyServiceState.Stopping -> DashboardServiceState.Stopping
+        ProxyServiceState.Stopped -> DashboardServiceState.Stopped
+        ProxyServiceState.Failed -> DashboardServiceState.Failed
+    }
 
-private fun RouteTarget.toDashboardRouteTarget(): DashboardRouteTarget = when (this) {
-    RouteTarget.WiFi -> DashboardRouteTarget.WiFi
-    RouteTarget.Cellular -> DashboardRouteTarget.Cellular
-    RouteTarget.Vpn -> DashboardRouteTarget.Vpn
-    RouteTarget.Automatic -> DashboardRouteTarget.Automatic
-}
+private fun RouteTarget.toDashboardRouteTarget(): DashboardRouteTarget =
+    when (this) {
+        RouteTarget.WiFi -> DashboardRouteTarget.WiFi
+        RouteTarget.Cellular -> DashboardRouteTarget.Cellular
+        RouteTarget.Vpn -> DashboardRouteTarget.Vpn
+        RouteTarget.Automatic -> DashboardRouteTarget.Automatic
+    }
 
-private fun NetworkDescriptor.toDashboardBoundRoute(): DashboardBoundRoute = DashboardBoundRoute(
-    category = category.toDashboardNetworkCategory(),
-    displayName = displayName,
-    isAvailable = isAvailable,
-)
+private fun NetworkDescriptor.toDashboardBoundRoute(): DashboardBoundRoute =
+    DashboardBoundRoute(
+        category = category.toDashboardNetworkCategory(),
+        displayName = displayName,
+        isAvailable = isAvailable,
+    )
 
-private fun NetworkCategory.toDashboardNetworkCategory(): DashboardNetworkCategory = when (this) {
-    NetworkCategory.WiFi -> DashboardNetworkCategory.WiFi
-    NetworkCategory.Cellular -> DashboardNetworkCategory.Cellular
-    NetworkCategory.Vpn -> DashboardNetworkCategory.Vpn
-}
+private fun NetworkCategory.toDashboardNetworkCategory(): DashboardNetworkCategory =
+    when (this) {
+        NetworkCategory.WiFi -> DashboardNetworkCategory.WiFi
+        NetworkCategory.Cellular -> DashboardNetworkCategory.Cellular
+        NetworkCategory.Vpn -> DashboardNetworkCategory.Vpn
+    }
 
-private fun com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus.toDashboardCloudflareStatus():
-    DashboardCloudflareStatus = DashboardCloudflareStatus(
+private fun com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus.toDashboardCloudflareStatus(): DashboardCloudflareStatus =
+    DashboardCloudflareStatus(
         state = state.toDashboardCloudflareState(),
         remoteManagementAvailable = isRemoteManagementAvailable,
         failureReason = failureReason?.let { CLOUDFLARE_FAILURE_SUMMARY },
@@ -178,17 +183,19 @@ private fun com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus.toDashboa
 
 private const val CLOUDFLARE_FAILURE_SUMMARY = "Cloudflare tunnel failed"
 
-private fun CloudflareTunnelState.toDashboardCloudflareState(): DashboardCloudflareState = when (this) {
-    CloudflareTunnelState.Disabled -> DashboardCloudflareState.Disabled
-    CloudflareTunnelState.Starting -> DashboardCloudflareState.Starting
-    CloudflareTunnelState.Connected -> DashboardCloudflareState.Connected
-    CloudflareTunnelState.Degraded -> DashboardCloudflareState.Degraded
-    CloudflareTunnelState.Stopped -> DashboardCloudflareState.Stopped
-    CloudflareTunnelState.Failed -> DashboardCloudflareState.Failed
-}
+private fun CloudflareTunnelState.toDashboardCloudflareState(): DashboardCloudflareState =
+    when (this) {
+        CloudflareTunnelState.Disabled -> DashboardCloudflareState.Disabled
+        CloudflareTunnelState.Starting -> DashboardCloudflareState.Starting
+        CloudflareTunnelState.Connected -> DashboardCloudflareState.Connected
+        CloudflareTunnelState.Degraded -> DashboardCloudflareState.Degraded
+        CloudflareTunnelState.Stopped -> DashboardCloudflareState.Stopped
+        CloudflareTunnelState.Failed -> DashboardCloudflareState.Failed
+    }
 
-private fun RootAvailabilityStatus.toDashboardRootState(): DashboardRootState = when (this) {
-    RootAvailabilityStatus.Unknown -> DashboardRootState.Unknown
-    RootAvailabilityStatus.Available -> DashboardRootState.Available
-    RootAvailabilityStatus.Unavailable -> DashboardRootState.Unavailable
-}
+private fun RootAvailabilityStatus.toDashboardRootState(): DashboardRootState =
+    when (this) {
+        RootAvailabilityStatus.Unknown -> DashboardRootState.Unknown
+        RootAvailabilityStatus.Available -> DashboardRootState.Available
+        RootAvailabilityStatus.Unavailable -> DashboardRootState.Unavailable
+    }

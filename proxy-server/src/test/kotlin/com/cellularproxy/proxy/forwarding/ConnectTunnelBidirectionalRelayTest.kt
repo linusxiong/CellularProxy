@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -23,19 +22,22 @@ class ConnectTunnelBidirectionalRelayTest {
         val originInput = CloseTrackingInputStream("origin response".toByteArray(Charsets.UTF_8))
         val originOutput = CloseTrackingOutputStream()
 
-        val result = ConnectTunnelBidirectionalRelay.relay(
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-            ),
-            origin = OutboundConnectTunnelConnection(
-                input = originInput,
-                output = originOutput,
-                host = "origin.example",
-                port = 443,
-            ),
-            bufferSize = 4,
-        )
+        val result =
+            ConnectTunnelBidirectionalRelay.relay(
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                    ),
+                origin =
+                    OutboundConnectTunnelConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                    ),
+                bufferSize = 4,
+            )
 
         val completed = assertIs<ConnectTunnelBidirectionalRelayResult.Completed>(result)
         assertEquals(
@@ -67,30 +69,34 @@ class ConnectTunnelBidirectionalRelayTest {
         val releaseOriginInput = CountDownLatch(1)
         val clientInput = CloseTrackingInputStream("client".toByteArray(Charsets.UTF_8))
         val clientOutput = CloseTrackingOutputStream()
-        val originInput = DelayedInputStream(
-            bytes = "origin".toByteArray(Charsets.UTF_8),
-            blocked = originInputBlocked,
-            release = releaseOriginInput,
-        )
+        val originInput =
+            DelayedInputStream(
+                bytes = "origin".toByteArray(Charsets.UTF_8),
+                blocked = originInputBlocked,
+                release = releaseOriginInput,
+            )
         val originOutput = CloseTrackingOutputStream()
         val executor = Executors.newSingleThreadExecutor()
 
         try {
-            val future = executor.submit<ConnectTunnelBidirectionalRelayResult> {
-                ConnectTunnelBidirectionalRelay.relay(
-                    client = ConnectTunnelClientConnection(
-                        input = clientInput,
-                        output = clientOutput,
-                    ),
-                    origin = OutboundConnectTunnelConnection(
-                        input = originInput,
-                        output = originOutput,
-                        host = "origin.example",
-                        port = 443,
-                    ),
-                    bufferSize = 6,
-                )
-            }
+            val future =
+                executor.submit<ConnectTunnelBidirectionalRelayResult> {
+                    ConnectTunnelBidirectionalRelay.relay(
+                        client =
+                            ConnectTunnelClientConnection(
+                                input = clientInput,
+                                output = clientOutput,
+                            ),
+                        origin =
+                            OutboundConnectTunnelConnection(
+                                input = originInput,
+                                output = originOutput,
+                                host = "origin.example",
+                                port = 443,
+                            ),
+                        bufferSize = 6,
+                    )
+                }
 
             assertTrue(originOutput.awaitSize(expectedSize = 6, timeoutMillis = 1_000))
             assertEquals("client", originOutput.toString(Charsets.UTF_8))
@@ -100,9 +106,10 @@ class ConnectTunnelBidirectionalRelayTest {
 
             releaseOriginInput.countDown()
 
-            val result = assertIs<ConnectTunnelBidirectionalRelayResult.Completed>(
-                future.get(1, TimeUnit.SECONDS),
-            )
+            val result =
+                assertIs<ConnectTunnelBidirectionalRelayResult.Completed>(
+                    future.get(1, TimeUnit.SECONDS),
+                )
             assertEquals(12, result.totalBytesRelayed)
             assertEquals("origin", clientOutput.toString(Charsets.UTF_8))
             assertTrue(clientInput.wasClosed)
@@ -117,29 +124,33 @@ class ConnectTunnelBidirectionalRelayTest {
 
     @Test
     fun `returns failed result when either relay direction fails and still closes owned streams`() {
-        val clientInput = BlockingAfterFirstChunkInputStream(
-            firstChunk = "client".toByteArray(Charsets.UTF_8),
-            blocked = CountDownLatch(1),
-            release = CountDownLatch(1),
-            failWhenClosed = true,
-        )
+        val clientInput =
+            BlockingAfterFirstChunkInputStream(
+                firstChunk = "client".toByteArray(Charsets.UTF_8),
+                blocked = CountDownLatch(1),
+                release = CountDownLatch(1),
+                failWhenClosed = true,
+            )
         val clientOutput = CloseTrackingOutputStream()
         val originInput = ThrowingReadInputStream("abc".toByteArray(Charsets.UTF_8))
         val originOutput = CloseTrackingOutputStream()
 
-        val result = ConnectTunnelBidirectionalRelay.relay(
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-            ),
-            origin = OutboundConnectTunnelConnection(
-                input = originInput,
-                output = originOutput,
-                host = "origin.example",
-                port = 443,
-            ),
-            bufferSize = 8,
-        )
+        val result =
+            ConnectTunnelBidirectionalRelay.relay(
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                    ),
+                origin =
+                    OutboundConnectTunnelConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                    ),
+                bufferSize = 8,
+            )
 
         val failed = assertIs<ConnectTunnelBidirectionalRelayResult.Failed>(result)
         assertEquals(
@@ -176,21 +187,24 @@ class ConnectTunnelBidirectionalRelayTest {
         val originInput = CloseTrackingInputStream("origin".toByteArray(Charsets.UTF_8))
         val originOutput = CloseTrackingOutputStream()
 
-        val result = ConnectTunnelBidirectionalRelay.relay(
-            client = ConnectTunnelClientConnection(
-                input = clientInput,
-                output = clientOutput,
-                shutdownInputAction = { clientInputShutdowns += 1 },
-            ),
-            origin = OutboundConnectTunnelConnection(
-                input = originInput,
-                output = originOutput,
-                host = "origin.example",
-                port = 443,
-                shutdownOutputAction = { originOutputShutdowns += 1 },
-            ),
-            bufferSize = 8,
-        )
+        val result =
+            ConnectTunnelBidirectionalRelay.relay(
+                client =
+                    ConnectTunnelClientConnection(
+                        input = clientInput,
+                        output = clientOutput,
+                        shutdownInputAction = { clientInputShutdowns += 1 },
+                    ),
+                origin =
+                    OutboundConnectTunnelConnection(
+                        input = originInput,
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                        shutdownOutputAction = { originOutputShutdowns += 1 },
+                    ),
+                bufferSize = 8,
+            )
 
         assertIs<ConnectTunnelBidirectionalRelayResult.Completed>(result)
         assertEquals(1, clientInputShutdowns)
@@ -201,19 +215,22 @@ class ConnectTunnelBidirectionalRelayTest {
 
     @Test
     fun `maps unexpected relay task exceptions to sanitized failure result`() {
-        val result = ConnectTunnelBidirectionalRelay.relay(
-            client = ConnectTunnelClientConnection(
-                input = ThrowingRuntimeInputStream(),
-                output = CloseTrackingOutputStream(),
-            ),
-            origin = OutboundConnectTunnelConnection(
-                input = CloseTrackingInputStream(ByteArray(0)),
-                output = CloseTrackingOutputStream(),
-                host = "origin.example",
-                port = 443,
-            ),
-            bufferSize = 8,
-        )
+        val result =
+            ConnectTunnelBidirectionalRelay.relay(
+                client =
+                    ConnectTunnelClientConnection(
+                        input = ThrowingRuntimeInputStream(),
+                        output = CloseTrackingOutputStream(),
+                    ),
+                origin =
+                    OutboundConnectTunnelConnection(
+                        input = CloseTrackingInputStream(ByteArray(0)),
+                        output = CloseTrackingOutputStream(),
+                        host = "origin.example",
+                        port = 443,
+                    ),
+                bufferSize = 8,
+            )
 
         val failed = assertIs<ConnectTunnelBidirectionalRelayResult.Failed>(result)
         assertEquals(
@@ -230,16 +247,18 @@ class ConnectTunnelBidirectionalRelayTest {
     fun `does not swallow fatal relay task errors`() {
         assertFailsWith<OutOfMemoryError> {
             ConnectTunnelBidirectionalRelay.relay(
-                client = ConnectTunnelClientConnection(
-                    input = ThrowingFatalInputStream(),
-                    output = CloseTrackingOutputStream(),
-                ),
-                origin = OutboundConnectTunnelConnection(
-                    input = CloseTrackingInputStream(ByteArray(0)),
-                    output = CloseTrackingOutputStream(),
-                    host = "origin.example",
-                    port = 443,
-                ),
+                client =
+                    ConnectTunnelClientConnection(
+                        input = ThrowingFatalInputStream(),
+                        output = CloseTrackingOutputStream(),
+                    ),
+                origin =
+                    OutboundConnectTunnelConnection(
+                        input = CloseTrackingInputStream(ByteArray(0)),
+                        output = CloseTrackingOutputStream(),
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 bufferSize = 8,
             )
         }
@@ -249,30 +268,34 @@ class ConnectTunnelBidirectionalRelayTest {
     fun `rejects impossible relay arguments and failed results`() {
         assertFailsWith<IllegalArgumentException> {
             ConnectTunnelBidirectionalRelay.relay(
-                client = ConnectTunnelClientConnection(
-                    input = ByteArrayInputStream(ByteArray(0)),
-                    output = ByteArrayOutputStream(),
-                ),
-                origin = OutboundConnectTunnelConnection(
-                    input = ByteArrayInputStream(ByteArray(0)),
-                    output = ByteArrayOutputStream(),
-                    host = "origin.example",
-                    port = 443,
-                ),
+                client =
+                    ConnectTunnelClientConnection(
+                        input = ByteArrayInputStream(ByteArray(0)),
+                        output = ByteArrayOutputStream(),
+                    ),
+                origin =
+                    OutboundConnectTunnelConnection(
+                        input = ByteArrayInputStream(ByteArray(0)),
+                        output = ByteArrayOutputStream(),
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 bufferSize = 0,
             )
         }
 
         assertFailsWith<IllegalArgumentException> {
             ConnectTunnelBidirectionalRelayResult.Failed(
-                clientToOrigin = ConnectTunnelStreamRelayResult.Completed(
-                    direction = ConnectTunnelRelayDirection.ClientToOrigin,
-                    bytesRelayed = 1,
-                ),
-                originToClient = ConnectTunnelStreamRelayResult.Completed(
-                    direction = ConnectTunnelRelayDirection.OriginToClient,
-                    bytesRelayed = 1,
-                ),
+                clientToOrigin =
+                    ConnectTunnelStreamRelayResult.Completed(
+                        direction = ConnectTunnelRelayDirection.ClientToOrigin,
+                        bytesRelayed = 1,
+                    ),
+                originToClient =
+                    ConnectTunnelStreamRelayResult.Completed(
+                        direction = ConnectTunnelRelayDirection.OriginToClient,
+                        bytesRelayed = 1,
+                    ),
             )
         }
     }
@@ -287,8 +310,11 @@ class ConnectTunnelBidirectionalRelayTest {
 
         override fun read(): Int = delegate.read()
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-            delegate.read(buffer, offset, length)
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = delegate.read(buffer, offset, length)
 
         override fun close() {
             wasClosed = true
@@ -300,7 +326,10 @@ class ConnectTunnelBidirectionalRelayTest {
         var wasClosed: Boolean = false
             private set
 
-        fun awaitSize(expectedSize: Int, timeoutMillis: Long): Boolean {
+        fun awaitSize(
+            expectedSize: Int,
+            timeoutMillis: Long,
+        ): Boolean {
             val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
             while (System.nanoTime() < deadline) {
                 if (size() >= expectedSize) {
@@ -334,7 +363,11 @@ class ConnectTunnelBidirectionalRelayTest {
             return if (count == -1) -1 else buffer[0].toInt() and 0xff
         }
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int {
             if (index < firstChunk.size) {
                 val count = minOf(length, firstChunk.size - index)
                 firstChunk.copyInto(buffer, destinationOffset = offset, startIndex = index, endIndex = index + count)
@@ -379,7 +412,11 @@ class ConnectTunnelBidirectionalRelayTest {
             return if (count == -1) -1 else buffer[0].toInt() and 0xff
         }
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int {
             if (!released) {
                 blocked.countDown()
                 while (!wasClosed && !release.await(10, TimeUnit.MILLISECONDS)) {
@@ -420,7 +457,11 @@ class ConnectTunnelBidirectionalRelayTest {
             throw IOException("read failed")
         }
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int {
             if (index < bytesBeforeFailure.size) {
                 val count = minOf(length, bytesBeforeFailure.size - index)
                 bytesBeforeFailure.copyInto(buffer, destinationOffset = offset, startIndex = index, endIndex = index + count)
@@ -432,22 +473,22 @@ class ConnectTunnelBidirectionalRelayTest {
     }
 
     private class ThrowingRuntimeInputStream : InputStream() {
-        override fun read(): Int {
-            throw IllegalStateException("sensitive implementation detail")
-        }
+        override fun read(): Int = throw IllegalStateException("sensitive implementation detail")
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            throw IllegalStateException("sensitive implementation detail")
-        }
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = throw IllegalStateException("sensitive implementation detail")
     }
 
     private class ThrowingFatalInputStream : InputStream() {
-        override fun read(): Int {
-            throw OutOfMemoryError("fatal")
-        }
+        override fun read(): Int = throw OutOfMemoryError("fatal")
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            throw OutOfMemoryError("fatal")
-        }
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = throw OutOfMemoryError("fatal")
     }
 }

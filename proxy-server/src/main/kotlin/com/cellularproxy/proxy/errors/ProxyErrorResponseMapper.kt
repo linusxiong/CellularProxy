@@ -29,16 +29,25 @@ sealed interface ProxyServerFailure {
     ) : ProxyServerFailure
 
     data object SelectedRouteUnavailable : ProxyServerFailure
+
     data object ProxyRequestsPaused : ProxyServerFailure
+
     data object DnsResolutionFailed : ProxyServerFailure
+
     data object OutboundConnectionFailed : ProxyServerFailure
+
     data object OutboundConnectionTimeout : ProxyServerFailure
+
     data object IdleTimeout : ProxyServerFailure
+
     data object ClientDisconnected : ProxyServerFailure
 }
 
 sealed interface ProxyErrorResponseDecision {
-    data class Emit(val response: ProxyErrorResponse) : ProxyErrorResponseDecision
+    data class Emit(
+        val response: ProxyErrorResponse,
+    ) : ProxyErrorResponseDecision
+
     data object Suppress : ProxyErrorResponseDecision
 }
 
@@ -78,21 +87,22 @@ class ProxyErrorResponse(
         this.headers = Collections.unmodifiableMap(LinkedHashMap(headers))
     }
 
-    fun toHttpString(): String = buildString {
-        append("HTTP/1.1 ")
-        append(statusCode)
-        append(' ')
-        append(reasonPhrase)
-        append(CRLF)
-        headers.forEach { (name, value) ->
-            append(name)
-            append(": ")
-            append(value)
+    fun toHttpString(): String =
+        buildString {
+            append("HTTP/1.1 ")
+            append(statusCode)
+            append(' ')
+            append(reasonPhrase)
             append(CRLF)
+            headers.forEach { (name, value) ->
+                append(name)
+                append(": ")
+                append(value)
+                append(CRLF)
+            }
+            append(CRLF)
+            append(body)
         }
-        append(CRLF)
-        append(body)
-    }
 
     fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
 }
@@ -122,18 +132,17 @@ object ProxyErrorResponseMapper {
                 ProxyErrorResponseDecision.Suppress
         }
 
-    private fun mapAdmission(
-        reason: ProxyRequestAdmissionRejectionReason,
-    ): ProxyErrorResponseDecision =
+    private fun mapAdmission(reason: ProxyRequestAdmissionRejectionReason): ProxyErrorResponseDecision =
         when (reason) {
             ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
             is ProxyRequestAdmissionRejectionReason.ProxyAuthentication,
-            -> emit(
-                statusCode = 407,
-                reasonPhrase = "Proxy Authentication Required",
-                body = "Proxy authentication required\n",
-                extraHeaders = linkedMapOf("Proxy-Authenticate" to "Basic realm=\"CellularProxy\""),
-            )
+            ->
+                emit(
+                    statusCode = 407,
+                    reasonPhrase = "Proxy Authentication Required",
+                    body = "Proxy authentication required\n",
+                    extraHeaders = linkedMapOf("Proxy-Authenticate" to "Basic realm=\"CellularProxy\""),
+                )
             is ProxyRequestAdmissionRejectionReason.ManagementAuthorization ->
                 emit(
                     statusCode = 401,
@@ -166,19 +175,16 @@ object ProxyErrorResponseMapper {
     }
 }
 
-private fun String.isHttpToken(): Boolean =
-    isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-private fun Map<String, String>.containsHeader(name: String): Boolean =
-    headerValue(name) != null
+private fun Map<String, String>.containsHeader(name: String): Boolean = headerValue(name) != null
 
 private fun Map<String, String>.headerValue(name: String): String? {
     val normalizedName = name.lowercase(Locale.US)
     return entries.singleOrNull { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }?.value
 }
 
-private fun Char.isUnsafeHttpHeaderCharacter(): Boolean =
-    code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+private fun Char.isUnsafeHttpHeaderCharacter(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 
 private const val CRLF = "\r\n"
 private const val CONTENT_LENGTH_HEADER = "Content-Length"
@@ -186,9 +192,10 @@ private const val TRANSFER_ENCODING_HEADER = "Transfer-Encoding"
 private const val DELETE_CONTROL_CHAR = 0x7F
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
 private val HTTP_STATUS_CODE_RANGE = 100..599
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).toSet()
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).toSet()

@@ -27,37 +27,43 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProxyClientStreamExchangeLifecycleTest {
-    private val config = com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig(
-        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
-        requestAdmission = ProxyRequestAdmissionConfig(
-            proxyAuthentication = ProxyAuthenticationConfig(
-                authEnabled = false,
-                credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-            ),
-            managementApiToken = MANAGEMENT_TOKEN,
-        ),
-    )
+    private val config =
+        com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig(
+            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = false,
+                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        ),
+                    managementApiToken = MANAGEMENT_TOKEN,
+                ),
+        )
 
     @Test
     fun `closes client streams after successful exchange handling`() {
-        val input = CloseTrackingInputStream(
-            (
-                "GET /health HTTP/1.1\r\n" +
-                    "Host: phone.local\r\n" +
-                    "\r\n"
+        val input =
+            CloseTrackingInputStream(
+                (
+                    "GET /health HTTP/1.1\r\n" +
+                        "Host: phone.local\r\n" +
+                        "\r\n"
                 ).toByteArray(Charsets.US_ASCII),
-        )
+            )
         val output = CloseTrackingOutputStream()
 
-        val result = handler(
-            managementHandler = StaticManagementHandler(
-                ManagementApiResponse.json(statusCode = 200, body = """{"ok":true}"""),
-            ),
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(input = input, output = output),
-        )
+        val result =
+            handler(
+                managementHandler =
+                    StaticManagementHandler(
+                        ManagementApiResponse.json(statusCode = 200, body = """{"ok":true}"""),
+                    ),
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(input = input, output = output),
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
@@ -71,13 +77,14 @@ class ProxyClientStreamExchangeLifecycleTest {
         val input = CloseTrackingInputStream("not consumed".toByteArray(Charsets.US_ASCII))
         val output = CloseTrackingOutputStream()
 
-        val result = handler(
-            managementHandler = ThrowingManagementHandler(IOException("management must not be called")),
-        ).handle(
-            config = config,
-            activeConnections = 2,
-            client = ProxyClientStreamConnection(input = input, output = output),
-        )
+        val result =
+            handler(
+                managementHandler = ThrowingManagementHandler(IOException("management must not be called")),
+            ).handle(
+                config = config,
+                activeConnections = 2,
+                client = ProxyClientStreamConnection(input = input, output = output),
+            )
 
         assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result)
         assertContains(output.toString(), "HTTP/1.1 503 Service Unavailable")
@@ -87,25 +94,27 @@ class ProxyClientStreamExchangeLifecycleTest {
 
     @Test
     fun `closes client streams when exchange handling throws`() {
-        val input = CloseTrackingInputStream(
-            (
-                "GET /api/status HTTP/1.1\r\n" +
-                    "Host: phone.local\r\n" +
-                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                    "\r\n"
+        val input =
+            CloseTrackingInputStream(
+                (
+                    "GET /api/status HTTP/1.1\r\n" +
+                        "Host: phone.local\r\n" +
+                        "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                        "\r\n"
                 ).toByteArray(Charsets.US_ASCII),
-        )
+            )
         val output = CloseTrackingOutputStream()
 
-        val failure = assertFailsWith<ManagementApiHandlerException> {
-            handler(
-                managementHandler = ThrowingManagementHandler(IOException("handler unavailable")),
-            ).handle(
-                config = config,
-                activeConnections = 0,
-                client = ProxyClientStreamConnection(input = input, output = output),
-            )
-        }
+        val failure =
+            assertFailsWith<ManagementApiHandlerException> {
+                handler(
+                    managementHandler = ThrowingManagementHandler(IOException("handler unavailable")),
+                ).handle(
+                    config = config,
+                    activeConnections = 0,
+                    client = ProxyClientStreamConnection(input = input, output = output),
+                )
+            }
 
         assertIs<IOException>(failure.cause)
         assertTrue(input.wasClosed)
@@ -114,26 +123,28 @@ class ProxyClientStreamExchangeLifecycleTest {
 
     @Test
     fun `ordinary client close failures do not replace exchange handling failure`() {
-        val input = CloseTrackingInputStream(
-            (
-                "GET /api/status HTTP/1.1\r\n" +
-                    "Host: phone.local\r\n" +
-                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                    "\r\n"
+        val input =
+            CloseTrackingInputStream(
+                (
+                    "GET /api/status HTTP/1.1\r\n" +
+                        "Host: phone.local\r\n" +
+                        "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                        "\r\n"
                 ).toByteArray(Charsets.US_ASCII),
-            failOnClose = true,
-        )
+                failOnClose = true,
+            )
         val output = CloseTrackingOutputStream(failOnClose = true)
 
-        val failure = assertFailsWith<ManagementApiHandlerException> {
-            handler(
-                managementHandler = ThrowingManagementHandler(IOException("handler unavailable")),
-            ).handle(
-                config = config,
-                activeConnections = 0,
-                client = ProxyClientStreamConnection(input = input, output = output),
-            )
-        }
+        val failure =
+            assertFailsWith<ManagementApiHandlerException> {
+                handler(
+                    managementHandler = ThrowingManagementHandler(IOException("handler unavailable")),
+                ).handle(
+                    config = config,
+                    activeConnections = 0,
+                    client = ProxyClientStreamConnection(input = input, output = output),
+                )
+            }
 
         assertIs<IOException>(failure.cause)
         assertTrue(input.wasClosed)
@@ -142,25 +153,28 @@ class ProxyClientStreamExchangeLifecycleTest {
 
     @Test
     fun `ordinary client close failures do not replace exchange result`() {
-        val input = CloseTrackingInputStream(
-            (
-                "GET /health HTTP/1.1\r\n" +
-                    "Host: phone.local\r\n" +
-                    "\r\n"
+        val input =
+            CloseTrackingInputStream(
+                (
+                    "GET /health HTTP/1.1\r\n" +
+                        "Host: phone.local\r\n" +
+                        "\r\n"
                 ).toByteArray(Charsets.US_ASCII),
-            failOnClose = true,
-        )
+                failOnClose = true,
+            )
         val output = CloseTrackingOutputStream(failOnClose = true)
 
-        val result = handler(
-            managementHandler = StaticManagementHandler(
-                ManagementApiResponse.json(statusCode = 200, body = """{"ok":true}"""),
-            ),
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(input = input, output = output),
-        )
+        val result =
+            handler(
+                managementHandler =
+                    StaticManagementHandler(
+                        ManagementApiResponse.json(statusCode = 200, body = """{"ok":true}"""),
+                    ),
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(input = input, output = output),
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         assertEquals(200, assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result).statusCode)
@@ -170,20 +184,22 @@ class ProxyClientStreamExchangeLifecycleTest {
 
     @Test
     fun `passes HTTP tunables through to stream exchange handler before consuming client bytes`() {
-        val input = CloseTrackingInputStream(
-            (
-                "GET /health HTTP/1.1\r\n" +
-                    "Host: phone.local\r\n" +
-                    "\r\n"
+        val input =
+            CloseTrackingInputStream(
+                (
+                    "GET /health HTTP/1.1\r\n" +
+                        "Host: phone.local\r\n" +
+                        "\r\n"
                 ).toByteArray(Charsets.US_ASCII),
-        )
+            )
         val output = CloseTrackingOutputStream()
 
         assertFailsWith<IllegalArgumentException> {
             handler(
-                managementHandler = StaticManagementHandler(
-                    ManagementApiResponse.json(statusCode = 200, body = """{"ok":true}"""),
-                ),
+                managementHandler =
+                    StaticManagementHandler(
+                        ManagementApiResponse.json(statusCode = 200, body = """{"ok":true}"""),
+                    ),
             ).handle(
                 config = config,
                 activeConnections = 0,
@@ -198,9 +214,7 @@ class ProxyClientStreamExchangeLifecycleTest {
         assertTrue(output.wasClosed)
     }
 
-    private fun handler(
-        managementHandler: ManagementApiHandler,
-    ): ProxyClientStreamExchangeHandler =
+    private fun handler(managementHandler: ManagementApiHandler): ProxyClientStreamExchangeHandler =
         ProxyClientStreamExchangeHandler(
             httpConnector = ThrowingHttpConnector(),
             connectConnector = ThrowingConnectConnector(),
@@ -216,9 +230,7 @@ class ProxyClientStreamExchangeLifecycleTest {
     private class ThrowingManagementHandler(
         private val failure: IOException,
     ) : ManagementApiHandler {
-        override fun handle(operation: ManagementApiOperation): ManagementApiResponse {
-            throw failure
-        }
+        override fun handle(operation: ManagementApiOperation): ManagementApiResponse = throw failure
     }
 
     private class ThrowingHttpConnector : OutboundHttpOriginConnector {
@@ -243,8 +255,11 @@ class ProxyClientStreamExchangeLifecycleTest {
 
         override fun read(): Int = delegate.read()
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-            delegate.read(buffer, offset, length)
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = delegate.read(buffer, offset, length)
 
         override fun close() {
             wasClosed = true
@@ -266,7 +281,11 @@ class ProxyClientStreamExchangeLifecycleTest {
             delegate.write(value)
         }
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ) {
             delegate.write(buffer, offset, length)
         }
 

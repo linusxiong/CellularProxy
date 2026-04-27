@@ -25,22 +25,25 @@ class RouteBoundPublicIpProbeTest {
         scriptedSocketServer(
             response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\n203.0.113.7\n",
         ).use { server ->
-            val provider = RecordingBoundSocketProvider(
-                BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
-            )
+            val provider =
+                RecordingBoundSocketProvider(
+                    BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
+                )
             val probe = RouteBoundPublicIpProbe(provider)
 
-            val result = runSuspend {
-                probe.probe(
-                    route = RouteTarget.Cellular,
-                    endpoint = PublicIpProbeEndpoint(
-                        host = "ip.example",
-                        port = 8080,
-                        path = "/check",
-                        timeoutMillis = 5_000,
-                    ),
-                )
-            }
+            val result =
+                runSuspend {
+                    probe.probe(
+                        route = RouteTarget.Cellular,
+                        endpoint =
+                            PublicIpProbeEndpoint(
+                                host = "ip.example",
+                                port = 8080,
+                                path = "/check",
+                                timeoutMillis = 5_000,
+                            ),
+                    )
+                }
 
             val success = assertIs<PublicIpProbeResult.Success>(result)
             assertEquals("203.0.113.7", success.publicIp)
@@ -61,16 +64,18 @@ class RouteBoundPublicIpProbeTest {
         scriptedSocketServer(
             response = "HTTP/1.1 200 OK\r\n\r\n198.51.100.42",
         ).use { server ->
-            val provider = RecordingBoundSocketProvider(
-                BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
-            )
-
-            val result = runSuspend {
-                RouteBoundPublicIpProbe(provider).probe(
-                    route = RouteTarget.WiFi,
-                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+            val provider =
+                RecordingBoundSocketProvider(
+                    BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
                 )
-            }
+
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(provider).probe(
+                        route = RouteTarget.WiFi,
+                        endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    )
+                }
 
             assertIs<PublicIpProbeResult.Success>(result)
             assertContains(server.requestText(), "Host: ip.example\r\n")
@@ -83,16 +88,18 @@ class RouteBoundPublicIpProbeTest {
         scriptedSocketServer(
             response = "HTTP/1.1 200 OK\r\n\r\n198.51.100.42",
         ).use { server ->
-            val provider = RecordingBoundSocketProvider(
-                BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
-            )
-
-            val result = runSuspend {
-                RouteBoundPublicIpProbe(provider).probe(
-                    route = RouteTarget.WiFi,
-                    endpoint = PublicIpProbeEndpoint(host = "2001:db8::1", port = 8080),
+            val provider =
+                RecordingBoundSocketProvider(
+                    BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
                 )
-            }
+
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(provider).probe(
+                        route = RouteTarget.WiFi,
+                        endpoint = PublicIpProbeEndpoint(host = "2001:db8::1", port = 8080),
+                    )
+                }
 
             assertIs<PublicIpProbeResult.Success>(result)
             assertContains(server.requestText(), "Host: [2001:db8::1]:8080\r\n")
@@ -101,16 +108,18 @@ class RouteBoundPublicIpProbeTest {
 
     @Test
     fun `maps selected route connect failure without opening probe request`() {
-        val provider = RecordingBoundSocketProvider(
-            BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
-        )
-
-        val result = runSuspend {
-            RouteBoundPublicIpProbe(provider).probe(
-                route = RouteTarget.Vpn,
-                endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+        val provider =
+            RecordingBoundSocketProvider(
+                BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
             )
-        }
+
+        val result =
+            runSuspend {
+                RouteBoundPublicIpProbe(provider).probe(
+                    route = RouteTarget.Vpn,
+                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                )
+            }
 
         val failed = assertIs<PublicIpProbeResult.Failed>(result)
         assertEquals(PublicIpProbeFailure.SelectedRouteUnavailable, failed.reason)
@@ -123,16 +132,17 @@ class RouteBoundPublicIpProbeTest {
         scriptedSocketServer(
             response = "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\ntry later",
         ).use { server ->
-            val result = runSuspend {
-                RouteBoundPublicIpProbe(
-                    RecordingBoundSocketProvider(
-                        BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
-                    ),
-                ).probe(
-                    route = RouteTarget.WiFi,
-                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                )
-            }
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(
+                        RecordingBoundSocketProvider(
+                            BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
+                        ),
+                    ).probe(
+                        route = RouteTarget.WiFi,
+                        endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    )
+                }
 
             val failed = assertIs<PublicIpProbeResult.Failed>(result)
             assertEquals(PublicIpProbeFailure.NonSuccessStatus, failed.reason)
@@ -146,16 +156,17 @@ class RouteBoundPublicIpProbeTest {
         scriptedSocketServer(
             response = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nnot an ip",
         ).use { server ->
-            val result = runSuspend {
-                RouteBoundPublicIpProbe(
-                    RecordingBoundSocketProvider(
-                        BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
-                    ),
-                ).probe(
-                    route = RouteTarget.WiFi,
-                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                )
-            }
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(
+                        RecordingBoundSocketProvider(
+                            BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
+                        ),
+                    ).probe(
+                        route = RouteTarget.WiFi,
+                        endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    )
+                }
 
             val failed = assertIs<PublicIpProbeResult.Failed>(result)
             assertEquals(PublicIpProbeFailure.InvalidPublicIp, failed.reason)
@@ -169,16 +180,17 @@ class RouteBoundPublicIpProbeTest {
         scriptedSocketServer(
             response = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n2001:db8::2\n",
         ).use { server ->
-            val result = runSuspend {
-                RouteBoundPublicIpProbe(
-                    RecordingBoundSocketProvider(
-                        BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
-                    ),
-                ).probe(
-                    route = RouteTarget.WiFi,
-                    endpoint = PublicIpProbeEndpoint(host = "ip.example"),
-                )
-            }
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(
+                        RecordingBoundSocketProvider(
+                            BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
+                        ),
+                    ).probe(
+                        route = RouteTarget.WiFi,
+                        endpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                    )
+                }
 
             val success = assertIs<PublicIpProbeResult.Success>(result)
             assertEquals("2001:db8::2", success.publicIp)
@@ -205,12 +217,13 @@ class RouteBoundPublicIpProbeTest {
         assertFailsWith<IllegalArgumentException> {
             PublicIpProbeResult.Failed(
                 reason = PublicIpProbeFailure.InvalidPublicIp,
-                network = NetworkDescriptor(
-                    id = "wifi",
-                    category = NetworkCategory.WiFi,
-                    displayName = "wifi",
-                    isAvailable = false,
-                ),
+                network =
+                    NetworkDescriptor(
+                        id = "wifi",
+                        category = NetworkCategory.WiFi,
+                        displayName = "wifi",
+                        isAvailable = false,
+                    ),
             )
         }
     }
@@ -249,8 +262,7 @@ class RouteBoundPublicIpProbeTest {
             isAvailable = true,
         )
 
-    private fun scriptedSocketServer(response: String): ScriptedSocketServer =
-        ScriptedSocketServer(response.toByteArray(Charsets.US_ASCII))
+    private fun scriptedSocketServer(response: String): ScriptedSocketServer = ScriptedSocketServer(response.toByteArray(Charsets.US_ASCII))
 
     private class ScriptedSocketServer(
         private val response: ByteArray,
@@ -258,17 +270,18 @@ class RouteBoundPublicIpProbeTest {
         private val server = ServerSocket(0)
         private val capturedRequest = ByteArrayOutputStream()
         private var failure: Throwable? = null
-        private val thread = thread(start = true) {
-            try {
-                server.accept().use { socket ->
-                    readHeaders(socket)
-                    socket.getOutputStream().write(response)
-                    socket.getOutputStream().flush()
+        private val thread =
+            thread(start = true) {
+                try {
+                    server.accept().use { socket ->
+                        readHeaders(socket)
+                        socket.getOutputStream().write(response)
+                        socket.getOutputStream().flush()
+                    }
+                } catch (throwable: Throwable) {
+                    failure = throwable
                 }
-            } catch (throwable: Throwable) {
-                failure = throwable
             }
-        }
 
         fun connectClient(): Socket = Socket("127.0.0.1", server.localPort)
 

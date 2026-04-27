@@ -56,15 +56,16 @@ data class ForegroundServiceNotificationDescriptor(
                 warningText = status.warningText,
                 priority = status.priority,
                 isOngoing = status.isOngoing,
-                stopAction = if (status.stopActionEnabled) {
-                    ForegroundServiceNotificationAction(
-                        label = STOP_ACTION_LABEL,
-                        action = ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION,
-                        source = ForegroundServiceCommandSource.Notification,
-                    )
-                } else {
-                    null
-                },
+                stopAction =
+                    if (status.stopActionEnabled) {
+                        ForegroundServiceNotificationAction(
+                            label = STOP_ACTION_LABEL,
+                            action = ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION,
+                            source = ForegroundServiceCommandSource.Notification,
+                        )
+                    } else {
+                        null
+                    },
             )
     }
 }

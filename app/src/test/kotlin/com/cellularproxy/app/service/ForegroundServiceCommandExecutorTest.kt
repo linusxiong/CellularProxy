@@ -12,11 +12,12 @@ class ForegroundServiceCommandExecutorTest {
         val events = mutableListOf<String>()
         val lifecycle = RecordingRuntimeLifecycle(events)
 
-        val execution = ForegroundServiceCommandExecutor.execute(
-            commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
-            runtimeLifecycle = lifecycle,
-            applyServiceEffect = { effect -> events += "service:$effect" },
-        )
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
+                runtimeLifecycle = lifecycle,
+                applyServiceEffect = { effect -> events += "service:$effect" },
+            )
 
         assertEquals(
             listOf(
@@ -40,11 +41,12 @@ class ForegroundServiceCommandExecutorTest {
         val events = mutableListOf<String>()
         val lifecycle = RecordingRuntimeLifecycle(events)
 
-        val execution = ForegroundServiceCommandExecutor.execute(
-            commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.STOP_PROXY),
-            runtimeLifecycle = lifecycle,
-            applyServiceEffect = { effect -> events += "service:$effect" },
-        )
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.STOP_PROXY),
+                runtimeLifecycle = lifecycle,
+                applyServiceEffect = { effect -> events += "service:$effect" },
+            )
 
         assertEquals(
             listOf(
@@ -68,11 +70,12 @@ class ForegroundServiceCommandExecutorTest {
         val events = mutableListOf<String>()
         val lifecycle = RecordingRuntimeLifecycle(events)
 
-        val execution = ForegroundServiceCommandExecutor.execute(
-            commandResult = ForegroundServiceCommandParser.parse(null),
-            runtimeLifecycle = lifecycle,
-            applyServiceEffect = { effect -> events += "service:$effect" },
-        )
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(null),
+                runtimeLifecycle = lifecycle,
+                applyServiceEffect = { effect -> events += "service:$effect" },
+            )
 
         assertEquals(listOf("service:${ForegroundServiceCommandEffect.StopSelf}"), events)
         assertEquals(
@@ -91,11 +94,12 @@ class ForegroundServiceCommandExecutorTest {
         val exception = IllegalStateException("runtime unavailable")
         val lifecycle = RecordingRuntimeLifecycle(events, startException = exception)
 
-        val execution = ForegroundServiceCommandExecutor.execute(
-            commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
-            runtimeLifecycle = lifecycle,
-            applyServiceEffect = { effect -> events += "service:$effect" },
-        )
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
+                runtimeLifecycle = lifecycle,
+                applyServiceEffect = { effect -> events += "service:$effect" },
+            )
 
         assertEquals(
             listOf(
@@ -117,11 +121,12 @@ class ForegroundServiceCommandExecutorTest {
         val exception = IllegalStateException("stop failed")
         val lifecycle = RecordingRuntimeLifecycle(events, stopException = exception)
 
-        val execution = ForegroundServiceCommandExecutor.execute(
-            commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION),
-            runtimeLifecycle = lifecycle,
-            applyServiceEffect = { effect -> events += "service:$effect" },
-        )
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION),
+                runtimeLifecycle = lifecycle,
+                applyServiceEffect = { effect -> events += "service:$effect" },
+            )
 
         assertEquals(
             listOf(
@@ -139,13 +144,12 @@ class ForegroundServiceCommandExecutorTest {
     @Test
     fun `fatal runtime errors are rethrown`() {
         val fatal = OutOfMemoryError("fatal")
-        val lifecycle = object : ForegroundProxyRuntimeLifecycle {
-            override fun startProxyRuntime() {
-                throw fatal
-            }
+        val lifecycle =
+            object : ForegroundProxyRuntimeLifecycle {
+                override fun startProxyRuntime(): Unit = throw fatal
 
-            override fun stopProxyRuntime() = Unit
-        }
+                override fun stopProxyRuntime() = Unit
+            }
 
         assertSame(
             fatal,
@@ -163,11 +167,12 @@ class ForegroundServiceCommandExecutorTest {
     fun `default uninstalled runtime lifecycle fails instead of reporting fake runtime success`() {
         val events = mutableListOf<String>()
 
-        val execution = ForegroundServiceCommandExecutor.execute(
-            commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
-            runtimeLifecycle = UninstalledForegroundProxyRuntimeLifecycle,
-            applyServiceEffect = { effect -> events += "service:$effect" },
-        )
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
+                runtimeLifecycle = UninstalledForegroundProxyRuntimeLifecycle,
+                applyServiceEffect = { effect -> events += "service:$effect" },
+            )
 
         assertEquals(
             listOf(

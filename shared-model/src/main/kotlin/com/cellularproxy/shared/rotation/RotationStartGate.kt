@@ -24,16 +24,18 @@ class RotationStartGate(
             )
         }
 
-        val cooldownDecision = RotationCooldownPolicy.evaluate(
-            lastTerminalRotationElapsedMillis = terminalTimestampTracker.lastTerminalElapsedMillis,
-            nowElapsedMillis = nowElapsedMillis,
-            cooldown = cooldown,
-        )
+        val cooldownDecision =
+            RotationCooldownPolicy.evaluate(
+                lastTerminalRotationElapsedMillis = terminalTimestampTracker.lastTerminalElapsedMillis,
+                nowElapsedMillis = nowElapsedMillis,
+                cooldown = cooldown,
+            )
         val cooldownTransition = sessionController.apply(cooldownDecision.event)
-        val terminalTimestampObservation = terminalTimestampTracker.observe(
-            transition = cooldownTransition,
-            nowElapsedMillis = nowElapsedMillis,
-        )
+        val terminalTimestampObservation =
+            terminalTimestampTracker.observe(
+                transition = cooldownTransition,
+                nowElapsedMillis = nowElapsedMillis,
+            )
 
         return RotationStartGateResult(
             startTransition = startTransition,

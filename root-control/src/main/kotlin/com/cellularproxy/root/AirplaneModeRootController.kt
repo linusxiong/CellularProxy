@@ -38,33 +38,35 @@ class AirplaneModeRootController(
     ): AirplaneModeRootCommandResult {
         require(timeoutMillis > 0) { "Airplane mode root command timeout must be positive" }
 
-        val execution = try {
-            executor.execute(
-                command = command,
-                timeoutMillis = timeoutMillis,
-                secrets = secrets,
-            )
-        } catch (exception: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw exception
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (_: Exception) {
-            return AirplaneModeRootCommandResult(
-                action = action,
-                execution = null,
-                failureReason = AirplaneModeRootCommandFailure.ProcessExecutionFailed,
-            )
-        }
+        val execution =
+            try {
+                executor.execute(
+                    command = command,
+                    timeoutMillis = timeoutMillis,
+                    secrets = secrets,
+                )
+            } catch (exception: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw exception
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                return AirplaneModeRootCommandResult(
+                    action = action,
+                    execution = null,
+                    failureReason = AirplaneModeRootCommandFailure.ProcessExecutionFailed,
+                )
+            }
 
         return AirplaneModeRootCommandResult(
             action = action,
             execution = execution,
-            failureReason = when (execution.result.outcome) {
-                RootCommandOutcome.Success -> null
-                RootCommandOutcome.Failure -> AirplaneModeRootCommandFailure.CommandFailed
-                RootCommandOutcome.Timeout -> AirplaneModeRootCommandFailure.CommandTimedOut
-            },
+            failureReason =
+                when (execution.result.outcome) {
+                    RootCommandOutcome.Success -> null
+                    RootCommandOutcome.Failure -> AirplaneModeRootCommandFailure.CommandFailed
+                    RootCommandOutcome.Timeout -> AirplaneModeRootCommandFailure.CommandTimedOut
+                },
         )
     }
 }
@@ -125,7 +127,8 @@ enum class AirplaneModeRootCommandFailure {
 }
 
 private val AirplaneModeRootAction.expectedCategory: RootCommandCategory
-    get() = when (this) {
-        AirplaneModeRootAction.Enable -> RootCommandCategory.AirplaneModeEnable
-        AirplaneModeRootAction.Disable -> RootCommandCategory.AirplaneModeDisable
-    }
+    get() =
+        when (this) {
+            AirplaneModeRootAction.Enable -> RootCommandCategory.AirplaneModeEnable
+            AirplaneModeRootAction.Disable -> RootCommandCategory.AirplaneModeDisable
+        }

@@ -22,18 +22,21 @@ import kotlin.test.assertTrue
 class ProxyRotationPauseCoordinatorTest {
     @Test
     fun `pauses proxy requests and advances control plane to draining connections`() {
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.PausingNewRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-            ),
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.PausingNewRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
         val pauseController = LockRecordingPauseActions(controlPlane)
-        val coordinator = ProxyRotationPauseCoordinator(
-            pauseController = pauseController,
-            controlPlane = controlPlane,
-        )
+        val coordinator =
+            ProxyRotationPauseCoordinator(
+                pauseController = pauseController,
+                controlPlane = controlPlane,
+            )
 
         val result = coordinator.advance(nowElapsedMillis = 10_000)
 
@@ -46,23 +49,27 @@ class ProxyRotationPauseCoordinatorTest {
 
     @Test
     fun `resumes proxy requests and records terminal completion timestamp`() {
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.ResumingProxyRequests,
-                operation = RotationOperation.AirplaneMode,
-                oldPublicIp = "198.51.100.10",
-                newPublicIp = "203.0.113.25",
-                publicIpChanged = true,
-            ),
-        )
-        val pauseController = LockRecordingPauseActions(
-            controlPlane = controlPlane,
-            initiallyPaused = true,
-        )
-        val coordinator = ProxyRotationPauseCoordinator(
-            pauseController = pauseController,
-            controlPlane = controlPlane,
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ResumingProxyRequests,
+                        operation = RotationOperation.AirplaneMode,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.25",
+                        publicIpChanged = true,
+                    ),
+            )
+        val pauseController =
+            LockRecordingPauseActions(
+                controlPlane = controlPlane,
+                initiallyPaused = true,
+            )
+        val coordinator =
+            ProxyRotationPauseCoordinator(
+                pauseController = pauseController,
+                controlPlane = controlPlane,
+            )
 
         val result = coordinator.advance(nowElapsedMillis = 20_000)
 
@@ -80,21 +87,25 @@ class ProxyRotationPauseCoordinatorTest {
 
     @Test
     fun `resumes proxy requests and records terminal failure timestamp`() {
-        val pauseController = ProxyRotationRequestPauseController(
-            ingressConfig().copy(proxyRequestsPaused = true),
-        )
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.ResumingProxyRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-                failureReason = RotationFailureReason.RootCommandFailed,
-            ),
-        )
-        val coordinator = ProxyRotationPauseCoordinator(
-            pauseController = pauseController,
-            controlPlane = controlPlane,
-        )
+        val pauseController =
+            ProxyRotationRequestPauseController(
+                ingressConfig().copy(proxyRequestsPaused = true),
+            )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ResumingProxyRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        failureReason = RotationFailureReason.RootCommandFailed,
+                    ),
+            )
+        val coordinator =
+            ProxyRotationPauseCoordinator(
+                pauseController = pauseController,
+                controlPlane = controlPlane,
+            )
 
         val result = coordinator.advance(nowElapsedMillis = 30_000)
 
@@ -107,17 +118,20 @@ class ProxyRotationPauseCoordinatorTest {
     @Test
     fun `does not change runtime pause state when control plane is not waiting for pause or resume`() {
         val pauseController = ProxyRotationRequestPauseController(ingressConfig())
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.DrainingConnections,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-            ),
-        )
-        val coordinator = ProxyRotationPauseCoordinator(
-            pauseController = pauseController,
-            controlPlane = controlPlane,
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.DrainingConnections,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
+        val coordinator =
+            ProxyRotationPauseCoordinator(
+                pauseController = pauseController,
+                controlPlane = controlPlane,
+            )
 
         val result = coordinator.advance(nowElapsedMillis = 10_000)
 
@@ -129,17 +143,20 @@ class ProxyRotationPauseCoordinatorTest {
     @Test
     fun `rejects negative observation time before changing runtime pause state`() {
         val pauseController = ProxyRotationRequestPauseController(ingressConfig())
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.PausingNewRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-            ),
-        )
-        val coordinator = ProxyRotationPauseCoordinator(
-            pauseController = pauseController,
-            controlPlane = controlPlane,
-        )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.PausingNewRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
+        val coordinator =
+            ProxyRotationPauseCoordinator(
+                pauseController = pauseController,
+                controlPlane = controlPlane,
+            )
 
         assertFailsWith<IllegalArgumentException> {
             coordinator.advance(nowElapsedMillis = -1)
@@ -151,22 +168,26 @@ class ProxyRotationPauseCoordinatorTest {
 
     @Test
     fun `rejects negative observation time before changing runtime resume state`() {
-        val pauseController = ProxyRotationRequestPauseController(
-            ingressConfig().copy(proxyRequestsPaused = true),
-        )
-        val controlPlane = RotationControlPlane(
-            initialStatus = RotationStatus(
-                state = RotationState.ResumingProxyRequests,
-                operation = RotationOperation.MobileData,
-                oldPublicIp = "198.51.100.10",
-                newPublicIp = "203.0.113.25",
-                publicIpChanged = true,
-            ),
-        )
-        val coordinator = ProxyRotationPauseCoordinator(
-            pauseController = pauseController,
-            controlPlane = controlPlane,
-        )
+        val pauseController =
+            ProxyRotationRequestPauseController(
+                ingressConfig().copy(proxyRequestsPaused = true),
+            )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ResumingProxyRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.25",
+                        publicIpChanged = true,
+                    ),
+            )
+        val coordinator =
+            ProxyRotationPauseCoordinator(
+                pauseController = pauseController,
+                controlPlane = controlPlane,
+            )
 
         assertFailsWith<IllegalArgumentException> {
             coordinator.advance(nowElapsedMillis = -1)
@@ -179,13 +200,15 @@ class ProxyRotationPauseCoordinatorTest {
     private fun ingressConfig(): ProxyIngressPreflightConfig =
         ProxyIngressPreflightConfig(
             connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 4),
-            requestAdmission = ProxyRequestAdmissionConfig(
-                proxyAuthentication = ProxyAuthenticationConfig(
-                    authEnabled = false,
-                    credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = false,
+                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        ),
+                    managementApiToken = "management-token",
                 ),
-                managementApiToken = "management-token",
-            ),
         )
 
     private class LockRecordingPauseActions(

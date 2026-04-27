@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/main/kotlin/com/cellularproxy/shared/cloudflare/CloudflareTunnelControlPlane.kt">
+        <error line="47" column="73" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/cloudflare/CloudflareTunnelStateMachine.kt">
+        <error line="33" column="61" source="standard:function-signature" />
+        <error line="88" column="42" source="standard:function-signature" />
+        <error line="98" column="91" source="standard:function-signature" />
+        <error line="110" column="95" source="standard:function-signature" />
+        <error line="122" column="94" source="standard:function-signature" />
+        <error line="137" column="42" source="standard:function-signature" />
+        <error line="149" column="90" source="standard:function-signature" />
+        <error line="160" column="93" source="standard:function-signature" />
+        <error line="171" column="93" source="standard:function-signature" />
+        <error line="174" column="94" source="standard:function-signature" />
+        <error line="177" column="92" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/config/AppConfig.kt">
+        <error line="34" column="35" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/logging/LogRedactor.kt">
+        <error line="53" column="66" source="standard:function-signature" />
+        <error line="60" column="69" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/proxy/ProxyAuthenticationPolicy.kt">
+        <error line="43" column="96" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/proxy/ProxyServiceStartupPolicy.kt">
+        <error line="91" column="44" source="standard:function-signature" />
+        <error line="102" column="72" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/proxy/ProxyServiceStatus.kt">
+        <error line="48" column="32" source="standard:function-signature" />
+        <error line="67" column="32" source="standard:function-signature" />
+        <error line="87" column="32" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/proxy/ProxyServiceStopStateMachine.kt">
+        <error line="25" column="42" source="standard:function-signature" />
+        <error line="30" column="86" source="standard:function-signature" />
+        <error line="41" column="89" source="standard:function-signature" />
+        <error line="44" column="90" source="standard:function-signature" />
+        <error line="47" column="88" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/root/RootCommandResult.kt">
+        <error line="23" column="31" source="standard:function-signature" />
+        <error line="37" column="31" source="standard:function-signature" />
+        <error line="72" column="77" source="standard:function-signature" />
+        <error line="82" column="75" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/rotation/RotationControlPlane.kt">
+        <error line="76" column="51" source="standard:function-signature" />
+        <error line="102" column="74" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/rotation/RotationProgressGate.kt">
+        <error line="40" column="57" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/shared/rotation/RotationStateMachine.kt">
+        <error line="236" column="86" source="standard:function-signature" />
+        <error line="243" column="87" source="standard:function-signature" />
+        <error line="250" column="88" source="standard:function-signature" />
+        <error line="262" column="95" source="standard:function-signature" />
+        <error line="268" column="93" source="standard:function-signature" />
+        <error line="274" column="92" source="standard:function-signature" />
+        <error line="298" column="89" source="standard:function-signature" />
+        <error line="304" column="91" source="standard:function-signature" />
+        <error line="328" column="91" source="standard:function-signature" />
+        <error line="336" column="88" source="standard:function-signature" />
+        <error line="348" column="98" source="standard:function-signature" />
+        <error line="383" column="24" source="standard:function-signature" />
+        <error line="397" column="24" source="standard:function-signature" />
+        <error line="405" column="58" source="standard:function-signature" />
+        <error line="412" column="57" source="standard:function-signature" />
+        <error line="419" column="77" source="standard:function-signature" />
+        <error line="422" column="78" source="standard:function-signature" />
+        <error line="425" column="76" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/proxy/ProxyServiceStartupPolicyTest.kt">
+        <error line="181" column="43" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/rotation/RotationNetworkReturnCoordinatorTest.kt">
+        <error line="250" column="78" source="standard:function-signature" />
+        <error line="253" column="66" source="standard:function-signature" />
+        <error line="264" column="27" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/rotation/RotationNetworkReturnPolicyTest.kt">
+        <error line="230" column="27" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/rotation/RotationSessionControllerTest.kt">
+        <error line="136" column="76" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/rotation/RotationStateMachineTest.kt">
+        <error line="420" column="76" source="standard:function-signature" />
+        <error line="427" column="76" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/rotation/RotationToggleDelayCoordinatorTest.kt">
+        <error line="173" column="76" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/shared/rotation/TerminalRotationTimestampTrackerTest.kt">
+        <error line="204" column="74" source="standard:function-signature" />
+        <error line="210" column="100" source="standard:function-signature" />
+        <error line="221" column="52" source="standard:function-signature" />
+    </file>
+</baseline>

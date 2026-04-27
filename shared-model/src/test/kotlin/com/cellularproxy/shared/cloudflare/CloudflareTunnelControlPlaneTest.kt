@@ -17,10 +17,11 @@ class CloudflareTunnelControlPlaneTest {
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.disposition)
         assertEquals(CloudflareTunnelStatus.starting(), result.status)
-        val expectedSnapshot = CloudflareTunnelControlPlaneSnapshot(
-            status = CloudflareTunnelStatus.starting(),
-            transitionGeneration = 1,
-        )
+        val expectedSnapshot =
+            CloudflareTunnelControlPlaneSnapshot(
+                status = CloudflareTunnelStatus.starting(),
+                transitionGeneration = 1,
+            )
         assertEquals(expectedSnapshot, result.snapshot)
         assertEquals(expectedSnapshot, controlPlane.snapshot())
     }
@@ -85,10 +86,11 @@ class CloudflareTunnelControlPlaneTest {
         controlPlane.apply(CloudflareTunnelEvent.StopRequested)
         val secondStart = controlPlane.apply(CloudflareTunnelEvent.StartRequested)
 
-        val staleResult = controlPlane.apply(
-            expectedSnapshot = firstStart.snapshot,
-            event = CloudflareTunnelEvent.Connected,
-        )
+        val staleResult =
+            controlPlane.apply(
+                expectedSnapshot = firstStart.snapshot,
+                event = CloudflareTunnelEvent.Connected,
+            )
 
         val stale = staleResult as CloudflareTunnelGuardedTransitionResult.Stale
         assertEquals(firstStart.snapshot, stale.expectedSnapshot)
@@ -102,10 +104,11 @@ class CloudflareTunnelControlPlaneTest {
         val controlPlane = CloudflareTunnelControlPlane()
         val started = controlPlane.apply(CloudflareTunnelEvent.StartRequested)
 
-        val result = controlPlane.apply(
-            expectedSnapshot = started.snapshot,
-            event = CloudflareTunnelEvent.Connected,
-        )
+        val result =
+            controlPlane.apply(
+                expectedSnapshot = started.snapshot,
+                event = CloudflareTunnelEvent.Connected,
+            )
 
         val evaluated = result as CloudflareTunnelGuardedTransitionResult.Evaluated
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, evaluated.transition.disposition)
@@ -127,13 +130,14 @@ class CloudflareTunnelControlPlaneTest {
         val start = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(workers)
         try {
-            val results = MutableList(workers) {
-                executor.submit<CloudflareTunnelControlPlaneTransitionResult> {
-                    ready.countDown()
-                    assertTrue(start.await(5, TimeUnit.SECONDS))
-                    controlPlane.apply(CloudflareTunnelEvent.StartRequested)
+            val results =
+                MutableList(workers) {
+                    executor.submit<CloudflareTunnelControlPlaneTransitionResult> {
+                        ready.countDown()
+                        assertTrue(start.await(5, TimeUnit.SECONDS))
+                        controlPlane.apply(CloudflareTunnelEvent.StartRequested)
+                    }
                 }
-            }
 
             assertTrue(ready.await(5, TimeUnit.SECONDS))
             start.countDown()

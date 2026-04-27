@@ -12,22 +12,26 @@ import kotlin.time.Duration.Companion.seconds
 class ProxySettingsFormModelTest {
     @Test
     fun `form state starts from persisted proxy and route config`() {
-        val config = AppConfig.default().copy(
-            network = AppConfig.default().network.copy(
-                defaultRoutePolicy = RouteTarget.Cellular,
-            ),
-            cloudflare = AppConfig.default().cloudflare.copy(
-                enabled = true,
-                tunnelTokenPresent = true,
-                managementHostnameLabel = "manage.example.com",
-            ),
-            rotation = AppConfig.default().rotation.copy(
-                strictIpChangeRequired = true,
-                mobileDataOffDelay = 7.seconds,
-                networkReturnTimeout = 90.seconds,
-                cooldown = 300.seconds,
-            ),
-        )
+        val config =
+            AppConfig.default().copy(
+                network =
+                    AppConfig.default().network.copy(
+                        defaultRoutePolicy = RouteTarget.Cellular,
+                    ),
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+                rotation =
+                    AppConfig.default().rotation.copy(
+                        strictIpChangeRequired = true,
+                        mobileDataOffDelay = 7.seconds,
+                        networkReturnTimeout = 90.seconds,
+                        cooldown = 300.seconds,
+                    ),
+            )
 
         val form = ProxySettingsFormState.from(config)
 
@@ -47,13 +51,14 @@ class ProxySettingsFormModelTest {
 
     @Test
     fun `valid settings produce updated config and broad unauthenticated warning`() {
-        val result = ProxySettingsFormState(
-            listenHost = " 0.0.0.0 ",
-            listenPort = " 8181 ",
-            authEnabled = false,
-            maxConcurrentConnections = "12",
-            route = RouteTarget.Vpn,
-        ).toAppConfig(base = AppConfig.default())
+        val result =
+            ProxySettingsFormState(
+                listenHost = " 0.0.0.0 ",
+                listenPort = " 8181 ",
+                authEnabled = false,
+                maxConcurrentConnections = "12",
+                route = RouteTarget.Vpn,
+            ).toAppConfig(base = AppConfig.default())
 
         val saved = result as ProxySettingsFormResult.Valid
         assertEquals("0.0.0.0", saved.config.proxy.listenHost)
@@ -66,12 +71,13 @@ class ProxySettingsFormModelTest {
 
     @Test
     fun `invalid host and port return validation errors without throwing`() {
-        val result = ProxySettingsFormState(
-            listenHost = "not-an-ip",
-            listenPort = "+8080",
-            authEnabled = true,
-            route = RouteTarget.Automatic,
-        ).toAppConfig(base = AppConfig.default())
+        val result =
+            ProxySettingsFormState(
+                listenHost = "not-an-ip",
+                listenPort = "+8080",
+                authEnabled = true,
+                route = RouteTarget.Automatic,
+            ).toAppConfig(base = AppConfig.default())
 
         val invalid = result as ProxySettingsFormResult.Invalid
         assertEquals(
@@ -83,12 +89,13 @@ class ProxySettingsFormModelTest {
     @Test
     fun `blank and out of range ports are rejected`() {
         listOf("", "0", "65536").forEach { port ->
-            val result = ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = port,
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-            ).toAppConfig(base = AppConfig.default())
+            val result =
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = port,
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                ).toAppConfig(base = AppConfig.default())
 
             assertTrue(
                 result is ProxySettingsFormResult.Invalid &&
@@ -103,13 +110,14 @@ class ProxySettingsFormModelTest {
         val invalidValues = listOf("", "0", "-1", "1.5")
 
         invalidValues.forEach { invalidValue ->
-            val result = ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8181",
-                authEnabled = true,
-                maxConcurrentConnections = invalidValue,
-                route = RouteTarget.Automatic,
-            ).toAppConfig(base = AppConfig.default())
+            val result =
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8181",
+                    authEnabled = true,
+                    maxConcurrentConnections = invalidValue,
+                    route = RouteTarget.Automatic,
+                ).toAppConfig(base = AppConfig.default())
 
             assertTrue(
                 result is ProxySettingsFormResult.Invalid && result.invalidMaxConcurrentConnections,
@@ -120,19 +128,22 @@ class ProxySettingsFormModelTest {
 
     @Test
     fun `proxy settings save ignores unrelated stale Cloudflare token presence validation`() {
-        val staleCloudflareConfig = AppConfig.default().copy(
-            cloudflare = AppConfig.default().cloudflare.copy(
-                enabled = true,
-                tunnelTokenPresent = false,
-            ),
-        )
+        val staleCloudflareConfig =
+            AppConfig.default().copy(
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = false,
+                    ),
+            )
 
-        val result = ProxySettingsFormState(
-            listenHost = "127.0.0.1",
-            listenPort = "8181",
-            authEnabled = true,
-            route = RouteTarget.Automatic,
-        ).toAppConfig(base = staleCloudflareConfig)
+        val result =
+            ProxySettingsFormState(
+                listenHost = "127.0.0.1",
+                listenPort = "8181",
+                authEnabled = true,
+                route = RouteTarget.Automatic,
+            ).toAppConfig(base = staleCloudflareConfig)
 
         val saved = result as ProxySettingsFormResult.Valid
         assertEquals("127.0.0.1", saved.config.proxy.listenHost)
@@ -142,26 +153,29 @@ class ProxySettingsFormModelTest {
 
     @Test
     fun `valid settings update rotation controls`() {
-        val base = AppConfig.default().copy(
-            rotation = RotationConfig(
-                strictIpChangeRequired = false,
-                mobileDataOffDelay = 7.seconds,
-                networkReturnTimeout = 90.seconds,
-                cooldown = 300.seconds,
-            ),
-        )
+        val base =
+            AppConfig.default().copy(
+                rotation =
+                    RotationConfig(
+                        strictIpChangeRequired = false,
+                        mobileDataOffDelay = 7.seconds,
+                        networkReturnTimeout = 90.seconds,
+                        cooldown = 300.seconds,
+                    ),
+            )
 
-        val result = ProxySettingsFormState(
-            listenHost = "127.0.0.1",
-            listenPort = "8181",
-            authEnabled = true,
-            route = RouteTarget.Automatic,
-            strictIpChangeRequired = true,
-            mobileDataOffDelaySeconds = " 11 ",
-            networkReturnTimeoutSeconds = "120",
-            cooldownSeconds = "360",
-            rootOperationsEnabled = true,
-        ).toAppConfig(base = base)
+        val result =
+            ProxySettingsFormState(
+                listenHost = "127.0.0.1",
+                listenPort = "8181",
+                authEnabled = true,
+                route = RouteTarget.Automatic,
+                strictIpChangeRequired = true,
+                mobileDataOffDelaySeconds = " 11 ",
+                networkReturnTimeoutSeconds = "120",
+                cooldownSeconds = "360",
+                rootOperationsEnabled = true,
+            ).toAppConfig(base = base)
 
         val saved = result as ProxySettingsFormResult.Valid
         assertEquals(true, saved.config.rotation.strictIpChangeRequired)
@@ -176,13 +190,14 @@ class ProxySettingsFormModelTest {
         val invalidValues = listOf("", "0", "-1", "1.5")
 
         invalidValues.forEach { invalidValue ->
-            val result = ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8181",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                mobileDataOffDelaySeconds = invalidValue,
-            ).toAppConfig(base = AppConfig.default())
+            val result =
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8181",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    mobileDataOffDelaySeconds = invalidValue,
+                ).toAppConfig(base = AppConfig.default())
 
             assertTrue(
                 result is ProxySettingsFormResult.Invalid && result.invalidRotationTiming,

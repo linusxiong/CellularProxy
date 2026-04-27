@@ -5,7 +5,9 @@ import androidx.datastore.preferences.preferencesDataStore
 
 object CellularProxyPlainConfigStore {
     fun repository(context: Context): PlainConfigDataStoreRepository =
-        PlainConfigDataStoreRepository(context.applicationContext.cellularProxyPlainConfigDataStore)
+        PlainConfigDataStoreRepository(
+            context.applicationContext.cellularProxyPlainConfigDataStore,
+        )
 }
 
 private val Context.cellularProxyPlainConfigDataStore by preferencesDataStore(

@@ -16,10 +16,11 @@ class FileBackedRootCommandAuditLogTest {
     @Test
     fun `records root audit entries durably with redacted fields and timestamps`() {
         withLogFile { file ->
-            val auditLog = FileBackedRootCommandAuditLog(
-                file = file,
-                clock = incrementingClock(start = 1_000L),
-            )
+            val auditLog =
+                FileBackedRootCommandAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 1_000L),
+                )
 
             auditLog.record(RootCommandAuditRecord.started(RootCommandCategory.MobileDataDisable))
             auditLog.record(
@@ -65,11 +66,12 @@ class FileBackedRootCommandAuditLogTest {
     @Test
     fun `retains newest audit records when max record count is exceeded`() {
         withLogFile { file ->
-            val auditLog = FileBackedRootCommandAuditLog(
-                file = file,
-                clock = incrementingClock(start = 10L),
-                maxRecords = 2,
-            )
+            val auditLog =
+                FileBackedRootCommandAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 10L),
+                    maxRecords = 2,
+                )
 
             auditLog.record(RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck))
             auditLog.record(RootCommandAuditRecord.started(RootCommandCategory.MobileDataDisable))
@@ -104,10 +106,11 @@ class FileBackedRootCommandAuditLogTest {
     @Test
     fun `skips malformed persisted audit lines when reading and compacting`() {
         withLogFile { file ->
-            val auditLog = FileBackedRootCommandAuditLog(
-                file = file,
-                clock = incrementingClock(start = 20L),
-            )
+            val auditLog =
+                FileBackedRootCommandAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 20L),
+                )
             auditLog.record(RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck))
             file.appendText("malformed\n")
             file.appendText("v2\t20\tStarted\tRootAvailabilityCheck\t-\t-\t-\t-\n")
@@ -162,17 +165,19 @@ class FileBackedRootCommandAuditLogTest {
     @Test
     fun `failed file replacement preserves existing audit log`() {
         withLogFile { file ->
-            val auditLog = FileBackedRootCommandAuditLog(
-                file = file,
-                clock = incrementingClock(start = 30L),
-            )
+            val auditLog =
+                FileBackedRootCommandAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 30L),
+                )
             auditLog.record(RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck))
             val originalContents = file.readText()
-            val failingAuditLog = FileBackedRootCommandAuditLog(
-                file = file,
-                clock = incrementingClock(start = 31L),
-                replaceFile = { _, _ -> throw java.io.IOException("disk full") },
-            )
+            val failingAuditLog =
+                FileBackedRootCommandAuditLog(
+                    file = file,
+                    clock = incrementingClock(start = 31L),
+                    replaceFile = { _, _ -> throw java.io.IOException("disk full") },
+                )
 
             assertFailsWith<java.io.IOException> {
                 failingAuditLog.record(RootCommandAuditRecord.started(RootCommandCategory.MobileDataDisable))

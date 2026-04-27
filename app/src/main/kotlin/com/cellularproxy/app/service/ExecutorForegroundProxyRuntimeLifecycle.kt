@@ -11,7 +11,8 @@ class ExecutorForegroundProxyRuntimeLifecycle private constructor(
     private val delegate: ForegroundProxyRuntimeLifecycle,
     private val executor: Executor,
     private val closeAction: () -> Unit,
-) : ForegroundProxyRuntimeLifecycle, Closeable {
+) : ForegroundProxyRuntimeLifecycle,
+    Closeable {
     private val closed = AtomicBoolean(false)
 
     companion object {
@@ -78,6 +79,5 @@ class ExecutorForegroundProxyRuntimeLifecycle private constructor(
 private object ForegroundRuntimeThreadFactory : ThreadFactory {
     private val threadIds = AtomicLong(0)
 
-    override fun newThread(command: Runnable): Thread =
-        Thread(command, "CellularProxyRuntimeLifecycle-${threadIds.incrementAndGet()}")
+    override fun newThread(command: Runnable): Thread = Thread(command, "CellularProxyRuntimeLifecycle-${threadIds.incrementAndGet()}")
 }

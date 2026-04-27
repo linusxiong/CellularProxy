@@ -15,10 +15,11 @@ class BlockingRootCommandProcessExecutorTest {
     fun `completed process captures exit code stdout and stderr`() {
         val executor = BlockingRootCommandProcessExecutor()
 
-        val result = executor.execute(
-            command = shellCommand("printf stdout; printf stderr >&2; exit 7"),
-            timeoutMillis = 2_000,
-        )
+        val result =
+            executor.execute(
+                command = shellCommand("printf stdout; printf stderr >&2; exit 7"),
+                timeoutMillis = 2_000,
+            )
 
         val completed = result as RootCommandProcessResult.Completed
         assertEquals(7, completed.exitCode)
@@ -30,10 +31,11 @@ class BlockingRootCommandProcessExecutorTest {
     fun `process stdin is closed immediately because executor has no input API`() {
         val executor = BlockingRootCommandProcessExecutor()
 
-        val result = executor.execute(
-            command = shellCommand("cat >/dev/null; printf after-eof"),
-            timeoutMillis = 2_000,
-        )
+        val result =
+            executor.execute(
+                command = shellCommand("cat >/dev/null; printf after-eof"),
+                timeoutMillis = 2_000,
+            )
 
         val completed = assertIs<RootCommandProcessResult.Completed>(result)
         assertEquals(0, completed.exitCode)
@@ -44,10 +46,11 @@ class BlockingRootCommandProcessExecutorTest {
     fun `timed out process is destroyed and returns partial output`() {
         val executor = BlockingRootCommandProcessExecutor()
 
-        val result = executor.execute(
-            command = shellCommand("printf before; printf err-before >&2; sleep 2; printf after"),
-            timeoutMillis = 100,
-        )
+        val result =
+            executor.execute(
+                command = shellCommand("printf before; printf err-before >&2; sleep 2; printf after"),
+                timeoutMillis = 100,
+            )
 
         val timedOut = result as RootCommandProcessResult.TimedOut
         assertEquals("before", timedOut.stdout)
@@ -59,12 +62,14 @@ class BlockingRootCommandProcessExecutorTest {
         val executor = BlockingRootCommandProcessExecutor()
         var result: RootCommandProcessResult? = null
 
-        val elapsedMillis = measureTimeMillis {
-            result = executor.execute(
-                command = shellCommand("printf before; (sleep 5; printf child)& sleep 5"),
-                timeoutMillis = 250,
-            )
-        }
+        val elapsedMillis =
+            measureTimeMillis {
+                result =
+                    executor.execute(
+                        command = shellCommand("printf before; (sleep 5; printf child)& sleep 5"),
+                        timeoutMillis = 250,
+                    )
+            }
 
         assertIs<RootCommandProcessResult.TimedOut>(result)
         assertTrue(elapsedMillis < 1_500, "Expected bounded timeout cleanup, took ${elapsedMillis}ms")
@@ -75,15 +80,21 @@ class BlockingRootCommandProcessExecutorTest {
     fun `timed out process destroys descendant process before returning`() {
         val executor = BlockingRootCommandProcessExecutor()
 
-        val result = executor.execute(
-            command = shellCommand("sleep 5 & echo child-pid:$!; sleep 5"),
-            timeoutMillis = 250,
-        )
+        val result =
+            executor.execute(
+                command = shellCommand("sleep 5 & echo child-pid:$!; sleep 5"),
+                timeoutMillis = 250,
+            )
 
         val timedOut = assertIs<RootCommandProcessResult.TimedOut>(result)
-        val childPid = requireNotNull(
-            Regex("child-pid:(\\d+)").find(timedOut.stdout)?.groupValues?.get(1)?.toLong(),
-        )
+        val childPid =
+            requireNotNull(
+                Regex("child-pid:(\\d+)")
+                    .find(timedOut.stdout)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.toLong(),
+            )
         assertProcessStops(childPid)
     }
 
@@ -92,12 +103,14 @@ class BlockingRootCommandProcessExecutorTest {
         val executor = BlockingRootCommandProcessExecutor()
         var result: RootCommandProcessResult? = null
 
-        val elapsedMillis = measureTimeMillis {
-            result = executor.execute(
-                command = shellCommand("printf parent; (sleep 5; printf child)& exit 0"),
-                timeoutMillis = 2_000,
-            )
-        }
+        val elapsedMillis =
+            measureTimeMillis {
+                result =
+                    executor.execute(
+                        command = shellCommand("printf parent; (sleep 5; printf child)& exit 0"),
+                        timeoutMillis = 2_000,
+                    )
+            }
 
         val completed = assertIs<RootCommandProcessResult.Completed>(result)
         assertEquals(0, completed.exitCode)
@@ -111,17 +124,18 @@ class BlockingRootCommandProcessExecutorTest {
         val pidFile = Files.createTempFile("cellularproxy-root-child", ".pid")
         val interruptionCaught = AtomicBoolean(false)
         val interruptStatusRestored = AtomicBoolean(false)
-        val thread = Thread {
-            try {
-                executor.execute(
-                    command = shellCommand("sleep 5 & echo $! > ${pidFile.toAbsolutePath()}; sleep 5"),
-                    timeoutMillis = 10_000,
-                )
-            } catch (_: InterruptedException) {
-                interruptionCaught.set(true)
-                interruptStatusRestored.set(Thread.currentThread().isInterrupted)
+        val thread =
+            Thread {
+                try {
+                    executor.execute(
+                        command = shellCommand("sleep 5 & echo $! > ${pidFile.toAbsolutePath()}; sleep 5"),
+                        timeoutMillis = 10_000,
+                    )
+                } catch (_: InterruptedException) {
+                    interruptionCaught.set(true)
+                    interruptStatusRestored.set(Thread.currentThread().isInterrupted)
+                }
             }
-        }
 
         thread.start()
         val childPid = awaitPidFile(pidFile)
@@ -139,17 +153,18 @@ class BlockingRootCommandProcessExecutorTest {
         val executor = BlockingRootCommandProcessExecutor(streamCleanupTimeoutMillis = 10_000)
         val interruptionCaught = AtomicBoolean(false)
         val interruptStatusRestored = AtomicBoolean(false)
-        val thread = Thread {
-            try {
-                executor.execute(
-                    command = shellCommand("printf parent; (sleep 5)& exit 0"),
-                    timeoutMillis = 2_000,
-                )
-            } catch (_: InterruptedException) {
-                interruptionCaught.set(true)
-                interruptStatusRestored.set(Thread.currentThread().isInterrupted)
+        val thread =
+            Thread {
+                try {
+                    executor.execute(
+                        command = shellCommand("printf parent; (sleep 5)& exit 0"),
+                        timeoutMillis = 2_000,
+                    )
+                } catch (_: InterruptedException) {
+                    interruptionCaught.set(true)
+                    interruptStatusRestored.set(Thread.currentThread().isInterrupted)
+                }
             }
-        }
 
         thread.start()
         Thread.sleep(250)
@@ -165,12 +180,13 @@ class BlockingRootCommandProcessExecutorTest {
     fun `invalid timeout is rejected before process start`() {
         val executor = BlockingRootCommandProcessExecutor()
 
-        val failure = assertFailsWith<IllegalArgumentException> {
-            executor.execute(
-                command = shellCommand("exit 0"),
-                timeoutMillis = 0,
-            )
-        }
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    command = shellCommand("exit 0"),
+                    timeoutMillis = 0,
+                )
+            }
 
         assertEquals("Root process timeout must be positive", failure.message)
     }
@@ -207,5 +223,4 @@ class BlockingRootCommandProcessExecutorTest {
         val process = ProcessHandle.of(pid)
         assertTrue(process.isEmpty || !process.get().isAlive, "Expected descendant process $pid to be stopped")
     }
-
 }

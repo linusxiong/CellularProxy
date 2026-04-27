@@ -17,8 +17,8 @@ import com.cellularproxy.proxy.errors.ProxyErrorResponseMapper
 import com.cellularproxy.proxy.errors.ProxyServerFailure
 import com.cellularproxy.proxy.management.ManagementApiDispatchDecision
 import com.cellularproxy.proxy.management.ManagementApiDispatcher
-import com.cellularproxy.proxy.management.ManagementApiHandlerException
 import com.cellularproxy.proxy.management.ManagementApiHandler
+import com.cellularproxy.proxy.management.ManagementApiHandlerException
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
@@ -33,21 +33,24 @@ class CloudflareManagementApiBridge(
 ) : CloudflareLocalManagementHandler {
     override fun handle(request: CloudflareLocalManagementRequest): CloudflareTunnelResponse {
         val accessDecision = ManagementAccessPolicy.evaluate(request.method, request.originTarget)
-        val parsedManagementRequest = ParsedProxyRequest.Management(
-            method = request.method,
-            originTarget = request.originTarget,
-            requiresToken = accessDecision.requiresToken,
-            requiresAuditLog = accessDecision.requiresAuditLog,
-        )
+        val parsedManagementRequest =
+            ParsedProxyRequest.Management(
+                method = request.method,
+                originTarget = request.originTarget,
+                requiresToken = accessDecision.requiresToken,
+                requiresAuditLog = accessDecision.requiresAuditLog,
+            )
 
         return when (
-            val admission = ProxyRequestAdmissionPolicy.evaluate(
-                config = admissionConfig,
-                request = ParsedHttpRequest(
-                    request = parsedManagementRequest,
-                    headers = request.headers,
-                ),
-            )
+            val admission =
+                ProxyRequestAdmissionPolicy.evaluate(
+                    config = admissionConfig,
+                    request =
+                        ParsedHttpRequest(
+                            request = parsedManagementRequest,
+                            headers = request.headers,
+                        ),
+                )
         ) {
             is ProxyRequestAdmissionDecision.Accepted ->
                 dispatch(parsedManagementRequest)
@@ -68,8 +71,7 @@ class CloudflareManagementApiBridge(
         }
     }
 
-    override fun toString(): String =
-        "CloudflareManagementApiBridge(admissionConfig=[REDACTED], managementHandler=[REDACTED])"
+    override fun toString(): String = "CloudflareManagementApiBridge(admissionConfig=[REDACTED], managementHandler=[REDACTED])"
 
     private fun dispatch(request: ParsedProxyRequest.Management): CloudflareTunnelResponse =
         try {
@@ -117,9 +119,10 @@ class CloudflareManagementApiBridge(
 
     private fun ProxyRequestAdmissionDecision.Rejected.toCloudflareResponse(): CloudflareTunnelResponse =
         when (
-            val decision = ProxyErrorResponseMapper.map(
-                ProxyServerFailure.Admission(reason = reason),
-            )
+            val decision =
+                ProxyErrorResponseMapper.map(
+                    ProxyServerFailure.Admission(reason = reason),
+                )
         ) {
             is ProxyErrorResponseDecision.Emit ->
                 decision.response.toCloudflareResponse()
@@ -138,10 +141,11 @@ class CloudflareManagementApiBridge(
             return CloudflareManagementApiBridge(
                 admissionConfig = admissionConfig,
                 managementHandler = managementHandler,
-                recordManagementAudit = nonFatalManagementAuditRecorder(
-                    recordManagementAudit = auditLog::record,
-                    reportManagementAuditFailure = reportManagementAuditFailure,
-                ),
+                recordManagementAudit =
+                    nonFatalManagementAuditRecorder(
+                        recordManagementAudit = auditLog::record,
+                        reportManagementAuditFailure = reportManagementAuditFailure,
+                    ),
             )
         }
     }

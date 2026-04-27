@@ -64,8 +64,9 @@ private fun CloudflareTunnelControlPlaneTransitionResult.isStartRequestResult():
             false
     }
 
-private val ACTIVE_TUNNEL_STATES = setOf(
-    CloudflareTunnelState.Starting,
-    CloudflareTunnelState.Connected,
-    CloudflareTunnelState.Degraded,
-)
+private val ACTIVE_TUNNEL_STATES =
+    setOf(
+        CloudflareTunnelState.Starting,
+        CloudflareTunnelState.Connected,
+        CloudflareTunnelState.Degraded,
+    )

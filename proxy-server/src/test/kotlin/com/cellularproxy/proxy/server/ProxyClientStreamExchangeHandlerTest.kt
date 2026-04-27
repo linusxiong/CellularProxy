@@ -3,17 +3,17 @@ package com.cellularproxy.proxy.server
 import com.cellularproxy.proxy.admission.ConnectionLimitAdmissionConfig
 import com.cellularproxy.proxy.admission.ProxyRequestAdmissionConfig
 import com.cellularproxy.proxy.errors.ProxyServerFailure
+import com.cellularproxy.proxy.forwarding.ConnectTunnelBidirectionalRelayResult
+import com.cellularproxy.proxy.forwarding.ConnectTunnelOutboundExchangeRelayHandlingResult
+import com.cellularproxy.proxy.forwarding.ConnectTunnelRelayDirection
+import com.cellularproxy.proxy.forwarding.ConnectTunnelStreamRelayResult
+import com.cellularproxy.proxy.forwarding.HttpProxyOutboundExchangeHandlingResult
 import com.cellularproxy.proxy.forwarding.OutboundConnectTunnelConnection
 import com.cellularproxy.proxy.forwarding.OutboundConnectTunnelConnector
 import com.cellularproxy.proxy.forwarding.OutboundConnectTunnelOpenResult
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginConnection
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginConnector
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginOpenResult
-import com.cellularproxy.proxy.forwarding.HttpProxyOutboundExchangeHandlingResult
-import com.cellularproxy.proxy.forwarding.ConnectTunnelOutboundExchangeRelayHandlingResult
-import com.cellularproxy.proxy.forwarding.ConnectTunnelBidirectionalRelayResult
-import com.cellularproxy.proxy.forwarding.ConnectTunnelStreamRelayResult
-import com.cellularproxy.proxy.forwarding.ConnectTunnelRelayDirection
 import com.cellularproxy.proxy.ingress.ProxyIngressPreflightConfig
 import com.cellularproxy.proxy.management.ManagementApiHandler
 import com.cellularproxy.proxy.management.ManagementApiHandlerException
@@ -44,32 +44,37 @@ import kotlin.test.assertTrue
 
 class ProxyClientStreamExchangeHandlerTest {
     private val credential = ProxyCredential(username = "proxy-user", password = "proxy-pass")
-    private val config = ProxyIngressPreflightConfig(
-        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
-        requestAdmission = ProxyRequestAdmissionConfig(
-            proxyAuthentication = ProxyAuthenticationConfig(
-                authEnabled = true,
-                credential = credential,
-            ),
-            managementApiToken = MANAGEMENT_TOKEN,
-        ),
-    )
+    private val config =
+        ProxyIngressPreflightConfig(
+            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 2),
+            requestAdmission =
+                ProxyRequestAdmissionConfig(
+                    proxyAuthentication =
+                        ProxyAuthenticationConfig(
+                            authEnabled = true,
+                            credential = credential,
+                        ),
+                    managementApiToken = MANAGEMENT_TOKEN,
+                ),
+        )
 
     @Test
     fun `writes preflight rejection response without dispatching accepted handlers`() {
         val input = ByteArrayInputStream("not consumed".toByteArray(Charsets.US_ASCII))
         val output = ByteArrayOutputStream()
-        val handler = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-        )
+        val handler =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+            )
 
-        val result = handler.handle(
-            config = config,
-            activeConnections = 2,
-            client = ProxyClientStreamConnection(input = input, output = output),
-        )
+        val result =
+            handler.handle(
+                config = config,
+                activeConnections = 2,
+                client = ProxyClientStreamConnection(input = input, output = output),
+            )
 
         val rejected = assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result)
         assertIs<ProxyServerFailure.ConnectionLimit>(rejected.failure)
@@ -82,35 +87,38 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `dispatches admitted plain HTTP proxy streams to outbound HTTP handler`() {
-        val request = (
-            "GET http://origin.example/resource HTTP/1.1\r\n" +
-                "Host: origin.example\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n"
+        val request =
+            (
+                "GET http://origin.example/resource HTTP/1.1\r\n" +
+                    "Host: origin.example\r\n" +
+                    "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val input = ByteArrayInputStream(request)
         val output = ByteArrayOutputStream()
         val originOutput = ByteArrayOutputStream()
-        val httpConnector = RecordingHttpConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 80,
+        val httpConnector =
+            RecordingHttpConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = handler(
-            httpConnector = httpConnector,
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(input = input, output = output),
-        )
+        val result =
+            handler(
+                httpConnector = httpConnector,
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(input = input, output = output),
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.HttpProxyHandled>(result)
         assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(handled.result)
@@ -124,40 +132,43 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `tracks admitted plain HTTP proxy exchange only while forwarding runs`() {
-        val request = (
-            "GET http://origin.example/resource HTTP/1.1\r\n" +
-                "Host: origin.example\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n"
+        val request =
+            (
+                "GET http://origin.example/resource HTTP/1.1\r\n" +
+                    "Host: origin.example\r\n" +
+                    "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val input = ByteArrayInputStream(request)
         val output = ByteArrayOutputStream()
         val tracker = ProxyTrafficActivityTracker()
         val observedActiveProxyExchanges = mutableListOf<Long>()
-        val httpConnector = RecordingHttpConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-                    output = ByteArrayOutputStream(),
-                    host = "origin.example",
-                    port = 80,
+        val httpConnector =
+            RecordingHttpConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                        output = ByteArrayOutputStream(),
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-            onOpen = {
-                observedActiveProxyExchanges += tracker.activeProxyExchanges
-            },
-        )
+                onOpen = {
+                    observedActiveProxyExchanges += tracker.activeProxyExchanges
+                },
+            )
 
-        val result = handler(
-            httpConnector = httpConnector,
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-            proxyActivityTracker = tracker,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(input = input, output = output),
-        )
+        val result =
+            handler(
+                httpConnector = httpConnector,
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+                proxyActivityTracker = tracker,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(input = input, output = output),
+            )
 
         assertIs<ProxyClientStreamExchangeHandlingResult.HttpProxyHandled>(result)
         assertEquals(listOf(1L), observedActiveProxyExchanges)
@@ -166,31 +177,35 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `dispatches admitted management streams to management handler`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val output = ByteArrayOutputStream()
         val metricEvents = mutableListOf<ProxyTrafficMetricsEvent>()
-        val managementHandler = RecordingManagementHandler(
-            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-        )
+        val managementHandler =
+            RecordingManagementHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            )
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = managementHandler,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = output,
-            ),
-            recordMetricEvent = { metricEvents.add(it) },
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = managementHandler,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = output,
+                    ),
+                recordMetricEvent = { metricEvents.add(it) },
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
@@ -213,29 +228,33 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact management response audit event`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = RecordingManagementHandler(
-                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-            ),
-            recordManagementAudit = auditEvents::add,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = ByteArrayOutputStream(),
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler =
+                    RecordingManagementHandler(
+                        ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+                    ),
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = ByteArrayOutputStream(),
+                    ),
+            )
 
         assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         assertEquals(
@@ -253,27 +272,30 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact route rejection audit event with attempted operation`() {
-        val request = (
-            "POST /api/service/stop?reason=local HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop?reason=local HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-            recordManagementAudit = auditEvents::add,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = ByteArrayOutputStream(),
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = ByteArrayOutputStream(),
+                    ),
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
@@ -293,27 +315,30 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact authorization rejection audit event`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val output = ByteArrayOutputStream()
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-            recordManagementAudit = auditEvents::add,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = output,
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+                recordManagementAudit = auditEvents::add,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = output,
+                    ),
+            )
 
         val rejected = assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result)
         assertEquals(output.size(), rejected.responseBytesWritten)
@@ -333,30 +358,33 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact handler failure audit event before rethrowing`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
         val failure = IOException("runtime unavailable")
 
-        val thrown = assertFailsWith<ManagementApiHandlerException> {
-            handler(
-                httpConnector = ThrowingHttpConnector(),
-                connectConnector = ThrowingConnectConnector(),
-                managementHandler = ManagementApiHandler { throw failure },
-                recordManagementAudit = auditEvents::add,
-            ).handle(
-                config = config,
-                activeConnections = 0,
-                client = ProxyClientStreamConnection(
-                    input = ByteArrayInputStream(request),
-                    output = ByteArrayOutputStream(),
-                ),
-            )
-        }
+        val thrown =
+            assertFailsWith<ManagementApiHandlerException> {
+                handler(
+                    httpConnector = ThrowingHttpConnector(),
+                    connectConnector = ThrowingConnectConnector(),
+                    managementHandler = ManagementApiHandler { throw failure },
+                    recordManagementAudit = auditEvents::add,
+                ).handle(
+                    config = config,
+                    activeConnections = 0,
+                    client =
+                        ProxyClientStreamConnection(
+                            input = ByteArrayInputStream(request),
+                            output = ByteArrayOutputStream(),
+                        ),
+                )
+            }
 
         assertSame(failure, thrown.cause)
         assertEquals(
@@ -374,29 +402,33 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `local management audit recorder failure does not replace command response`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val output = ByteArrayOutputStream()
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = RecordingManagementHandler(
-                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-            ),
-            recordManagementAudit = { throw IllegalStateException("audit unavailable") },
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = output,
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler =
+                    RecordingManagementHandler(
+                        ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+                    ),
+                recordManagementAudit = { throw IllegalStateException("audit unavailable") },
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = output,
+                    ),
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         assertEquals(202, assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result).statusCode)
@@ -405,32 +437,36 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact management response audit before response write failure`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
         val writeFailure = IOException("client disconnected")
 
-        val thrown = assertFailsWith<IOException> {
-            handler(
-                httpConnector = ThrowingHttpConnector(),
-                connectConnector = ThrowingConnectConnector(),
-                managementHandler = RecordingManagementHandler(
-                    ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-                ),
-                recordManagementAudit = auditEvents::add,
-            ).handle(
-                config = config,
-                activeConnections = 0,
-                client = ProxyClientStreamConnection(
-                    input = ByteArrayInputStream(request),
-                    output = ThrowingOutputStream(writeFailure),
-                ),
-            )
-        }
+        val thrown =
+            assertFailsWith<IOException> {
+                handler(
+                    httpConnector = ThrowingHttpConnector(),
+                    connectConnector = ThrowingConnectConnector(),
+                    managementHandler =
+                        RecordingManagementHandler(
+                            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+                        ),
+                    recordManagementAudit = auditEvents::add,
+                ).handle(
+                    config = config,
+                    activeConnections = 0,
+                    client =
+                        ProxyClientStreamConnection(
+                            input = ByteArrayInputStream(request),
+                            output = ThrowingOutputStream(writeFailure),
+                        ),
+                )
+            }
 
         assertSame(writeFailure, thrown)
         assertEquals(
@@ -448,30 +484,33 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact route rejection audit before response write failure`() {
-        val request = (
-            "POST /api/service/stop?reason=local HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop?reason=local HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
         val writeFailure = IOException("client disconnected")
 
-        val thrown = assertFailsWith<IOException> {
-            handler(
-                httpConnector = ThrowingHttpConnector(),
-                connectConnector = ThrowingConnectConnector(),
-                managementHandler = ThrowingManagementHandler(),
-                recordManagementAudit = auditEvents::add,
-            ).handle(
-                config = config,
-                activeConnections = 0,
-                client = ProxyClientStreamConnection(
-                    input = ByteArrayInputStream(request),
-                    output = ThrowingOutputStream(writeFailure),
-                ),
-            )
-        }
+        val thrown =
+            assertFailsWith<IOException> {
+                handler(
+                    httpConnector = ThrowingHttpConnector(),
+                    connectConnector = ThrowingConnectConnector(),
+                    managementHandler = ThrowingManagementHandler(),
+                    recordManagementAudit = auditEvents::add,
+                ).handle(
+                    config = config,
+                    activeConnections = 0,
+                    client =
+                        ProxyClientStreamConnection(
+                            input = ByteArrayInputStream(request),
+                            output = ThrowingOutputStream(writeFailure),
+                        ),
+                )
+            }
 
         assertSame(writeFailure, thrown)
         assertEquals(
@@ -489,29 +528,32 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `records local high impact authorization rejection audit before response write failure`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
         val writeFailure = IOException("client disconnected")
 
-        val thrown = assertFailsWith<IOException> {
-            handler(
-                httpConnector = ThrowingHttpConnector(),
-                connectConnector = ThrowingConnectConnector(),
-                managementHandler = ThrowingManagementHandler(),
-                recordManagementAudit = auditEvents::add,
-            ).handle(
-                config = config,
-                activeConnections = 0,
-                client = ProxyClientStreamConnection(
-                    input = ByteArrayInputStream(request),
-                    output = ThrowingOutputStream(writeFailure),
-                ),
-            )
-        }
+        val thrown =
+            assertFailsWith<IOException> {
+                handler(
+                    httpConnector = ThrowingHttpConnector(),
+                    connectConnector = ThrowingConnectConnector(),
+                    managementHandler = ThrowingManagementHandler(),
+                    recordManagementAudit = auditEvents::add,
+                ).handle(
+                    config = config,
+                    activeConnections = 0,
+                    client =
+                        ProxyClientStreamConnection(
+                            input = ByteArrayInputStream(request),
+                            output = ThrowingOutputStream(writeFailure),
+                        ),
+                )
+            }
 
         assertSame(writeFailure, thrown)
         assertEquals(
@@ -529,35 +571,39 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `does not track management exchanges as active proxy traffic`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val output = ByteArrayOutputStream()
         val tracker = ProxyTrafficActivityTracker()
         val observedActiveProxyExchanges = mutableListOf<Long>()
-        val managementHandler = RecordingManagementHandler(
-            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-            onHandle = {
-                observedActiveProxyExchanges += tracker.activeProxyExchanges
-            },
-        )
+        val managementHandler =
+            RecordingManagementHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+                onHandle = {
+                    observedActiveProxyExchanges += tracker.activeProxyExchanges
+                },
+            )
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = managementHandler,
-            proxyActivityTracker = tracker,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = output,
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = managementHandler,
+                proxyActivityTracker = tracker,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = output,
+                    ),
+            )
 
         assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         assertEquals(listOf(0L), observedActiveProxyExchanges)
@@ -567,19 +613,21 @@ class ProxyClientStreamExchangeHandlerTest {
     @Test
     fun `does not track preflight rejections as active proxy traffic`() {
         val tracker = ProxyTrafficActivityTracker()
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-            proxyActivityTracker = tracker,
-        ).handle(
-            config = config,
-            activeConnections = 2,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream("not consumed".toByteArray(Charsets.US_ASCII)),
-                output = ByteArrayOutputStream(),
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+                proxyActivityTracker = tracker,
+            ).handle(
+                config = config,
+                activeConnections = 2,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream("not consumed".toByteArray(Charsets.US_ASCII)),
+                        output = ByteArrayOutputStream(),
+                    ),
+            )
 
         assertIs<ProxyClientStreamExchangeHandlingResult.PreflightRejected>(result)
         assertEquals(0, tracker.activeProxyExchanges)
@@ -587,36 +635,40 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `continues handling when metric callback throws an ordinary exception`() {
-        val request = (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
+        val request =
+            (
+                "POST /api/service/stop HTTP/1.1\r\n" +
+                    "Host: phone.local\r\n" +
+                    "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+                    "\r\n"
             ).toByteArray(Charsets.US_ASCII)
         val output = ByteArrayOutputStream()
         val metricEvents = mutableListOf<ProxyTrafficMetricsEvent>()
-        val managementHandler = RecordingManagementHandler(
-            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-        )
+        val managementHandler =
+            RecordingManagementHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            )
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = managementHandler,
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = ByteArrayInputStream(request),
-                output = output,
-            ),
-            recordMetricEvent = { event ->
-                metricEvents.add(event)
-                if (event is ProxyTrafficMetricsEvent.BytesReceived) {
-                    throw IllegalStateException("metrics sink unavailable")
-                }
-            },
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = managementHandler,
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = ByteArrayInputStream(request),
+                        output = output,
+                    ),
+                recordMetricEvent = { event ->
+                    metricEvents.add(event)
+                    if (event is ProxyTrafficMetricsEvent.BytesReceived) {
+                        throw IllegalStateException("metrics sink unavailable")
+                    }
+                },
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ManagementHandled>(result)
         val responded = assertIs<ManagementApiStreamExchangeHandlingResult.Responded>(handled.result)
@@ -636,44 +688,48 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `dispatches admitted CONNECT streams to tunnel relay handler with client shutdown hooks`() {
-        val request = (
-            "CONNECT origin.example:443 HTTP/1.1\r\n" +
-                "Host: origin.example:443\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n" +
-                "client bytes"
+        val request =
+            (
+                "CONNECT origin.example:443 HTTP/1.1\r\n" +
+                    "Host: origin.example:443\r\n" +
+                    "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                    "\r\n" +
+                    "client bytes"
             ).toByteArray(Charsets.US_ASCII)
         val input = CloseTrackingInputStream(request)
         val output = CloseTrackingOutputStream()
         var clientInputShutdowns = 0
         var clientOutputShutdowns = 0
         val originOutput = ByteArrayOutputStream()
-        val connectConnector = RecordingConnectConnector(
-            OutboundConnectTunnelOpenResult.Connected(
-                OutboundConnectTunnelConnection(
-                    input = ByteArrayInputStream("origin bytes".toByteArray(Charsets.US_ASCII)),
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 443,
+        val connectConnector =
+            RecordingConnectConnector(
+                OutboundConnectTunnelOpenResult.Connected(
+                    OutboundConnectTunnelConnection(
+                        input = ByteArrayInputStream("origin bytes".toByteArray(Charsets.US_ASCII)),
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = handler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = connectConnector,
-            managementHandler = ThrowingManagementHandler(),
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = input,
-                output = output,
-                shutdownInputAction = { clientInputShutdowns += 1 },
-                shutdownOutputAction = { clientOutputShutdowns += 1 },
-            ),
-            connectRelayBufferSize = 4,
-        )
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = connectConnector,
+                managementHandler = ThrowingManagementHandler(),
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = input,
+                        output = output,
+                        shutdownInputAction = { clientInputShutdowns += 1 },
+                        shutdownOutputAction = { clientOutputShutdowns += 1 },
+                    ),
+                connectRelayBufferSize = 4,
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.ConnectTunnelHandled>(result)
         val relayed = assertIs<ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed>(handled.result)
@@ -697,42 +753,46 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `clears header read timeout after accepting request before forwarding body`() {
-        val request = (
-            "POST http://origin.example/upload HTTP/1.1\r\n" +
-                "Host: origin.example\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "Content-Length: 4\r\n" +
-                "\r\n" +
-                "BODY"
+        val request =
+            (
+                "POST http://origin.example/upload HTTP/1.1\r\n" +
+                    "Host: origin.example\r\n" +
+                    "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                    "Content-Length: 4\r\n" +
+                    "\r\n" +
+                    "BODY"
             ).toByteArray(Charsets.US_ASCII)
         val input = ByteArrayInputStream(request)
         val output = ByteArrayOutputStream()
         val timeoutValues = mutableListOf<Int>()
         val originOutput = ByteArrayOutputStream()
-        val httpConnector = RecordingHttpConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-                    output = originOutput,
-                    host = "origin.example",
-                    port = 80,
+        val httpConnector =
+            RecordingHttpConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                        output = originOutput,
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-        )
+            )
 
-        val result = handler(
-            httpConnector = httpConnector,
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = ThrowingManagementHandler(),
-        ).handle(
-            config = config,
-            activeConnections = 0,
-            client = ProxyClientStreamConnection(
-                input = input,
-                output = output,
-                setReadTimeoutMillisAction = { timeoutValues.add(it) },
-            ),
-        )
+        val result =
+            handler(
+                httpConnector = httpConnector,
+                connectConnector = ThrowingConnectConnector(),
+                managementHandler = ThrowingManagementHandler(),
+            ).handle(
+                config = config,
+                activeConnections = 0,
+                client =
+                    ProxyClientStreamConnection(
+                        input = input,
+                        output = output,
+                        setReadTimeoutMillisAction = { timeoutValues.add(it) },
+                    ),
+            )
 
         val handled = assertIs<ProxyClientStreamExchangeHandlingResult.HttpProxyHandled>(result)
         assertIs<HttpProxyOutboundExchangeHandlingResult.Forwarded>(handled.result)
@@ -742,25 +802,27 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `rejects invalid HTTP tunables before consuming client bytes or opening origin`() {
-        val request = (
-            "GET http://origin.example/resource HTTP/1.1\r\n" +
-                "Host: origin.example\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n" +
-                "BODY"
+        val request =
+            (
+                "GET http://origin.example/resource HTTP/1.1\r\n" +
+                    "Host: origin.example\r\n" +
+                    "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                    "\r\n" +
+                    "BODY"
             ).toByteArray(Charsets.US_ASCII)
         val input = ByteArrayInputStream(request)
         val output = ByteArrayOutputStream()
-        val connector = RecordingHttpConnector(
-            OutboundHttpOriginOpenResult.Connected(
-                OutboundHttpOriginConnection(
-                    input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
-                    output = ByteArrayOutputStream(),
-                    host = "origin.example",
-                    port = 80,
+        val connector =
+            RecordingHttpConnector(
+                OutboundHttpOriginOpenResult.Connected(
+                    OutboundHttpOriginConnection(
+                        input = ByteArrayInputStream("HTTP/1.1 204 No Content\r\n\r\n".toByteArray(Charsets.US_ASCII)),
+                        output = ByteArrayOutputStream(),
+                        host = "origin.example",
+                        port = 80,
+                    ),
                 ),
-            ),
-        )
+            )
 
         assertFailsWith<IllegalArgumentException> {
             handler(
@@ -782,25 +844,27 @@ class ProxyClientStreamExchangeHandlerTest {
 
     @Test
     fun `rejects invalid CONNECT relay tunables before consuming client bytes or opening origin`() {
-        val request = (
-            "CONNECT origin.example:443 HTTP/1.1\r\n" +
-                "Host: origin.example:443\r\n" +
-                "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
-                "\r\n" +
-                "client bytes"
+        val request =
+            (
+                "CONNECT origin.example:443 HTTP/1.1\r\n" +
+                    "Host: origin.example:443\r\n" +
+                    "Proxy-Authorization: ${validProxyAuthorization()}\r\n" +
+                    "\r\n" +
+                    "client bytes"
             ).toByteArray(Charsets.US_ASCII)
         val input = ByteArrayInputStream(request)
         val output = ByteArrayOutputStream()
-        val connector = RecordingConnectConnector(
-            OutboundConnectTunnelOpenResult.Connected(
-                OutboundConnectTunnelConnection(
-                    input = ByteArrayInputStream(ByteArray(0)),
-                    output = ByteArrayOutputStream(),
-                    host = "origin.example",
-                    port = 443,
+        val connector =
+            RecordingConnectConnector(
+                OutboundConnectTunnelOpenResult.Connected(
+                    OutboundConnectTunnelConnection(
+                        input = ByteArrayInputStream(ByteArray(0)),
+                        output = ByteArrayOutputStream(),
+                        host = "origin.example",
+                        port = 443,
+                    ),
                 ),
-            ),
-        )
+            )
 
         assertFailsWith<IllegalArgumentException> {
             handler(
@@ -904,8 +968,11 @@ class ProxyClientStreamExchangeHandlerTest {
 
         override fun read(): Int = delegate.read()
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-            delegate.read(buffer, offset, length)
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = delegate.read(buffer, offset, length)
 
         override fun close() {
             wasClosed = true
@@ -922,7 +989,11 @@ class ProxyClientStreamExchangeHandlerTest {
             delegate.write(value)
         }
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ) {
             delegate.write(buffer, offset, length)
         }
 
@@ -937,13 +1008,13 @@ class ProxyClientStreamExchangeHandlerTest {
     private class ThrowingOutputStream(
         private val failure: IOException,
     ) : OutputStream() {
-        override fun write(value: Int) {
-            throw failure
-        }
+        override fun write(value: Int): Unit = throw failure
 
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
-            throw failure
-        }
+        override fun write(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Unit = throw failure
     }
 }
 

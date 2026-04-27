@@ -25,10 +25,11 @@ class RotationPublicIpProbeCoordinator(
             "Rotation public IP probe observation elapsed millis must not be negative"
         }
 
-        val decision = probeController.probeOldPublicIp(
-            route = route,
-            endpoint = endpoint,
-        )
+        val decision =
+            probeController.probeOldPublicIp(
+                route = route,
+                endpoint = endpoint,
+            )
         return applyIfCurrent(
             expectedSnapshot = expectedSnapshot,
             decision = decision,
@@ -52,11 +53,12 @@ class RotationPublicIpProbeCoordinator(
             "Rotation public IP probe observation elapsed millis must not be negative"
         }
 
-        val decision = probeController.probeNewPublicIp(
-            route = route,
-            endpoint = endpoint,
-            strictIpChangeRequired = strictIpChangeRequired,
-        )
+        val decision =
+            probeController.probeNewPublicIp(
+                route = route,
+                endpoint = endpoint,
+                strictIpChangeRequired = strictIpChangeRequired,
+            )
         return applyIfCurrent(
             expectedSnapshot = expectedSnapshot,
             decision = decision,
@@ -99,10 +101,11 @@ class RotationPublicIpProbeCoordinator(
 
             RotationPublicIpProbeAdvanceResult.Applied(
                 decision = decision,
-                progress = controlPlane.applyProgress(
-                    event = decision.event,
-                    nowElapsedMillis = nowElapsedMillis,
-                ),
+                progress =
+                    controlPlane.applyProgress(
+                        event = decision.event,
+                        nowElapsedMillis = nowElapsedMillis,
+                    ),
             )
         }
 }

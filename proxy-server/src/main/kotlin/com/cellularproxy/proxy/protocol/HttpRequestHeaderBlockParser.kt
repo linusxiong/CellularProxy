@@ -9,7 +9,9 @@ data class ParsedHttpRequest(
 )
 
 sealed interface HttpRequestHeaderBlockParseResult {
-    data class Accepted(val request: ParsedHttpRequest) : HttpRequestHeaderBlockParseResult
+    data class Accepted(
+        val request: ParsedHttpRequest,
+    ) : HttpRequestHeaderBlockParseResult
 
     data class Rejected(
         val reason: HttpRequestHeaderBlockRejectionReason,
@@ -43,8 +45,9 @@ object HttpRequestHeaderBlockParser {
             return HttpRequestHeaderBlockParseResult.Rejected(HttpRequestHeaderBlockRejectionReason.HeaderBlockTooLarge)
         }
 
-        val headerTerminator = headerBlock.headerTerminator()
-            ?: return HttpRequestHeaderBlockParseResult.Rejected(HttpRequestHeaderBlockRejectionReason.IncompleteHeaderBlock)
+        val headerTerminator =
+            headerBlock.headerTerminator()
+                ?: return HttpRequestHeaderBlockParseResult.Rejected(HttpRequestHeaderBlockRejectionReason.IncompleteHeaderBlock)
         if (headerTerminator.endIndex != headerBlock.length) {
             return HttpRequestHeaderBlockParseResult.Rejected(HttpRequestHeaderBlockRejectionReason.MalformedHeader)
         }
@@ -58,14 +61,15 @@ object HttpRequestHeaderBlockParser {
             )
         }
 
-        val request = when (val requestLine = ProxyRequestLineParser.parse(lines.first())) {
-            is ProxyRequestLineParseResult.Accepted -> requestLine.request
-            is ProxyRequestLineParseResult.Rejected ->
-                return HttpRequestHeaderBlockParseResult.Rejected(
-                    reason = HttpRequestHeaderBlockRejectionReason.RequestLineRejected,
-                    requestLineRejectionReason = requestLine.reason,
-                )
-        }
+        val request =
+            when (val requestLine = ProxyRequestLineParser.parse(lines.first())) {
+                is ProxyRequestLineParseResult.Accepted -> requestLine.request
+                is ProxyRequestLineParseResult.Rejected ->
+                    return HttpRequestHeaderBlockParseResult.Rejected(
+                        reason = HttpRequestHeaderBlockRejectionReason.RequestLineRejected,
+                        requestLineRejectionReason = requestLine.reason,
+                    )
+            }
 
         val headers = linkedMapOf<String, MutableList<String>>()
         for (line in lines.drop(1)) {
@@ -115,14 +119,11 @@ object HttpRequestHeaderBlockParser {
         }
     }
 
-    private fun String.isHttpToken(): Boolean =
-        isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+    private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-    private fun String.trimHorizontalWhitespace(): String =
-        trim { it == ' ' || it == '\t' }
+    private fun String.trimHorizontalWhitespace(): String = trim { it == ' ' || it == '\t' }
 
-    private fun Char.isDisallowedHeaderValueControl(): Boolean =
-        code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
+    private fun Char.isDisallowedHeaderValueControl(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 }
 
 private data class HeaderTerminator(
@@ -140,9 +141,10 @@ private const val CRLF_TERMINATOR = "\r\n\r\n"
 private const val LF_TERMINATOR = "\n\n"
 private const val DELETE_CONTROL_CHAR = 0x7F
 private val CONTROL_CHAR_RANGE = 0x00..0x1F
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).toSet()
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).toSet()

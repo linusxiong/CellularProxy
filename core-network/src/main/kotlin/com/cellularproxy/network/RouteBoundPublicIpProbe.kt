@@ -45,12 +45,13 @@ class RouteBoundPublicIpProbe(
         endpoint: PublicIpProbeEndpoint,
     ): PublicIpProbeResult =
         when (
-            val connectResult = socketProvider.connect(
-                route = route,
-                host = endpoint.host,
-                port = endpoint.port,
-                timeoutMillis = endpoint.timeoutMillis,
-            )
+            val connectResult =
+                socketProvider.connect(
+                    route = route,
+                    host = endpoint.host,
+                    port = endpoint.port,
+                    timeoutMillis = endpoint.timeoutMillis,
+                )
         ) {
             is BoundSocketConnectResult.Failed ->
                 PublicIpProbeResult.Failed(connectResult.reason.toPublicIpProbeFailure())
@@ -136,15 +137,14 @@ private fun PublicIpProbeEndpoint.toHttpRequestBytes(): ByteArray =
             "Accept: text/plain\r\n" +
             "Connection: close\r\n" +
             "\r\n"
-        ).toByteArray(Charsets.US_ASCII)
+    ).toByteArray(Charsets.US_ASCII)
 
 private fun PublicIpProbeEndpoint.hostHeaderValue(): String =
     hostForHeader().let { hostForHeader ->
         if (port == DEFAULT_PUBLIC_IP_PROBE_PORT) hostForHeader else "$hostForHeader:$port"
     }
 
-private fun PublicIpProbeEndpoint.hostForHeader(): String =
-    if (host.contains(":")) "[$host]" else host
+private fun PublicIpProbeEndpoint.hostForHeader(): String = if (host.contains(":")) "[$host]" else host
 
 private fun Socket.readResponseBytes(maxResponseBytes: Int): ByteArray {
     val output = ByteArrayOutputStream()
@@ -165,19 +165,25 @@ private fun parseProbeResponse(
     bytes: ByteArray,
     network: NetworkDescriptor,
 ): PublicIpProbeResult {
-    val headerEnd = findHeaderEnd(bytes)
-        ?: return PublicIpProbeResult.Failed(PublicIpProbeFailure.MalformedHttpResponse, network)
-    val headerText = bytes.copyOfRange(0, headerEnd.headerBytesEnd)
-        .toString(Charsets.US_ASCII)
-    val statusCode = parseStatusCode(headerText.lineSequence().firstOrNull())
-        ?: return PublicIpProbeResult.Failed(PublicIpProbeFailure.MalformedHttpResponse, network)
+    val headerEnd =
+        findHeaderEnd(bytes)
+            ?: return PublicIpProbeResult.Failed(PublicIpProbeFailure.MalformedHttpResponse, network)
+    val headerText =
+        bytes
+            .copyOfRange(0, headerEnd.headerBytesEnd)
+            .toString(Charsets.US_ASCII)
+    val statusCode =
+        parseStatusCode(headerText.lineSequence().firstOrNull())
+            ?: return PublicIpProbeResult.Failed(PublicIpProbeFailure.MalformedHttpResponse, network)
     if (statusCode !in SUCCESS_STATUS_RANGE) {
         return PublicIpProbeResult.Failed(PublicIpProbeFailure.NonSuccessStatus, network)
     }
 
-    val body = bytes.copyOfRange(headerEnd.bodyStart, bytes.size)
-        .toString(Charsets.UTF_8)
-        .trim()
+    val body =
+        bytes
+            .copyOfRange(headerEnd.bodyStart, bytes.size)
+            .toString(Charsets.UTF_8)
+            .trim()
     if (!isValidPublicIp(body)) {
         return PublicIpProbeResult.Failed(PublicIpProbeFailure.InvalidPublicIp, network)
     }
@@ -227,8 +233,7 @@ private fun parseStatusCode(statusLine: String?): Int? {
     return parts.getOrNull(1)?.toIntOrNull()
 }
 
-private fun isValidPublicIp(value: String): Boolean =
-    isValidIpv4(value) || isValidIpv6(value)
+private fun isValidPublicIp(value: String): Boolean = isValidIpv4(value) || isValidIpv6(value)
 
 private fun isValidIpv4(value: String): Boolean {
     val octets = value.split(".")

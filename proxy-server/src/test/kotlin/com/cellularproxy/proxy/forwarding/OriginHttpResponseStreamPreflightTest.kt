@@ -17,11 +17,12 @@ class OriginHttpResponseStreamPreflightTest {
 
         assertEquals(
             OriginHttpResponseStreamPreflightResult.Accepted(
-                response = ParsedHttpResponse(
-                    statusCode = 200,
-                    reasonPhrase = "OK",
-                    headers = mapOf("content-length" to listOf("4")),
-                ),
+                response =
+                    ParsedHttpResponse(
+                        statusCode = 200,
+                        reasonPhrase = "OK",
+                        headers = mapOf("content-length" to listOf("4")),
+                    ),
                 headerBytesRead = headerBytes.size,
             ),
             result,
@@ -49,10 +50,11 @@ class OriginHttpResponseStreamPreflightTest {
     fun `rejects oversized origin response headers without reading past byte limit`() {
         val input = ByteArrayInputStream("HTTP/1.1 200 OK\r\nx: y\r\n\r\nbody".toByteArray(Charsets.UTF_8))
 
-        val result = OriginHttpResponseStreamPreflight.evaluate(
-            input = input,
-            maxHeaderBytes = 12,
-        )
+        val result =
+            OriginHttpResponseStreamPreflight.evaluate(
+                input = input,
+                maxHeaderBytes = 12,
+            )
 
         assertEquals(
             OriginHttpResponseStreamPreflightResult.Rejected(
@@ -66,17 +68,20 @@ class OriginHttpResponseStreamPreflightTest {
 
     @Test
     fun `accepted result diagnostics do not include origin-controlled response data`() {
-        val result = OriginHttpResponseStreamPreflightResult.Accepted(
-            response = ParsedHttpResponse(
-                statusCode = 302,
-                reasonPhrase = "Redirect contains origin text",
-                headers = mapOf(
-                    "set-cookie" to listOf("session=secret"),
-                    "location" to listOf("https://origin.example/sensitive"),
-                ),
-            ),
-            headerBytesRead = 96,
-        )
+        val result =
+            OriginHttpResponseStreamPreflightResult.Accepted(
+                response =
+                    ParsedHttpResponse(
+                        statusCode = 302,
+                        reasonPhrase = "Redirect contains origin text",
+                        headers =
+                            mapOf(
+                                "set-cookie" to listOf("session=secret"),
+                                "location" to listOf("https://origin.example/sensitive"),
+                            ),
+                    ),
+                headerBytesRead = 96,
+            )
 
         val diagnostic = result.toString()
 
@@ -88,30 +93,31 @@ class OriginHttpResponseStreamPreflightTest {
 
     @Test
     fun `rejects malformed UTF-8 origin response headers without exposing raw bytes`() {
-        val input = ByteArrayInputStream(
-            byteArrayOf(
-                'H'.code.toByte(),
-                'T'.code.toByte(),
-                'T'.code.toByte(),
-                'P'.code.toByte(),
-                '/'.code.toByte(),
-                '1'.code.toByte(),
-                '.'.code.toByte(),
-                '1'.code.toByte(),
-                ' '.code.toByte(),
-                '2'.code.toByte(),
-                '0'.code.toByte(),
-                '0'.code.toByte(),
-                ' '.code.toByte(),
-                0xC3.toByte(),
-                0x28.toByte(),
-                '\r'.code.toByte(),
-                '\n'.code.toByte(),
-                '\r'.code.toByte(),
-                '\n'.code.toByte(),
-                'b'.code.toByte(),
-            ),
-        )
+        val input =
+            ByteArrayInputStream(
+                byteArrayOf(
+                    'H'.code.toByte(),
+                    'T'.code.toByte(),
+                    'T'.code.toByte(),
+                    'P'.code.toByte(),
+                    '/'.code.toByte(),
+                    '1'.code.toByte(),
+                    '.'.code.toByte(),
+                    '1'.code.toByte(),
+                    ' '.code.toByte(),
+                    '2'.code.toByte(),
+                    '0'.code.toByte(),
+                    '0'.code.toByte(),
+                    ' '.code.toByte(),
+                    0xC3.toByte(),
+                    0x28.toByte(),
+                    '\r'.code.toByte(),
+                    '\n'.code.toByte(),
+                    '\r'.code.toByte(),
+                    '\n'.code.toByte(),
+                    'b'.code.toByte(),
+                ),
+            )
 
         val result = OriginHttpResponseStreamPreflight.evaluate(input)
 
@@ -134,9 +140,10 @@ class OriginHttpResponseStreamPreflightTest {
 
         assertEquals(
             OriginHttpResponseStreamPreflightResult.Rejected(
-                reason = OriginHttpResponseStreamPreflightRejectionReason.HeaderParseRejected(
-                    HttpResponseHeaderBlockRejectionReason.MalformedStatusLine,
-                ),
+                reason =
+                    OriginHttpResponseStreamPreflightRejectionReason.HeaderParseRejected(
+                        HttpResponseHeaderBlockRejectionReason.MalformedStatusLine,
+                    ),
                 headerBytesRead = headerBlock.toByteArray(Charsets.UTF_8).size,
             ),
             result,

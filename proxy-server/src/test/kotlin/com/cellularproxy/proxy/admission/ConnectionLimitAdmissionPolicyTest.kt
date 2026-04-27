@@ -10,10 +10,11 @@ class ConnectionLimitAdmissionPolicyTest {
     fun `accepts connections below the configured maximum`() {
         val config = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 3)
 
-        val decision = ConnectionLimitAdmissionPolicy.evaluate(
-            config = config,
-            activeConnections = 2,
-        )
+        val decision =
+            ConnectionLimitAdmissionPolicy.evaluate(
+                config = config,
+                activeConnections = 2,
+            )
 
         val accepted = assertIs<ConnectionLimitAdmissionDecision.Accepted>(decision)
         assertEquals(3, accepted.activeConnectionsAfterAdmission)
@@ -23,10 +24,11 @@ class ConnectionLimitAdmissionPolicyTest {
     fun `rejects connections at the configured maximum`() {
         val config = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 3)
 
-        val decision = ConnectionLimitAdmissionPolicy.evaluate(
-            config = config,
-            activeConnections = 3,
-        )
+        val decision =
+            ConnectionLimitAdmissionPolicy.evaluate(
+                config = config,
+                activeConnections = 3,
+            )
 
         assertEquals(
             ConnectionLimitAdmissionDecision.Rejected(
@@ -43,10 +45,11 @@ class ConnectionLimitAdmissionPolicyTest {
     fun `rejects connections above the configured maximum`() {
         val config = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 3)
 
-        val decision = ConnectionLimitAdmissionPolicy.evaluate(
-            config = config,
-            activeConnections = 4,
-        )
+        val decision =
+            ConnectionLimitAdmissionPolicy.evaluate(
+                config = config,
+                activeConnections = 4,
+            )
 
         assertEquals(
             ConnectionLimitAdmissionDecision.Rejected(

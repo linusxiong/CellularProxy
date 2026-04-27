@@ -42,5 +42,4 @@ internal class ForegroundServiceRuntimeCompositionOwner(
     }
 }
 
-private fun Throwable.isFatal(): Boolean =
-    this is VirtualMachineError || this is ThreadDeath || this is LinkageError
+private fun Throwable.isFatal(): Boolean = this is VirtualMachineError || this is ThreadDeath || this is LinkageError

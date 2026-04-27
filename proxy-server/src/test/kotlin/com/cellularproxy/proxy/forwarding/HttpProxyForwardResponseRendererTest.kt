@@ -9,18 +9,20 @@ import kotlin.test.assertFailsWith
 class HttpProxyForwardResponseRendererTest {
     @Test
     fun `renders sanitized origin response head without buffering the response body`() {
-        val head = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 200,
-                reasonPhrase = "OK",
-                headers = linkedMapOf(
-                    "connection" to listOf("X-Hop"),
-                    "x-hop" to listOf("remove-me"),
-                    "content-length" to listOf("5"),
-                    "content-type" to listOf("text/plain"),
+        val head =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers =
+                        linkedMapOf(
+                            "connection" to listOf("X-Hop"),
+                            "x-hop" to listOf("remove-me"),
+                            "content-length" to listOf("5"),
+                            "content-type" to listOf("text/plain"),
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(200, head.statusCode)
         assertEquals("OK", head.reasonPhrase)
@@ -36,13 +38,14 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `renders close-delimited origin response head without requiring body framing headers`() {
-        val head = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 200,
-                reasonPhrase = "OK",
-                headers = linkedMapOf("content-type" to listOf("text/plain")),
-            ),
-        )
+        val head =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers = linkedMapOf("content-type" to listOf("text/plain")),
+                ),
+            )
 
         assertEquals(
             "HTTP/1.1 200 OK\r\n" +
@@ -54,38 +57,44 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `strips response framing headers from no-body status heads except not-modified content length metadata`() {
-        val noContentHead = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 204,
-                reasonPhrase = "No Content",
-                headers = linkedMapOf(
-                    "content-length" to listOf("123"),
-                    "transfer-encoding" to listOf("chunked"),
-                    "x-safe" to listOf("keep"),
+        val noContentHead =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 204,
+                    reasonPhrase = "No Content",
+                    headers =
+                        linkedMapOf(
+                            "content-length" to listOf("123"),
+                            "transfer-encoding" to listOf("chunked"),
+                            "x-safe" to listOf("keep"),
+                        ),
                 ),
-            ),
-        )
-        val informationalHead = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 101,
-                reasonPhrase = "Switching Protocols",
-                headers = linkedMapOf(
-                    "content-length" to listOf("123"),
-                    "x-safe" to listOf("keep"),
+            )
+        val informationalHead =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 101,
+                    reasonPhrase = "Switching Protocols",
+                    headers =
+                        linkedMapOf(
+                            "content-length" to listOf("123"),
+                            "x-safe" to listOf("keep"),
+                        ),
                 ),
-            ),
-        )
-        val notModifiedHead = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 304,
-                reasonPhrase = "Not Modified",
-                headers = linkedMapOf(
-                    "content-length" to listOf("123"),
-                    "transfer-encoding" to listOf("chunked"),
-                    "x-safe" to listOf("keep"),
+            )
+        val notModifiedHead =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 304,
+                    reasonPhrase = "Not Modified",
+                    headers =
+                        linkedMapOf(
+                            "content-length" to listOf("123"),
+                            "transfer-encoding" to listOf("chunked"),
+                            "x-safe" to listOf("keep"),
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(
             "HTTP/1.1 204 No Content\r\n" +
@@ -110,17 +119,19 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `strips content length from transfer encoded response heads`() {
-        val head = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 200,
-                reasonPhrase = "OK",
-                headers = linkedMapOf(
-                    "transfer-encoding" to listOf("chunked"),
-                    "content-length" to listOf("999"),
-                    "content-type" to listOf("text/plain"),
+        val head =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers =
+                        linkedMapOf(
+                            "transfer-encoding" to listOf("chunked"),
+                            "content-length" to listOf("999"),
+                            "content-type" to listOf("text/plain"),
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(
             "HTTP/1.1 200 OK\r\n" +
@@ -133,16 +144,18 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `normalizes identical duplicate content length values in response heads`() {
-        val head = HttpProxyForwardResponseRenderer.renderHead(
-            ParsedHttpResponse(
-                statusCode = 200,
-                reasonPhrase = "OK",
-                headers = linkedMapOf(
-                    "content-length" to listOf("7", "7"),
-                    "content-type" to listOf("text/plain"),
+        val head =
+            HttpProxyForwardResponseRenderer.renderHead(
+                ParsedHttpResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers =
+                        linkedMapOf(
+                            "content-length" to listOf("7", "7"),
+                            "content-type" to listOf("text/plain"),
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(
             "HTTP/1.1 200 OK\r\n" +
@@ -182,10 +195,11 @@ class HttpProxyForwardResponseRendererTest {
             ForwardedHttpResponseHead(
                 statusCode = 200,
                 reasonPhrase = "OK",
-                headers = mapOf(
-                    "transfer-encoding" to listOf("chunked"),
-                    "content-length" to listOf("5"),
-                ),
+                headers =
+                    mapOf(
+                        "transfer-encoding" to listOf("chunked"),
+                        "content-length" to listOf("5"),
+                    ),
             )
         }
     }
@@ -193,11 +207,12 @@ class HttpProxyForwardResponseRendererTest {
     @Test
     fun `defensively snapshots forwarded response heads`() {
         val originalHeaders = linkedMapOf("content-length" to mutableListOf("2"))
-        val head = ForwardedHttpResponseHead(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = originalHeaders,
-        )
+        val head =
+            ForwardedHttpResponseHead(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = originalHeaders,
+            )
 
         originalHeaders["content-length"]?.set(0, "4")
 
@@ -244,15 +259,17 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `renders fixed-length origin response to the proxy client`() {
-        val response = HttpProxyForwardResponseRenderer.render(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf(
-                "content-length" to listOf("5"),
-                "content-type" to listOf("text/plain"),
-            ),
-            body = "hello".toByteArray(Charsets.UTF_8),
-        )
+        val response =
+            HttpProxyForwardResponseRenderer.render(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers =
+                    linkedMapOf(
+                        "content-length" to listOf("5"),
+                        "content-type" to listOf("text/plain"),
+                    ),
+                body = "hello".toByteArray(Charsets.UTF_8),
+            )
 
         assertEquals(200, response.statusCode)
         assertEquals("OK", response.reasonPhrase)
@@ -269,22 +286,24 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `strips hop-by-hop response headers before forwarding to the proxy client`() {
-        val response = HttpProxyForwardResponseRenderer.render(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf(
-                "connection" to listOf("keep-alive"),
-                "keep-alive" to listOf("timeout=5"),
-                "proxy-authenticate" to listOf("Basic realm=\"origin\""),
-                "proxy-connection" to listOf("keep-alive"),
-                "te" to listOf("trailers"),
-                "trailer" to listOf("x-checksum"),
-                "upgrade" to listOf("websocket"),
-                "content-length" to listOf("2"),
-                "x-end-to-end" to listOf("preserve-me"),
-            ),
-            body = "ok".toByteArray(Charsets.UTF_8),
-        )
+        val response =
+            HttpProxyForwardResponseRenderer.render(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers =
+                    linkedMapOf(
+                        "connection" to listOf("keep-alive"),
+                        "keep-alive" to listOf("timeout=5"),
+                        "proxy-authenticate" to listOf("Basic realm=\"origin\""),
+                        "proxy-connection" to listOf("keep-alive"),
+                        "te" to listOf("trailers"),
+                        "trailer" to listOf("x-checksum"),
+                        "upgrade" to listOf("websocket"),
+                        "content-length" to listOf("2"),
+                        "x-end-to-end" to listOf("preserve-me"),
+                    ),
+                body = "ok".toByteArray(Charsets.UTF_8),
+            )
 
         val rendered = response.toHttpString()
 
@@ -302,18 +321,20 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `strips headers nominated by the connection response header`() {
-        val response = HttpProxyForwardResponseRenderer.render(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf(
-                "connection" to listOf("X-Hop, keep-alive", "X-Trace"),
-                "x-hop" to listOf("remove-me"),
-                "x-trace" to listOf("remove-too"),
-                "x-end-to-end" to listOf("preserve-me"),
-                "content-length" to listOf("2"),
-            ),
-            body = "ok".toByteArray(Charsets.UTF_8),
-        )
+        val response =
+            HttpProxyForwardResponseRenderer.render(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers =
+                    linkedMapOf(
+                        "connection" to listOf("X-Hop, keep-alive", "X-Trace"),
+                        "x-hop" to listOf("remove-me"),
+                        "x-trace" to listOf("remove-too"),
+                        "x-end-to-end" to listOf("preserve-me"),
+                        "content-length" to listOf("2"),
+                    ),
+                body = "ok".toByteArray(Charsets.UTF_8),
+            )
 
         val rendered = response.toHttpString()
 
@@ -329,15 +350,17 @@ class HttpProxyForwardResponseRendererTest {
     fun `preserves transfer-encoded response framing and byte body`() {
         val chunkedBody = "5\r\nhello\r\n0\r\n\r\n".toByteArray(Charsets.UTF_8)
 
-        val response = HttpProxyForwardResponseRenderer.render(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf(
-                "transfer-encoding" to listOf("chunked"),
-                "content-type" to listOf("text/plain"),
-            ),
-            body = chunkedBody,
-        )
+        val response =
+            HttpProxyForwardResponseRenderer.render(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers =
+                    linkedMapOf(
+                        "transfer-encoding" to listOf("chunked"),
+                        "content-type" to listOf("text/plain"),
+                    ),
+                body = chunkedBody,
+            )
 
         assertEquals(
             (
@@ -345,7 +368,7 @@ class HttpProxyForwardResponseRendererTest {
                     "transfer-encoding: chunked\r\n" +
                     "content-type: text/plain\r\n" +
                     "\r\n"
-                ).toByteArray(Charsets.UTF_8).toList() + chunkedBody.toList(),
+            ).toByteArray(Charsets.UTF_8).toList() + chunkedBody.toList(),
             response.toByteArray().toList(),
         )
     }
@@ -416,12 +439,13 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `allows empty not modified responses to preserve origin content length metadata`() {
-        val response = ForwardedHttpResponse(
-            statusCode = 304,
-            reasonPhrase = "Not Modified",
-            headers = linkedMapOf("content-length" to listOf("123")),
-            body = ByteArray(0),
-        )
+        val response =
+            ForwardedHttpResponse(
+                statusCode = 304,
+                reasonPhrase = "Not Modified",
+                headers = linkedMapOf("content-length" to listOf("123")),
+                body = ByteArray(0),
+            )
 
         assertEquals(
             "HTTP/1.1 304 Not Modified\r\n" +
@@ -445,12 +469,13 @@ class HttpProxyForwardResponseRendererTest {
 
     @Test
     fun `allows empty reason phrases from origin responses`() {
-        val response = ForwardedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "",
-            headers = linkedMapOf("content-length" to listOf("2")),
-            body = "ok".toByteArray(Charsets.UTF_8),
-        )
+        val response =
+            ForwardedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "",
+                headers = linkedMapOf("content-length" to listOf("2")),
+                body = "ok".toByteArray(Charsets.UTF_8),
+            )
 
         assertEquals(
             "HTTP/1.1 200 \r\n" +
@@ -491,10 +516,11 @@ class HttpProxyForwardResponseRendererTest {
             ForwardedHttpResponse(
                 statusCode = 200,
                 reasonPhrase = "OK",
-                headers = linkedMapOf(
-                    "content-length" to listOf("2"),
-                    "transfer-encoding" to listOf("chunked"),
-                ),
+                headers =
+                    linkedMapOf(
+                        "content-length" to listOf("2"),
+                        "transfer-encoding" to listOf("chunked"),
+                    ),
                 body = "ok".toByteArray(Charsets.UTF_8),
             )
         }
@@ -511,12 +537,13 @@ class HttpProxyForwardResponseRendererTest {
     @Test
     fun `defensively snapshots forwarded response bodies`() {
         val originalBody = "ok".toByteArray(Charsets.UTF_8)
-        val response = ForwardedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("content-length" to listOf("2")),
-            body = originalBody,
-        )
+        val response =
+            ForwardedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("content-length" to listOf("2")),
+                body = originalBody,
+            )
 
         originalBody[0] = 'n'.code.toByte()
         response.body[1] = 'o'.code.toByte()
@@ -534,19 +561,20 @@ class HttpProxyForwardResponseRendererTest {
     @Test
     fun `byte rendering preserves non-utf8 response bodies and string rendering rejects them`() {
         val binaryBody = byteArrayOf(0x00, 0x7F, 0x80.toByte(), 0xFF.toByte())
-        val response = ForwardedHttpResponse(
-            statusCode = 200,
-            reasonPhrase = "OK",
-            headers = linkedMapOf("content-length" to listOf(binaryBody.size.toString())),
-            body = binaryBody,
-        )
+        val response =
+            ForwardedHttpResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("content-length" to listOf(binaryBody.size.toString())),
+                body = binaryBody,
+            )
 
         assertEquals(
             (
                 "HTTP/1.1 200 OK\r\n" +
                     "content-length: 4\r\n" +
                     "\r\n"
-                ).toByteArray(Charsets.UTF_8).toList() + binaryBody.toList(),
+            ).toByteArray(Charsets.UTF_8).toList() + binaryBody.toList(),
             response.toByteArray().toList(),
         )
         assertFailsWith<IllegalStateException> {

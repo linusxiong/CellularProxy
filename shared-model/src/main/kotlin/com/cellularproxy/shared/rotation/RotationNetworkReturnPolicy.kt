@@ -83,9 +83,10 @@ sealed interface RotationNetworkReturnDecision {
 }
 
 private val RouteTarget.networkCategory: NetworkCategory
-    get() = when (this) {
-        RouteTarget.WiFi -> NetworkCategory.WiFi
-        RouteTarget.Cellular -> NetworkCategory.Cellular
-        RouteTarget.Vpn -> NetworkCategory.Vpn
-        RouteTarget.Automatic -> error("Automatic route target does not map to one category")
-    }
+    get() =
+        when (this) {
+            RouteTarget.WiFi -> NetworkCategory.WiFi
+            RouteTarget.Cellular -> NetworkCategory.Cellular
+            RouteTarget.Vpn -> NetworkCategory.Vpn
+            RouteTarget.Automatic -> error("Automatic route target does not map to one category")
+        }

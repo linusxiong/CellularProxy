@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/main/kotlin/com/cellularproxy/proxy/admission/ProxyRequestAdmissionPolicy.kt">
+        <error line="57" column="39" source="standard:function-signature" />
+        <error line="154" column="125" source="standard:function-signature" />
+        <error line="162" column="48" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/errors/ProxyErrorResponseMapper.kt">
+        <error line="90" column="33" source="standard:function-signature" />
+        <error line="111" column="71" source="standard:function-signature" />
+        <error line="135" column="105" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/ConnectTunnelBidirectionalRelay.kt">
+        <error line="148" column="50" source="standard:function-signature" />
+        <error line="198" column="40" source="standard:function-signature" />
+        <error line="205" column="106" source="standard:function-signature" />
+        <error line="214" column="40" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/ConnectTunnelEstablishmentRenderer.kt">
+        <error line="55" column="33" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/ConnectTunnelOutboundExchangeHandler.kt">
+        <error line="75" column="82" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyForwardRequestRenderer.kt">
+        <error line="123" column="82" source="standard:function-signature" />
+        <error line="184" column="12" source="standard:function-signature" />
+        <error line="204" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyForwardResponseRenderer.kt">
+        <error line="142" column="78" source="standard:function-signature" />
+        <error line="153" column="35" source="standard:function-signature" />
+        <error line="165" column="31" source="standard:function-signature" />
+        <error line="209" column="90" source="standard:function-signature" />
+        <error line="219" column="91" source="standard:function-signature" />
+        <error line="258" column="12" source="standard:function-signature" />
+        <error line="288" column="49" source="standard:function-signature" />
+        <error line="366" column="55" source="standard:function-signature" />
+        <error line="378" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyOutboundExchangeHandler.kt">
+        <error line="65" column="79" source="standard:function-signature" />
+        <error line="154" column="59" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyRequestStreamForwarder.kt">
+        <error line="67" column="48" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyStreamExchangeForwarder.kt">
+        <error line="145" column="102" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/forwarding/OriginHttpResponseStreamPreflight.kt">
+        <error line="20" column="42" source="standard:function-signature" />
+        <error line="90" column="49" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/ingress/ProxyIngressPreflight.kt">
+        <error line="38" column="42" source="standard:function-signature" />
+        <error line="193" column="48" source="standard:function-signature" />
+        <error line="201" column="59" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/ingress/ProxyIngressStreamPreflight.kt">
+        <error line="26" column="42" source="standard:function-signature" />
+        <error line="125" column="45" source="standard:function-signature" />
+        <error line="154" column="54" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiCloudflareActionResponses.kt">
+        <error line="10" column="31" source="standard:function-signature" />
+        <error line="31" column="107" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiDispatcher.kt">
+        <error line="67" column="33" source="standard:function-signature" />
+        <error line="131" column="39" source="standard:function-signature" />
+        <error line="158" column="88" source="standard:function-signature" />
+        <error line="173" column="55" source="standard:function-signature" />
+        <error line="196" column="81" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiReadOnlyResponses.kt">
+        <error line="16" column="68" source="standard:function-signature" />
+        <error line="26" column="31" source="standard:function-signature" />
+        <error line="50" column="77" source="standard:function-signature" />
+        <error line="61" column="61" source="standard:function-signature" />
+        <error line="70" column="31" source="standard:function-signature" />
+        <error line="77" column="55" source="standard:function-signature" />
+        <error line="106" column="55" source="standard:function-signature" />
+        <error line="115" column="94" source="standard:function-signature" />
+        <error line="129" column="54" source="standard:function-signature" />
+        <error line="146" column="51" source="standard:function-signature" />
+        <error line="155" column="45" source="standard:function-signature" />
+        <error line="163" column="49" source="standard:function-signature" />
+        <error line="170" column="55" source="standard:function-signature" />
+        <error line="180" column="56" source="standard:function-signature" />
+        <error line="187" column="109" source="standard:function-signature" />
+        <error line="194" column="51" source="standard:function-signature" />
+        <error line="207" column="43" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiRotationActionResponses.kt">
+        <error line="11" column="78" source="standard:function-signature" />
+        <error line="30" column="57" source="standard:function-signature" />
+        <error line="53" column="63" source="standard:function-signature" />
+        <error line="61" column="47" source="standard:function-signature" />
+        <error line="79" column="51" source="standard:function-signature" />
+        <error line="85" column="55" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiServiceStopActionResponses.kt">
+        <error line="9" column="86" source="standard:function-signature" />
+        <error line="28" column="59" source="standard:function-signature" />
+        <error line="39" column="71" source="standard:function-signature" />
+        <error line="46" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiStateHandler.kt">
+        <error line="30" column="84" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/management/ManagementApiStreamExchangeHandler.kt">
+        <error line="161" column="112" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/metrics/ProxyTrafficMetricsReducer.kt">
+        <error line="33" column="29" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/protocol/HttpHeaderBlockStreamReader.kt">
+        <error line="88" column="17" source="standard:function-signature" />
+        <error line="97" column="58" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/protocol/HttpResponseBodyFramingPolicy.kt">
+        <error line="95" column="53" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyBoundClientConnectionHandler.kt">
+        <error line="128" column="50" source="standard:function-signature" />
+        <error line="154" column="73" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyBoundServerAcceptLoop.kt">
+        <error line="54" column="42" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyClientStreamExchangeHandler.kt">
+        <error line="33" column="75" source="standard:function-signature" />
+        <error line="213" column="49" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyClientStreamExchangeMetrics.kt">
+        <error line="22" column="101" source="standard:function-signature" />
+        <error line="36" column="113" source="standard:function-signature" />
+        <error line="52" column="115" source="standard:function-signature" />
+        <error line="77" column="40" source="standard:function-signature" />
+        <error line="83" column="91" source="standard:function-signature" />
+        <error line="92" column="40" source="standard:function-signature" />
+        <error line="111" column="82" source="standard:function-signature" />
+        <error line="118" column="78" source="standard:function-signature" />
+        <error line="125" column="82" source="standard:function-signature" />
+        <error line="133" column="78" source="standard:function-signature" />
+        <error line="142" column="81" source="standard:function-signature" />
+        <error line="149" column="78" source="standard:function-signature" />
+        <error line="157" column="91" source="standard:function-signature" />
+        <error line="165" column="87" source="standard:function-signature" />
+        <error line="173" column="80" source="standard:function-signature" />
+        <error line="179" column="87" source="standard:function-signature" />
+        <error line="182" column="87" source="standard:function-signature" />
+        <error line="194" column="59" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyServerRuntimeManagementCallbacks.kt">
+        <error line="31" column="32" source="standard:function-signature" />
+        <error line="72" column="32" source="standard:function-signature" />
+        <error line="116" column="30" source="standard:function-signature" />
+        <error line="128" column="111" source="standard:function-signature" />
+        <error line="142" column="36" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyServerRuntimeStartup.kt">
+        <error line="79" column="41" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyServerSocketBinder.kt">
+        <error line="137" column="68" source="standard:function-signature" />
+    </file>
+    <file name="src/main/kotlin/com/cellularproxy/proxy/server/ProxyTrafficActivityTracker.kt">
+        <error line="13" column="78" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/admission/ProxyRequestAdmissionPolicyTest.kt">
+        <error line="296" column="104" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/errors/ProxyErrorResponseMapperTest.kt">
+        <error line="221" column="90" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/forwarding/ConnectTunnelEstablishmentRendererTest.kt">
+        <error line="187" column="95" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/forwarding/ConnectTunnelOutboundExchangeHandlerTest.kt">
+        <error line="461" column="27" source="standard:function-signature" />
+        <error line="467" column="101" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyOutboundExchangeHandlerTest.kt">
+        <error line="324" column="27" source="standard:function-signature" />
+        <error line="336" column="101" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyRequestStreamForwarderTest.kt">
+        <error line="296" column="27" source="standard:function-signature" />
+        <error line="308" column="101" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyResponseStreamForwarderTest.kt">
+        <error line="315" column="28" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/forwarding/HttpProxyStreamExchangeForwarderTest.kt">
+        <error line="256" column="27" source="standard:function-signature" />
+        <error line="268" column="101" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/management/ManagementApiDispatcherTest.kt">
+        <error line="256" column="39" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/management/ManagementApiRouterTest.kt">
+        <error line="154" column="39" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/management/ManagementApiStateHandlerTest.kt">
+        <error line="277" column="103" source="standard:function-signature" />
+        <error line="322" column="50" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/management/ManagementApiStreamExchangeHandlerTest.kt">
+        <error line="147" column="102" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/protocol/HttpRequestBodyFramingPolicyTest.kt">
+        <error line="148" column="90" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyBoundClientConnectionHandlerTest.kt">
+        <error line="389" column="109" source="standard:function-signature" />
+        <error line="396" column="54" source="standard:function-signature" />
+        <error line="404" column="53" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyBoundServerAcceptLoopTest.kt">
+        <error line="586" column="109" source="standard:function-signature" />
+        <error line="593" column="54" source="standard:function-signature" />
+        <error line="659" column="52" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyClientConnectionLifecycleHandlerTest.kt">
+        <error line="217" column="101" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyClientStreamExchangeHandlerTest.kt">
+        <error line="893" column="42" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyRotationConnectionDrainCoordinatorTest.kt">
+        <error line="169" column="63" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyRotationPauseCoordinatorTest.kt">
+        <error line="200" column="63" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyRotationRequestPauseControllerTest.kt">
+        <error line="33" column="63" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyServerRuntimeManagementCallbacksTest.kt">
+        <error line="598" column="35" source="standard:function-signature" />
+        <error line="616" column="63" source="standard:function-signature" />
+        <error line="630" column="73" source="standard:function-signature" />
+        <error line="646" column="108" source="standard:function-signature" />
+        <error line="652" column="49" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyServerRuntimeStartupTest.kt">
+        <error line="139" column="49" source="standard:function-signature" />
+    </file>
+    <file name="src/test/kotlin/com/cellularproxy/proxy/server/ProxyServerRuntimeTest.kt">
+        <error line="395" column="63" source="standard:function-signature" />
+        <error line="411" column="43" source="standard:function-signature" />
+        <error line="427" column="108" source="standard:function-signature" />
+        <error line="434" column="49" source="standard:function-signature" />
+    </file>
+</baseline>

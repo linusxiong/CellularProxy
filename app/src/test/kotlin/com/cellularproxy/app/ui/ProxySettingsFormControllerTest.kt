@@ -1,9 +1,9 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RouteTarget
-import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
 import java.util.Base64
 import java.util.UUID
@@ -15,38 +15,43 @@ import kotlin.time.Duration.Companion.seconds
 class ProxySettingsFormControllerTest {
     @Test
     fun `valid form saves updated proxy settings while preserving unrelated config`() {
-        val original = AppConfig.default().copy(
-            cloudflare = AppConfig.default().cloudflare.copy(
-                enabled = true,
-                tunnelTokenPresent = true,
-                managementHostnameLabel = "manage.example.com",
-            ),
-            rotation = AppConfig.default().rotation.copy(
-                mobileDataOffDelay = 5.seconds,
-                networkReturnTimeout = 70.seconds,
-                cooldown = 200.seconds,
-            ),
-        )
+        val original =
+            AppConfig.default().copy(
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+                rotation =
+                    AppConfig.default().rotation.copy(
+                        mobileDataOffDelay = 5.seconds,
+                        networkReturnTimeout = 70.seconds,
+                        cooldown = 200.seconds,
+                    ),
+            )
         val savedConfigs = mutableListOf<AppConfig>()
-        val controller = ProxySettingsFormController(
-            loadConfig = { original },
-            saveConfig = savedConfigs::add,
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = { original },
+                saveConfig = savedConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = false,
-                maxConcurrentConnections = "9",
-                route = RouteTarget.WiFi,
-                strictIpChangeRequired = true,
-                mobileDataOffDelaySeconds = "8",
-                networkReturnTimeoutSeconds = "95",
-                cooldownSeconds = "240",
-                rootOperationsEnabled = true,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = false,
+                    maxConcurrentConnections = "9",
+                    route = RouteTarget.WiFi,
+                    strictIpChangeRequired = true,
+                    mobileDataOffDelaySeconds = "8",
+                    networkReturnTimeoutSeconds = "95",
+                    cooldownSeconds = "240",
+                    rootOperationsEnabled = true,
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals("127.0.0.1", saved.config.proxy.listenHost)
@@ -67,28 +72,30 @@ class ProxySettingsFormControllerTest {
     fun `invalid rotation timing is rejected before sensitive config is loaded`() {
         val savedConfigs = mutableListOf<AppConfig>()
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                networkReturnTimeoutSeconds = "0",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    networkReturnTimeoutSeconds = "0",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidRotationTiming)
@@ -100,28 +107,30 @@ class ProxySettingsFormControllerTest {
     fun `invalid maximum concurrent connections is rejected before sensitive config is loaded`() {
         val savedConfigs = mutableListOf<AppConfig>()
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                maxConcurrentConnections = "0",
-                route = RouteTarget.Automatic,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    maxConcurrentConnections = "0",
+                    route = RouteTarget.Automatic,
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidMaxConcurrentConnections)
@@ -132,19 +141,21 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `invalid form returns errors and does not save`() {
         val savedConfigs = mutableListOf<AppConfig>()
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "bad host",
-                listenPort = "8080",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "bad host",
+                    listenPort = "8080",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertEquals(listOf(ConfigValidationError.InvalidListenHost), invalid.errors)
@@ -155,28 +166,31 @@ class ProxySettingsFormControllerTest {
     fun `credential fields update encrypted proxy credential while preserving other sensitive values`() {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-            cloudflareTunnelToken = "cloudflare-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+                cloudflareTunnelToken = "cloudflare-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Cellular,
-                proxyUsername = "new-user",
-                proxyPassword = "new-pass",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Cellular,
+                    proxyUsername = "new-user",
+                    proxyPassword = "new-pass",
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(ProxyCredential(username = "new-user", password = "new-pass"), saved.sensitiveConfig?.proxyCredential)
@@ -188,27 +202,30 @@ class ProxySettingsFormControllerTest {
 
     @Test
     fun `credential edit preserves exact password text including surrounding spaces`() {
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = {},
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                proxyUsername = "new-user",
-                proxyPassword = " new-pass ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    proxyUsername = "new-user",
+                    proxyPassword = " new-pass ",
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(" new-pass ", saved.sensitiveConfig?.proxyCredential?.password)
@@ -217,27 +234,30 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `management token field updates encrypted management token while preserving other sensitive values`() {
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "old-management-token",
-            cloudflareTunnelToken = "cloudflare-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "old-management-token",
+                cloudflareTunnelToken = "cloudflare-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                managementApiToken = "new-management-token",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    managementApiToken = "new-management-token",
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(originalSensitiveConfig.proxyCredential, saved.sensitiveConfig?.proxyCredential)
@@ -251,28 +271,31 @@ class ProxySettingsFormControllerTest {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
         val cloudflareToken = validCloudflareTunnelToken()
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                cloudflareEnabled = true,
-                cloudflareTunnelToken = cloudflareToken,
-                cloudflareHostnameLabel = " manage.example.com ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    cloudflareEnabled = true,
+                    cloudflareTunnelToken = cloudflareToken,
+                    cloudflareHostnameLabel = " manage.example.com ",
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(true, saved.config.cloudflare.enabled)
@@ -287,35 +310,40 @@ class ProxySettingsFormControllerTest {
 
     @Test
     fun `blank cloudflare token field preserves existing token while allowing hostname removal`() {
-        val originalConfig = AppConfig.default().copy(
-            cloudflare = AppConfig.default().cloudflare.copy(
-                enabled = true,
-                tunnelTokenPresent = true,
-                managementHostnameLabel = "old.example.com",
-            ),
-        )
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-            cloudflareTunnelToken = "existing-cloudflare-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = { originalConfig },
-            saveConfig = {},
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = {},
-        )
+        val originalConfig =
+            AppConfig.default().copy(
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "old.example.com",
+                    ),
+            )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+                cloudflareTunnelToken = "existing-cloudflare-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = { originalConfig },
+                saveConfig = {},
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                cloudflareEnabled = true,
-                cloudflareHostnameLabel = "   ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    cloudflareEnabled = true,
+                    cloudflareHostnameLabel = "   ",
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(true, saved.config.cloudflare.enabled)
@@ -328,26 +356,29 @@ class ProxySettingsFormControllerTest {
     fun `enabling cloudflare without existing or edited tunnel token is rejected without saving`() {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                cloudflareEnabled = true,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    cloudflareEnabled = true,
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidCloudflareTunnelToken)
@@ -358,28 +389,30 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `blank after trim cloudflare tunnel token edit is rejected before sensitive config is loaded`() {
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                cloudflareTunnelToken = "   ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    cloudflareTunnelToken = "   ",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidCloudflareTunnelToken)
@@ -389,28 +422,30 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `malformed cloudflare tunnel token edit is rejected before sensitive config is loaded`() {
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                cloudflareTunnelToken = "not-base64",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    cloudflareTunnelToken = "not-base64",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidCloudflareTunnelToken)
@@ -421,26 +456,29 @@ class ProxySettingsFormControllerTest {
     fun `management token edit with surrounding whitespace is rejected without saving`() {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "old-management-token",
-        )
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "old-management-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                managementApiToken = " new-management-token ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    managementApiToken = " new-management-token ",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidManagementApiToken)
@@ -450,26 +488,29 @@ class ProxySettingsFormControllerTest {
 
     @Test
     fun `blank management token field preserves current sensitive management token`() {
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+            )
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals("management-token", saved.sensitiveConfig?.managementApiToken)
@@ -480,27 +521,29 @@ class ProxySettingsFormControllerTest {
     fun `blank after trim management token edit is rejected without saving plain or sensitive state`() {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = {
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = {
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                managementApiToken = "   ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    managementApiToken = "   ",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidManagementApiToken)
@@ -510,26 +553,29 @@ class ProxySettingsFormControllerTest {
 
     @Test
     fun `blank credential fields preserve current sensitive proxy credential`() {
-        val originalSensitiveConfig = SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-            managementApiToken = "management-token",
-        )
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+            )
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = { originalSensitiveConfig },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                ),
+            )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(originalSensitiveConfig.proxyCredential, saved.sensitiveConfig?.proxyCredential)
@@ -540,28 +586,30 @@ class ProxySettingsFormControllerTest {
     fun `partial credential edit is rejected without saving plain or sensitive state`() {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = savedConfigs::add,
-            loadSensitiveConfig = {
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = savedSensitiveConfigs::add,
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = {
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                proxyUsername = "new-user",
-                proxyPassword = "",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    proxyUsername = "new-user",
+                    proxyPassword = "",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidProxyCredential)
@@ -572,27 +620,29 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `invalid plain form is rejected before sensitive config is loaded`() {
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "bad host",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "bad host",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                ),
+            )
 
         assertTrue(result is ProxySettingsSaveResult.Invalid)
         assertEquals(false, loadSensitiveConfigCalled)
@@ -601,29 +651,31 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `partial credential edit is rejected before sensitive config is loaded`() {
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                proxyUsername = "new-user",
-                proxyPassword = "",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    proxyUsername = "new-user",
+                    proxyPassword = "",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidProxyCredential)
@@ -633,28 +685,30 @@ class ProxySettingsFormControllerTest {
     @Test
     fun `blank after trim management token edit is rejected before sensitive config is loaded`() {
         var loadSensitiveConfigCalled = false
-        val controller = ProxySettingsFormController(
-            loadConfig = AppConfig::default,
-            saveConfig = {},
-            loadSensitiveConfig = {
-                loadSensitiveConfigCalled = true
-                SensitiveConfig(
-                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
-                    managementApiToken = "management-token",
-                )
-            },
-            saveSensitiveConfig = {},
-        )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = {},
+            )
 
-        val result = controller.save(
-            ProxySettingsFormState(
-                listenHost = "127.0.0.1",
-                listenPort = "8888",
-                authEnabled = true,
-                route = RouteTarget.Automatic,
-                managementApiToken = "   ",
-            ),
-        )
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    managementApiToken = "   ",
+                ),
+            )
 
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidManagementApiToken)

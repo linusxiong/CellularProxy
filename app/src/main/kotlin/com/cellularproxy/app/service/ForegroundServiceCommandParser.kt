@@ -7,33 +7,37 @@ object ForegroundServiceActions {
 }
 
 object ForegroundServiceCommandParser {
-    fun parse(action: String?): ForegroundServiceCommandResult = when (action) {
-        ForegroundServiceActions.START_PROXY -> ForegroundServiceCommandResult.Accepted(
-            ForegroundServiceCommandDecision(
-                command = ForegroundServiceCommand.Start,
-                source = ForegroundServiceCommandSource.App,
-                auditEvent = ForegroundServiceAuditEvent.StartRequested,
-            ),
-        )
+    fun parse(action: String?): ForegroundServiceCommandResult =
+        when (action) {
+            ForegroundServiceActions.START_PROXY ->
+                ForegroundServiceCommandResult.Accepted(
+                    ForegroundServiceCommandDecision(
+                        command = ForegroundServiceCommand.Start,
+                        source = ForegroundServiceCommandSource.App,
+                        auditEvent = ForegroundServiceAuditEvent.StartRequested,
+                    ),
+                )
 
-        ForegroundServiceActions.STOP_PROXY -> ForegroundServiceCommandResult.Accepted(
-            ForegroundServiceCommandDecision(
-                command = ForegroundServiceCommand.Stop,
-                source = ForegroundServiceCommandSource.App,
-                auditEvent = ForegroundServiceAuditEvent.StopRequested,
-            ),
-        )
+            ForegroundServiceActions.STOP_PROXY ->
+                ForegroundServiceCommandResult.Accepted(
+                    ForegroundServiceCommandDecision(
+                        command = ForegroundServiceCommand.Stop,
+                        source = ForegroundServiceCommandSource.App,
+                        auditEvent = ForegroundServiceAuditEvent.StopRequested,
+                    ),
+                )
 
-        ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION -> ForegroundServiceCommandResult.Accepted(
-            ForegroundServiceCommandDecision(
-                command = ForegroundServiceCommand.Stop,
-                source = ForegroundServiceCommandSource.Notification,
-                auditEvent = ForegroundServiceAuditEvent.NotificationStopRequested,
-            ),
-        )
+            ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION ->
+                ForegroundServiceCommandResult.Accepted(
+                    ForegroundServiceCommandDecision(
+                        command = ForegroundServiceCommand.Stop,
+                        source = ForegroundServiceCommandSource.Notification,
+                        auditEvent = ForegroundServiceAuditEvent.NotificationStopRequested,
+                    ),
+                )
 
-        else -> ForegroundServiceCommandResult.Ignored
-    }
+            else -> ForegroundServiceCommandResult.Ignored
+        }
 }
 
 sealed interface ForegroundServiceCommandResult {

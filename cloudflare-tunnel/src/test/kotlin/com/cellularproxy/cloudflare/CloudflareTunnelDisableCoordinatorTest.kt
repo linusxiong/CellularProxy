@@ -19,14 +19,16 @@ class CloudflareTunnelDisableCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
         registry.install(connected, connection)
-        val coordinator = CloudflareTunnelDisableCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDisableCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
-            coordinator.disableIfCurrent(connected),
-        )
+        val result =
+            assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
+                coordinator.disableIfCurrent(connected),
+            )
 
         assertTrue(connection.closed)
         assertNull(registry.currentSessionOrNull())
@@ -41,9 +43,10 @@ class CloudflareTunnelDisableCoordinatorTest {
         val starting = controlPlane.apply(CloudflareTunnelEvent.StartRequested).snapshot
         val coordinator = CloudflareTunnelDisableCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
-            coordinator.disableIfCurrent(starting),
-        )
+        val result =
+            assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
+                coordinator.disableIfCurrent(starting),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.disabled(), result.transition.status)
@@ -59,14 +62,16 @@ class CloudflareTunnelDisableCoordinatorTest {
         registry.install(connected, connection)
         controlPlane.apply(CloudflareTunnelEvent.Degraded)
         val degraded = controlPlane.snapshot()
-        val coordinator = CloudflareTunnelDisableCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDisableCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
-            coordinator.disableIfCurrent(degraded),
-        )
+        val result =
+            assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
+                coordinator.disableIfCurrent(degraded),
+            )
 
         assertTrue(connection.closed)
         assertNull(registry.currentSessionOrNull())
@@ -85,14 +90,16 @@ class CloudflareTunnelDisableCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
         registry.install(currentConnected, connection)
-        val coordinator = CloudflareTunnelDisableCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDisableCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDisableCoordinatorResult.Stale>(
-            coordinator.disableIfCurrent(staleConnected),
-        )
+        val result =
+            assertIs<CloudflareTunnelDisableCoordinatorResult.Stale>(
+                coordinator.disableIfCurrent(staleConnected),
+            )
 
         assertFalse(connection.closed)
         assertEquals(staleConnected, result.expectedSnapshot)
@@ -106,9 +113,10 @@ class CloudflareTunnelDisableCoordinatorTest {
         val disabled = controlPlane.snapshot()
         val coordinator = CloudflareTunnelDisableCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
-            coordinator.disableIfCurrent(disabled),
-        )
+        val result =
+            assertIs<CloudflareTunnelDisableCoordinatorResult.Applied>(
+                coordinator.disableIfCurrent(disabled),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Duplicate, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.disabled(), result.transition.status)
@@ -118,12 +126,14 @@ class CloudflareTunnelDisableCoordinatorTest {
 
     @Test
     fun `applied disable result rejects non-disabled transition`() {
-        val transition = CloudflareTunnelControlPlane()
-            .apply(CloudflareTunnelEvent.StartRequested)
+        val transition =
+            CloudflareTunnelControlPlane()
+                .apply(CloudflareTunnelEvent.StartRequested)
 
-        val failure = kotlin.runCatching {
-            CloudflareTunnelDisableCoordinatorResult.Applied(transition)
-        }
+        val failure =
+            kotlin.runCatching {
+                CloudflareTunnelDisableCoordinatorResult.Applied(transition)
+            }
 
         assertTrue(failure.isFailure)
     }

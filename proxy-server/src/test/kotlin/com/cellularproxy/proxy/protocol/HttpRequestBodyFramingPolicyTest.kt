@@ -80,12 +80,14 @@ class HttpRequestBodyFramingPolicyTest {
 
     @Test
     fun `rejects transfer encoding before content length`() {
-        val request = httpProxyRequest(
-            headers = linkedMapOf(
-                "transfer-encoding" to listOf("chunked"),
-                "content-length" to listOf("5"),
-            ),
-        )
+        val request =
+            httpProxyRequest(
+                headers =
+                    linkedMapOf(
+                        "transfer-encoding" to listOf("chunked"),
+                        "content-length" to listOf("5"),
+                    ),
+            )
 
         assertEquals(
             HttpRequestBodyFramingResult.Rejected(HttpRequestBodyFramingRejectionReason.UnsupportedTransferEncoding),
@@ -101,12 +103,13 @@ class HttpRequestBodyFramingPolicyTest {
                 headers = emptyMap(),
             ),
             ParsedHttpRequest(
-                request = ParsedProxyRequest.Management(
-                    method = HttpMethod.Post,
-                    originTarget = "/api/service/stop",
-                    requiresToken = true,
-                    requiresAuditLog = true,
-                ),
+                request =
+                    ParsedProxyRequest.Management(
+                        method = HttpMethod.Post,
+                        originTarget = "/api/service/stop",
+                        requiresToken = true,
+                        requiresAuditLog = true,
+                    ),
                 headers = emptyMap(),
             ),
         ).forEach { request ->
@@ -125,12 +128,13 @@ class HttpRequestBodyFramingPolicyTest {
                 headers = linkedMapOf("content-length" to listOf("1")),
             ),
             ParsedHttpRequest(
-                request = ParsedProxyRequest.Management(
-                    method = HttpMethod.Post,
-                    originTarget = "/api/service/stop",
-                    requiresToken = true,
-                    requiresAuditLog = true,
-                ),
+                request =
+                    ParsedProxyRequest.Management(
+                        method = HttpMethod.Post,
+                        originTarget = "/api/service/stop",
+                        requiresToken = true,
+                        requiresAuditLog = true,
+                    ),
                 headers = linkedMapOf("content-length" to listOf("1")),
             ),
         ).forEach { request ->
@@ -143,12 +147,13 @@ class HttpRequestBodyFramingPolicyTest {
 
     private fun httpProxyRequest(headers: Map<String, List<String>>): ParsedHttpRequest =
         ParsedHttpRequest(
-            request = ParsedProxyRequest.HttpProxy(
-                method = "POST",
-                host = "origin.example",
-                port = 80,
-                originTarget = "/submit",
-            ),
+            request =
+                ParsedProxyRequest.HttpProxy(
+                    method = "POST",
+                    host = "origin.example",
+                    port = 80,
+                    originTarget = "/submit",
+                ),
             headers = headers,
         )
 }

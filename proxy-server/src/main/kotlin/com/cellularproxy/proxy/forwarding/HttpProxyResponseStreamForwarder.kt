@@ -66,39 +66,43 @@ object HttpProxyResponseStreamForwarder {
         require(maxChunkHeaderBytes > 0) { "Maximum chunk header bytes must be positive" }
         require(maxTrailerBytes >= 0) { "Maximum trailer bytes must be non-negative" }
 
-        val framing = when (
-            val result = HttpResponseBodyFramingPolicy.classify(
-                response = response,
-                requestMethod = requestMethod,
-            )
-        ) {
-            is HttpResponseBodyFramingResult.Accepted -> result.framing
-            is HttpResponseBodyFramingResult.Rejected -> {
+        val framing =
+            when (
+                val result =
+                    HttpResponseBodyFramingPolicy.classify(
+                        response = response,
+                        requestMethod = requestMethod,
+                    )
+            ) {
+                is HttpResponseBodyFramingResult.Accepted -> result.framing
+                is HttpResponseBodyFramingResult.Rejected -> {
+                    return HttpProxyResponseStreamForwardingResult.Rejected(
+                        HttpProxyResponseStreamForwardingRejectionReason.BodyFramingRejected(result.reason),
+                    )
+                }
+            }
+
+        val responseHead =
+            try {
+                HttpProxyForwardResponseRenderer.renderHead(response)
+            } catch (_: IllegalArgumentException) {
                 return HttpProxyResponseStreamForwardingResult.Rejected(
-                    HttpProxyResponseStreamForwardingRejectionReason.BodyFramingRejected(result.reason),
+                    HttpProxyResponseStreamForwardingRejectionReason.ResponseHeadRejected,
                 )
             }
-        }
-
-        val responseHead = try {
-            HttpProxyForwardResponseRenderer.renderHead(response)
-        } catch (_: IllegalArgumentException) {
-            return HttpProxyResponseStreamForwardingResult.Rejected(
-                HttpProxyResponseStreamForwardingRejectionReason.ResponseHeadRejected,
-            )
-        }
         val responseHeadBytes = responseHead.toByteArray()
         output.write(responseHeadBytes)
 
         return when (
-            val bodyCopyResult = HttpBodyFramingStreamCopier.copyResponseBody(
-                framing = framing,
-                input = input,
-                output = output,
-                bufferSize = bufferSize,
-                maxChunkHeaderBytes = maxChunkHeaderBytes,
-                maxTrailerBytes = maxTrailerBytes,
-            )
+            val bodyCopyResult =
+                HttpBodyFramingStreamCopier.copyResponseBody(
+                    framing = framing,
+                    input = input,
+                    output = output,
+                    bufferSize = bufferSize,
+                    maxChunkHeaderBytes = maxChunkHeaderBytes,
+                    maxTrailerBytes = maxTrailerBytes,
+                )
         ) {
             is HttpBodyStreamCopyResult.Completed ->
                 HttpProxyResponseStreamForwardingResult.Forwarded(
@@ -117,8 +121,7 @@ object HttpProxyResponseStreamForwarder {
         }
     }
 
-    private fun HttpResponseBodyFraming.requiresClientConnectionClose(): Boolean =
-        this is HttpResponseBodyFraming.CloseDelimited
+    private fun HttpResponseBodyFraming.requiresClientConnectionClose(): Boolean = this is HttpResponseBodyFraming.CloseDelimited
 }
 
 private const val DEFAULT_RESPONSE_FORWARD_BUFFER_BYTES = 8 * 1024

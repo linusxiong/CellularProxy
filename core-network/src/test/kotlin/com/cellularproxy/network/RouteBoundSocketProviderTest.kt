@@ -24,21 +24,24 @@ class RouteBoundSocketProviderTest {
         val cellular = network("cell", NetworkCategory.Cellular)
         connectedSocketPair().use { socketPair ->
             val calls = mutableListOf<ConnectCall>()
-            val provider = RouteBoundSocketProvider(
-                observedNetworks = { listOf(wifi, cellular) },
-                connector = recordingConnector(calls) {
-                    BoundSocketConnectResult.Connected(socket = socketPair.client, network = it.network)
-                },
-            )
-
-            val result = runSuspend {
-                provider.connect(
-                    route = RouteTarget.Cellular,
-                    host = "example.com",
-                    port = 443,
-                    timeoutMillis = 5_000,
+            val provider =
+                RouteBoundSocketProvider(
+                    observedNetworks = { listOf(wifi, cellular) },
+                    connector =
+                        recordingConnector(calls) {
+                            BoundSocketConnectResult.Connected(socket = socketPair.client, network = it.network)
+                        },
                 )
-            }
+
+            val result =
+                runSuspend {
+                    provider.connect(
+                        route = RouteTarget.Cellular,
+                        host = "example.com",
+                        port = 443,
+                        timeoutMillis = 5_000,
+                    )
+                }
 
             val connected = assertIs<BoundSocketConnectResult.Connected>(result)
             assertSame(socketPair.client, connected.socket)
@@ -54,21 +57,24 @@ class RouteBoundSocketProviderTest {
         val cellular = network("cell", NetworkCategory.Cellular)
         connectedSocketPair().use { socketPair ->
             val calls = mutableListOf<ConnectCall>()
-            val provider = RouteBoundSocketProvider(
-                observedNetworks = { listOf(unavailableWifi, vpn, cellular) },
-                connector = recordingConnector(calls) {
-                    BoundSocketConnectResult.Connected(socket = socketPair.client, network = it.network)
-                },
-            )
-
-            val result = runSuspend {
-                provider.connect(
-                    route = RouteTarget.Automatic,
-                    host = "origin.test",
-                    port = 80,
-                    timeoutMillis = 1_000,
+            val provider =
+                RouteBoundSocketProvider(
+                    observedNetworks = { listOf(unavailableWifi, vpn, cellular) },
+                    connector =
+                        recordingConnector(calls) {
+                            BoundSocketConnectResult.Connected(socket = socketPair.client, network = it.network)
+                        },
                 )
-            }
+
+            val result =
+                runSuspend {
+                    provider.connect(
+                        route = RouteTarget.Automatic,
+                        host = "origin.test",
+                        port = 80,
+                        timeoutMillis = 1_000,
+                    )
+                }
 
             val connected = assertIs<BoundSocketConnectResult.Connected>(result)
             assertEquals(vpn, connected.network)
@@ -79,22 +85,25 @@ class RouteBoundSocketProviderTest {
     @Test
     fun `unavailable selected route fails before connector is called`() {
         var connectorCalled = false
-        val provider = RouteBoundSocketProvider(
-            observedNetworks = { listOf(network("wifi", NetworkCategory.WiFi)) },
-            connector = BoundNetworkSocketConnector { _, _, _, _ ->
-                connectorCalled = true
-                BoundSocketConnectResult.Connected(socket = Socket(), network = network("cell", NetworkCategory.Cellular))
-            },
-        )
-
-        val result = runSuspend {
-            provider.connect(
-                route = RouteTarget.Cellular,
-                host = "example.com",
-                port = 443,
-                timeoutMillis = 5_000,
+        val provider =
+            RouteBoundSocketProvider(
+                observedNetworks = { listOf(network("wifi", NetworkCategory.WiFi)) },
+                connector =
+                    BoundNetworkSocketConnector { _, _, _, _ ->
+                        connectorCalled = true
+                        BoundSocketConnectResult.Connected(socket = Socket(), network = network("cell", NetworkCategory.Cellular))
+                    },
             )
-        }
+
+        val result =
+            runSuspend {
+                provider.connect(
+                    route = RouteTarget.Cellular,
+                    host = "example.com",
+                    port = 443,
+                    timeoutMillis = 5_000,
+                )
+            }
 
         val failed = assertIs<BoundSocketConnectResult.Failed>(result)
         assertEquals(BoundSocketConnectFailure.SelectedRouteUnavailable, failed.reason)
@@ -104,21 +113,24 @@ class RouteBoundSocketProviderTest {
     @Test
     fun `connector failure is preserved`() {
         val wifi = network("wifi", NetworkCategory.WiFi)
-        val provider = RouteBoundSocketProvider(
-            observedNetworks = { listOf(wifi) },
-            connector = BoundNetworkSocketConnector { _, _, _, _ ->
-                BoundSocketConnectResult.Failed(BoundSocketConnectFailure.ConnectionTimedOut)
-            },
-        )
-
-        val result = runSuspend {
-            provider.connect(
-                route = RouteTarget.WiFi,
-                host = "example.com",
-                port = 443,
-                timeoutMillis = 5_000,
+        val provider =
+            RouteBoundSocketProvider(
+                observedNetworks = { listOf(wifi) },
+                connector =
+                    BoundNetworkSocketConnector { _, _, _, _ ->
+                        BoundSocketConnectResult.Failed(BoundSocketConnectFailure.ConnectionTimedOut)
+                    },
             )
-        }
+
+        val result =
+            runSuspend {
+                provider.connect(
+                    route = RouteTarget.WiFi,
+                    host = "example.com",
+                    port = 443,
+                    timeoutMillis = 5_000,
+                )
+            }
 
         val failed = assertIs<BoundSocketConnectResult.Failed>(result)
         assertEquals(BoundSocketConnectFailure.ConnectionTimedOut, failed.reason)
@@ -129,15 +141,17 @@ class RouteBoundSocketProviderTest {
         val wifi = network("wifi", NetworkCategory.WiFi)
         val cellular = network("cell", NetworkCategory.Cellular)
         connectedSocketPair().use { socketPair ->
-            val provider = RouteBoundSocketProvider(
-                observedNetworks = { listOf(wifi, cellular) },
-                connector = BoundNetworkSocketConnector { _, _, _, _ ->
-                    BoundSocketConnectResult.Connected(
-                        socket = socketPair.client,
-                        network = cellular,
-                    )
-                },
-            )
+            val provider =
+                RouteBoundSocketProvider(
+                    observedNetworks = { listOf(wifi, cellular) },
+                    connector =
+                        BoundNetworkSocketConnector { _, _, _, _ ->
+                            BoundSocketConnectResult.Connected(
+                                socket = socketPair.client,
+                                network = cellular,
+                            )
+                        },
+                )
 
             assertFailsWithMessage("Connector returned a socket for a different network") {
                 runSuspend {
@@ -156,15 +170,17 @@ class RouteBoundSocketProviderTest {
     @Test
     fun `invalid connection arguments fail before observing networks`() {
         var observedNetworksCalled = false
-        val provider = RouteBoundSocketProvider(
-            observedNetworks = {
-                observedNetworksCalled = true
-                listOf(network("wifi", NetworkCategory.WiFi))
-            },
-            connector = BoundNetworkSocketConnector { _, _, _, _ ->
-                error("Connector should not be called for invalid arguments")
-            },
-        )
+        val provider =
+            RouteBoundSocketProvider(
+                observedNetworks = {
+                    observedNetworksCalled = true
+                    listOf(network("wifi", NetworkCategory.WiFi))
+                },
+                connector =
+                    BoundNetworkSocketConnector { _, _, _, _ ->
+                        error("Connector should not be called for invalid arguments")
+                    },
+            )
 
         assertFailsWithMessage("Host must not be blank") {
             runSuspend {

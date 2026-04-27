@@ -4,8 +4,8 @@ import com.cellularproxy.app.audit.ManagementApiAuditOutcome
 import com.cellularproxy.app.audit.ManagementApiAuditRecord
 import com.cellularproxy.cloudflare.CloudflareLocalManagementRequest
 import com.cellularproxy.proxy.admission.ProxyRequestAdmissionConfig
-import com.cellularproxy.proxy.management.ManagementApiHandlerException
 import com.cellularproxy.proxy.management.ManagementApiHandler
+import com.cellularproxy.proxy.management.ManagementApiHandlerException
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
@@ -16,22 +16,24 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
 
 class CloudflareManagementApiBridgeTest {
     @Test
     fun `public health without auth dispatches`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 200, body = """{"healthy":true}"""),
-        )
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = handler,
-            recordManagementAudit = auditRecords::add,
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 200, body = """{"healthy":true}"""),
+            )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit = auditRecords::add,
+            )
 
         val response = bridge.handle(localRequest(method = HttpMethod.Get, originTarget = "/health"))
 
@@ -57,22 +59,25 @@ class CloudflareManagementApiBridgeTest {
     @Test
     fun `api status with correct bearer dispatches`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 200, body = """{"status":"running"}"""),
-        )
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = handler,
-            recordManagementAudit = auditRecords::add,
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 200, body = """{"status":"running"}"""),
+            )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit = auditRecords::add,
+            )
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Get,
-                originTarget = "/api/status",
-                headers = mapOf("Authorization" to listOf("Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Get,
+                    originTarget = "/api/status",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
 
         assertEquals(listOf(ManagementApiOperation.Status), handler.operations)
         assertEquals(200, response.statusCode)
@@ -85,13 +90,14 @@ class CloudflareManagementApiBridgeTest {
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
         val bridge = CloudflareManagementApiBridge(admissionConfig, handler, recordManagementAudit = {})
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Get,
-                originTarget = "/api/status",
-                headers = mapOf("Authorization" to listOf("Bearer management-token", "Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Get,
+                    originTarget = "/api/status",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token", "Bearer management-token")),
+                ),
+            )
 
         assertEquals(emptyList(), handler.operations)
         assertEquals(401, response.statusCode)
@@ -103,13 +109,14 @@ class CloudflareManagementApiBridgeTest {
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
         val bridge = CloudflareManagementApiBridge(admissionConfig, handler, recordManagementAudit = {})
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Get,
-                originTarget = "/api/unknown",
-                headers = mapOf("Authorization" to listOf("Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Get,
+                    originTarget = "/api/unknown",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
 
         assertEquals(emptyList(), handler.operations)
         assertEquals(404, response.statusCode)
@@ -118,22 +125,24 @@ class CloudflareManagementApiBridgeTest {
 
     @Test
     fun `response headers body and reason are preserved in conversion`() {
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(
-                statusCode = 202,
-                body = """{"accepted":true}""",
-                extraHeaders = linkedMapOf("X-Request-Id" to "request-123"),
-            ),
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(
+                    statusCode = 202,
+                    body = """{"accepted":true}""",
+                    extraHeaders = linkedMapOf("X-Request-Id" to "request-123"),
+                ),
+            )
         val bridge = CloudflareManagementApiBridge(admissionConfig, handler, recordManagementAudit = {})
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Get,
-                originTarget = "/api/status",
-                headers = mapOf("Authorization" to listOf("Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Get,
+                    originTarget = "/api/status",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
 
         assertEquals(202, response.statusCode)
         assertEquals("Accepted", response.reasonPhrase)
@@ -148,19 +157,21 @@ class CloudflareManagementApiBridgeTest {
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
         val bridge = CloudflareManagementApiBridge(admissionConfig, handler, recordManagementAudit = {})
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Get,
-                originTarget = "/api/status",
-                headers = mapOf("Authorization" to listOf("Bearer wrong-secret")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Get,
+                    originTarget = "/api/status",
+                    headers = mapOf("Authorization" to listOf("Bearer wrong-secret")),
+                ),
+            )
 
-        val diagnosticText = listOf(
-            response.toString(),
-            response.toHttpString(),
-            bridge.toString(),
-        ).joinToString("\n")
+        val diagnosticText =
+            listOf(
+                response.toString(),
+                response.toHttpString(),
+                bridge.toString(),
+            ).joinToString("\n")
         assertContains(diagnosticText, "Unauthorized")
         assertFalse(diagnosticText.contains("wrong-secret"))
         assertFalse(diagnosticText.contains("management-token"))
@@ -169,22 +180,25 @@ class CloudflareManagementApiBridgeTest {
     @Test
     fun `high impact cloudflare management response records audit entry`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-        )
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = handler,
-            recordManagementAudit = auditRecords::add,
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit = auditRecords::add,
+            )
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Post,
-                originTarget = "/api/cloudflare/start",
-                headers = mapOf("Authorization" to listOf("Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/cloudflare/start",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
 
         assertEquals(202, response.statusCode)
         assertEquals(
@@ -204,19 +218,21 @@ class CloudflareManagementApiBridgeTest {
     fun `high impact cloudflare route rejection records audit entry`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = handler,
-            recordManagementAudit = auditRecords::add,
-        )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit = auditRecords::add,
+            )
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Post,
-                originTarget = "/api/cloudflare/start?reason=remote",
-                headers = mapOf("Authorization" to listOf("Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/cloudflare/start?reason=remote",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
 
         assertEquals(400, response.statusCode)
         assertEquals(
@@ -236,18 +252,20 @@ class CloudflareManagementApiBridgeTest {
     fun `high impact cloudflare authorization rejection records audit entry`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = handler,
-            recordManagementAudit = auditRecords::add,
-        )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit = auditRecords::add,
+            )
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Post,
-                originTarget = "/api/cloudflare/start",
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/cloudflare/start",
+                ),
+            )
 
         assertEquals(401, response.statusCode)
         assertEquals(emptyList(), handler.operations)
@@ -268,21 +286,23 @@ class CloudflareManagementApiBridgeTest {
     fun `high impact cloudflare handler failure records audit entry before rethrowing`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
         val failure = IOException("cloudflare state unavailable")
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = ManagementApiHandler { throw failure },
-            recordManagementAudit = auditRecords::add,
-        )
-
-        val thrown = assertFailsWith<ManagementApiHandlerException> {
-            bridge.handle(
-                localRequest(
-                    method = HttpMethod.Post,
-                    originTarget = "/api/cloudflare/start",
-                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
-                ),
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = ManagementApiHandler { throw failure },
+                recordManagementAudit = auditRecords::add,
             )
-        }
+
+        val thrown =
+            assertFailsWith<ManagementApiHandlerException> {
+                bridge.handle(
+                    localRequest(
+                        method = HttpMethod.Post,
+                        originTarget = "/api/cloudflare/start",
+                        headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                    ),
+                )
+            }
 
         assertEquals(ManagementApiOperation.CloudflareStart, thrown.operation)
         assertSame(failure, thrown.cause)
@@ -303,25 +323,29 @@ class CloudflareManagementApiBridgeTest {
     fun `management audit recorder failure does not replace command response`() {
         val failure = IOException("disk full")
         val reportedFailures = mutableListOf<Exception>()
-        val handler = RecordingManagementApiHandler(
-            ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
-        )
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = handler,
-            recordManagementAudit = nonFatalManagementAuditRecorder(
-                recordManagementAudit = { throw failure },
-                reportManagementAuditFailure = reportedFailures::add,
-            ),
-        )
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(statusCode = 202, body = """{"accepted":true}"""),
+            )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit =
+                    nonFatalManagementAuditRecorder(
+                        recordManagementAudit = { throw failure },
+                        reportManagementAuditFailure = reportedFailures::add,
+                    ),
+            )
 
-        val response = bridge.handle(
-            localRequest(
-                method = HttpMethod.Post,
-                originTarget = "/api/cloudflare/start",
-                headers = mapOf("Authorization" to listOf("Bearer management-token")),
-            ),
-        )
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/cloudflare/start",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
 
         assertEquals(202, response.statusCode)
         assertEquals(listOf(ManagementApiOperation.CloudflareStart), handler.operations)
@@ -334,37 +358,42 @@ class CloudflareManagementApiBridgeTest {
         val auditFailure = IOException("disk full")
         val handlerFailure = IOException("cloudflare state unavailable")
         val reportedFailures = mutableListOf<Exception>()
-        val bridge = CloudflareManagementApiBridge(
-            admissionConfig = admissionConfig,
-            managementHandler = ManagementApiHandler { throw handlerFailure },
-            recordManagementAudit = nonFatalManagementAuditRecorder(
-                recordManagementAudit = { throw auditFailure },
-                reportManagementAuditFailure = reportedFailures::add,
-            ),
-        )
-
-        val thrown = assertFailsWith<ManagementApiHandlerException> {
-            bridge.handle(
-                localRequest(
-                    method = HttpMethod.Post,
-                    originTarget = "/api/cloudflare/start",
-                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
-                ),
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = ManagementApiHandler { throw handlerFailure },
+                recordManagementAudit =
+                    nonFatalManagementAuditRecorder(
+                        recordManagementAudit = { throw auditFailure },
+                        reportManagementAuditFailure = reportedFailures::add,
+                    ),
             )
-        }
+
+        val thrown =
+            assertFailsWith<ManagementApiHandlerException> {
+                bridge.handle(
+                    localRequest(
+                        method = HttpMethod.Post,
+                        originTarget = "/api/cloudflare/start",
+                        headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                    ),
+                )
+            }
 
         assertSame(handlerFailure, thrown.cause)
         assertEquals(1, reportedFailures.size)
         assertSame(auditFailure, reportedFailures.single())
     }
 
-    private val admissionConfig = ProxyRequestAdmissionConfig(
-        proxyAuthentication = ProxyAuthenticationConfig(
-            authEnabled = false,
-            credential = ProxyCredential(username = "proxy-user", password = "proxy-password"),
-        ),
-        managementApiToken = "management-token",
-    )
+    private val admissionConfig =
+        ProxyRequestAdmissionConfig(
+            proxyAuthentication =
+                ProxyAuthenticationConfig(
+                    authEnabled = false,
+                    credential = ProxyCredential(username = "proxy-user", password = "proxy-password"),
+                ),
+            managementApiToken = "management-token",
+        )
 
     private fun localRequest(
         method: HttpMethod,

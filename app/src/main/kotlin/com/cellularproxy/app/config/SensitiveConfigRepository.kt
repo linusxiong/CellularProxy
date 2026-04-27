@@ -27,19 +27,31 @@ object SensitiveConfigSecretKeys {
 
 interface SensitiveKeyValueStore {
     fun read(key: String): String?
-    fun replace(encryptedValues: Map<String, String>, keysToRemove: Set<String>)
+
+    fun replace(
+        encryptedValues: Map<String, String>,
+        keysToRemove: Set<String>,
+    )
+
     fun clear(keys: Set<String>)
 }
 
 interface SensitiveValueCipher {
     fun encrypt(plainText: String): String
+
     fun decrypt(encryptedValue: String): String?
 }
 
 sealed interface SensitiveConfigLoadResult {
-    data class Loaded(val config: SensitiveConfig) : SensitiveConfigLoadResult
+    data class Loaded(
+        val config: SensitiveConfig,
+    ) : SensitiveConfigLoadResult
+
     data object MissingRequiredSecrets : SensitiveConfigLoadResult
-    data class Invalid(val reason: SensitiveConfigInvalidReason) : SensitiveConfigLoadResult
+
+    data class Invalid(
+        val reason: SensitiveConfigInvalidReason,
+    ) : SensitiveConfigLoadResult
 }
 
 enum class SensitiveConfigInvalidReason {
@@ -71,15 +83,18 @@ class SensitiveConfigRepository(
             }
         }
 
-        val proxyCredentialText = cipher.decrypt(encryptedProxyCredential)
-            ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
-        val managementApiToken = cipher.decrypt(encryptedManagementApiToken)
-            ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
-        val cloudflareTunnelToken = encryptedCloudflareTunnelToken
-            ?.let { encryptedToken ->
-                cipher.decrypt(encryptedToken)
-                    ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
-            }
+        val proxyCredentialText =
+            cipher.decrypt(encryptedProxyCredential)
+                ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+        val managementApiToken =
+            cipher.decrypt(encryptedManagementApiToken)
+                ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+        val cloudflareTunnelToken =
+            encryptedCloudflareTunnelToken
+                ?.let { encryptedToken ->
+                    cipher.decrypt(encryptedToken)
+                        ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+                }
 
         return sensitiveConfigFromPlainText(
             proxyCredentialText = proxyCredentialText,
@@ -89,24 +104,26 @@ class SensitiveConfigRepository(
     }
 
     fun save(config: SensitiveConfig) {
-        val encryptedValues = buildMap {
-            put(
-                SensitiveConfigSecretKeys.proxyAuthCredential,
-                cipher.encrypt(config.proxyCredential.canonicalBasicPayload()),
-            )
-            put(
-                SensitiveConfigSecretKeys.managementApiToken,
-                cipher.encrypt(config.managementApiToken),
-            )
-            config.cloudflareTunnelToken?.let { token ->
-                put(SensitiveConfigSecretKeys.cloudflareTunnelToken, cipher.encrypt(token))
+        val encryptedValues =
+            buildMap {
+                put(
+                    SensitiveConfigSecretKeys.proxyAuthCredential,
+                    cipher.encrypt(config.proxyCredential.canonicalBasicPayload()),
+                )
+                put(
+                    SensitiveConfigSecretKeys.managementApiToken,
+                    cipher.encrypt(config.managementApiToken),
+                )
+                config.cloudflareTunnelToken?.let { token ->
+                    put(SensitiveConfigSecretKeys.cloudflareTunnelToken, cipher.encrypt(token))
+                }
             }
-        }
-        val keysToRemove = if (config.cloudflareTunnelToken == null) {
-            setOf(SensitiveConfigSecretKeys.cloudflareTunnelToken)
-        } else {
-            emptySet()
-        }
+        val keysToRemove =
+            if (config.cloudflareTunnelToken == null) {
+                setOf(SensitiveConfigSecretKeys.cloudflareTunnelToken)
+            } else {
+                emptySet()
+            }
 
         store.replace(
             encryptedValues = encryptedValues,
@@ -123,8 +140,9 @@ class SensitiveConfigRepository(
         managementApiToken: String,
         cloudflareTunnelToken: String?,
     ): SensitiveConfigLoadResult {
-        val proxyCredential = proxyCredentialText.toProxyCredential()
-            ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidProxyCredential)
+        val proxyCredential =
+            proxyCredentialText.toProxyCredential()
+                ?: return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidProxyCredential)
         if (managementApiToken.isBlank()) {
             return SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidManagementApiToken)
         }
@@ -142,11 +160,12 @@ class SensitiveConfigRepository(
     }
 }
 
-private val REPOSITORY_SECRET_KEYS: Set<String> = setOf(
-    SensitiveConfigSecretKeys.proxyAuthCredential,
-    SensitiveConfigSecretKeys.managementApiToken,
-    SensitiveConfigSecretKeys.cloudflareTunnelToken,
-)
+private val REPOSITORY_SECRET_KEYS: Set<String> =
+    setOf(
+        SensitiveConfigSecretKeys.proxyAuthCredential,
+        SensitiveConfigSecretKeys.managementApiToken,
+        SensitiveConfigSecretKeys.cloudflareTunnelToken,
+    )
 
 private fun String.toProxyCredential(): ProxyCredential? {
     val separatorIndex = indexOf(':')

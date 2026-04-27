@@ -65,10 +65,11 @@ class ManagementApiStateHandlerTest {
         val response = callbacks.handler().handle(ManagementApiOperation.Status)
 
         assertEquals(
-            ManagementApiReadOnlyResponses.status(
-                status = callbacks.statusResult.copy(rootAvailability = RootAvailabilityStatus.Unknown),
-                rootOperationsEnabled = false,
-            ).body,
+            ManagementApiReadOnlyResponses
+                .status(
+                    status = callbacks.statusResult.copy(rootAvailability = RootAvailabilityStatus.Unknown),
+                    rootOperationsEnabled = false,
+                ).body,
             response.body,
         )
         callbacks.assertCalls("rootOperationsEnabled", "status")
@@ -113,10 +114,11 @@ class ManagementApiStateHandlerTest {
     @Test
     fun `cloudflare start uses only cloudflare start callback and action renderer`() {
         val callbacks = RecordingCallbacks()
-        val expectedResult = CloudflareTunnelTransitionResult(
-            disposition = CloudflareTunnelTransitionDisposition.Accepted,
-            status = CloudflareTunnelStatus.starting(),
-        )
+        val expectedResult =
+            CloudflareTunnelTransitionResult(
+                disposition = CloudflareTunnelTransitionDisposition.Accepted,
+                status = CloudflareTunnelStatus.starting(),
+            )
         val secrets = LogRedactionSecrets(cloudflareTunnelToken = "cf-start-secret")
         callbacks.cloudflareStartResult = expectedResult
 
@@ -129,10 +131,11 @@ class ManagementApiStateHandlerTest {
     @Test
     fun `cloudflare stop uses only cloudflare stop callback and action renderer`() {
         val callbacks = RecordingCallbacks()
-        val expectedResult = CloudflareTunnelTransitionResult(
-            disposition = CloudflareTunnelTransitionDisposition.Duplicate,
-            status = CloudflareTunnelStatus.stopped(),
-        )
+        val expectedResult =
+            CloudflareTunnelTransitionResult(
+                disposition = CloudflareTunnelTransitionDisposition.Duplicate,
+                status = CloudflareTunnelStatus.stopped(),
+            )
         callbacks.cloudflareStopResult = expectedResult
 
         val response = callbacks.handler().handle(ManagementApiOperation.CloudflareStop)
@@ -147,10 +150,11 @@ class ManagementApiStateHandlerTest {
     @Test
     fun `rotate mobile data uses only mobile data rotation callback and action renderer`() {
         val callbacks = RecordingCallbacks()
-        val expectedResult = RotationTransitionResult(
-            disposition = RotationTransitionDisposition.Accepted,
-            status = RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
-        )
+        val expectedResult =
+            RotationTransitionResult(
+                disposition = RotationTransitionDisposition.Accepted,
+                status = RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.MobileData),
+            )
         callbacks.rotateMobileDataResult = expectedResult
 
         val response = callbacks.handler().handle(ManagementApiOperation.RotateMobileData)
@@ -162,10 +166,11 @@ class ManagementApiStateHandlerTest {
     @Test
     fun `rotate airplane mode uses only airplane mode rotation callback and action renderer`() {
         val callbacks = RecordingCallbacks()
-        val expectedResult = RotationTransitionResult(
-            disposition = RotationTransitionDisposition.Accepted,
-            status = RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
-        )
+        val expectedResult =
+            RotationTransitionResult(
+                disposition = RotationTransitionDisposition.Accepted,
+                status = RotationStatus(state = RotationState.CheckingCooldown, operation = RotationOperation.AirplaneMode),
+            )
         callbacks.rotateAirplaneModeResult = expectedResult
 
         val response = callbacks.handler().handle(ManagementApiOperation.RotateAirplaneMode)
@@ -177,13 +182,15 @@ class ManagementApiStateHandlerTest {
     @Test
     fun `service stop uses only service stop callback and action renderer`() {
         val callbacks = RecordingCallbacks()
-        val expectedResult = ProxyServiceStopTransitionResult(
-            disposition = ProxyServiceStopTransitionDisposition.Accepted,
-            status = ProxyServiceStatus(
-                state = ProxyServiceState.Stopping,
-                metrics = ProxyTrafficMetrics(activeConnections = 1, totalConnections = 3),
-            ),
-        )
+        val expectedResult =
+            ProxyServiceStopTransitionResult(
+                disposition = ProxyServiceStopTransitionDisposition.Accepted,
+                status =
+                    ProxyServiceStatus(
+                        state = ProxyServiceState.Stopping,
+                        metrics = ProxyTrafficMetrics(activeConnections = 1, totalConnections = 3),
+                    ),
+            )
         callbacks.serviceStopResult = expectedResult
 
         val response = callbacks.handler().handle(ManagementApiOperation.ServiceStop)
@@ -197,9 +204,10 @@ class ManagementApiStateHandlerTest {
         val callbacks = RecordingCallbacks()
         callbacks.cloudflareStatusResult = CloudflareTunnelStatus.failed("failed with cloudflare-secret in log")
 
-        val response = callbacks
-            .handler(LogRedactionSecrets(cloudflareTunnelToken = "cloudflare-secret"))
-            .handle(ManagementApiOperation.CloudflareStatus)
+        val response =
+            callbacks
+                .handler(LogRedactionSecrets(cloudflareTunnelToken = "cloudflare-secret"))
+                .handle(ManagementApiOperation.CloudflareStatus)
 
         assertEquals(
             """{"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"failed with [REDACTED] in log"}}""",
@@ -212,14 +220,16 @@ class ManagementApiStateHandlerTest {
     @Test
     fun `handler redacts configured secret in cloudflare start response`() {
         val callbacks = RecordingCallbacks()
-        callbacks.cloudflareStartResult = CloudflareTunnelTransitionResult(
-            disposition = CloudflareTunnelTransitionDisposition.Duplicate,
-            status = CloudflareTunnelStatus.failed("edge rejected cloudflare-secret"),
-        )
+        callbacks.cloudflareStartResult =
+            CloudflareTunnelTransitionResult(
+                disposition = CloudflareTunnelTransitionDisposition.Duplicate,
+                status = CloudflareTunnelStatus.failed("edge rejected cloudflare-secret"),
+            )
 
-        val response = callbacks
-            .handler(LogRedactionSecrets(cloudflareTunnelToken = "cloudflare-secret"))
-            .handle(ManagementApiOperation.CloudflareStart)
+        val response =
+            callbacks
+                .handler(LogRedactionSecrets(cloudflareTunnelToken = "cloudflare-secret"))
+                .handle(ManagementApiOperation.CloudflareStart)
 
         assertEquals(
             """{"accepted":false,"disposition":"duplicate","cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"edge rejected [REDACTED]"}}""",
@@ -238,42 +248,48 @@ class ManagementApiStateHandlerTest {
         var publicIpResult: String? = null
         var rootOperationsEnabledResult: Boolean = false
         var cloudflareStatusResult: CloudflareTunnelStatus = CloudflareTunnelStatus.disabled()
-        var cloudflareStartResult: CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
-            CloudflareTunnelTransitionDisposition.Ignored,
-            CloudflareTunnelStatus.disabled(),
-        )
-        var cloudflareStopResult: CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
-            CloudflareTunnelTransitionDisposition.Ignored,
-            CloudflareTunnelStatus.disabled(),
-        )
-        var rotateMobileDataResult: RotationTransitionResult = RotationTransitionResult(
-            RotationTransitionDisposition.Ignored,
-            RotationStatus.idle(),
-        )
-        var rotateAirplaneModeResult: RotationTransitionResult = RotationTransitionResult(
-            RotationTransitionDisposition.Ignored,
-            RotationStatus.idle(),
-        )
-        var serviceStopResult: ProxyServiceStopTransitionResult = ProxyServiceStopTransitionResult(
-            ProxyServiceStopTransitionDisposition.Ignored,
-            stoppedStatus(),
-        )
+        var cloudflareStartResult: CloudflareTunnelTransitionResult =
+            CloudflareTunnelTransitionResult(
+                CloudflareTunnelTransitionDisposition.Ignored,
+                CloudflareTunnelStatus.disabled(),
+            )
+        var cloudflareStopResult: CloudflareTunnelTransitionResult =
+            CloudflareTunnelTransitionResult(
+                CloudflareTunnelTransitionDisposition.Ignored,
+                CloudflareTunnelStatus.disabled(),
+            )
+        var rotateMobileDataResult: RotationTransitionResult =
+            RotationTransitionResult(
+                RotationTransitionDisposition.Ignored,
+                RotationStatus.idle(),
+            )
+        var rotateAirplaneModeResult: RotationTransitionResult =
+            RotationTransitionResult(
+                RotationTransitionDisposition.Ignored,
+                RotationStatus.idle(),
+            )
+        var serviceStopResult: ProxyServiceStopTransitionResult =
+            ProxyServiceStopTransitionResult(
+                ProxyServiceStopTransitionDisposition.Ignored,
+                stoppedStatus(),
+            )
 
         fun handler(secrets: LogRedactionSecrets = LogRedactionSecrets()): ManagementApiStateHandler =
             ManagementApiStateHandler(
-                callbacks = ManagementApiCallbacks(
-                    healthStatus = { record("healthStatus", healthStatusResult) },
-                    status = { record("status", statusResult) },
-                    networks = { record("networks", networksResult) },
-                    publicIp = { record("publicIp", publicIpResult) },
-                    cloudflareStatus = { record("cloudflareStatus", cloudflareStatusResult) },
-                    cloudflareStart = { record("cloudflareStart", cloudflareStartResult) },
-                    cloudflareStop = { record("cloudflareStop", cloudflareStopResult) },
-                    rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
-                    rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
-                    serviceStop = { record("serviceStop", serviceStopResult) },
-                    rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
-                ),
+                callbacks =
+                    ManagementApiCallbacks(
+                        healthStatus = { record("healthStatus", healthStatusResult) },
+                        status = { record("status", statusResult) },
+                        networks = { record("networks", networksResult) },
+                        publicIp = { record("publicIp", publicIpResult) },
+                        cloudflareStatus = { record("cloudflareStatus", cloudflareStatusResult) },
+                        cloudflareStart = { record("cloudflareStart", cloudflareStartResult) },
+                        cloudflareStop = { record("cloudflareStop", cloudflareStopResult) },
+                        rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
+                        rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
+                        serviceStop = { record("serviceStop", serviceStopResult) },
+                        rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
+                    ),
                 secrets = secrets,
             )
 
@@ -281,14 +297,20 @@ class ManagementApiStateHandlerTest {
             assertEquals(expected.toList(), calls)
         }
 
-        private fun <T> record(name: String, result: T): T {
+        private fun <T> record(
+            name: String,
+            result: T,
+        ): T {
             calls += name
             return result
         }
     }
 }
 
-private fun assertSameResponse(expected: ManagementApiResponse, actual: ManagementApiResponse) {
+private fun assertSameResponse(
+    expected: ManagementApiResponse,
+    actual: ManagementApiResponse,
+) {
     assertEquals(expected.statusCode, actual.statusCode)
     assertEquals(expected.reasonPhrase, actual.reasonPhrase)
     assertEquals(expected.headers, actual.headers)

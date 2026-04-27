@@ -1,5 +1,6 @@
 package com.cellularproxy.proxy.forwarding
 
+import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import com.cellularproxy.proxy.protocol.HttpBodyFramingStreamCopier
 import com.cellularproxy.proxy.protocol.HttpBodyStreamCopyResult
 import com.cellularproxy.proxy.protocol.HttpRequestBodyFramingPolicy
@@ -7,7 +8,6 @@ import com.cellularproxy.proxy.protocol.HttpRequestBodyFramingRejectionReason
 import com.cellularproxy.proxy.protocol.HttpRequestBodyFramingResult
 import com.cellularproxy.proxy.protocol.ParsedHttpRequest
 import com.cellularproxy.proxy.protocol.ParsedProxyRequest
-import com.cellularproxy.proxy.ingress.ProxyIngressStreamPreflightDecision
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Locale
@@ -50,7 +50,9 @@ sealed interface HttpProxyRequestStreamForwardingResult {
 
 sealed interface HttpProxyRequestStreamForwardingRejectionReason {
     data object NotHttpProxyRequest : HttpProxyRequestStreamForwardingRejectionReason
+
     data object UnsupportedExpectHeader : HttpProxyRequestStreamForwardingRejectionReason
+
     data class BodyFramingRejected(
         val reason: HttpRequestBodyFramingRejectionReason,
     ) : HttpProxyRequestStreamForwardingRejectionReason
@@ -90,26 +92,28 @@ object HttpProxyRequestStreamForwarder {
             )
         }
 
-        val framing = when (val result = HttpRequestBodyFramingPolicy.classify(request)) {
-            is HttpRequestBodyFramingResult.Accepted -> result.framing
-            is HttpRequestBodyFramingResult.Rejected -> {
-                return HttpProxyRequestStreamForwardingResult.Rejected(
-                    HttpProxyRequestStreamForwardingRejectionReason.BodyFramingRejected(result.reason),
-                )
+        val framing =
+            when (val result = HttpRequestBodyFramingPolicy.classify(request)) {
+                is HttpRequestBodyFramingResult.Accepted -> result.framing
+                is HttpRequestBodyFramingResult.Rejected -> {
+                    return HttpProxyRequestStreamForwardingResult.Rejected(
+                        HttpProxyRequestStreamForwardingRejectionReason.BodyFramingRejected(result.reason),
+                    )
+                }
             }
-        }
 
         val requestHead = HttpProxyForwardRequestRenderer.renderHead(request)
         val requestHeadBytes = requestHead.toByteArray()
         output.write(requestHeadBytes)
 
         return when (
-            val bodyCopyResult = HttpBodyFramingStreamCopier.copyRequestBody(
-                framing = framing,
-                input = input,
-                output = output,
-                bufferSize = bufferSize,
-            )
+            val bodyCopyResult =
+                HttpBodyFramingStreamCopier.copyRequestBody(
+                    framing = framing,
+                    input = input,
+                    output = output,
+                    bufferSize = bufferSize,
+                )
         ) {
             is HttpBodyStreamCopyResult.Completed ->
                 HttpProxyRequestStreamForwardingResult.Forwarded(

@@ -21,20 +21,22 @@ class ProxyRotationConnectionDrainCoordinator(
                 return ProxyRotationConnectionDrainAdvanceResult.NoAction(controlPlane.snapshot())
             }
 
-            val decision = drainController.evaluate(
-                drainStartedElapsedMillis = drainStartedElapsedMillis,
-                nowElapsedMillis = nowElapsedMillis,
-                maxDrainTime = maxDrainTime,
-            )
+            val decision =
+                drainController.evaluate(
+                    drainStartedElapsedMillis = drainStartedElapsedMillis,
+                    nowElapsedMillis = nowElapsedMillis,
+                    maxDrainTime = maxDrainTime,
+                )
 
             return when (decision) {
                 is RotationConnectionDrainDecision.Drained ->
                     ProxyRotationConnectionDrainAdvanceResult.Applied(
                         decision = decision,
-                        progress = controlPlane.applyProgress(
-                            event = decision.event,
-                            nowElapsedMillis = nowElapsedMillis,
-                        ),
+                        progress =
+                            controlPlane.applyProgress(
+                                event = decision.event,
+                                nowElapsedMillis = nowElapsedMillis,
+                            ),
                     )
                 is RotationConnectionDrainDecision.Waiting ->
                     ProxyRotationConnectionDrainAdvanceResult.Waiting(

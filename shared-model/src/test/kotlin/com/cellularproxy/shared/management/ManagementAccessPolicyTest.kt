@@ -37,13 +37,14 @@ class ManagementAccessPolicyTest {
 
     @Test
     fun `high-impact api endpoints require audit logging`() {
-        val endpoints = listOf(
-            HttpMethod.Post to "/api/cloudflare/start",
-            HttpMethod.Post to "/api/cloudflare/stop",
-            HttpMethod.Post to "/api/rotate/mobile-data",
-            HttpMethod.Post to "/api/rotate/airplane-mode",
-            HttpMethod.Post to "/api/service/stop",
-        )
+        val endpoints =
+            listOf(
+                HttpMethod.Post to "/api/cloudflare/start",
+                HttpMethod.Post to "/api/cloudflare/stop",
+                HttpMethod.Post to "/api/rotate/mobile-data",
+                HttpMethod.Post to "/api/rotate/airplane-mode",
+                HttpMethod.Post to "/api/service/stop",
+            )
 
         endpoints.forEach { (method, path) ->
             val decision = ManagementAccessPolicy.evaluate(method, path)
@@ -73,12 +74,13 @@ class ManagementAccessPolicyTest {
 
     @Test
     fun `read-only api endpoints do not require audit logging`() {
-        val endpoints = listOf(
-            HttpMethod.Get to "/api/status",
-            HttpMethod.Get to "/api/networks",
-            HttpMethod.Get to "/api/ip",
-            HttpMethod.Get to "/api/cloudflare/status",
-        )
+        val endpoints =
+            listOf(
+                HttpMethod.Get to "/api/status",
+                HttpMethod.Get to "/api/networks",
+                HttpMethod.Get to "/api/ip",
+                HttpMethod.Get to "/api/cloudflare/status",
+            )
 
         endpoints.forEach { (method, path) ->
             val decision = ManagementAccessPolicy.evaluate(method, path)
@@ -143,13 +145,14 @@ class ManagementAccessPolicyTest {
 
     @Test
     fun `cloudflare ingress rejects non-GET health bare api and similar prefixes`() {
-        val rejected = listOf(
-            ManagementIngressRequest.OriginForm(HttpMethod.Post, "/health"),
-            ManagementIngressRequest.OriginForm(HttpMethod.Connect, "/api/status"),
-            ManagementIngressRequest.OriginForm(HttpMethod.Get, "/api"),
-            ManagementIngressRequest.OriginForm(HttpMethod.Get, "/apiary/status"),
-            ManagementIngressRequest.OriginForm(HttpMethod.Get, "/"),
-        )
+        val rejected =
+            listOf(
+                ManagementIngressRequest.OriginForm(HttpMethod.Post, "/health"),
+                ManagementIngressRequest.OriginForm(HttpMethod.Connect, "/api/status"),
+                ManagementIngressRequest.OriginForm(HttpMethod.Get, "/api"),
+                ManagementIngressRequest.OriginForm(HttpMethod.Get, "/apiary/status"),
+                ManagementIngressRequest.OriginForm(HttpMethod.Get, "/"),
+            )
 
         rejected.forEach { request ->
             assertEquals(CloudflareIngressDecision.Reject, CloudflareManagementIngressPolicy.evaluate(request))
@@ -174,9 +177,10 @@ class ManagementAccessPolicyTest {
 
     @Test
     fun `cloudflare ingress request diagnostics do not expose sensitive rejected targets`() {
-        val explicitProxy = ManagementIngressRequest.ExplicitProxyForm(
-            "http://user:pass@example.com/api/status?token=secret",
-        )
+        val explicitProxy =
+            ManagementIngressRequest.ExplicitProxyForm(
+                "http://user:pass@example.com/api/status?token=secret",
+            )
         val connect = ManagementIngressRequest.ConnectAuthority("example.com:443")
 
         val rendered = "$explicitProxy $connect"

@@ -3,8 +3,8 @@ package com.cellularproxy.app.config
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.nio.ByteBuffer
-import java.nio.charset.CodingErrorAction
 import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.util.Base64
@@ -36,10 +36,11 @@ class AndroidKeystoreSensitiveValueCipher private constructor(
         return try {
             val iv = Base64.getDecoder().decode(parts[1])
             val cipherText = Base64.getDecoder().decode(parts[2])
-            val cipher = cipherFactory.decryptCipher(
-                key = keyProvider.getOrCreateKey(),
-                iv = iv,
-            )
+            val cipher =
+                cipherFactory.decryptCipher(
+                    key = keyProvider.getOrCreateKey(),
+                    iv = iv,
+                )
             cipher.doFinal(cipherText).decodeStrictUtf8()
         } catch (_: IllegalArgumentException) {
             null
@@ -56,7 +57,11 @@ class AndroidKeystoreSensitiveValueCipher private constructor(
 
     internal interface AesGcmCipherFactory {
         fun encryptCipher(key: SecretKey): Cipher
-        fun decryptCipher(key: SecretKey, iv: ByteArray): Cipher
+
+        fun decryptCipher(
+            key: SecretKey,
+            iv: ByteArray,
+        ): Cipher
     }
 
     companion object {
@@ -91,7 +96,10 @@ private object JcaAesGcmCipherFactory : AndroidKeystoreSensitiveValueCipher.AesG
             init(Cipher.ENCRYPT_MODE, key)
         }
 
-    override fun decryptCipher(key: SecretKey, iv: ByteArray): Cipher {
+    override fun decryptCipher(
+        key: SecretKey,
+        iv: ByteArray,
+    ): Cipher {
         if (iv.isEmpty()) {
             throw IllegalArgumentException("Cipher IV must not be empty")
         }
@@ -107,29 +115,31 @@ private class AndroidKeystoreSecretKeyProvider(
     override fun getOrCreateKey(): SecretKey {
         require(keyAlias.isNotBlank()) { "Android Keystore key alias must not be blank" }
 
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE_PROVIDER).apply {
-            load(null)
-        }
+        val keyStore =
+            KeyStore.getInstance(ANDROID_KEYSTORE_PROVIDER).apply {
+                load(null)
+            }
         val existingKey = keyStore.getKey(keyAlias, null)
         if (existingKey is SecretKey) {
             return existingKey
         }
 
-        return KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES,
-            ANDROID_KEYSTORE_PROVIDER,
-        ).apply {
-            init(
-                KeyGenParameterSpec.Builder(
-                    keyAlias,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+        return KeyGenerator
+            .getInstance(
+                KeyProperties.KEY_ALGORITHM_AES,
+                ANDROID_KEYSTORE_PROVIDER,
+            ).apply {
+                init(
+                    KeyGenParameterSpec
+                        .Builder(
+                            keyAlias,
+                            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                        ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setKeySize(256)
+                        .build(),
                 )
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .build(),
-            )
-        }.generateKey()
+            }.generateKey()
     }
 
     private companion object {
@@ -138,9 +148,10 @@ private class AndroidKeystoreSecretKeyProvider(
 }
 
 private fun ByteArray.decodeStrictUtf8(): String {
-    val decoder = Charsets.UTF_8
-        .newDecoder()
-        .onMalformedInput(CodingErrorAction.REPORT)
-        .onUnmappableCharacter(CodingErrorAction.REPORT)
+    val decoder =
+        Charsets.UTF_8
+            .newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
     return decoder.decode(ByteBuffer.wrap(this)).toString()
 }

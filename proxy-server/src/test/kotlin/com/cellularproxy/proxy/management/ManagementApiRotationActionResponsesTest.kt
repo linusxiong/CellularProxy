@@ -12,15 +12,17 @@ import kotlin.test.assertEquals
 class ManagementApiRotationActionResponsesTest {
     @Test
     fun `accepted rotation transition renders accepted response`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Accepted,
-                status = RotationStatus(
-                    state = RotationState.CheckingCooldown,
-                    operation = RotationOperation.MobileData,
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Accepted,
+                    status =
+                        RotationStatus(
+                            state = RotationState.CheckingCooldown,
+                            operation = RotationOperation.MobileData,
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(202, response.statusCode)
         assertEquals(
@@ -31,16 +33,18 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `duplicate rotation transition renders conflict response`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Duplicate,
-                status = RotationStatus(
-                    state = RotationState.WaitingForNetworkReturn,
-                    operation = RotationOperation.AirplaneMode,
-                    oldPublicIp = "198.51.100.10",
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Duplicate,
+                    status =
+                        RotationStatus(
+                            state = RotationState.WaitingForNetworkReturn,
+                            operation = RotationOperation.AirplaneMode,
+                            oldPublicIp = "198.51.100.10",
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -51,12 +55,13 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `ignored rotation transition renders conflict response`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Ignored,
-                status = RotationStatus.idle(),
-            ),
-        )
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Ignored,
+                    status = RotationStatus.idle(),
+                ),
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -67,16 +72,18 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `rejected rotation transition renders conflict response`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Rejected,
-                status = RotationStatus(
-                    state = RotationState.Failed,
-                    operation = RotationOperation.MobileData,
-                    failureReason = RotationFailureReason.RootOperationsDisabled,
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Rejected,
+                    status =
+                        RotationStatus(
+                            state = RotationState.Failed,
+                            operation = RotationOperation.MobileData,
+                            failureReason = RotationFailureReason.RootOperationsDisabled,
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -87,18 +94,20 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `completed rotation transition renders public ip change result`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Accepted,
-                status = RotationStatus(
-                    state = RotationState.Completed,
-                    operation = RotationOperation.MobileData,
-                    oldPublicIp = "198.51.100.10",
-                    newPublicIp = "203.0.113.25",
-                    publicIpChanged = true,
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Accepted,
+                    status =
+                        RotationStatus(
+                            state = RotationState.Completed,
+                            operation = RotationOperation.MobileData,
+                            oldPublicIp = "198.51.100.10",
+                            newPublicIp = "203.0.113.25",
+                            publicIpChanged = true,
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(
             """{"accepted":true,"disposition":"accepted","rotation":{"state":"completed","operation":"mobile_data","oldPublicIp":"198.51.100.10","newPublicIp":"203.0.113.25","publicIpChanged":true,"failureReason":null}}""",
@@ -108,16 +117,18 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `failed rotation transition renders structured failure reason`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Accepted,
-                status = RotationStatus(
-                    state = RotationState.Failed,
-                    operation = RotationOperation.AirplaneMode,
-                    failureReason = RotationFailureReason.RootCommandTimedOut,
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Accepted,
+                    status =
+                        RotationStatus(
+                            state = RotationState.Failed,
+                            operation = RotationOperation.AirplaneMode,
+                            failureReason = RotationFailureReason.RootCommandTimedOut,
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(
             """{"accepted":true,"disposition":"accepted","rotation":{"state":"failed","operation":"airplane_mode","oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":"root_command_timed_out"}}""",
@@ -127,16 +138,18 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `root disabled rotation rejection renders structured failure reason`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Rejected,
-                status = RotationStatus(
-                    state = RotationState.Failed,
-                    operation = RotationOperation.MobileData,
-                    failureReason = RotationFailureReason.RootOperationsDisabled,
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Rejected,
+                    status =
+                        RotationStatus(
+                            state = RotationState.Failed,
+                            operation = RotationOperation.MobileData,
+                            failureReason = RotationFailureReason.RootOperationsDisabled,
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(
@@ -147,16 +160,18 @@ class ManagementApiRotationActionResponsesTest {
 
     @Test
     fun `execution unavailable rotation rejection renders structured failure reason`() {
-        val response = ManagementApiRotationActionResponses.transition(
-            RotationTransitionResult(
-                disposition = RotationTransitionDisposition.Rejected,
-                status = RotationStatus(
-                    state = RotationState.Failed,
-                    operation = RotationOperation.AirplaneMode,
-                    failureReason = RotationFailureReason.ExecutionUnavailable,
+        val response =
+            ManagementApiRotationActionResponses.transition(
+                RotationTransitionResult(
+                    disposition = RotationTransitionDisposition.Rejected,
+                    status =
+                        RotationStatus(
+                            state = RotationState.Failed,
+                            operation = RotationOperation.AirplaneMode,
+                            failureReason = RotationFailureReason.ExecutionUnavailable,
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(409, response.statusCode)
         assertEquals(

@@ -12,10 +12,11 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `disabled proxy authentication accepts missing authorization`() {
-        val decision = ProxyAuthenticationPolicy.evaluate(
-            config = ProxyAuthenticationConfig(authEnabled = false, credential = credential),
-            proxyAuthorization = null,
-        )
+        val decision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = ProxyAuthenticationConfig(authEnabled = false, credential = credential),
+                proxyAuthorization = null,
+            )
 
         assertTrue(decision.accepted)
         assertEquals(null, decision.rejectionReason)
@@ -23,10 +24,11 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `enabled proxy authentication accepts matching basic credentials`() {
-        val decision = ProxyAuthenticationPolicy.evaluate(
-            config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-            proxyAuthorization = basicHeader("proxy-user", "proxy-pass"),
-        )
+        val decision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                proxyAuthorization = basicHeader("proxy-user", "proxy-pass"),
+            )
 
         assertTrue(decision.accepted)
         assertEquals(null, decision.rejectionReason)
@@ -34,10 +36,11 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `enabled proxy authentication rejects missing authorization`() {
-        val decision = ProxyAuthenticationPolicy.evaluate(
-            config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-            proxyAuthorization = null,
-        )
+        val decision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                proxyAuthorization = null,
+            )
 
         assertFalse(decision.accepted)
         assertEquals(ProxyAuthenticationRejectionReason.MissingAuthorization, decision.rejectionReason)
@@ -45,10 +48,11 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `enabled proxy authentication rejects unsupported schemes`() {
-        val decision = ProxyAuthenticationPolicy.evaluate(
-            config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-            proxyAuthorization = "Bearer token",
-        )
+        val decision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                proxyAuthorization = "Bearer token",
+            )
 
         assertFalse(decision.accepted)
         assertEquals(ProxyAuthenticationRejectionReason.UnsupportedScheme, decision.rejectionReason)
@@ -56,20 +60,21 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `enabled proxy authentication rejects malformed basic credentials`() {
-        val decisions = listOf(
-            ProxyAuthenticationPolicy.evaluate(
-                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-                proxyAuthorization = "Basic !!!not-base64!!!",
-            ),
-            ProxyAuthenticationPolicy.evaluate(
-                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-                proxyAuthorization = Base64.getEncoder().encodeToString("missing-separator".toByteArray()).let { "Basic $it" },
-            ),
-            ProxyAuthenticationPolicy.evaluate(
-                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-                proxyAuthorization = "Basic ${Base64.getEncoder().encodeToString(byteArrayOf(0xC3.toByte()))}",
-            ),
-        )
+        val decisions =
+            listOf(
+                ProxyAuthenticationPolicy.evaluate(
+                    config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                    proxyAuthorization = "Basic !!!not-base64!!!",
+                ),
+                ProxyAuthenticationPolicy.evaluate(
+                    config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                    proxyAuthorization = Base64.getEncoder().encodeToString("missing-separator".toByteArray()).let { "Basic $it" },
+                ),
+                ProxyAuthenticationPolicy.evaluate(
+                    config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                    proxyAuthorization = "Basic ${Base64.getEncoder().encodeToString(byteArrayOf(0xC3.toByte()))}",
+                ),
+            )
 
         decisions.forEach { decision ->
             assertFalse(decision.accepted)
@@ -79,10 +84,11 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `enabled proxy authentication rejects mismatched credentials`() {
-        val decision = ProxyAuthenticationPolicy.evaluate(
-            config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-            proxyAuthorization = basicHeader("proxy-user", "wrong-pass"),
-        )
+        val decision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                proxyAuthorization = basicHeader("proxy-user", "wrong-pass"),
+            )
 
         assertFalse(decision.accepted)
         assertEquals(ProxyAuthenticationRejectionReason.CredentialMismatch, decision.rejectionReason)
@@ -90,10 +96,11 @@ class ProxyAuthenticationPolicyTest {
 
     @Test
     fun `authorization parsing tolerates scheme case and surrounding whitespace`() {
-        val decision = ProxyAuthenticationPolicy.evaluate(
-            config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
-            proxyAuthorization = "  bAsIc ${encoded("proxy-user:proxy-pass")}  ",
-        )
+        val decision =
+            ProxyAuthenticationPolicy.evaluate(
+                config = ProxyAuthenticationConfig(authEnabled = true, credential = credential),
+                proxyAuthorization = "  bAsIc ${encoded("proxy-user:proxy-pass")}  ",
+            )
 
         assertTrue(decision.accepted)
     }
@@ -128,7 +135,10 @@ class ProxyAuthenticationPolicyTest {
         assertFalse("proxy-pass" in renderedCredential)
     }
 
-    private fun basicHeader(username: String, password: String): String = "Basic ${encoded("$username:$password")}"
+    private fun basicHeader(
+        username: String,
+        password: String,
+    ): String = "Basic ${encoded("$username:$password")}"
 
     private fun encoded(value: String): String = Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))
 }

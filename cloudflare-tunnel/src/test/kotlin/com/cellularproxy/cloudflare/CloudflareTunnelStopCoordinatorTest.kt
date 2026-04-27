@@ -24,9 +24,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(connected, connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(connected, connection),
+            )
 
         assertTrue(connection.closed)
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
@@ -41,14 +42,16 @@ class CloudflareTunnelStopCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
         registry.install(connected, connection)
-        val coordinator = CloudflareTunnelStopCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelStopCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(connected),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(connected),
+            )
 
         assertTrue(connection.closed)
         assertNull(registry.currentSessionOrNull())
@@ -65,14 +68,16 @@ class CloudflareTunnelStopCoordinatorTest {
         registry.install(connected, connection)
         controlPlane.apply(CloudflareTunnelEvent.Degraded)
         val degraded = controlPlane.snapshot()
-        val coordinator = CloudflareTunnelStopCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelStopCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(degraded),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(degraded),
+            )
 
         assertTrue(connection.closed)
         assertNull(registry.currentSessionOrNull())
@@ -89,14 +94,16 @@ class CloudflareTunnelStopCoordinatorTest {
         registry.install(connected, connection)
         controlPlane.apply(CloudflareTunnelEvent.Failed("ProtocolError"))
         val failed = controlPlane.snapshot()
-        val coordinator = CloudflareTunnelStopCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelStopCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(failed),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(failed),
+            )
 
         assertTrue(connection.closed)
         assertNull(registry.currentSessionOrNull())
@@ -114,20 +121,23 @@ class CloudflareTunnelStopCoordinatorTest {
         controlPlane.apply(CloudflareTunnelEvent.Degraded)
         CloudflareTunnelReconnectCoordinator(
             controlPlane = controlPlane,
-            connector = CloudflareTunnelEdgeConnector {
-                CloudflareTunnelEdgeConnectionResult.Failed(CloudflareTunnelEdgeConnectionFailure.ProtocolError)
-            },
+            connector =
+                CloudflareTunnelEdgeConnector {
+                    CloudflareTunnelEdgeConnectionResult.Failed(CloudflareTunnelEdgeConnectionFailure.ProtocolError)
+                },
             sessionRegistry = registry,
         ).reconnectIfDegraded(controlPlane.snapshot(), credentials())
         val failed = controlPlane.snapshot()
-        val coordinator = CloudflareTunnelStopCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelStopCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(failed),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(failed),
+            )
 
         assertTrue(connection.closed)
         assertNull(registry.currentSessionOrNull())
@@ -144,14 +154,16 @@ class CloudflareTunnelStopCoordinatorTest {
         val registry = CloudflareTunnelEdgeSessionRegistry()
         val connection = TrackableEdgeConnection()
         registry.install(controlPlane.snapshot(), connection)
-        val coordinator = CloudflareTunnelStopCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelStopCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Stale>(
-            coordinator.stopIfCurrent(staleConnected),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Stale>(
+                coordinator.stopIfCurrent(staleConnected),
+            )
 
         assertFalse(connection.closed)
         assertEquals(staleConnected, result.expectedSnapshot)
@@ -165,9 +177,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val starting = controlPlane.apply(CloudflareTunnelEvent.StartRequested).snapshot
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(starting, activeConnection = null),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(starting, activeConnection = null),
+            )
 
         assertEquals(CloudflareTunnelStatus.stopped(), result.transition.status)
         assertEquals(CloudflareTunnelStatus.stopped(), controlPlane.currentStatus)
@@ -181,9 +194,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(degraded, connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(degraded, connection),
+            )
 
         assertTrue(connection.closed)
         assertEquals(CloudflareTunnelStatus.stopped(), result.transition.status)
@@ -197,9 +211,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val failed = controlPlane.snapshot()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(failed, activeConnection = null),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(failed, activeConnection = null),
+            )
 
         assertEquals(CloudflareTunnelStatus.stopped(), result.transition.status)
         assertEquals(CloudflareTunnelStatus.stopped(), controlPlane.currentStatus)
@@ -212,9 +227,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.NoAction>(
-            coordinator.stopIfCurrent(controlPlane.snapshot(), connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.NoAction>(
+                coordinator.stopIfCurrent(controlPlane.snapshot(), connection),
+            )
 
         assertFalse(connection.closed)
         assertEquals(CloudflareTunnelStatus.stopped(), result.snapshot.status)
@@ -229,9 +245,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Stale>(
-            coordinator.stopIfCurrent(staleConnected, connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Stale>(
+                coordinator.stopIfCurrent(staleConnected, connection),
+            )
 
         assertFalse(connection.closed)
         assertEquals(staleConnected, result.expectedSnapshot)
@@ -247,24 +264,27 @@ class CloudflareTunnelStopCoordinatorTest {
         val competingTransition = CountDownLatch(1)
         val statusWasStoppedDuringClose = AtomicBoolean(false)
         val competingTransitionCompletedDuringClose = AtomicBoolean(false)
-        val connection = CloudflareTunnelEdgeConnection {
-            statusWasStoppedDuringClose.set(controlPlane.currentStatus == CloudflareTunnelStatus.stopped())
-            val competingThread = Thread {
-                competingTransitionAttempted.countDown()
-                controlPlane.apply(CloudflareTunnelEvent.StopRequested)
-                competingTransition.countDown()
+        val connection =
+            CloudflareTunnelEdgeConnection {
+                statusWasStoppedDuringClose.set(controlPlane.currentStatus == CloudflareTunnelStatus.stopped())
+                val competingThread =
+                    Thread {
+                        competingTransitionAttempted.countDown()
+                        controlPlane.apply(CloudflareTunnelEvent.StopRequested)
+                        competingTransition.countDown()
+                    }
+                competingThread.start()
+                assertTrue(competingTransitionAttempted.await(1, TimeUnit.SECONDS))
+                competingTransitionCompletedDuringClose.set(
+                    competingTransition.await(1, TimeUnit.SECONDS),
+                )
             }
-            competingThread.start()
-            assertTrue(competingTransitionAttempted.await(1, TimeUnit.SECONDS))
-            competingTransitionCompletedDuringClose.set(
-                competingTransition.await(1, TimeUnit.SECONDS),
-            )
-        }
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(connected, connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(connected, connection),
+            )
 
         assertEquals(CloudflareTunnelStatus.stopped(), result.transition.status)
         assertEquals(CloudflareTunnelStatus.stopped(), controlPlane.currentStatus)
@@ -279,14 +299,16 @@ class CloudflareTunnelStopCoordinatorTest {
         val connected = controlPlane.snapshot()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
-            coordinator.stopIfCurrent(
-                expectedSnapshot = connected,
-                activeConnection = CloudflareTunnelEdgeConnection {
-                    throw java.io.IOException("raw close failure tunnel-secret")
-                },
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.Applied>(
+                coordinator.stopIfCurrent(
+                    expectedSnapshot = connected,
+                    activeConnection =
+                        CloudflareTunnelEdgeConnection {
+                            throw java.io.IOException("raw close failure tunnel-secret")
+                        },
+                ),
+            )
 
         assertEquals(CloudflareTunnelStatus.stopped(), result.transition.status)
         assertEquals(CloudflareTunnelStatus.stopped(), controlPlane.currentStatus)
@@ -302,9 +324,10 @@ class CloudflareTunnelStopCoordinatorTest {
             assertFailsWith<InterruptedException> {
                 coordinator.stopIfCurrent(
                     expectedSnapshot = connected,
-                    activeConnection = CloudflareTunnelEdgeConnection {
-                        throw InterruptedException("shutdown")
-                    },
+                    activeConnection =
+                        CloudflareTunnelEdgeConnection {
+                            throw InterruptedException("shutdown")
+                        },
                 )
             }
 
@@ -324,9 +347,10 @@ class CloudflareTunnelStopCoordinatorTest {
         assertFailsWith<CancellationException> {
             coordinator.stopIfCurrent(
                 expectedSnapshot = connected,
-                activeConnection = CloudflareTunnelEdgeConnection {
-                    throw CancellationException("cancelled")
-                },
+                activeConnection =
+                    CloudflareTunnelEdgeConnection {
+                        throw CancellationException("cancelled")
+                    },
             )
         }
 
@@ -339,9 +363,10 @@ class CloudflareTunnelStopCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val coordinator = CloudflareTunnelStopCoordinator(controlPlane)
 
-        val result = assertIs<CloudflareTunnelStopCoordinatorResult.NoAction>(
-            coordinator.stopIfCurrent(controlPlane.snapshot(), connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelStopCoordinatorResult.NoAction>(
+                coordinator.stopIfCurrent(controlPlane.snapshot(), connection),
+            )
 
         assertFalse(connection.closed)
         assertEquals(CloudflareTunnelStatus.disabled(), result.snapshot.status)
@@ -349,12 +374,14 @@ class CloudflareTunnelStopCoordinatorTest {
 
     @Test
     fun `applied stop result rejects non-accepted transition`() {
-        val transition = CloudflareTunnelControlPlane()
-            .apply(CloudflareTunnelEvent.StopRequested)
+        val transition =
+            CloudflareTunnelControlPlane()
+                .apply(CloudflareTunnelEvent.StopRequested)
 
-        val failure = kotlin.runCatching {
-            CloudflareTunnelStopCoordinatorResult.Applied(transition)
-        }
+        val failure =
+            kotlin.runCatching {
+                CloudflareTunnelStopCoordinatorResult.Applied(transition)
+            }
 
         assertTrue(failure.isFailure)
     }

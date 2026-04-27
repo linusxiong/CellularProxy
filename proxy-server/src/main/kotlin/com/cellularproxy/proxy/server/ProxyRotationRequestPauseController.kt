@@ -18,8 +18,7 @@ class ProxyRotationRequestPauseController(
     val proxyRequestsPaused: Boolean
         get() = paused.get()
 
-    fun currentConfig(): ProxyIngressPreflightConfig =
-        baseConfig.copy(proxyRequestsPaused = paused.get())
+    fun currentConfig(): ProxyIngressPreflightConfig = baseConfig.copy(proxyRequestsPaused = paused.get())
 
     override fun pauseProxyRequests(): RotationEvent.NewRequestsPaused {
         paused.set(true)

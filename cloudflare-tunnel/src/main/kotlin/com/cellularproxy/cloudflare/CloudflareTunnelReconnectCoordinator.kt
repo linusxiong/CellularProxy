@@ -30,31 +30,33 @@ class CloudflareTunnelReconnectCoordinator(
         val event = connectionResult.toCloudflareTunnelEvent()
 
         var connectionToClose: CloudflareTunnelEdgeConnection? = null
-        val result = synchronized(controlPlane) {
-            when (val guarded = controlPlane.apply(expectedSnapshot, event)) {
-                is CloudflareTunnelGuardedTransitionResult.Evaluated -> {
-                    if (connectionResult is CloudflareTunnelEdgeConnectionResult.Connected) {
-                        connectionToClose = sessionRegistry?.installConnectedSession(
-                            snapshot = guarded.transition.snapshot,
-                            connection = connectionResult.connection,
+        val result =
+            synchronized(controlPlane) {
+                when (val guarded = controlPlane.apply(expectedSnapshot, event)) {
+                    is CloudflareTunnelGuardedTransitionResult.Evaluated -> {
+                        if (connectionResult is CloudflareTunnelEdgeConnectionResult.Connected) {
+                            connectionToClose =
+                                sessionRegistry?.installConnectedSession(
+                                    snapshot = guarded.transition.snapshot,
+                                    connection = connectionResult.connection,
+                                )
+                        }
+                        CloudflareTunnelReconnectCoordinatorResult.Applied(
+                            connectionResult = connectionResult,
+                            transition = guarded.transition,
                         )
                     }
-                    CloudflareTunnelReconnectCoordinatorResult.Applied(
-                        connectionResult = connectionResult,
-                        transition = guarded.transition,
-                    )
-                }
-                is CloudflareTunnelGuardedTransitionResult.Stale -> {
-                    if (connectionResult is CloudflareTunnelEdgeConnectionResult.Connected) {
-                        connectionToClose = connectionResult.connection
+                    is CloudflareTunnelGuardedTransitionResult.Stale -> {
+                        if (connectionResult is CloudflareTunnelEdgeConnectionResult.Connected) {
+                            connectionToClose = connectionResult.connection
+                        }
+                        CloudflareTunnelReconnectCoordinatorResult.Stale(
+                            expectedSnapshot = guarded.expectedSnapshot,
+                            actualSnapshot = guarded.actualSnapshot,
+                        )
                     }
-                    CloudflareTunnelReconnectCoordinatorResult.Stale(
-                        expectedSnapshot = guarded.expectedSnapshot,
-                        actualSnapshot = guarded.actualSnapshot,
-                    )
                 }
             }
-        }
         connectionToClose?.closeSuppressingExceptions()
         return result
     }

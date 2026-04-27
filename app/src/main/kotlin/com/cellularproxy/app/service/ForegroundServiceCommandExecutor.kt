@@ -12,7 +12,9 @@ interface ForegroundProxyRuntimeLifecycle {
 
 sealed interface ForegroundProxyRuntimeActionResult {
     data object Started : ForegroundProxyRuntimeActionResult
+
     data object Stopped : ForegroundProxyRuntimeActionResult
+
     data object NotRequested : ForegroundProxyRuntimeActionResult
 
     data class Failed(
@@ -25,16 +27,17 @@ data class ForegroundServiceCommandExecution(
     val runtimeActionResult: ForegroundProxyRuntimeActionResult,
 ) {
     init {
-        val valid = when (plan.runtimeEffect) {
-            ForegroundServiceRuntimeEffect.StartProxyRuntime ->
-                runtimeActionResult == ForegroundProxyRuntimeActionResult.Started ||
-                    runtimeActionResult is ForegroundProxyRuntimeActionResult.Failed
-            ForegroundServiceRuntimeEffect.StopProxyRuntime ->
-                runtimeActionResult == ForegroundProxyRuntimeActionResult.Stopped ||
-                    runtimeActionResult is ForegroundProxyRuntimeActionResult.Failed
-            ForegroundServiceRuntimeEffect.None ->
-                runtimeActionResult == ForegroundProxyRuntimeActionResult.NotRequested
-        }
+        val valid =
+            when (plan.runtimeEffect) {
+                ForegroundServiceRuntimeEffect.StartProxyRuntime ->
+                    runtimeActionResult == ForegroundProxyRuntimeActionResult.Started ||
+                        runtimeActionResult is ForegroundProxyRuntimeActionResult.Failed
+                ForegroundServiceRuntimeEffect.StopProxyRuntime ->
+                    runtimeActionResult == ForegroundProxyRuntimeActionResult.Stopped ||
+                        runtimeActionResult is ForegroundProxyRuntimeActionResult.Failed
+                ForegroundServiceRuntimeEffect.None ->
+                    runtimeActionResult == ForegroundProxyRuntimeActionResult.NotRequested
+            }
         require(valid) {
             "Foreground service execution result must match the planned runtime effect"
         }
@@ -48,29 +51,32 @@ object ForegroundServiceCommandExecutor {
         applyServiceEffect: (ForegroundServiceCommandEffect) -> Unit,
     ): ForegroundServiceCommandExecution {
         val plan = ForegroundServiceCommandEffectPlanner.plan(commandResult)
-        val runtimeResult = when (plan.runtimeEffect) {
-            ForegroundServiceRuntimeEffect.StartProxyRuntime -> {
-                applyServiceEffect(plan.serviceEffect)
-                val startResult = invokeRuntimeAction { runtimeLifecycle.startProxyRuntime() }
-                    .startedOrFailed()
-                if (startResult is ForegroundProxyRuntimeActionResult.Failed) {
-                    applyServiceEffect(ForegroundServiceCommandEffect.StopForegroundAndSelf)
+        val runtimeResult =
+            when (plan.runtimeEffect) {
+                ForegroundServiceRuntimeEffect.StartProxyRuntime -> {
+                    applyServiceEffect(plan.serviceEffect)
+                    val startResult =
+                        invokeRuntimeAction { runtimeLifecycle.startProxyRuntime() }
+                            .startedOrFailed()
+                    if (startResult is ForegroundProxyRuntimeActionResult.Failed) {
+                        applyServiceEffect(ForegroundServiceCommandEffect.StopForegroundAndSelf)
+                    }
+                    startResult
                 }
-                startResult
-            }
 
-            ForegroundServiceRuntimeEffect.StopProxyRuntime -> {
-                val stopResult = invokeRuntimeAction { runtimeLifecycle.stopProxyRuntime() }
-                    .stoppedOrFailed()
-                applyServiceEffect(plan.serviceEffect)
-                stopResult
-            }
+                ForegroundServiceRuntimeEffect.StopProxyRuntime -> {
+                    val stopResult =
+                        invokeRuntimeAction { runtimeLifecycle.stopProxyRuntime() }
+                            .stoppedOrFailed()
+                    applyServiceEffect(plan.serviceEffect)
+                    stopResult
+                }
 
-            ForegroundServiceRuntimeEffect.None -> {
-                applyServiceEffect(plan.serviceEffect)
-                ForegroundProxyRuntimeActionResult.NotRequested
+                ForegroundServiceRuntimeEffect.None -> {
+                    applyServiceEffect(plan.serviceEffect)
+                    ForegroundProxyRuntimeActionResult.NotRequested
+                }
             }
-        }
 
         return ForegroundServiceCommandExecution(
             plan = plan,
@@ -108,9 +114,7 @@ private fun RuntimeActionInvocationResult.stoppedOrFailed(): ForegroundProxyRunt
     }
 
 object UninstalledForegroundProxyRuntimeLifecycle : ForegroundProxyRuntimeLifecycle {
-    override fun startProxyRuntime(): Nothing =
-        throw IllegalStateException("Foreground proxy runtime lifecycle is not installed")
+    override fun startProxyRuntime(): Nothing = throw IllegalStateException("Foreground proxy runtime lifecycle is not installed")
 
-    override fun stopProxyRuntime(): Nothing =
-        throw IllegalStateException("Foreground proxy runtime lifecycle is not installed")
+    override fun stopProxyRuntime(): Nothing = throw IllegalStateException("Foreground proxy runtime lifecycle is not installed")
 }

@@ -17,29 +17,34 @@ import kotlin.time.Duration.Companion.seconds
 class PlainConfigPreferencesMapperTest {
     @Test
     fun `round trips non-sensitive app configuration through preferences`() {
-        val config = AppConfig(
-            proxy = ProxyConfig(
-                listenHost = "127.0.0.1",
-                listenPort = 8_888,
-                authEnabled = false,
-                maxConcurrentConnections = 12,
-            ),
-            network = NetworkConfig(defaultRoutePolicy = RouteTarget.Cellular),
-            rotation = RotationConfig(
-                strictIpChangeRequired = true,
-                mobileDataOffDelay = 5.seconds,
-                networkReturnTimeout = 75.seconds,
-                cooldown = 240.seconds,
-            ),
-            root = RootConfig(
-                operationsEnabled = true,
-            ),
-            cloudflare = CloudflareConfig(
-                enabled = true,
-                tunnelTokenPresent = true,
-                managementHostnameLabel = "manage.example.com",
-            ),
-        )
+        val config =
+            AppConfig(
+                proxy =
+                    ProxyConfig(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8_888,
+                        authEnabled = false,
+                        maxConcurrentConnections = 12,
+                    ),
+                network = NetworkConfig(defaultRoutePolicy = RouteTarget.Cellular),
+                rotation =
+                    RotationConfig(
+                        strictIpChangeRequired = true,
+                        mobileDataOffDelay = 5.seconds,
+                        networkReturnTimeout = 75.seconds,
+                        cooldown = 240.seconds,
+                    ),
+                root =
+                    RootConfig(
+                        operationsEnabled = true,
+                    ),
+                cloudflare =
+                    CloudflareConfig(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+            )
 
         val preferences = PlainConfigPreferencesMapper.toPreferences(config)
         val restored = PlainConfigPreferencesMapper.fromPreferences(preferences)
@@ -56,14 +61,15 @@ class PlainConfigPreferencesMapperTest {
 
     @Test
     fun `invalid persisted enum and duration values fall back to defaults`() {
-        val restored = PlainConfigPreferencesMapper.fromPreferences(
-            preferencesOf(
-                PlainConfigPreferenceKeys.defaultRoutePolicy to "satellite",
-                PlainConfigPreferenceKeys.mobileDataOffDelay to (-1L),
-                PlainConfigPreferenceKeys.networkReturnTimeout to 0L,
-                PlainConfigPreferenceKeys.cooldown to (-5L),
-            ),
-        )
+        val restored =
+            PlainConfigPreferencesMapper.fromPreferences(
+                preferencesOf(
+                    PlainConfigPreferenceKeys.defaultRoutePolicy to "satellite",
+                    PlainConfigPreferenceKeys.mobileDataOffDelay to (-1L),
+                    PlainConfigPreferenceKeys.networkReturnTimeout to 0L,
+                    PlainConfigPreferenceKeys.cooldown to (-5L),
+                ),
+            )
 
         assertEquals(RouteTarget.Automatic, restored.network.defaultRoutePolicy)
         assertEquals(3.seconds, restored.rotation.mobileDataOffDelay)
@@ -73,13 +79,14 @@ class PlainConfigPreferencesMapperTest {
 
     @Test
     fun `invalid persisted proxy listener values fall back to defaults`() {
-        val restored = PlainConfigPreferencesMapper.fromPreferences(
-            preferencesOf(
-                PlainConfigPreferenceKeys.proxyListenHost to "example.com",
-                PlainConfigPreferenceKeys.proxyListenPort to 65_536,
-                PlainConfigPreferenceKeys.proxyMaxConcurrentConnections to 0,
-            ),
-        )
+        val restored =
+            PlainConfigPreferencesMapper.fromPreferences(
+                preferencesOf(
+                    PlainConfigPreferenceKeys.proxyListenHost to "example.com",
+                    PlainConfigPreferenceKeys.proxyListenPort to 65_536,
+                    PlainConfigPreferenceKeys.proxyMaxConcurrentConnections to 0,
+                ),
+            )
 
         assertEquals("0.0.0.0", restored.proxy.listenHost)
         assertEquals(8080, restored.proxy.listenPort)
@@ -88,16 +95,18 @@ class PlainConfigPreferencesMapperTest {
 
     @Test
     fun `plain preferences do not contain raw sensitive credential values`() {
-        val preferences = PlainConfigPreferencesMapper.toPreferences(
-            AppConfig.default().copy(
-                proxy = AppConfig.default().proxy.copy(authEnabled = true),
-                cloudflare = AppConfig.default().cloudflare.copy(
-                    enabled = true,
-                    tunnelTokenPresent = true,
-                    managementHostnameLabel = "public-hostname-only",
+        val preferences =
+            PlainConfigPreferencesMapper.toPreferences(
+                AppConfig.default().copy(
+                    proxy = AppConfig.default().proxy.copy(authEnabled = true),
+                    cloudflare =
+                        AppConfig.default().cloudflare.copy(
+                            enabled = true,
+                            tunnelTokenPresent = true,
+                            managementHostnameLabel = "public-hostname-only",
+                        ),
                 ),
-            ),
-        )
+            )
 
         assertEquals(
             setOf(
@@ -122,13 +131,15 @@ class PlainConfigPreferencesMapperTest {
 
     @Test
     fun `replacing preferences removes stale nullable hostname labels`() {
-        val preferences = PlainConfigPreferencesMapper.toPreferences(
-            AppConfig.default().copy(
-                cloudflare = AppConfig.default().cloudflare.copy(
-                    managementHostnameLabel = "old.example.com",
+        val preferences =
+            PlainConfigPreferencesMapper.toPreferences(
+                AppConfig.default().copy(
+                    cloudflare =
+                        AppConfig.default().cloudflare.copy(
+                            managementHostnameLabel = "old.example.com",
+                        ),
                 ),
-            ),
-        ) as androidx.datastore.preferences.core.MutablePreferences
+            ) as androidx.datastore.preferences.core.MutablePreferences
 
         PlainConfigPreferencesMapper.replacePreferences(
             preferences = preferences,

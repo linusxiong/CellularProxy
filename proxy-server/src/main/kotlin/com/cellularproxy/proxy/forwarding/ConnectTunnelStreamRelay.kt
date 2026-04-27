@@ -54,15 +54,16 @@ object ConnectTunnelStreamRelay {
         var bytesRelayed = 0L
 
         while (true) {
-            val readBytes = try {
-                input.read(buffer)
-            } catch (_: IOException) {
-                return ConnectTunnelStreamRelayResult.Failed(
-                    direction = direction,
-                    bytesRelayed = bytesRelayed,
-                    reason = ConnectTunnelStreamRelayFailure.SourceReadFailed,
-                )
-            }
+            val readBytes =
+                try {
+                    input.read(buffer)
+                } catch (_: IOException) {
+                    return ConnectTunnelStreamRelayResult.Failed(
+                        direction = direction,
+                        bytesRelayed = bytesRelayed,
+                        reason = ConnectTunnelStreamRelayFailure.SourceReadFailed,
+                    )
+                }
 
             if (readBytes == END_OF_STREAM) {
                 return ConnectTunnelStreamRelayResult.Completed(

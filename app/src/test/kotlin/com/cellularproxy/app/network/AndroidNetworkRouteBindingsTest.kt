@@ -4,6 +4,7 @@ import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
+import kotlinx.coroutines.runBlocking
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -11,8 +12,6 @@ import java.net.SocketTimeoutException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertSame
-import kotlinx.coroutines.runBlocking
 
 class AndroidNetworkRouteBindingsTest {
     @Test
@@ -54,34 +53,35 @@ class AndroidNetworkRouteBindingsTest {
 
     @Test
     fun `network monitor maps Android transport observations into route descriptors`() {
-        val monitor = AndroidNetworkRouteMonitor.forTesting {
-            listOf(
-                AndroidNetworkObservation(
-                    handle = 10L,
-                    transports = setOf(AndroidNetworkTransport.WiFi),
-                    hasInternet = true,
-                    isSuspended = false,
-                ),
-                AndroidNetworkObservation(
-                    handle = 11L,
-                    transports = setOf(AndroidNetworkTransport.Cellular),
-                    hasInternet = true,
-                    isSuspended = true,
-                ),
-                AndroidNetworkObservation(
-                    handle = 12L,
-                    transports = setOf(AndroidNetworkTransport.Vpn, AndroidNetworkTransport.Other),
-                    hasInternet = true,
-                    isSuspended = false,
-                ),
-                AndroidNetworkObservation(
-                    handle = 13L,
-                    transports = setOf(AndroidNetworkTransport.Other),
-                    hasInternet = true,
-                    isSuspended = false,
-                ),
-            )
-        }
+        val monitor =
+            AndroidNetworkRouteMonitor.forTesting {
+                listOf(
+                    AndroidNetworkObservation(
+                        handle = 10L,
+                        transports = setOf(AndroidNetworkTransport.WiFi),
+                        hasInternet = true,
+                        isSuspended = false,
+                    ),
+                    AndroidNetworkObservation(
+                        handle = 11L,
+                        transports = setOf(AndroidNetworkTransport.Cellular),
+                        hasInternet = true,
+                        isSuspended = true,
+                    ),
+                    AndroidNetworkObservation(
+                        handle = 12L,
+                        transports = setOf(AndroidNetworkTransport.Vpn, AndroidNetworkTransport.Other),
+                        hasInternet = true,
+                        isSuspended = false,
+                    ),
+                    AndroidNetworkObservation(
+                        handle = 13L,
+                        transports = setOf(AndroidNetworkTransport.Other),
+                        hasInternet = true,
+                        isSuspended = false,
+                    ),
+                )
+            }
 
         assertEquals(
             listOf(
@@ -129,128 +129,144 @@ class AndroidNetworkRouteBindingsTest {
     }
 
     @Test
-    fun `bound connector reports selected route unavailable when route disappears during connect`() = runBlocking {
-        val routeLostFailure = AndroidBoundNetworkSocketConnector.forTesting(
-            RecordingAndroidBoundSocketOperations(
-                availableHandles = listOf(42L),
-                resolvedAddresses = listOf(InetAddress.getByName("127.0.0.1")),
-                connectFailure = SelectedAndroidNetworkUnavailableException(),
-            ),
-        ).connect(androidCellularNetwork(), "example.test", 443, 1_000L)
+    fun `bound connector reports selected route unavailable when route disappears during connect`() =
+        runBlocking {
+            val routeLostFailure =
+                AndroidBoundNetworkSocketConnector
+                    .forTesting(
+                        RecordingAndroidBoundSocketOperations(
+                            availableHandles = listOf(42L),
+                            resolvedAddresses = listOf(InetAddress.getByName("127.0.0.1")),
+                            connectFailure = SelectedAndroidNetworkUnavailableException(),
+                        ),
+                    ).connect(androidCellularNetwork(), "example.test", 443, 1_000L)
 
-        assertEquals(
-            BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
-            routeLostFailure,
-        )
-    }
-
-    @Test
-    fun `bound connector resolves and connects through the descriptor network handle`() = runBlocking {
-        val server = ServerSocket(0)
-        val accepted = mutableListOf<Socket>()
-        val acceptThread = Thread {
-            accepted += server.accept()
-        }.also(Thread::start)
-        val operations = RecordingAndroidBoundSocketOperations(
-            availableHandles = listOf(42L),
-            resolvedAddresses = listOf(InetAddress.getByName("127.0.0.1")),
-        )
-        val connector = AndroidBoundNetworkSocketConnector.forTesting(operations)
-
-        try {
-            val result = connector.connect(
-                network = NetworkDescriptor(
-                    id = "android-network:42",
-                    category = NetworkCategory.Cellular,
-                    displayName = "Cellular",
-                    isAvailable = true,
-                ),
-                host = "example.test",
-                port = server.localPort,
-                timeoutMillis = 1_000L,
-            )
-
-            assertIs<BoundSocketConnectResult.Connected>(result)
-            assertEquals(42L, operations.resolvedHandle)
-            assertEquals("example.test", operations.resolvedHost)
-            assertEquals(42L, operations.connectedHandle)
-            assertEquals(server.localPort, operations.connectedPort)
-            assertEquals(1_000, operations.connectedTimeoutMillis)
             assertEquals(
-                NetworkDescriptor(
-                    id = "android-network:42",
-                    category = NetworkCategory.Cellular,
-                    displayName = "Cellular",
-                    isAvailable = true,
-                ),
-                result.network,
+                BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
+                routeLostFailure,
             )
-            result.socket.close()
-        } finally {
-            server.close()
-            acceptThread.join(1_000L)
-            accepted.forEach(Socket::close)
         }
-    }
 
     @Test
-    fun `bound connector fails quickly when descriptor handle is not currently available`() = runBlocking {
-        val operations = RecordingAndroidBoundSocketOperations(availableHandles = listOf(7L))
-        val connector = AndroidBoundNetworkSocketConnector.forTesting(operations)
+    fun `bound connector resolves and connects through the descriptor network handle`() =
+        runBlocking {
+            val server = ServerSocket(0)
+            val accepted = mutableListOf<Socket>()
+            val acceptThread =
+                Thread {
+                    accepted += server.accept()
+                }.also(Thread::start)
+            val operations =
+                RecordingAndroidBoundSocketOperations(
+                    availableHandles = listOf(42L),
+                    resolvedAddresses = listOf(InetAddress.getByName("127.0.0.1")),
+                )
+            val connector = AndroidBoundNetworkSocketConnector.forTesting(operations)
 
-        val result = connector.connect(
-            network = NetworkDescriptor(
-                id = "android-network:8",
-                category = NetworkCategory.WiFi,
-                displayName = "Wi-Fi",
-                isAvailable = true,
-            ),
-            host = "example.test",
-            port = 443,
-            timeoutMillis = 1_000L,
-        )
+            try {
+                val result =
+                    connector.connect(
+                        network =
+                            NetworkDescriptor(
+                                id = "android-network:42",
+                                category = NetworkCategory.Cellular,
+                                displayName = "Cellular",
+                                isAvailable = true,
+                            ),
+                        host = "example.test",
+                        port = server.localPort,
+                        timeoutMillis = 1_000L,
+                    )
 
-        assertEquals(
-            BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
-            result,
-        )
-        assertEquals(null, operations.resolvedHandle)
-    }
+                assertIs<BoundSocketConnectResult.Connected>(result)
+                assertEquals(42L, operations.resolvedHandle)
+                assertEquals("example.test", operations.resolvedHost)
+                assertEquals(42L, operations.connectedHandle)
+                assertEquals(server.localPort, operations.connectedPort)
+                assertEquals(1_000, operations.connectedTimeoutMillis)
+                assertEquals(
+                    NetworkDescriptor(
+                        id = "android-network:42",
+                        category = NetworkCategory.Cellular,
+                        displayName = "Cellular",
+                        isAvailable = true,
+                    ),
+                    result.network,
+                )
+                result.socket.close()
+            } finally {
+                server.close()
+                acceptThread.join(1_000L)
+                accepted.forEach(Socket::close)
+            }
+        }
 
     @Test
-    fun `bound connector maps DNS and connect failures without leaking target details`() = runBlocking {
-        val dnsFailure = AndroidBoundNetworkSocketConnector.forTesting(
-            RecordingAndroidBoundSocketOperations(
-                availableHandles = listOf(42L),
-                resolvedAddresses = emptyList(),
-            ),
-        ).connect(androidCellularNetwork(), "secret.example", 443, 1_000L)
+    fun `bound connector fails quickly when descriptor handle is not currently available`() =
+        runBlocking {
+            val operations = RecordingAndroidBoundSocketOperations(availableHandles = listOf(7L))
+            val connector = AndroidBoundNetworkSocketConnector.forTesting(operations)
 
-        val timeoutFailure = AndroidBoundNetworkSocketConnector.forTesting(
-            RecordingAndroidBoundSocketOperations(
-                availableHandles = listOf(42L),
-                resolvedAddresses = listOf(InetAddress.getByName("127.0.0.1")),
-                connectFailure = SocketTimeoutException("timed out connecting to secret.example"),
-            ),
-        ).connect(androidCellularNetwork(), "secret.example", 443, 1_000L)
+            val result =
+                connector.connect(
+                    network =
+                        NetworkDescriptor(
+                            id = "android-network:8",
+                            category = NetworkCategory.WiFi,
+                            displayName = "Wi-Fi",
+                            isAvailable = true,
+                        ),
+                    host = "example.test",
+                    port = 443,
+                    timeoutMillis = 1_000L,
+                )
 
-        assertEquals(
-            BoundSocketConnectResult.Failed(BoundSocketConnectFailure.DnsResolutionFailed),
-            dnsFailure,
-        )
-        assertEquals(
-            BoundSocketConnectResult.Failed(BoundSocketConnectFailure.ConnectionTimedOut),
-            timeoutFailure,
-        )
-        assertEquals(
-            "Failed(reason=DnsResolutionFailed)",
-            dnsFailure.toString(),
-        )
-        assertEquals(
-            "Failed(reason=ConnectionTimedOut)",
-            timeoutFailure.toString(),
-        )
-    }
+            assertEquals(
+                BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable),
+                result,
+            )
+            assertEquals(null, operations.resolvedHandle)
+        }
+
+    @Test
+    fun `bound connector maps DNS and connect failures without leaking target details`() =
+        runBlocking {
+            val dnsFailure =
+                AndroidBoundNetworkSocketConnector
+                    .forTesting(
+                        RecordingAndroidBoundSocketOperations(
+                            availableHandles = listOf(42L),
+                            resolvedAddresses = emptyList(),
+                        ),
+                    ).connect(androidCellularNetwork(), "secret.example", 443, 1_000L)
+
+            val timeoutFailure =
+                AndroidBoundNetworkSocketConnector
+                    .forTesting(
+                        RecordingAndroidBoundSocketOperations(
+                            availableHandles = listOf(42L),
+                            resolvedAddresses = listOf(InetAddress.getByName("127.0.0.1")),
+                            connectFailure = SocketTimeoutException("timed out connecting to secret.example"),
+                        ),
+                    ).connect(androidCellularNetwork(), "secret.example", 443, 1_000L)
+
+            assertEquals(
+                BoundSocketConnectResult.Failed(BoundSocketConnectFailure.DnsResolutionFailed),
+                dnsFailure,
+            )
+            assertEquals(
+                BoundSocketConnectResult.Failed(BoundSocketConnectFailure.ConnectionTimedOut),
+                timeoutFailure,
+            )
+            assertEquals(
+                "Failed(reason=DnsResolutionFailed)",
+                dnsFailure.toString(),
+            )
+            assertEquals(
+                "Failed(reason=ConnectionTimedOut)",
+                timeoutFailure.toString(),
+            )
+        }
 
     @Test
     fun `bound connector rejects invalid public inputs before resolving`() {
@@ -303,7 +319,10 @@ private class RecordingAndroidBoundSocketOperations(
 
     override fun currentNetworkHandles(): List<Long> = availableHandles
 
-    override fun resolveAll(handle: Long, host: String): List<InetAddress> {
+    override fun resolveAll(
+        handle: Long,
+        host: String,
+    ): List<InetAddress> {
         resolvedHandle = handle
         resolvedHost = host
         return resolvedAddresses

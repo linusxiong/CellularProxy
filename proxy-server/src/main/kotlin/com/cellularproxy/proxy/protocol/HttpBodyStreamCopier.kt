@@ -4,7 +4,9 @@ import java.io.InputStream
 import java.io.OutputStream
 
 sealed interface HttpBodyStreamCopyResult {
-    data class Completed(val bytesCopied: Long) : HttpBodyStreamCopyResult {
+    data class Completed(
+        val bytesCopied: Long,
+    ) : HttpBodyStreamCopyResult {
         init {
             require(bytesCopied >= 0) { "Copied byte count must be non-negative" }
         }
@@ -21,7 +23,9 @@ sealed interface HttpBodyStreamCopyResult {
         }
     }
 
-    data class ChunkedPrematureEnd(val bytesCopied: Long) : HttpBodyStreamCopyResult {
+    data class ChunkedPrematureEnd(
+        val bytesCopied: Long,
+    ) : HttpBodyStreamCopyResult {
         init {
             require(bytesCopied >= 0) { "Copied byte count must be non-negative" }
         }
@@ -125,11 +129,12 @@ object HttpBodyStreamCopier {
                     )
                 }
                 is ChunkLineReadResult.Completed -> {
-                    val chunkSize = chunkHeader.lineBytes.decodeChunkSizeOrNull()
-                        ?: return HttpBodyStreamCopyResult.MalformedChunk(
-                            bytesCopied = copied,
-                            reason = HttpChunkedBodyMalformedReason.InvalidChunkSize,
-                        )
+                    val chunkSize =
+                        chunkHeader.lineBytes.decodeChunkSizeOrNull()
+                            ?: return HttpBodyStreamCopyResult.MalformedChunk(
+                                bytesCopied = copied,
+                                reason = HttpChunkedBodyMalformedReason.InvalidChunkSize,
+                            )
 
                     output.write(chunkHeader.wireBytes)
                     copied += chunkHeader.wireBytes.size.toLong()
@@ -143,12 +148,13 @@ object HttpBodyStreamCopier {
                         )
                     }
 
-                    val bodyCopyResult = copyChunkData(
-                        input = input,
-                        output = output,
-                        chunkSize = chunkSize,
-                        bufferSize = bufferSize,
-                    )
+                    val bodyCopyResult =
+                        copyChunkData(
+                            input = input,
+                            output = output,
+                            chunkSize = chunkSize,
+                            bufferSize = bufferSize,
+                        )
                     copied += bodyCopyResult.bytesCopied
                     if (!bodyCopyResult.completed) {
                         return HttpBodyStreamCopyResult.ChunkedPrematureEnd(copied)
@@ -260,19 +266,25 @@ private const val LINE_FEED = '\n'.code
 private const val DELETE_CONTROL_CHAR = 0x7F
 private const val HEX_RADIX = 16
 private val CRLF_BYTES = byteArrayOf(CARRIAGE_RETURN.toByte(), LINE_FEED.toByte())
-private val HTTP_TOKEN_CHARS = (
-    ('0'..'9') +
-        ('A'..'Z') +
-        ('a'..'z') +
-        listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
-).map { it.code.toByte() }.toSet()
+private val HTTP_TOKEN_CHARS =
+    (
+        ('0'..'9') +
+            ('A'..'Z') +
+            ('a'..'z') +
+            listOf('!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~')
+    ).map { it.code.toByte() }.toSet()
 
 private sealed interface ChunkLineReadResult {
-    data class Completed(val lineBytes: ByteArray) : ChunkLineReadResult {
+    data class Completed(
+        val lineBytes: ByteArray,
+    ) : ChunkLineReadResult {
         val wireBytes: ByteArray = lineBytes + CRLF_BYTES
     }
+
     data object EndOfStream : ChunkLineReadResult
+
     data object LineTooLarge : ChunkLineReadResult
+
     data object MalformedLineEnding : ChunkLineReadResult
 }
 
@@ -369,8 +381,9 @@ private fun ByteArray.decodeChunkSizeOrNull(): Long? {
                 index += 1
             }
 
-            val valueEnd = line.parseChunkExtensionValueEnd(startIndex = index)
-                ?: return null
+            val valueEnd =
+                line.parseChunkExtensionValueEnd(startIndex = index)
+                    ?: return null
             if (valueEnd == index) {
                 return null
             }
@@ -395,14 +408,11 @@ private fun ByteArray.isValidTrailerLine(): Boolean {
     return name.isHttpToken() && value.none { it.isDisallowedHeaderValueControl() }
 }
 
-private fun ByteArray.isHttpToken(): Boolean =
-    isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
+private fun ByteArray.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
-private fun Char.isHttpToken(): Boolean =
-    code.toByte() in HTTP_TOKEN_CHARS
+private fun Char.isHttpToken(): Boolean = code.toByte() in HTTP_TOKEN_CHARS
 
-private fun Char.isChunkWhitespace(): Boolean =
-    this == ' '
+private fun Char.isChunkWhitespace(): Boolean = this == ' '
 
 private fun String.parseChunkExtensionValueEnd(startIndex: Int): Int? {
     if (startIndex >= length) {
@@ -435,16 +445,13 @@ private fun String.parseChunkExtensionValueEnd(startIndex: Int): Int? {
     return null
 }
 
-private fun Char.isQuotedTextChar(): Boolean =
-    this == ' ' || this == '!' || this in '#'..'[' || this in ']'..'~'
+private fun Char.isQuotedTextChar(): Boolean = this == ' ' || this == '!' || this in '#'..'[' || this in ']'..'~'
 
-private fun Char.isQuotedPairChar(): Boolean =
-    this == ' ' || this in '!'..'~'
+private fun Char.isQuotedPairChar(): Boolean = this == ' ' || this in '!'..'~'
 
 private fun Byte.isDisallowedHeaderValueControl(): Boolean {
     val unsigned = toInt() and 0xFF
     return unsigned in 0x00..0x1F || unsigned == DELETE_CONTROL_CHAR
 }
 
-private fun Char.isHexDigit(): Boolean =
-    this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'

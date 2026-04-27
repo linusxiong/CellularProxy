@@ -1,8 +1,8 @@
 package com.cellularproxy.root
 
 import com.cellularproxy.shared.logging.LogRedactionSecrets
-import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootCommandAuditPhase
+import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootCommandCategory
 import com.cellularproxy.shared.root.RootCommandOutcome
 import kotlin.test.Test
@@ -16,21 +16,24 @@ class RootCommandExecutorTest {
     fun `completed command emits started and completed audit records`() {
         val calls = mutableListOf<RootCommandProcessCall>()
         val auditRecords = mutableListOf<RootCommandAuditRecord>()
-        val executor = RootCommandExecutor(
-            processExecutor = recordingProcessExecutor(calls) {
-                assertEquals(RootCommandAuditPhase.Started, auditRecords.single().phase)
-                RootCommandProcessResult.Completed(
-                    exitCode = 0,
-                    stdout = "uid=0(root)",
-                    stderr = "",
-                )
-            },
-            recordAudit = auditRecords::add,
-        )
-        val command = RootShellCommand.trusted(
-            category = RootCommandCategory.RootAvailabilityCheck,
-            argv = listOf("su", "-c", "id -u"),
-        )
+        val executor =
+            RootCommandExecutor(
+                processExecutor =
+                    recordingProcessExecutor(calls) {
+                        assertEquals(RootCommandAuditPhase.Started, auditRecords.single().phase)
+                        RootCommandProcessResult.Completed(
+                            exitCode = 0,
+                            stdout = "uid=0(root)",
+                            stderr = "",
+                        )
+                    },
+                recordAudit = auditRecords::add,
+            )
+        val command =
+            RootShellCommand.trusted(
+                category = RootCommandCategory.RootAvailabilityCheck,
+                argv = listOf("su", "-c", "id -u"),
+            )
 
         val execution = executor.execute(command, timeoutMillis = 5_000)
 
@@ -49,14 +52,16 @@ class RootCommandExecutorTest {
     fun `process executor exception still emits started audit record before propagating`() {
         val failure = IllegalStateException("process startup failed")
         val auditRecords = mutableListOf<RootCommandAuditRecord>()
-        val executor = RootCommandExecutor(
-            processExecutor = RootCommandProcessExecutor { _, _ -> throw failure },
-            recordAudit = auditRecords::add,
-        )
+        val executor =
+            RootCommandExecutor(
+                processExecutor = RootCommandProcessExecutor { _, _ -> throw failure },
+                recordAudit = auditRecords::add,
+            )
 
-        val thrown = assertFailsWith<IllegalStateException> {
-            executor.execute(RootShellCommands.mobileDataEnable(), timeoutMillis = 1_000)
-        }
+        val thrown =
+            assertFailsWith<IllegalStateException> {
+                executor.execute(RootShellCommands.mobileDataEnable(), timeoutMillis = 1_000)
+            }
 
         assertSame(failure, thrown)
         assertEquals(listOf(RootCommandAuditPhase.Started, RootCommandAuditPhase.Completed), auditRecords.map { it.phase })
@@ -68,15 +73,17 @@ class RootCommandExecutorTest {
 
     @Test
     fun `nonzero exit code is reported as a failed root command`() {
-        val executor = RootCommandExecutor(
-            processExecutor = RootCommandProcessExecutor { _, _ ->
-                RootCommandProcessResult.Completed(
-                    exitCode = 12,
-                    stdout = "",
-                    stderr = "permission denied",
-                )
-            },
-        )
+        val executor =
+            RootCommandExecutor(
+                processExecutor =
+                    RootCommandProcessExecutor { _, _ ->
+                        RootCommandProcessResult.Completed(
+                            exitCode = 12,
+                            stdout = "",
+                            stderr = "permission denied",
+                        )
+                    },
+            )
 
         val execution = executor.execute(RootShellCommands.mobileDataDisable(), timeoutMillis = 1_000)
 
@@ -88,21 +95,24 @@ class RootCommandExecutorTest {
 
     @Test
     fun `completed command output and audit record are redacted`() {
-        val executor = RootCommandExecutor(
-            processExecutor = RootCommandProcessExecutor { _, _ ->
-                RootCommandProcessResult.Completed(
-                    exitCode = 0,
-                    stdout = "management-token",
-                    stderr = "Cookie: session=abc",
-                )
-            },
-        )
+        val executor =
+            RootCommandExecutor(
+                processExecutor =
+                    RootCommandProcessExecutor { _, _ ->
+                        RootCommandProcessResult.Completed(
+                            exitCode = 0,
+                            stdout = "management-token",
+                            stderr = "Cookie: session=abc",
+                        )
+                    },
+            )
 
-        val execution = executor.execute(
-            command = RootShellCommands.serviceRestart(packageName = "com.example.app"),
-            timeoutMillis = 1_000,
-            secrets = LogRedactionSecrets(managementApiToken = "management-token"),
-        )
+        val execution =
+            executor.execute(
+                command = RootShellCommands.serviceRestart(packageName = "com.example.app"),
+                timeoutMillis = 1_000,
+                secrets = LogRedactionSecrets(managementApiToken = "management-token"),
+            )
 
         assertEquals("[REDACTED]", execution.result.stdout)
         assertEquals("Cookie: [REDACTED]", execution.result.stderr)
@@ -112,20 +122,23 @@ class RootCommandExecutorTest {
 
     @Test
     fun `timeout outcome has no exit code and preserves redacted partial output`() {
-        val executor = RootCommandExecutor(
-            processExecutor = RootCommandProcessExecutor { _, _ ->
-                RootCommandProcessResult.TimedOut(
-                    stdout = "token=management-token",
-                    stderr = "Proxy-Authorization: Basic abc",
-                )
-            },
-        )
+        val executor =
+            RootCommandExecutor(
+                processExecutor =
+                    RootCommandProcessExecutor { _, _ ->
+                        RootCommandProcessResult.TimedOut(
+                            stdout = "token=management-token",
+                            stderr = "Proxy-Authorization: Basic abc",
+                        )
+                    },
+            )
 
-        val execution = executor.execute(
-            command = RootShellCommands.airplaneModeEnable(),
-            timeoutMillis = 1_000,
-            secrets = LogRedactionSecrets(managementApiToken = "management-token"),
-        )
+        val execution =
+            executor.execute(
+                command = RootShellCommands.airplaneModeEnable(),
+                timeoutMillis = 1_000,
+                secrets = LogRedactionSecrets(managementApiToken = "management-token"),
+            )
 
         assertEquals(RootCommandOutcome.Timeout, execution.result.outcome)
         assertEquals(null, execution.result.exitCode)
@@ -136,12 +149,14 @@ class RootCommandExecutorTest {
     @Test
     fun `invalid command arguments and timeout are rejected before process execution`() {
         var processCalled = false
-        val executor = RootCommandExecutor(
-            processExecutor = RootCommandProcessExecutor { _, _ ->
-                processCalled = true
-                RootCommandProcessResult.Completed(0, "", "")
-            },
-        )
+        val executor =
+            RootCommandExecutor(
+                processExecutor =
+                    RootCommandProcessExecutor { _, _ ->
+                        processCalled = true
+                        RootCommandProcessResult.Completed(0, "", "")
+                    },
+            )
 
         assertFailsWithMessage("Root command argv must not be empty") {
             RootShellCommand.trusted(RootCommandCategory.ServiceRestart, emptyList())
@@ -157,12 +172,13 @@ class RootCommandExecutorTest {
 
     @Test
     fun `root command execution factory rejects mismatched audit phases`() {
-        val result = com.cellularproxy.shared.root.RootCommandResult.completed(
-            category = RootCommandCategory.RootAvailabilityCheck,
-            exitCode = 0,
-            stdout = "",
-            stderr = "",
-        )
+        val result =
+            com.cellularproxy.shared.root.RootCommandResult.completed(
+                category = RootCommandCategory.RootAvailabilityCheck,
+                exitCode = 0,
+                stdout = "",
+                stderr = "",
+            )
         val completed = RootCommandAuditRecord.completed(result)
 
         assertFailsWithMessage("Started audit record must have started phase") {

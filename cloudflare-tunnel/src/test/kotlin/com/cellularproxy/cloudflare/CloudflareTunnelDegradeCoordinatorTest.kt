@@ -19,17 +19,19 @@ class CloudflareTunnelDegradeCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
         registry.install(connected, connection)
-        val coordinator = CloudflareTunnelDegradeCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDegradeCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDegradeCoordinatorResult.Applied>(
-            coordinator.markDegradedIfCurrent(
-                expectedSnapshot = connected,
-                activeConnection = connection,
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelDegradeCoordinatorResult.Applied>(
+                coordinator.markDegradedIfCurrent(
+                    expectedSnapshot = connected,
+                    activeConnection = connection,
+                ),
+            )
 
         assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
         assertEquals(CloudflareTunnelStatus.degraded(), result.transition.status)
@@ -50,14 +52,16 @@ class CloudflareTunnelDegradeCoordinatorTest {
         val connection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
         registry.install(currentConnected, connection)
-        val coordinator = CloudflareTunnelDegradeCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDegradeCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDegradeCoordinatorResult.Stale>(
-            coordinator.markDegradedIfCurrent(staleConnected, connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelDegradeCoordinatorResult.Stale>(
+                coordinator.markDegradedIfCurrent(staleConnected, connection),
+            )
 
         assertEquals(staleConnected, result.expectedSnapshot)
         assertEquals(currentConnected, result.actualSnapshot)
@@ -73,17 +77,19 @@ class CloudflareTunnelDegradeCoordinatorTest {
         val currentConnection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
         registry.install(connected, currentConnection)
-        val coordinator = CloudflareTunnelDegradeCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDegradeCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDegradeCoordinatorResult.ActiveSessionMismatch>(
-            coordinator.markDegradedIfCurrent(
-                expectedSnapshot = connected,
-                activeConnection = staleConnection,
-            ),
-        )
+        val result =
+            assertIs<CloudflareTunnelDegradeCoordinatorResult.ActiveSessionMismatch>(
+                coordinator.markDegradedIfCurrent(
+                    expectedSnapshot = connected,
+                    activeConnection = staleConnection,
+                ),
+            )
 
         assertEquals(connected, result.snapshot)
         assertEquals(CloudflareTunnelStatus.connected(), controlPlane.currentStatus)
@@ -96,14 +102,16 @@ class CloudflareTunnelDegradeCoordinatorTest {
         val controlPlane = CloudflareTunnelControlPlane()
         val connection = TrackableEdgeConnection()
         val registry = CloudflareTunnelEdgeSessionRegistry()
-        val coordinator = CloudflareTunnelDegradeCoordinator(
-            controlPlane = controlPlane,
-            sessionRegistry = registry,
-        )
+        val coordinator =
+            CloudflareTunnelDegradeCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = registry,
+            )
 
-        val result = assertIs<CloudflareTunnelDegradeCoordinatorResult.NoAction>(
-            coordinator.markDegradedIfCurrent(controlPlane.snapshot(), connection),
-        )
+        val result =
+            assertIs<CloudflareTunnelDegradeCoordinatorResult.NoAction>(
+                coordinator.markDegradedIfCurrent(controlPlane.snapshot(), connection),
+            )
 
         assertEquals(CloudflareTunnelStatus.disabled(), result.snapshot.status)
         assertEquals(CloudflareTunnelStatus.disabled(), controlPlane.currentStatus)
@@ -144,12 +152,14 @@ class CloudflareTunnelDegradeCoordinatorTest {
 
     @Test
     fun `applied degraded result rejects non-accepted transition`() {
-        val transition = CloudflareTunnelControlPlane()
-            .apply(CloudflareTunnelEvent.Degraded)
+        val transition =
+            CloudflareTunnelControlPlane()
+                .apply(CloudflareTunnelEvent.Degraded)
 
-        val failure = kotlin.runCatching {
-            CloudflareTunnelDegradeCoordinatorResult.Applied(transition)
-        }
+        val failure =
+            kotlin.runCatching {
+                CloudflareTunnelDegradeCoordinatorResult.Applied(transition)
+            }
 
         assertTrue(failure.isFailure)
     }
