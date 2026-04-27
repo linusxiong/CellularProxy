@@ -24,18 +24,21 @@ data class DiagnosticsResultModel(
             val completedByType = completed.associateBy(DiagnosticRunRecord::type)
             val results =
                 DiagnosticCheckType.entries.map { type ->
-                    completedByType[type]
-                        ?.toResultItem(secrets)
-                        ?: DiagnosticResultItem(
-                            type = type,
-                            label = type.label,
-                            status =
-                                if (type in running) {
-                                    DiagnosticResultStatus.Running
-                                } else {
-                                    DiagnosticResultStatus.NotRun
-                                },
-                        )
+                    when {
+                        type in running ->
+                            DiagnosticResultItem(
+                                type = type,
+                                label = type.label,
+                                status = DiagnosticResultStatus.Running,
+                            )
+                        completedByType[type] != null -> completedByType.getValue(type).toResultItem(secrets)
+                        else ->
+                            DiagnosticResultItem(
+                                type = type,
+                                label = type.label,
+                                status = DiagnosticResultStatus.NotRun,
+                            )
+                    }
                 }
             return DiagnosticsResultModel(
                 results = results,

@@ -1195,6 +1195,94 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `diagnostics screen state gates duplicate running checks and empty copy summary`() {
+        val runningState =
+            DiagnosticsScreenState.from(
+                model = DiagnosticsResultModel.running(DiagnosticCheckType.RootAvailability),
+            )
+        val emptyState = DiagnosticsScreenState.from(DiagnosticsResultModel.empty())
+        val completedState =
+            DiagnosticsScreenState.from(
+                model =
+                    DiagnosticsResultModel.from(
+                        completed =
+                            listOf(
+                                DiagnosticRunRecord(
+                                    type = DiagnosticCheckType.RootAvailability,
+                                    status = DiagnosticResultStatus.Passed,
+                                    duration = 12.milliseconds,
+                                    details = "Root shell available",
+                                ),
+                            ),
+                    ),
+            )
+
+        assertFalse(
+            DiagnosticsScreenAction.RunAllChecks in runningState.availableActions,
+            "Run-all must be unavailable while any diagnostic check is already running.",
+        )
+        listOf(emptyState, runningState).forEach { state ->
+            assertFalse(
+                DiagnosticsScreenAction.CopySummary in state.availableActions,
+                "Copy summary must be unavailable before there is a completed diagnostic result.",
+            )
+        }
+        assertTrue(
+            DiagnosticsScreenAction.CopySummary in completedState.availableActions,
+            "Copy summary must be available once a redacted result exists.",
+        )
+        assertFalse(
+            DiagnosticsScreenAction.RunCheck in
+                runningState.items
+                    .single { it.type == DiagnosticCheckType.RootAvailability }
+                    .availableActions,
+            "A running check must not expose its duplicate per-check run action.",
+        )
+        assertTrue(
+            DiagnosticsScreenAction.RunCheck in
+                runningState.items
+                    .single { it.type == DiagnosticCheckType.SelectedRoute }
+                    .availableActions,
+            "Other checks should remain individually runnable while one check is running.",
+        )
+
+        val rerunningCompletedState =
+            DiagnosticsScreenState.from(
+                model =
+                    DiagnosticsResultModel.from(
+                        completed =
+                            listOf(
+                                DiagnosticRunRecord(
+                                    type = DiagnosticCheckType.RootAvailability,
+                                    status = DiagnosticResultStatus.Passed,
+                                    duration = 12.milliseconds,
+                                ),
+                            ),
+                        running = setOf(DiagnosticCheckType.RootAvailability),
+                    ),
+            )
+
+        assertFalse(
+            DiagnosticsScreenAction.RunAllChecks in rerunningCompletedState.availableActions,
+            "Run-all must stay unavailable when a previously completed check is being rerun.",
+        )
+        assertEquals(
+            DiagnosticResultStatus.Running.label,
+            rerunningCompletedState.items
+                .single { it.type == DiagnosticCheckType.RootAvailability }
+                .status,
+            "Rerunning a completed check must render as running instead of stale completed state.",
+        )
+        assertFalse(
+            DiagnosticsScreenAction.RunCheck in
+                rerunningCompletedState.items
+                    .single { it.type == DiagnosticCheckType.RootAvailability }
+                    .availableActions,
+            "A rerunning completed check must not expose duplicate RunCheck.",
+        )
+    }
+
+    @Test
     fun `logs audit route renders dedicated review screen`() {
         val shellSource =
             repoRoot()

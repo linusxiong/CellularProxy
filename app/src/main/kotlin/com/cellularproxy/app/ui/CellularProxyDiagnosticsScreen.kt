@@ -52,6 +52,7 @@ internal fun CellularProxyDiagnosticsScreen(
             style = MaterialTheme.typography.bodyMedium,
         )
         DiagnosticsActionRow(
+            state = state,
             actionsEnabled = actionsEnabled,
             onRunAllChecks = onRunAllChecks,
             onCopySummary = onCopySummary,
@@ -71,10 +72,12 @@ internal data class DiagnosticsScreenState(
     val completionSummary: String,
     val items: List<DiagnosticsScreenItem>,
     val copyableSummary: String,
+    val availableActions: List<DiagnosticsScreenAction>,
 ) {
     companion object {
         fun from(model: DiagnosticsResultModel): DiagnosticsScreenState {
-            val completedCount = model.results.count { it.status != DiagnosticResultStatus.NotRun }
+            val completedCount = model.results.count { it.status.isCompleted }
+            val anyRunning = model.results.any { it.status == DiagnosticResultStatus.Running }
             val overallStatus =
                 when {
                     model.results.any { it.status == DiagnosticResultStatus.Failed } -> DiagnosticResultStatus.Failed.label
@@ -89,6 +92,15 @@ internal data class DiagnosticsScreenState(
                 completionSummary = "$completedCount of ${model.results.size} checks complete",
                 items = items,
                 copyableSummary = items.joinToString(separator = "\n", transform = DiagnosticsScreenItem::summaryLine),
+                availableActions =
+                    buildList {
+                        if (!anyRunning) {
+                            add(DiagnosticsScreenAction.RunAllChecks)
+                        }
+                        if (completedCount > 0) {
+                            add(DiagnosticsScreenAction.CopySummary)
+                        }
+                    },
             )
         }
     }
@@ -101,6 +113,7 @@ internal data class DiagnosticsScreenItem(
     val duration: String,
     val errorCategory: String,
     val details: String,
+    val availableActions: List<DiagnosticsScreenAction>,
 ) {
     fun summaryLine(): String {
         val metadata =
@@ -117,8 +130,18 @@ internal data class DiagnosticsScreenItem(
     }
 }
 
+internal enum class DiagnosticsScreenAction {
+    RunAllChecks,
+    RunCheck,
+    CopySummary,
+}
+
+private val DiagnosticResultStatus.isCompleted: Boolean
+    get() = this != DiagnosticResultStatus.NotRun && this != DiagnosticResultStatus.Running
+
 @Composable
 private fun DiagnosticsActionRow(
+    state: DiagnosticsScreenState,
     actionsEnabled: Boolean,
     onRunAllChecks: () -> Unit,
     onCopySummary: () -> Unit,
@@ -129,14 +152,14 @@ private fun DiagnosticsActionRow(
     ) {
         Button(
             onClick = onRunAllChecks,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && DiagnosticsScreenAction.RunAllChecks in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Run all checks")
         }
         OutlinedButton(
             onClick = onCopySummary,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && DiagnosticsScreenAction.CopySummary in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy summary")
@@ -172,7 +195,7 @@ private fun DiagnosticsCheckRow(
         DiagnosticsField("Details", item.details)
         OutlinedButton(
             onClick = { onRunCheck(item.type) },
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && DiagnosticsScreenAction.RunCheck in item.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Run ${item.label}")
@@ -204,4 +227,10 @@ private fun DiagnosticResultItem.toScreenItem(): DiagnosticsScreenItem = Diagnos
     duration = durationMillis?.let { "$it ms" } ?: "Not run",
     errorCategory = errorCategory?.let(LogRedactor::redact) ?: "None",
     details = details?.let(LogRedactor::redact) ?: "None",
+    availableActions =
+        if (status == DiagnosticResultStatus.Running) {
+            emptyList()
+        } else {
+            listOf(DiagnosticsScreenAction.RunCheck)
+        },
 )
