@@ -14,6 +14,11 @@ import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.root.RootCommandAuditPhase
 import com.cellularproxy.shared.root.RootCommandAuditRecord
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
+import com.cellularproxy.shared.rotation.RotationTransitionDisposition
+import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -253,36 +258,88 @@ class CellularProxyRuntimeCompositionInstallerTest {
         }
     }
 
-    private fun readyBootstrap(): AppConfigBootstrapResult.Ready =
-        AppConfigBootstrapResult.Ready(
-            plainConfig =
-                AppConfig.default().copy(
-                    proxy =
-                        AppConfig.default().proxy.copy(
-                            listenHost = "127.0.0.1",
-                            listenPort = 8080,
-                        ),
-                ),
-            sensitiveConfig =
-                SensitiveConfig(
-                    proxyCredential =
-                        ProxyCredential(
-                            username = "proxy-user",
-                            password = "proxy-password",
-                        ),
-                    managementApiToken = "management-token",
-                ),
-            createdDefaultSecrets = false,
-            reconciledPlainConfig = false,
-        )
+    @Test
+    fun `runtime rotation handler factory is installed through composition boundary`() {
+        val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val runtimeRotationHandler = CompositionRecordingRuntimeRotationRequestHandler()
+        var handlerFactoryCalls = 0
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+                rootOperationsEnabled = { true },
+                runtimeRotationRequestHandlerFactory = {
+                    handlerFactoryCalls += 1
+                    runtimeRotationHandler
+                },
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
 
-    private fun wifiRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "wifi",
-            category = NetworkCategory.WiFi,
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-        )
+        try {
+            val installed =
+                assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(
+                    installation.installResult,
+                )
+
+            ForegroundProxyRuntimeLifecycleRegistry.foregroundProxyRuntimeLifecycle.startProxyRuntime()
+
+            val mobileData = installed.managementHandlerReference.handle(ManagementApiOperation.RotateMobileData)
+            val airplaneMode = installed.managementHandlerReference.handle(ManagementApiOperation.RotateAirplaneMode)
+
+            assertEquals(202, mobileData.statusCode)
+            assertEquals(202, airplaneMode.statusCode)
+            assertContains(mobileData.body, """"operation":"mobile_data"""")
+            assertContains(airplaneMode.body, """"operation":"airplane_mode"""")
+            assertEquals(1, handlerFactoryCalls)
+            assertEquals(1, runtimeRotationHandler.mobileDataRotationCalls)
+            assertEquals(1, runtimeRotationHandler.airplaneModeRotationCalls)
+        } finally {
+            installation.close()
+            assertTerminates(executors.workerExecutor)
+            assertTerminates(executors.queuedClientTimeoutExecutor)
+            assertTerminates(executors.acceptLoopExecutor)
+        }
+    }
+
+    private fun readyBootstrap(): AppConfigBootstrapResult.Ready = AppConfigBootstrapResult.Ready(
+        plainConfig =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8080,
+                    ),
+            ),
+        sensitiveConfig =
+            SensitiveConfig(
+                proxyCredential =
+                    ProxyCredential(
+                        username = "proxy-user",
+                        password = "proxy-password",
+                    ),
+                managementApiToken = "management-token",
+            ),
+        createdDefaultSecrets = false,
+        reconciledPlainConfig = false,
+    )
+
+    private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "wifi",
+        category = NetworkCategory.WiFi,
+        displayName = "Home Wi-Fi",
+        isAvailable = true,
+    )
 }
 
 private class RecordingRouteMonitor(
@@ -296,6 +353,25 @@ private class RecordingRouteMonitor(
     override fun close() {
         closed = true
     }
+}
+
+private class CompositionRecordingRuntimeRotationRequestHandler : RuntimeRotationRequestHandler {
+    var mobileDataRotationCalls = 0
+        private set
+    var airplaneModeRotationCalls = 0
+        private set
+
+    override fun rotateMobileData(): RotationTransitionResult {
+        mobileDataRotationCalls += 1
+        return acceptedCompletedRotation(RotationOperation.MobileData)
+    }
+
+    override fun rotateAirplaneMode(): RotationTransitionResult {
+        airplaneModeRotationCalls += 1
+        return acceptedCompletedRotation(RotationOperation.AirplaneMode)
+    }
+
+    override fun close() = Unit
 }
 
 private object CompositionUnavailableBoundNetworkSocketConnector : BoundNetworkSocketConnector {
@@ -314,3 +390,15 @@ private fun assertTerminates(executor: ExecutorService) {
 private fun assertTerminates(executor: ScheduledExecutorService) {
     assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS))
 }
+
+private fun acceptedCompletedRotation(operation: RotationOperation): RotationTransitionResult = RotationTransitionResult(
+    disposition = RotationTransitionDisposition.Accepted,
+    status =
+        RotationStatus(
+            state = RotationState.Completed,
+            operation = operation,
+            oldPublicIp = "198.51.100.10",
+            newPublicIp = "198.51.100.11",
+            publicIpChanged = true,
+        ),
+)

@@ -14,6 +14,7 @@ import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
+import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.root.BlockingRootCommandProcessExecutor
 import com.cellularproxy.root.RootAvailabilityChecker
 import com.cellularproxy.root.RootCommandExecutor
@@ -54,7 +55,10 @@ class CellularProxyRuntimeCompositionInstallation internal constructor(
 }
 
 object CellularProxyRuntimeCompositionInstaller {
-    fun install(context: Context): CellularProxyRuntimeCompositionInstallation {
+    fun install(
+        context: Context,
+        runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
+    ): CellularProxyRuntimeCompositionInstallation {
         val appContext = context.applicationContext
         val plainRepository = CellularProxyPlainConfigStore.repository(appContext)
         val bootstrapResult =
@@ -75,6 +79,7 @@ object CellularProxyRuntimeCompositionInstaller {
             socketConnector = AndroidBoundNetworkSocketConnector.create(appContext),
             executorResources = RuntimeCompositionExecutorResources.create(),
             rootOperationsEnabled = rootOperationsEnabled,
+            runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
             rootAvailability =
                 createRootAvailabilityProvider(
                     rootOperationsEnabled = rootOperationsEnabled,
@@ -111,33 +116,34 @@ object CellularProxyRuntimeCompositionInstaller {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
         rootAvailability: () -> RootAvailabilityStatus = ::unknownRootAvailability,
+        runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         recordManagementAudit: (com.cellularproxy.app.audit.ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
-    ): CellularProxyRuntimeCompositionInstallation =
-        install(
-            bootstrapResult = bootstrapResult,
-            observedNetworks = observedNetworks,
-            routeMonitor = routeMonitor,
-            socketConnector = socketConnector,
-            executorResources = executorResources,
-            publicIp = publicIp,
-            cloudflareStatus = cloudflareStatus,
-            cloudflareStart = cloudflareStart,
-            cloudflareStop = cloudflareStop,
-            rotateMobileData = rotateMobileData,
-            rotateAirplaneMode = rotateAirplaneMode,
-            rootOperationsEnabled = rootOperationsEnabled,
-            rootAvailability = rootAvailability,
-            maxConcurrentConnections = maxConcurrentConnections,
-            outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
-            recordMetricEvent = recordMetricEvent,
-            recordManagementAudit = recordManagementAudit,
-            bindListener = bindListener,
-        )
+    ): CellularProxyRuntimeCompositionInstallation = install(
+        bootstrapResult = bootstrapResult,
+        observedNetworks = observedNetworks,
+        routeMonitor = routeMonitor,
+        socketConnector = socketConnector,
+        executorResources = executorResources,
+        publicIp = publicIp,
+        cloudflareStatus = cloudflareStatus,
+        cloudflareStart = cloudflareStart,
+        cloudflareStop = cloudflareStop,
+        rotateMobileData = rotateMobileData,
+        rotateAirplaneMode = rotateAirplaneMode,
+        rootOperationsEnabled = rootOperationsEnabled,
+        rootAvailability = rootAvailability,
+        runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
+        maxConcurrentConnections = maxConcurrentConnections,
+        outboundConnectTimeoutMillis = outboundConnectTimeoutMillis,
+        recordMetricEvent = recordMetricEvent,
+        recordManagementAudit = recordManagementAudit,
+        bindListener = bindListener,
+    )
 
     private fun install(
         bootstrapResult: AppConfigBootstrapResult,
@@ -159,6 +165,7 @@ object CellularProxyRuntimeCompositionInstaller {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
         rootAvailability: () -> RootAvailabilityStatus,
+        runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
         maxConcurrentConnections: Int? = null,
         outboundConnectTimeoutMillis: Long = COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
@@ -180,6 +187,7 @@ object CellularProxyRuntimeCompositionInstaller {
                     rotateAirplaneMode = rotateAirplaneMode,
                     rootOperationsEnabled = rootOperationsEnabled,
                     rootAvailability = rootAvailability,
+                    runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
                     workerExecutor = executorResources.workerExecutor,
                     queuedClientTimeoutExecutor = executorResources.queuedClientTimeoutExecutor,
                     acceptLoopExecutor = executorResources.acceptLoopExecutor,
@@ -226,12 +234,11 @@ internal class RuntimeCompositionExecutorResources(
     }
 
     companion object {
-        fun create(): RuntimeCompositionExecutorResources =
-            RuntimeCompositionExecutorResources(
-                workerExecutor = Executors.newCachedThreadPool(),
-                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
-                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
-            )
+        fun create(): RuntimeCompositionExecutorResources = RuntimeCompositionExecutorResources(
+            workerExecutor = Executors.newCachedThreadPool(),
+            queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+            acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+        )
     }
 }
 
@@ -271,22 +278,20 @@ private class RuntimeCompositionCleanup(
     }
 }
 
-private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult =
-    CloudflareTunnelTransitionResult(
-        disposition = CloudflareTunnelTransitionDisposition.Ignored,
-        status = CloudflareTunnelStatus.disabled(),
-    )
+private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = CloudflareTunnelStatus.disabled(),
+)
 
-internal fun unavailableRotationExecutionTransition(operation: RotationOperation): RotationTransitionResult =
-    RotationTransitionResult(
-        disposition = RotationTransitionDisposition.Rejected,
-        status =
-            RotationStatus(
-                state = RotationState.Failed,
-                operation = operation,
-                failureReason = RotationFailureReason.ExecutionUnavailable,
-            ),
-    )
+internal fun unavailableRotationExecutionTransition(operation: RotationOperation): RotationTransitionResult = RotationTransitionResult(
+    disposition = RotationTransitionDisposition.Rejected,
+    status =
+        RotationStatus(
+            state = RotationState.Failed,
+            operation = operation,
+            failureReason = RotationFailureReason.ExecutionUnavailable,
+        ),
+)
 
 internal fun createRootAvailabilityProvider(
     rootOperationsEnabled: () -> Boolean,
@@ -312,14 +317,13 @@ internal fun createRootAvailabilityProvider(
 internal fun nonFatalRootAuditRecorder(
     recordRootAudit: (RootCommandAuditRecord) -> Unit,
     reportRootAuditFailure: (Exception) -> Unit = ::logRootAuditFailure,
-): (RootCommandAuditRecord) -> Unit =
-    { auditRecord ->
-        try {
-            recordRootAudit(auditRecord)
-        } catch (exception: Exception) {
-            reportRootAuditFailure(exception)
-        }
+): (RootCommandAuditRecord) -> Unit = { auditRecord ->
+    try {
+        recordRootAudit(auditRecord)
+    } catch (exception: Exception) {
+        reportRootAuditFailure(exception)
     }
+}
 
 private fun unknownRootAvailability(): RootAvailabilityStatus = RootAvailabilityStatus.Unknown
 
