@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.logging.LogRedactor
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
@@ -89,6 +91,7 @@ internal data class RotationScreenState(
     val currentPhase: String,
     val pauseDrainStatus: String,
     val strictIpChange: String,
+    val copyableDiagnostics: String,
 ) {
     companion object {
         fun from(
@@ -97,17 +100,41 @@ internal data class RotationScreenState(
             rootAvailability: RootAvailabilityStatus,
             cooldownRemainingSeconds: Long? = null,
             activeConnections: Long = 0,
-        ): RotationScreenState = RotationScreenState(
-            rootAvailability = rootAvailability.name,
-            rootOperations = if (config.root.operationsEnabled) "Enabled" else "Disabled",
-            cooldownStatus = cooldownRemainingSeconds.toCooldownText(),
-            lastRotationResult = rotationStatus.toRotationResultText(),
-            oldPublicIp = rotationStatus.oldPublicIp ?: "Unavailable",
-            newPublicIp = rotationStatus.newPublicIp ?: "Unavailable",
-            currentPhase = rotationStatus.state.name,
-            pauseDrainStatus = rotationStatus.toPauseDrainText(activeConnections),
-            strictIpChange = if (config.rotation.strictIpChangeRequired) "Required" else "Not required",
-        )
+            secrets: LogRedactionSecrets = LogRedactionSecrets(),
+        ): RotationScreenState {
+            val rootAvailabilityText = rootAvailability.name
+            val rootOperations = if (config.root.operationsEnabled) "Enabled" else "Disabled"
+            val cooldownStatus = cooldownRemainingSeconds.toCooldownText()
+            val lastRotationResult = rotationStatus.toRotationResultText()
+            val oldPublicIp = rotationStatus.oldPublicIp?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
+            val newPublicIp = rotationStatus.newPublicIp?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
+            val currentPhase = rotationStatus.state.name
+            val pauseDrainStatus = rotationStatus.toPauseDrainText(activeConnections)
+            val strictIpChange = if (config.rotation.strictIpChangeRequired) "Required" else "Not required"
+            return RotationScreenState(
+                rootAvailability = rootAvailabilityText,
+                rootOperations = rootOperations,
+                cooldownStatus = cooldownStatus,
+                lastRotationResult = lastRotationResult,
+                oldPublicIp = oldPublicIp,
+                newPublicIp = newPublicIp,
+                currentPhase = currentPhase,
+                pauseDrainStatus = pauseDrainStatus,
+                strictIpChange = strictIpChange,
+                copyableDiagnostics =
+                    listOf(
+                        "Root availability: $rootAvailabilityText",
+                        "Root operations: $rootOperations",
+                        "Cooldown status: $cooldownStatus",
+                        "Last rotation result: $lastRotationResult",
+                        "Old public IP: $oldPublicIp",
+                        "New public IP: $newPublicIp",
+                        "Current phase: $currentPhase",
+                        "Pause/drain status: $pauseDrainStatus",
+                        "Strict IP change: $strictIpChange",
+                    ).joinToString(separator = "\n"),
+            )
+        }
     }
 }
 

@@ -551,6 +551,51 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `rotation screen state derives redacted copyable diagnostics`() {
+        val state =
+            RotationScreenState.from(
+                config =
+                    AppConfig.default().copy(
+                        root =
+                            AppConfig.default().root.copy(
+                                operationsEnabled = true,
+                            ),
+                    ),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.Completed,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "https://before.example.test/ip?token=rotation-secret",
+                        newPublicIp = "Authorization: Bearer rotation-secret",
+                        publicIpChanged = true,
+                    ),
+                rootAvailability = RootAvailabilityStatus.Available,
+                cooldownRemainingSeconds = 0,
+                secrets =
+                    LogRedactionSecrets(
+                        managementApiToken = "rotation-secret",
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                "Root availability: Available",
+                "Root operations: Enabled",
+                "Cooldown status: Ready",
+                "Last rotation result: Completed: MobileData",
+                "Old public IP: https://before.example.test/ip?[REDACTED]",
+                "New public IP: Authorization: [REDACTED]",
+                "Current phase: Completed",
+                "Pause/drain status: Not active",
+                "Strict IP change: Not required",
+            ).joinToString(separator = "\n"),
+            state.copyableDiagnostics,
+            "Rotation diagnostics copy text must be derived from redacted screen fields.",
+        )
+        assertFalse(state.copyableDiagnostics.contains("rotation-secret"))
+    }
+
+    @Test
     fun `diagnostics route renders dedicated diagnostics screen`() {
         val shellSource =
             repoRoot()
