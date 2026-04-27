@@ -421,6 +421,50 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `cloudflare screen state derives redacted copyable diagnostics`() {
+        val state =
+            CloudflareScreenState.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            AppConfig.default().cloudflare.copy(
+                                enabled = true,
+                                managementHostnameLabel = "https://proxy.example.test/manage?token=tunnel-secret",
+                            ),
+                    ),
+                tunnelStatus =
+                    CloudflareTunnelStatus.failed(
+                        "Authorization: Bearer tunnel-secret\nhttps://example.test/api/status?token=tunnel-secret",
+                    ),
+                tokenStatus = CloudflareTokenStatus.Present,
+                edgeSessionSummary = "2 sessions",
+                managementApiRoundTrip = "HTTP 503 for token=tunnel-secret",
+                secrets =
+                    LogRedactionSecrets(
+                        cloudflareTunnelToken = "tunnel-secret",
+                    ),
+            )
+
+        val expectedDiagnostics =
+            listOf(
+                "Tunnel enabled: Enabled",
+                "Tunnel token: Present",
+                "Tunnel lifecycle: Failed",
+                "Management hostname: https://proxy.example.test/manage?[REDACTED]",
+                "Last connection error: Authorization: [REDACTED]\nhttps://example.test/api/status?[REDACTED]",
+                "Edge sessions: 2 sessions",
+                "Management API round trip: HTTP 503 for token=[REDACTED]",
+            ).joinToString(separator = "\n")
+
+        assertEquals(
+            expectedDiagnostics,
+            state.copyableDiagnostics,
+            "Cloudflare diagnostics copy text must be derived from redacted screen fields.",
+        )
+        assertFalse(state.copyableDiagnostics.contains("tunnel-secret"))
+    }
+
+    @Test
     fun `rotation route renders dedicated rotation control screen`() {
         val shellSource =
             repoRoot()

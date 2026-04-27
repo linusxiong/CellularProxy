@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
 
 @Composable
@@ -80,6 +81,7 @@ internal data class CloudflareScreenState(
     val lastConnectionError: String,
     val edgeSessionSummary: String,
     val managementApiRoundTrip: String,
+    val copyableDiagnostics: String,
 ) {
     companion object {
         fun from(
@@ -93,15 +95,36 @@ internal data class CloudflareScreenState(
                 },
             edgeSessionSummary: String? = null,
             managementApiRoundTrip: String? = null,
-        ): CloudflareScreenState = CloudflareScreenState(
-            tunnelEnabled = if (config.cloudflare.enabled) "Enabled" else "Disabled",
-            tokenStatus = tokenStatus.label,
-            lifecycleState = tunnelStatus.state.name,
-            managementHostname = config.cloudflare.managementHostnameLabel ?: "Not configured",
-            lastConnectionError = tunnelStatus.failureReason?.let(LogRedactor::redact) ?: "None",
-            edgeSessionSummary = edgeSessionSummary ?: "Unavailable",
-            managementApiRoundTrip = managementApiRoundTrip ?: "Not run",
-        )
+            secrets: LogRedactionSecrets = LogRedactionSecrets(),
+        ): CloudflareScreenState {
+            val tunnelEnabled = if (config.cloudflare.enabled) "Enabled" else "Disabled"
+            val managementHostname =
+                config.cloudflare.managementHostnameLabel
+                    ?.let { LogRedactor.redact(it, secrets) }
+                    ?: "Not configured"
+            val lastConnectionError = tunnelStatus.failureReason?.let { LogRedactor.redact(it, secrets) } ?: "None"
+            val redactedEdgeSessionSummary = edgeSessionSummary?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
+            val redactedManagementApiRoundTrip = managementApiRoundTrip?.let { LogRedactor.redact(it, secrets) } ?: "Not run"
+            return CloudflareScreenState(
+                tunnelEnabled = tunnelEnabled,
+                tokenStatus = tokenStatus.label,
+                lifecycleState = tunnelStatus.state.name,
+                managementHostname = managementHostname,
+                lastConnectionError = lastConnectionError,
+                edgeSessionSummary = redactedEdgeSessionSummary,
+                managementApiRoundTrip = redactedManagementApiRoundTrip,
+                copyableDiagnostics =
+                    listOf(
+                        "Tunnel enabled: $tunnelEnabled",
+                        "Tunnel token: ${tokenStatus.label}",
+                        "Tunnel lifecycle: ${tunnelStatus.state.name}",
+                        "Management hostname: $managementHostname",
+                        "Last connection error: $lastConnectionError",
+                        "Edge sessions: $redactedEdgeSessionSummary",
+                        "Management API round trip: $redactedManagementApiRoundTrip",
+                    ).joinToString(separator = "\n"),
+            )
+        }
     }
 }
 
