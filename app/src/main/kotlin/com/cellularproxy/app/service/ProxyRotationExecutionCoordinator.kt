@@ -187,6 +187,32 @@ class ProxyRotationExecutionCoordinator(
         expectedSnapshot = null,
     )
 
+    suspend fun advanceCurrentRotation(): RotationTransitionResult = when (controlPlane.currentStatus.state) {
+        RotationState.ProbingOldPublicIp ->
+            continueWithOldPublicIpProbeIfConfigured(
+                rootTransition = controlPlane.currentStatus.asIgnoredTransition(),
+                nowElapsedMillis = nowElapsedMillis(),
+                redactionSecrets = redactionSecretsForPotentialRootCommand(),
+            )
+        RotationState.PausingNewRequests ->
+            continueWithPauseCoordinatorIfConfigured(
+                oldPublicIpTransition = controlPlane.currentStatus.asIgnoredTransition(),
+                redactionSecrets = redactionSecretsForPotentialRootCommand(),
+            )
+        RotationState.DrainingConnections -> advanceConnectionDrain()
+        RotationState.RunningDisableCommand -> advanceRootCommand()
+        RotationState.WaitingForToggleDelay -> advanceToggleDelay()
+        RotationState.RunningEnableCommand -> advanceEnableCommand()
+        RotationState.WaitingForNetworkReturn -> advanceNetworkReturn()
+        RotationState.ProbingNewPublicIp -> advanceNewPublicIpProbe()
+        RotationState.ResumingProxyRequests ->
+            continueWithResumeIfNeeded(
+                transition = controlPlane.currentStatus.asIgnoredTransition(),
+                nowElapsedMillis = nowElapsedMillis(),
+            )
+        else -> controlPlane.currentStatus.asIgnoredTransition()
+    }
+
     private suspend fun rotate(operation: RotationOperation): RotationTransitionResult {
         val now = nowElapsedMillis()
         val redactionSecrets = secrets()
@@ -630,6 +656,12 @@ class ProxyRotationExecutionCoordinator(
             is ProxyRotationPauseAdvanceResult.Applied -> pauseResult.progress.transition
             is ProxyRotationPauseAdvanceResult.NoAction -> pauseResult.snapshot.status.asIgnoredTransition()
         }
+    }
+
+    private fun redactionSecretsForPotentialRootCommand(): LogRedactionSecrets = if (rootCommandCoordinator == null) {
+        LogRedactionSecrets()
+    } else {
+        secrets()
     }
 }
 

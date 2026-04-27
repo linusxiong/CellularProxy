@@ -741,6 +741,163 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `current rotation continuation advances waiting network return through configured probe`() {
+        val endpoint = PublicIpProbeEndpoint(host = "ip.example")
+        val publicIpRunner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.11",
+                    network = network("cell", NetworkCategory.Cellular),
+                ),
+            )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.WaitingForNetworkReturn,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner = publicIpRunner,
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = endpoint,
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                availableNetworks = {
+                    listOf(network("cell", NetworkCategory.Cellular))
+                },
+                networkReturnTimeout = 60.seconds,
+                nowElapsedMillis = { 20_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val result = runSuspend { coordinator.advanceCurrentRotation() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        assertEquals(RotationState.Completed, result.status.state)
+        assertEquals("198.51.100.10", result.status.oldPublicIp)
+        assertEquals("198.51.100.11", result.status.newPublicIp)
+        assertEquals(true, result.status.publicIpChanged)
+        assertEquals(result.status, controlPlane.currentStatus)
+        assertEquals(listOf(PublicIpProbeCall(RouteTarget.Cellular, endpoint)), publicIpRunner.calls)
+        assertTrue(!pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `current rotation continuation advances old public ip probing through pause`() {
+        val endpoint = PublicIpProbeEndpoint(host = "ip.example")
+        val publicIpRunner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.10",
+                    network = network("cell", NetworkCategory.Cellular),
+                ),
+            )
+        val controlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ProbingOldPublicIp,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner = publicIpRunner,
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = endpoint,
+                pauseActions = pauseActions,
+                nowElapsedMillis = { 20_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val result = runSuspend { coordinator.advanceCurrentRotation() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        assertEquals(RotationState.DrainingConnections, result.status.state)
+        assertEquals("198.51.100.10", result.status.oldPublicIp)
+        assertEquals(result.status, controlPlane.currentStatus)
+        assertEquals(listOf(PublicIpProbeCall(RouteTarget.Cellular, endpoint)), publicIpRunner.calls)
+        assertTrue(pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+    }
+
+    @Test
+    fun `current rotation continuation advances pause and resume phases`() {
+        val pausingControlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.PausingNewRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
+        val pausingActions = RecordingPauseActions()
+        val pausingCoordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = pausingControlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                pauseActions = pausingActions,
+                nowElapsedMillis = { 20_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+        val resumingControlPlane =
+            RotationControlPlane(
+                initialStatus =
+                    RotationStatus(
+                        state = RotationState.ResumingProxyRequests,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "198.51.100.11",
+                        publicIpChanged = true,
+                    ),
+            )
+        val resumingActions = RecordingPauseActions()
+        val resumingCoordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = resumingControlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                pauseActions = resumingActions,
+                nowElapsedMillis = { 21_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val paused = runSuspend { pausingCoordinator.advanceCurrentRotation() }
+        val resumed = runSuspend { resumingCoordinator.advanceCurrentRotation() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, paused.disposition)
+        assertEquals(RotationState.DrainingConnections, paused.status.state)
+        assertTrue(pausingActions.proxyRequestsPaused)
+        assertEquals(1, pausingActions.pauseCalls)
+        assertEquals(RotationTransitionDisposition.Accepted, resumed.disposition)
+        assertEquals(RotationState.Completed, resumed.status.state)
+        assertTrue(!resumingActions.proxyRequestsPaused)
+        assertEquals(1, resumingActions.resumeCalls)
+    }
+
+    @Test
     fun `network return continuation keeps waiting until selected route returns or timeout elapses`() {
         var now = 12_000L
         var networks = emptyList<NetworkDescriptor>()
