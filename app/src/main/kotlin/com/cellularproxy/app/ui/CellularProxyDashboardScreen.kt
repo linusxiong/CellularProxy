@@ -10,15 +10,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.status.DashboardBoundRoute
 import com.cellularproxy.app.status.DashboardRecentError
+import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.status.DashboardWarning
 import com.cellularproxy.shared.config.AppConfig
@@ -36,8 +43,77 @@ internal fun CellularProxyDashboardScreen(
     onStopProxy: () -> Unit = {},
     onRefreshStatus: () -> Unit = {},
     onCopyProxyEndpoint: () -> Unit = {},
+    onOpenRiskDetails: () -> Unit = {},
+    onOpenCloudflare: () -> Unit = {},
+    onOpenRotation: () -> Unit = {},
+    onOpenLogs: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {},
 ) {
     val screenState = DashboardScreenState.from(status)
+    var pendingConfirmationAction by remember { mutableStateOf<DashboardScreenAction?>(null) }
+
+    fun performAction(action: DashboardScreenAction) {
+        when (action) {
+            DashboardScreenAction.StartProxy -> onStartProxy()
+            DashboardScreenAction.StopProxy -> onStopProxy()
+            DashboardScreenAction.RefreshStatus -> onRefreshStatus()
+            DashboardScreenAction.CopyProxyEndpoint -> onCopyProxyEndpoint()
+            DashboardScreenAction.OpenRiskDetails -> onOpenRiskDetails()
+            DashboardScreenAction.OpenCloudflare -> onOpenCloudflare()
+            DashboardScreenAction.OpenRotation -> onOpenRotation()
+            DashboardScreenAction.OpenLogs -> onOpenLogs()
+            DashboardScreenAction.OpenDiagnostics -> onOpenDiagnostics()
+        }
+    }
+
+    fun requestAction(action: DashboardScreenAction) {
+        when (dashboardActionDispatchMode(action)) {
+            DashboardActionDispatchMode.Immediate -> performAction(action)
+            DashboardActionDispatchMode.ConfirmFirst -> pendingConfirmationAction = action
+        }
+    }
+
+    pendingConfirmationAction?.let { action ->
+        val canConfirm =
+            dashboardActionCanDispatch(
+                action = action,
+                actionsEnabled = actionsEnabled,
+                availableActions = screenState.availableActions,
+            )
+        AlertDialog(
+            onDismissRequest = {
+                pendingConfirmationAction = null
+            },
+            title = {
+                Text(action.confirmationTitle ?: "Confirm dashboard action")
+            },
+            text = {
+                Text("Confirm this high-impact proxy service action.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingConfirmationAction = null
+                        if (canConfirm) {
+                            performAction(action)
+                        }
+                    },
+                    enabled = canConfirm,
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingConfirmationAction = null
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
 
     Column(
         modifier =
@@ -54,10 +130,8 @@ internal fun CellularProxyDashboardScreen(
 
         DashboardActionRow(
             actionsEnabled = actionsEnabled,
-            onStartProxy = onStartProxy,
-            onStopProxy = onStopProxy,
-            onRefreshStatus = onRefreshStatus,
-            onCopyProxyEndpoint = onCopyProxyEndpoint,
+            availableActions = screenState.availableActions,
+            onAction = ::requestAction,
         )
 
         DashboardSection("Service") {
@@ -126,55 +200,189 @@ internal data class DashboardScreenState(
     val status: DashboardStatusModel,
     val riskWarnings: List<String>,
     val recentHighSeverityErrors: List<String>,
+    val availableActions: List<DashboardScreenAction>,
 ) {
     companion object {
         fun from(status: DashboardStatusModel): DashboardScreenState = DashboardScreenState(
             status = status,
             riskWarnings = status.warnings.map(DashboardWarning::toDashboardText),
             recentHighSeverityErrors = status.recentHighSeverityErrors.map(DashboardRecentError::toDashboardText),
+            availableActions = status.availableActions(),
         )
     }
 }
 
+internal enum class DashboardScreenAction(
+    val confirmationTitle: String? = null,
+) {
+    StartProxy,
+    StopProxy(
+        confirmationTitle = "Confirm proxy service stop",
+    ),
+    RefreshStatus,
+    CopyProxyEndpoint,
+    OpenRiskDetails,
+    OpenCloudflare,
+    OpenRotation,
+    OpenLogs,
+    OpenDiagnostics,
+    ;
+
+    val requiresConfirmation: Boolean = confirmationTitle != null
+}
+
+internal enum class DashboardActionDispatchMode {
+    Immediate,
+    ConfirmFirst,
+}
+
+internal fun dashboardActionDispatchMode(action: DashboardScreenAction): DashboardActionDispatchMode = if (action.requiresConfirmation) {
+    DashboardActionDispatchMode.ConfirmFirst
+} else {
+    DashboardActionDispatchMode.Immediate
+}
+
+internal fun dashboardActionCanDispatch(
+    action: DashboardScreenAction,
+    actionsEnabled: Boolean,
+    availableActions: List<DashboardScreenAction>,
+): Boolean = actionsEnabled && action in availableActions
+
 @Composable
 private fun DashboardActionRow(
     actionsEnabled: Boolean,
-    onStartProxy: () -> Unit,
-    onStopProxy: () -> Unit,
-    onRefreshStatus: () -> Unit,
-    onCopyProxyEndpoint: () -> Unit,
+    availableActions: List<DashboardScreenAction>,
+    onAction: (DashboardScreenAction) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(
-            onClick = onStartProxy,
-            enabled = actionsEnabled,
+            onClick = {
+                onAction(DashboardScreenAction.StartProxy)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.StartProxy,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Start proxy")
         }
         OutlinedButton(
-            onClick = onStopProxy,
-            enabled = actionsEnabled,
+            onClick = {
+                onAction(DashboardScreenAction.StopProxy)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.StopProxy,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Stop proxy")
         }
         OutlinedButton(
-            onClick = onRefreshStatus,
-            enabled = actionsEnabled,
+            onClick = {
+                onAction(DashboardScreenAction.RefreshStatus)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.RefreshStatus,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Refresh status")
         }
         OutlinedButton(
-            onClick = onCopyProxyEndpoint,
-            enabled = actionsEnabled,
+            onClick = {
+                onAction(DashboardScreenAction.CopyProxyEndpoint)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.CopyProxyEndpoint,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy proxy endpoint")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.OpenRiskDetails)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.OpenRiskDetails,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open risk details")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.OpenCloudflare)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.OpenCloudflare,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open Cloudflare")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.OpenRotation)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.OpenRotation,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open rotation")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.OpenLogs)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.OpenLogs,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open logs")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.OpenDiagnostics)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.OpenDiagnostics,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open diagnostics")
         }
     }
 }
@@ -243,6 +451,7 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.SelectedRouteUnavailable -> "Selected route is unavailable"
     DashboardWarning.CloudflareTokenMissing -> "Cloudflare tunnel token is missing"
     DashboardWarning.ManagementApiTokenMissing -> "Management API token is missing"
+    DashboardWarning.SensitiveConfigurationInvalid -> "Sensitive configuration is invalid"
     DashboardWarning.PortAlreadyInUse -> "Proxy port is already in use"
     DashboardWarning.InvalidListenAddress -> "Proxy listen address is invalid"
     DashboardWarning.InvalidListenPort -> "Proxy listen port is invalid"
@@ -251,3 +460,22 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
 }
 
 private fun DashboardRecentError.toDashboardText(): String = "$title: $detail"
+
+private fun DashboardStatusModel.availableActions(): List<DashboardScreenAction> = buildList {
+    when (serviceState) {
+        DashboardServiceState.Starting,
+        DashboardServiceState.Running,
+        -> add(DashboardScreenAction.StopProxy)
+        DashboardServiceState.Stopping -> Unit
+        DashboardServiceState.Stopped,
+        DashboardServiceState.Failed,
+        -> add(DashboardScreenAction.StartProxy)
+    }
+    add(DashboardScreenAction.RefreshStatus)
+    add(DashboardScreenAction.CopyProxyEndpoint)
+    add(DashboardScreenAction.OpenRiskDetails)
+    add(DashboardScreenAction.OpenCloudflare)
+    add(DashboardScreenAction.OpenRotation)
+    add(DashboardScreenAction.OpenLogs)
+    add(DashboardScreenAction.OpenDiagnostics)
+}

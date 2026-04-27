@@ -72,6 +72,7 @@ internal class LogsAuditScreenState private constructor(
     val totalRowCount: Int,
     val exportSupported: Boolean,
     val searchDisplayText: String,
+    val copyableSelectedRecord: String?,
     val copyableFilteredSummary: String,
     val exportBundle: LogsAuditScreenExportBundle?,
 ) {
@@ -112,13 +113,15 @@ internal class LogsAuditScreenState private constructor(
                     separator = "\n\n",
                     transform = LogsAuditScreenRow::copyText,
                 )
+            val selectedRow = filteredRows.firstOrNull { row -> row.id == selectedRowId }
             return LogsAuditScreenState(
                 rows = filteredRows,
-                selectedRow = filteredRows.firstOrNull { row -> row.id == selectedRowId },
+                selectedRow = selectedRow,
                 filter = filter,
                 totalRowCount = rows.size,
                 exportSupported = exportSupported,
                 searchDisplayText = LogRedactor.redact(filter.search, secrets),
+                copyableSelectedRecord = selectedRow?.copyText,
                 copyableFilteredSummary = copyableFilteredSummary,
                 exportBundle =
                     if (exportSupported && filteredRows.isNotEmpty()) {

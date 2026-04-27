@@ -1,7 +1,9 @@
 package com.cellularproxy.app.status
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RouteTarget
@@ -280,6 +282,26 @@ class NotificationStatusModelTest {
     }
 
     @Test
+    fun `notification warns when Cloudflare is enabled but tunnel token is missing before startup fails`() {
+        val model =
+            NotificationStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = false,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+            )
+
+        assertEquals(setOf(NotificationWarning.CloudflareTokenMissing), model.warnings)
+        assertEquals("Cloudflare tunnel token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
     fun `notification warns specifically when management api token is missing at startup`() {
         val model =
             NotificationStatusModel.from(
@@ -295,6 +317,34 @@ class NotificationStatusModelTest {
             model.warnings,
         )
         assertEquals("Service startup failed | Management API token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when management api token is missing before startup fails`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                managementApiTokenPresent = false,
+            )
+
+        assertEquals(setOf(NotificationWarning.ManagementApiTokenMissing), model.warnings)
+        assertEquals("Management API token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when sensitive configuration is invalid before startup fails`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidProxyCredential,
+            )
+
+        assertEquals(setOf(NotificationWarning.SensitiveConfigurationInvalid), model.warnings)
+        assertEquals("Sensitive configuration is invalid", model.warningText)
         assertEquals(NotificationPriority.Warning, model.priority)
     }
 }

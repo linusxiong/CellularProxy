@@ -1,7 +1,9 @@
 package com.cellularproxy.app.status
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RouteTarget
@@ -280,6 +282,24 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns when Cloudflare is enabled but tunnel token is missing before startup fails`() {
+        val model =
+            DashboardStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = false,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+            )
+
+        assertEquals(setOf(DashboardWarning.CloudflareTokenMissing), model.warnings)
+    }
+
+    @Test
     fun `model warns specifically when management api token is missing at startup`() {
         val model =
             DashboardStatusModel.from(
@@ -294,6 +314,30 @@ class DashboardStatusModelTest {
             setOf(DashboardWarning.StartupFailed, DashboardWarning.ManagementApiTokenMissing),
             model.warnings,
         )
+    }
+
+    @Test
+    fun `model warns when management api token is missing before startup fails`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                managementApiTokenPresent = false,
+            )
+
+        assertEquals(setOf(DashboardWarning.ManagementApiTokenMissing), model.warnings)
+    }
+
+    @Test
+    fun `model warns when sensitive configuration is invalid before startup fails`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.PartiallyMissingRequiredSecrets,
+            )
+
+        assertEquals(setOf(DashboardWarning.SensitiveConfigurationInvalid), model.warnings)
     }
 
     @Test

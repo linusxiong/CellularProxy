@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
@@ -37,6 +43,67 @@ internal fun CellularProxyCloudflareScreen(
     onTestManagementTunnel: () -> Unit = {},
     onCopyDiagnostics: () -> Unit = {},
 ) {
+    var pendingConfirmationAction by remember { mutableStateOf<CloudflareScreenAction?>(null) }
+
+    fun performAction(action: CloudflareScreenAction) {
+        when (action) {
+            CloudflareScreenAction.StartTunnel -> onStartTunnel()
+            CloudflareScreenAction.StopTunnel -> onStopTunnel()
+            CloudflareScreenAction.ReconnectTunnel -> onReconnectTunnel()
+            CloudflareScreenAction.TestManagementTunnel -> onTestManagementTunnel()
+            CloudflareScreenAction.CopyDiagnostics -> onCopyDiagnostics()
+        }
+    }
+
+    fun requestAction(action: CloudflareScreenAction) {
+        when (cloudflareActionDispatchMode(action)) {
+            CloudflareActionDispatchMode.Immediate -> performAction(action)
+            CloudflareActionDispatchMode.ConfirmFirst -> pendingConfirmationAction = action
+        }
+    }
+
+    pendingConfirmationAction?.let { action ->
+        val canConfirm =
+            cloudflareActionCanDispatch(
+                action = action,
+                actionsEnabled = actionsEnabled,
+                availableActions = state.availableActions,
+            )
+        AlertDialog(
+            onDismissRequest = {
+                pendingConfirmationAction = null
+            },
+            title = {
+                Text(action.confirmationTitle ?: "Confirm Cloudflare action")
+            },
+            text = {
+                Text("Confirm this high-impact Cloudflare tunnel action.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingConfirmationAction = null
+                        if (canConfirm) {
+                            performAction(action)
+                        }
+                    },
+                    enabled = canConfirm,
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingConfirmationAction = null
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     Column(
         modifier =
             Modifier
@@ -53,11 +120,7 @@ internal fun CellularProxyCloudflareScreen(
         CloudflareActionRow(
             actionsEnabled = actionsEnabled,
             availableActions = state.availableActions,
-            onStartTunnel = onStartTunnel,
-            onStopTunnel = onStopTunnel,
-            onReconnectTunnel = onReconnectTunnel,
-            onTestManagementTunnel = onTestManagementTunnel,
-            onCopyDiagnostics = onCopyDiagnostics,
+            onAction = ::requestAction,
         )
 
         CloudflareSection("Tunnel") {
@@ -137,12 +200,23 @@ internal data class CloudflareScreenState(
     }
 }
 
-internal enum class CloudflareScreenAction {
-    StartTunnel,
-    StopTunnel,
-    ReconnectTunnel,
+internal enum class CloudflareScreenAction(
+    val confirmationTitle: String? = null,
+) {
+    StartTunnel(
+        confirmationTitle = "Confirm Cloudflare tunnel start",
+    ),
+    StopTunnel(
+        confirmationTitle = "Confirm Cloudflare tunnel stop",
+    ),
+    ReconnectTunnel(
+        confirmationTitle = "Confirm Cloudflare tunnel reconnect",
+    ),
     TestManagementTunnel,
     CopyDiagnostics,
+    ;
+
+    val requiresConfirmation: Boolean = confirmationTitle != null
 }
 
 internal enum class CloudflareTokenStatus(
@@ -153,50 +227,73 @@ internal enum class CloudflareTokenStatus(
     Invalid("Invalid"),
 }
 
+internal enum class CloudflareActionDispatchMode {
+    Immediate,
+    ConfirmFirst,
+}
+
+internal fun cloudflareActionDispatchMode(action: CloudflareScreenAction): CloudflareActionDispatchMode = if (action.requiresConfirmation) {
+    CloudflareActionDispatchMode.ConfirmFirst
+} else {
+    CloudflareActionDispatchMode.Immediate
+}
+
+internal fun cloudflareActionCanDispatch(
+    action: CloudflareScreenAction,
+    actionsEnabled: Boolean,
+    availableActions: List<CloudflareScreenAction>,
+): Boolean = actionsEnabled && action in availableActions
+
 @Composable
 private fun CloudflareActionRow(
     actionsEnabled: Boolean,
     availableActions: List<CloudflareScreenAction>,
-    onStartTunnel: () -> Unit,
-    onStopTunnel: () -> Unit,
-    onReconnectTunnel: () -> Unit,
-    onTestManagementTunnel: () -> Unit,
-    onCopyDiagnostics: () -> Unit,
+    onAction: (CloudflareScreenAction) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(
-            onClick = onStartTunnel,
+            onClick = {
+                onAction(CloudflareScreenAction.StartTunnel)
+            },
             enabled = actionsEnabled && CloudflareScreenAction.StartTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Start tunnel")
         }
         OutlinedButton(
-            onClick = onStopTunnel,
+            onClick = {
+                onAction(CloudflareScreenAction.StopTunnel)
+            },
             enabled = actionsEnabled && CloudflareScreenAction.StopTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Stop tunnel")
         }
         OutlinedButton(
-            onClick = onReconnectTunnel,
+            onClick = {
+                onAction(CloudflareScreenAction.ReconnectTunnel)
+            },
             enabled = actionsEnabled && CloudflareScreenAction.ReconnectTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Reconnect tunnel")
         }
         OutlinedButton(
-            onClick = onTestManagementTunnel,
+            onClick = {
+                onAction(CloudflareScreenAction.TestManagementTunnel)
+            },
             enabled = actionsEnabled && CloudflareScreenAction.TestManagementTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Test management tunnel")
         }
         OutlinedButton(
-            onClick = onCopyDiagnostics,
+            onClick = {
+                onAction(CloudflareScreenAction.CopyDiagnostics)
+            },
             enabled = actionsEnabled && CloudflareScreenAction.CopyDiagnostics in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {

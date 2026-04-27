@@ -1,5 +1,6 @@
 package com.cellularproxy.app.status
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
@@ -21,12 +22,16 @@ data class NotificationStatusModel(
             status: ProxyServiceStatus,
             latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck =
                 DashboardCloudflareManagementApiCheck.NotRun,
+            managementApiTokenPresent: Boolean = true,
+            invalidSensitiveConfigReason: SensitiveConfigInvalidReason? = null,
         ): NotificationStatusModel {
             val dashboard =
                 DashboardStatusModel.from(
                     config = config,
                     status = status,
                     latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
+                    managementApiTokenPresent = managementApiTokenPresent,
+                    invalidSensitiveConfigReason = invalidSensitiveConfigReason,
                 )
             val serviceState = status.state.toNotificationServiceState()
             val warnings = dashboard.warnings.toNotificationWarnings()
@@ -91,6 +96,7 @@ enum class NotificationWarning(
     SelectedRouteUnavailable("Selected route is unavailable"),
     CloudflareTokenMissing("Cloudflare tunnel token is missing"),
     ManagementApiTokenMissing("Management API token is missing"),
+    SensitiveConfigurationInvalid("Sensitive configuration is invalid"),
     PortAlreadyInUse("Proxy port is already in use"),
     InvalidListenAddress("Proxy listen address is invalid"),
     InvalidListenPort("Proxy listen port is invalid"),
@@ -148,6 +154,7 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.SelectedRouteUnavailable -> NotificationWarning.SelectedRouteUnavailable
         DashboardWarning.CloudflareTokenMissing -> NotificationWarning.CloudflareTokenMissing
         DashboardWarning.ManagementApiTokenMissing -> NotificationWarning.ManagementApiTokenMissing
+        DashboardWarning.SensitiveConfigurationInvalid -> NotificationWarning.SensitiveConfigurationInvalid
         DashboardWarning.PortAlreadyInUse -> NotificationWarning.PortAlreadyInUse
         DashboardWarning.InvalidListenAddress -> NotificationWarning.InvalidListenAddress
         DashboardWarning.InvalidListenPort -> NotificationWarning.InvalidListenPort
@@ -168,6 +175,7 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.SelectedRouteUnavailable,
         NotificationWarning.CloudflareTokenMissing,
         NotificationWarning.ManagementApiTokenMissing,
+        NotificationWarning.SensitiveConfigurationInvalid,
         NotificationWarning.PortAlreadyInUse,
         NotificationWarning.InvalidListenAddress,
         NotificationWarning.InvalidListenPort,

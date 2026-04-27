@@ -1,5 +1,6 @@
 package com.cellularproxy.app.status
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
@@ -37,6 +38,8 @@ data class DashboardStatusModel(
             redactionSecrets: LogRedactionSecrets = LogRedactionSecrets(),
             latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck =
                 DashboardCloudflareManagementApiCheck.NotRun,
+            managementApiTokenPresent: Boolean = true,
+            invalidSensitiveConfigReason: SensitiveConfigInvalidReason? = null,
         ): DashboardStatusModel {
             val cloudflare = status.cloudflare.toDashboardCloudflareStatus()
             return DashboardStatusModel(
@@ -53,7 +56,15 @@ data class DashboardStatusModel(
                 cloudflare = cloudflare,
                 root = rootState(config, status),
                 startupError = status.startupError,
-                warnings = buildWarnings(config, status, cloudflare, latestCloudflareManagementApiCheck),
+                warnings =
+                    buildWarnings(
+                        config = config,
+                        status = status,
+                        cloudflare = cloudflare,
+                        latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
+                        managementApiTokenPresent = managementApiTokenPresent,
+                        invalidSensitiveConfigReason = invalidSensitiveConfigReason,
+                    ),
                 recentHighSeverityErrors = recentLogs.toDashboardRecentErrors(redactionSecrets),
             )
         }
@@ -72,6 +83,8 @@ data class DashboardStatusModel(
             status: ProxyServiceStatus,
             cloudflare: DashboardCloudflareStatus,
             latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
+            managementApiTokenPresent: Boolean,
+            invalidSensitiveConfigReason: SensitiveConfigInvalidReason?,
         ): Set<DashboardWarning> = buildSet {
             if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
                 add(DashboardWarning.BroadUnauthenticatedProxy)
@@ -94,11 +107,18 @@ data class DashboardStatusModel(
             if (status.startupError == ProxyStartupError.UnavailableSelectedRoute) {
                 add(DashboardWarning.SelectedRouteUnavailable)
             }
-            if (status.startupError == ProxyStartupError.MissingCloudflareTunnelToken) {
+            if (
+                config.cloudflare.enabled &&
+                !config.cloudflare.tunnelTokenPresent ||
+                status.startupError == ProxyStartupError.MissingCloudflareTunnelToken
+            ) {
                 add(DashboardWarning.CloudflareTokenMissing)
             }
-            if (status.startupError == ProxyStartupError.MissingManagementApiToken) {
+            if (!managementApiTokenPresent || status.startupError == ProxyStartupError.MissingManagementApiToken) {
                 add(DashboardWarning.ManagementApiTokenMissing)
+            }
+            if (invalidSensitiveConfigReason != null) {
+                add(DashboardWarning.SensitiveConfigurationInvalid)
             }
             if (status.startupError == ProxyStartupError.PortAlreadyInUse) {
                 add(DashboardWarning.PortAlreadyInUse)
@@ -184,6 +204,7 @@ enum class DashboardWarning {
     SelectedRouteUnavailable,
     CloudflareTokenMissing,
     ManagementApiTokenMissing,
+    SensitiveConfigurationInvalid,
     PortAlreadyInUse,
     InvalidListenAddress,
     InvalidListenPort,

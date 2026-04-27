@@ -50,6 +50,133 @@ class ProxySettingsFormModelTest {
     }
 
     @Test
+    fun `settings actions are available only when editable fields changed`() {
+        val persisted = ProxySettingsFormState.from(AppConfig.default())
+        val unchangedState =
+            ProxySettingsScreenState.from(
+                form = persisted,
+                persistedForm = persisted,
+            )
+        val changedPlainSettingState =
+            ProxySettingsScreenState.from(
+                form = persisted.copy(listenPort = "8181"),
+                persistedForm = persisted,
+            )
+        val changedSensitiveSettingState =
+            ProxySettingsScreenState.from(
+                form = persisted.copy(managementApiToken = "new-management-token"),
+                persistedForm = persisted,
+            )
+
+        assertEquals(
+            emptyList(),
+            unchangedState.availableActions,
+        )
+        assertEquals(
+            listOf(
+                ProxySettingsScreenAction.SaveChanges,
+                ProxySettingsScreenAction.DiscardChanges,
+            ),
+            changedPlainSettingState.availableActions,
+        )
+        assertEquals(
+            listOf(
+                ProxySettingsScreenAction.SaveChanges,
+                ProxySettingsScreenAction.DiscardChanges,
+            ),
+            changedSensitiveSettingState.availableActions,
+        )
+    }
+
+    @Test
+    fun `settings state withholds save and exposes validation errors for invalid dirty fields`() {
+        val persisted = ProxySettingsFormState.from(AppConfig.default())
+        val state =
+            ProxySettingsScreenState.from(
+                form =
+                    persisted.copy(
+                        listenPort = "65536",
+                        maxConcurrentConnections = "0",
+                        mobileDataOffDelaySeconds = "1.5",
+                        proxyUsername = "new-user",
+                    ),
+                persistedForm = persisted,
+            )
+
+        assertEquals(
+            listOf(ProxySettingsScreenAction.DiscardChanges),
+            state.availableActions,
+        )
+        assertEquals(
+            setOf(
+                ProxySettingsValidationError.InvalidListenPort,
+                ProxySettingsValidationError.InvalidMaxConcurrentConnections,
+                ProxySettingsValidationError.InvalidRotationTiming,
+                ProxySettingsValidationError.InvalidProxyCredential,
+            ),
+            state.validationErrors,
+        )
+    }
+
+    @Test
+    fun `successful settings save clears sensitive edit fields from the next editable baseline`() {
+        val savedConfig =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenPort = 8181,
+                    ),
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+            )
+        val editedForm =
+            ProxySettingsFormState
+                .from(AppConfig.default())
+                .copy(
+                    listenPort = "8181",
+                    proxyUsername = "new-user",
+                    proxyPassword = "new-password",
+                    managementApiToken = "new-management-token",
+                    cloudflareEnabled = true,
+                    cloudflareTunnelToken = "eyJhIjoiZmFrZSIsInQiOiJmYWtlIiwicyI6Ik1EUXpNVEkyTnpndE9Ua3dPUzAwTkRnNUxUaGhOV1F0TWpVMk1qYzRPVEV5TXpRMSJ9",
+                    cloudflareHostnameLabel = "manage.example.com",
+                )
+
+        val nextForm = editedForm.afterSuccessfulSave(savedConfig)
+
+        assertEquals("8181", nextForm.listenPort)
+        assertEquals(true, nextForm.cloudflareEnabled)
+        assertEquals("manage.example.com", nextForm.cloudflareHostnameLabel)
+        assertEquals("", nextForm.proxyUsername)
+        assertEquals("", nextForm.proxyPassword)
+        assertEquals("", nextForm.managementApiToken)
+        assertEquals("", nextForm.cloudflareTunnelToken)
+    }
+
+    @Test
+    fun `successful settings save preserves edited Cloudflare fields when saved config has stale Cloudflare state`() {
+        val savedConfigWithStaleCloudflare = AppConfig.default()
+        val editedForm =
+            ProxySettingsFormState
+                .from(AppConfig.default())
+                .copy(
+                    cloudflareEnabled = true,
+                    cloudflareHostnameLabel = "manage.example.com",
+                    cloudflareTunnelToken = "eyJhIjoiZmFrZSIsInQiOiJmYWtlIiwicyI6Ik1EUXpNVEkyTnpndE9Ua3dPUzAwTkRnNUxUaGhOV1F0TWpVMk1qYzRPVEV5TXpRMSJ9",
+                )
+
+        val nextForm = editedForm.afterSuccessfulSave(savedConfigWithStaleCloudflare)
+
+        assertEquals(true, nextForm.cloudflareEnabled)
+        assertEquals("manage.example.com", nextForm.cloudflareHostnameLabel)
+        assertEquals("", nextForm.cloudflareTunnelToken)
+    }
+
+    @Test
     fun `valid settings produce updated config and broad unauthenticated warning`() {
         val result =
             ProxySettingsFormState(

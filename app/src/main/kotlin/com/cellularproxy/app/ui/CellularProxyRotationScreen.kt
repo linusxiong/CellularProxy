@@ -54,6 +54,7 @@ internal fun CellularProxyRotationScreen(
 
         RotationActionRow(
             actionsEnabled = actionsEnabled,
+            availableActions = state.availableActions,
             onCheckRoot = onCheckRoot,
             onProbeCurrentPublicIp = onProbeCurrentPublicIp,
             onRotateMobileData = onRotateMobileData,
@@ -92,6 +93,7 @@ internal data class RotationScreenState(
     val pauseDrainStatus: String,
     val strictIpChange: String,
     val copyableDiagnostics: String,
+    val availableActions: List<RotationScreenAction>,
 ) {
     companion object {
         fun from(
@@ -133,14 +135,39 @@ internal data class RotationScreenState(
                         "Pause/drain status: $pauseDrainStatus",
                         "Strict IP change: $strictIpChange",
                     ).joinToString(separator = "\n"),
+                availableActions =
+                    rotationScreenActions(
+                        config = config,
+                        rotationStatus = rotationStatus,
+                        rootAvailability = rootAvailability,
+                        cooldownRemainingSeconds = cooldownRemainingSeconds,
+                    ),
             )
         }
     }
 }
 
+internal enum class RotationScreenAction(
+    val confirmationTitle: String? = null,
+) {
+    CheckRoot,
+    ProbeCurrentPublicIp,
+    RotateMobileData(
+        confirmationTitle = "Confirm mobile data rotation",
+    ),
+    RotateAirplaneMode(
+        confirmationTitle = "Confirm airplane mode rotation",
+    ),
+    CopyDiagnostics,
+    ;
+
+    val requiresConfirmation: Boolean = confirmationTitle != null
+}
+
 @Composable
 private fun RotationActionRow(
     actionsEnabled: Boolean,
+    availableActions: List<RotationScreenAction>,
     onCheckRoot: () -> Unit,
     onProbeCurrentPublicIp: () -> Unit,
     onRotateMobileData: () -> Unit,
@@ -153,35 +180,35 @@ private fun RotationActionRow(
     ) {
         OutlinedButton(
             onClick = onCheckRoot,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && RotationScreenAction.CheckRoot in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Check root")
         }
         OutlinedButton(
             onClick = onProbeCurrentPublicIp,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && RotationScreenAction.ProbeCurrentPublicIp in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Probe current public IP")
         }
         Button(
             onClick = onRotateMobileData,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && RotationScreenAction.RotateMobileData in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Rotate mobile data")
         }
         OutlinedButton(
             onClick = onRotateAirplaneMode,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && RotationScreenAction.RotateAirplaneMode in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Rotate airplane mode")
         }
         OutlinedButton(
             onClick = onCopyDiagnostics,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && RotationScreenAction.CopyDiagnostics in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy diagnostics")
@@ -240,4 +267,24 @@ private fun RotationStatus.toPauseDrainText(activeConnections: Long): String = w
     RotationState.DrainingConnections -> "$activeConnections active connections draining"
     RotationState.ResumingProxyRequests -> "Resuming proxy requests"
     else -> "Not active"
+}
+
+private fun rotationScreenActions(
+    config: AppConfig,
+    rotationStatus: RotationStatus,
+    rootAvailability: RootAvailabilityStatus,
+    cooldownRemainingSeconds: Long?,
+): List<RotationScreenAction> = buildList {
+    add(RotationScreenAction.CheckRoot)
+    add(RotationScreenAction.ProbeCurrentPublicIp)
+    if (
+        config.root.operationsEnabled &&
+        rootAvailability == RootAvailabilityStatus.Available &&
+        !rotationStatus.isActive &&
+        (cooldownRemainingSeconds == null || cooldownRemainingSeconds <= 0)
+    ) {
+        add(RotationScreenAction.RotateMobileData)
+        add(RotationScreenAction.RotateAirplaneMode)
+    }
+    add(RotationScreenAction.CopyDiagnostics)
 }

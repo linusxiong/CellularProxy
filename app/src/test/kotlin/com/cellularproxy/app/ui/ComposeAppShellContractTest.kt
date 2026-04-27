@@ -229,6 +229,11 @@ class ComposeAppShellContractTest {
             "Stop proxy",
             "Refresh status",
             "Copy proxy endpoint",
+            "Open risk details",
+            "Open Cloudflare",
+            "Open rotation",
+            "Open logs",
+            "Open diagnostics",
         ).forEach { label ->
             assertTrue(
                 dashboardSource.contains(label),
@@ -276,6 +281,133 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `dashboard screen action availability follows service state`() {
+        val stoppedState =
+            DashboardScreenState.from(
+                status =
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                    ),
+            )
+        val runningState =
+            DashboardScreenState.from(
+                status =
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status =
+                            ProxyServiceStatus.running(
+                                listenHost = "127.0.0.1",
+                                listenPort = 8080,
+                                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                                boundRoute = null,
+                                publicIp = null,
+                                hasHighSecurityRisk = false,
+                            ),
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardScreenAction.StartProxy,
+                DashboardScreenAction.RefreshStatus,
+                DashboardScreenAction.CopyProxyEndpoint,
+                DashboardScreenAction.OpenRiskDetails,
+                DashboardScreenAction.OpenCloudflare,
+                DashboardScreenAction.OpenRotation,
+                DashboardScreenAction.OpenLogs,
+                DashboardScreenAction.OpenDiagnostics,
+            ),
+            stoppedState.availableActions,
+        )
+        assertEquals(
+            listOf(
+                DashboardScreenAction.StopProxy,
+                DashboardScreenAction.RefreshStatus,
+                DashboardScreenAction.CopyProxyEndpoint,
+                DashboardScreenAction.OpenRiskDetails,
+                DashboardScreenAction.OpenCloudflare,
+                DashboardScreenAction.OpenRotation,
+                DashboardScreenAction.OpenLogs,
+                DashboardScreenAction.OpenDiagnostics,
+            ),
+            runningState.availableActions,
+        )
+    }
+
+    @Test
+    fun `dashboard high impact service actions are marked for confirmation`() {
+        assertFalse(DashboardScreenAction.StartProxy.requiresConfirmation)
+        assertTrue(DashboardScreenAction.StopProxy.requiresConfirmation)
+        assertFalse(DashboardScreenAction.RefreshStatus.requiresConfirmation)
+        assertFalse(DashboardScreenAction.CopyProxyEndpoint.requiresConfirmation)
+        assertFalse(DashboardScreenAction.OpenRiskDetails.requiresConfirmation)
+        assertFalse(DashboardScreenAction.OpenCloudflare.requiresConfirmation)
+        assertFalse(DashboardScreenAction.OpenRotation.requiresConfirmation)
+        assertFalse(DashboardScreenAction.OpenLogs.requiresConfirmation)
+        assertFalse(DashboardScreenAction.OpenDiagnostics.requiresConfirmation)
+
+        assertEquals(
+            "Confirm proxy service stop",
+            DashboardScreenAction.StopProxy.confirmationTitle,
+        )
+    }
+
+    @Test
+    fun `dashboard high impact service actions require confirmation before dispatch`() {
+        val dashboardSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDashboardScreen.kt")
+                .readText()
+
+        assertEquals(
+            DashboardActionDispatchMode.Immediate,
+            dashboardActionDispatchMode(DashboardScreenAction.StartProxy),
+        )
+        assertEquals(
+            DashboardActionDispatchMode.ConfirmFirst,
+            dashboardActionDispatchMode(DashboardScreenAction.StopProxy),
+        )
+        assertEquals(
+            DashboardActionDispatchMode.Immediate,
+            dashboardActionDispatchMode(DashboardScreenAction.OpenCloudflare),
+        )
+        assertTrue(
+            dashboardSource.contains("AlertDialog"),
+            "Dashboard high-impact actions must show a confirmation dialog before invoking callbacks.",
+        )
+        assertTrue(
+            dashboardSource.contains("pendingConfirmationAction"),
+            "Dashboard screen must remember the action awaiting confirmation instead of dispatching it directly.",
+        )
+    }
+
+    @Test
+    fun `dashboard confirmation dispatch rechecks current availability`() {
+        assertTrue(
+            dashboardActionCanDispatch(
+                action = DashboardScreenAction.StopProxy,
+                actionsEnabled = true,
+                availableActions = listOf(DashboardScreenAction.StopProxy),
+            ),
+        )
+        assertFalse(
+            dashboardActionCanDispatch(
+                action = DashboardScreenAction.StopProxy,
+                actionsEnabled = false,
+                availableActions = listOf(DashboardScreenAction.StopProxy),
+            ),
+        )
+        assertFalse(
+            dashboardActionCanDispatch(
+                action = DashboardScreenAction.StopProxy,
+                actionsEnabled = true,
+                availableActions = listOf(DashboardScreenAction.StartProxy),
+            ),
+        )
+    }
+
+    @Test
     fun `settings route renders dedicated configuration screen`() {
         val shellSource =
             repoRoot()
@@ -314,6 +446,14 @@ class ComposeAppShellContractTest {
             "Cloudflare hostname",
             "Leave secret fields blank to keep current values.",
             "Save settings",
+            "Discard changes",
+            "Listen host must be a valid bind address.",
+            "Listen port must be between 1 and 65535.",
+            "Max concurrent connections must be greater than zero.",
+            "Rotation timing values must be whole seconds greater than zero.",
+            "Enter both proxy username and password, or leave both blank.",
+            "Management API token cannot be blank or padded with spaces.",
+            "Cloudflare tunnel token is missing or invalid.",
         ).forEach { label ->
             assertTrue(
                 settingsSource.contains(label),
@@ -321,7 +461,8 @@ class ComposeAppShellContractTest {
             )
         }
         assertTrue(
-            settingsSource.contains("mutableStateOf(ProxySettingsFormState.from(AppConfig.default()))"),
+            settingsSource.contains("var persistedForm by remember { mutableStateOf(ProxySettingsFormState.from(AppConfig.default())) }") &&
+                settingsSource.contains("mutableStateOf(persistedForm)"),
             "Settings route must own editable form state until ViewModel/storage wiring is added.",
         )
         assertTrue(
@@ -331,6 +472,22 @@ class ComposeAppShellContractTest {
         assertTrue(
             settingsSource.contains("KeyboardType.Password"),
             "Secret settings fields must use password keyboard semantics, not only visual masking.",
+        )
+        assertTrue(
+            settingsSource.contains("ProxySettingsScreenState.from"),
+            "Settings screen must derive Save/Discard availability from the tested settings screen state.",
+        )
+        assertTrue(
+            settingsSource.contains("ProxySettingsScreenAction.SaveChanges in state.availableActions"),
+            "Save must be enabled only when the settings screen state allows it.",
+        )
+        assertTrue(
+            settingsSource.contains("ProxySettingsScreenAction.DiscardChanges in state.availableActions"),
+            "Discard must be enabled only when the settings screen state allows it.",
+        )
+        assertTrue(
+            settingsSource.contains("afterSuccessfulSave"),
+            "Settings route save handling must reset the editable baseline through the post-save sanitizer.",
         )
     }
 
@@ -471,6 +628,90 @@ class ComposeAppShellContractTest {
         assertEquals(
             listOf(CloudflareScreenAction.CopyDiagnostics),
             missingTokenActions,
+        )
+    }
+
+    @Test
+    fun `cloudflare high impact lifecycle actions are marked for confirmation`() {
+        assertTrue(CloudflareScreenAction.StartTunnel.requiresConfirmation)
+        assertTrue(CloudflareScreenAction.StopTunnel.requiresConfirmation)
+        assertTrue(CloudflareScreenAction.ReconnectTunnel.requiresConfirmation)
+        assertFalse(CloudflareScreenAction.TestManagementTunnel.requiresConfirmation)
+        assertFalse(CloudflareScreenAction.CopyDiagnostics.requiresConfirmation)
+
+        assertEquals(
+            "Confirm Cloudflare tunnel start",
+            CloudflareScreenAction.StartTunnel.confirmationTitle,
+        )
+        assertEquals(
+            "Confirm Cloudflare tunnel stop",
+            CloudflareScreenAction.StopTunnel.confirmationTitle,
+        )
+        assertEquals(
+            "Confirm Cloudflare tunnel reconnect",
+            CloudflareScreenAction.ReconnectTunnel.confirmationTitle,
+        )
+    }
+
+    @Test
+    fun `cloudflare high impact lifecycle actions require confirmation before dispatch`() {
+        val cloudflareSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyCloudflareScreen.kt")
+                .readText()
+
+        assertEquals(
+            CloudflareActionDispatchMode.ConfirmFirst,
+            cloudflareActionDispatchMode(CloudflareScreenAction.StartTunnel),
+        )
+        assertEquals(
+            CloudflareActionDispatchMode.ConfirmFirst,
+            cloudflareActionDispatchMode(CloudflareScreenAction.StopTunnel),
+        )
+        assertEquals(
+            CloudflareActionDispatchMode.ConfirmFirst,
+            cloudflareActionDispatchMode(CloudflareScreenAction.ReconnectTunnel),
+        )
+        assertEquals(
+            CloudflareActionDispatchMode.Immediate,
+            cloudflareActionDispatchMode(CloudflareScreenAction.TestManagementTunnel),
+        )
+        assertEquals(
+            CloudflareActionDispatchMode.Immediate,
+            cloudflareActionDispatchMode(CloudflareScreenAction.CopyDiagnostics),
+        )
+        assertTrue(
+            cloudflareSource.contains("AlertDialog"),
+            "Cloudflare high-impact actions must show a confirmation dialog before invoking callbacks.",
+        )
+        assertTrue(
+            cloudflareSource.contains("pendingConfirmationAction"),
+            "Cloudflare screen must remember the action awaiting confirmation instead of dispatching it directly.",
+        )
+    }
+
+    @Test
+    fun `cloudflare confirmation dispatch rechecks current availability`() {
+        assertTrue(
+            cloudflareActionCanDispatch(
+                action = CloudflareScreenAction.StopTunnel,
+                actionsEnabled = true,
+                availableActions = listOf(CloudflareScreenAction.StopTunnel),
+            ),
+        )
+        assertFalse(
+            cloudflareActionCanDispatch(
+                action = CloudflareScreenAction.StopTunnel,
+                actionsEnabled = false,
+                availableActions = listOf(CloudflareScreenAction.StopTunnel),
+            ),
+        )
+        assertFalse(
+            cloudflareActionCanDispatch(
+                action = CloudflareScreenAction.StopTunnel,
+                actionsEnabled = true,
+                availableActions = listOf(CloudflareScreenAction.StartTunnel),
+            ),
         )
     }
 
@@ -647,6 +888,107 @@ class ComposeAppShellContractTest {
             "Rotation diagnostics copy text must be derived from redacted screen fields.",
         )
         assertFalse(state.copyableDiagnostics.contains("rotation-secret"))
+    }
+
+    @Test
+    fun `rotation screen action availability follows root cooldown and active rotation state`() {
+        val enabledConfig =
+            AppConfig.default().copy(
+                root =
+                    AppConfig.default().root.copy(
+                        operationsEnabled = true,
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.RotateMobileData,
+                RotationScreenAction.RotateAirplaneMode,
+                RotationScreenAction.CopyDiagnostics,
+            ),
+            rotationActions(
+                config = enabledConfig,
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Available,
+            ),
+        )
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.CopyDiagnostics,
+            ),
+            rotationActions(
+                config = enabledConfig,
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Available,
+                cooldownRemainingSeconds = 3,
+            ),
+            "Rotation actions must be blocked during cooldown.",
+        )
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.CopyDiagnostics,
+            ),
+            rotationActions(
+                config = enabledConfig,
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+                rootAvailability = RootAvailabilityStatus.Available,
+            ),
+            "Rotation actions must be blocked while another rotation is active.",
+        )
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.CopyDiagnostics,
+            ),
+            rotationActions(
+                config = enabledConfig,
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Unavailable,
+            ),
+            "Rotation actions must be blocked when root is unavailable.",
+        )
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.CopyDiagnostics,
+            ),
+            rotationActions(
+                config = AppConfig.default(),
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Available,
+            ),
+            "Rotation actions must be blocked when root operations are disabled.",
+        )
+    }
+
+    @Test
+    fun `rotation high impact actions are marked for confirmation`() {
+        assertFalse(RotationScreenAction.CheckRoot.requiresConfirmation)
+        assertFalse(RotationScreenAction.ProbeCurrentPublicIp.requiresConfirmation)
+        assertTrue(RotationScreenAction.RotateMobileData.requiresConfirmation)
+        assertTrue(RotationScreenAction.RotateAirplaneMode.requiresConfirmation)
+        assertFalse(RotationScreenAction.CopyDiagnostics.requiresConfirmation)
+
+        assertEquals(
+            "Confirm mobile data rotation",
+            RotationScreenAction.RotateMobileData.confirmationTitle,
+        )
+        assertEquals(
+            "Confirm airplane mode rotation",
+            RotationScreenAction.RotateAirplaneMode.confirmationTitle,
+        )
     }
 
     @Test
@@ -1018,6 +1360,22 @@ class ComposeAppShellContractTest {
             CloudflareScreenState.from(
                 config = config,
                 tunnelStatus = tunnelStatus,
+            )
+        return state.availableActions
+    }
+
+    private fun rotationActions(
+        config: AppConfig,
+        rotationStatus: RotationStatus,
+        rootAvailability: RootAvailabilityStatus,
+        cooldownRemainingSeconds: Long? = null,
+    ): List<RotationScreenAction> {
+        val state =
+            RotationScreenState.from(
+                config = config,
+                rotationStatus = rotationStatus,
+                rootAvailability = rootAvailability,
+                cooldownRemainingSeconds = cooldownRemainingSeconds,
             )
         return state.availableActions
     }

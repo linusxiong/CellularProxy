@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -31,22 +32,43 @@ import com.cellularproxy.shared.config.RouteTarget
 
 @Composable
 internal fun CellularProxySettingsRoute() {
-    var form by remember { mutableStateOf(ProxySettingsFormState.from(AppConfig.default())) }
+    var persistedForm by remember { mutableStateOf(ProxySettingsFormState.from(AppConfig.default())) }
+    var form by remember { mutableStateOf(persistedForm) }
 
     CellularProxySettingsScreen(
         form = form,
+        persistedForm = persistedForm,
         saveEnabled = true,
         onFormChange = { updatedForm -> form = updatedForm },
+        onSaveSettings = {
+            when (val result = form.toAppConfig(AppConfig.default())) {
+                is ProxySettingsFormResult.Invalid -> Unit
+                is ProxySettingsFormResult.Valid -> {
+                    val nextForm = form.afterSuccessfulSave(result.config)
+                    persistedForm = nextForm
+                    form = nextForm
+                }
+            }
+        },
+        onDiscardChanges = { form = persistedForm },
     )
 }
 
 @Composable
 internal fun CellularProxySettingsScreen(
     form: ProxySettingsFormState = ProxySettingsFormState.from(AppConfig.default()),
+    persistedForm: ProxySettingsFormState = form,
     saveEnabled: Boolean = false,
     onFormChange: (ProxySettingsFormState) -> Unit = {},
     onSaveSettings: () -> Unit = {},
+    onDiscardChanges: () -> Unit = {},
 ) {
+    val state =
+        ProxySettingsScreenState.from(
+            form = form,
+            persistedForm = persistedForm,
+        )
+
     Column(
         modifier =
             Modifier
@@ -166,13 +188,43 @@ internal fun CellularProxySettingsScreen(
             )
         }
 
+        SettingsValidationErrors(state.validationErrors)
+
         Button(
             onClick = onSaveSettings,
-            enabled = saveEnabled,
+            enabled = saveEnabled && ProxySettingsScreenAction.SaveChanges in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Save settings")
         }
+        OutlinedButton(
+            onClick = onDiscardChanges,
+            enabled = saveEnabled && ProxySettingsScreenAction.DiscardChanges in state.availableActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Discard changes")
+        }
+    }
+}
+
+@Composable
+private fun SettingsValidationErrors(errors: Set<ProxySettingsValidationError>) {
+    if (errors.isEmpty()) {
+        return
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        errors
+            .map(ProxySettingsValidationError::displayText)
+            .forEach { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
     }
 }
 
@@ -190,6 +242,16 @@ private fun SettingsSection(
         )
         content()
     }
+}
+
+private fun ProxySettingsValidationError.displayText(): String = when (this) {
+    ProxySettingsValidationError.InvalidListenHost -> "Listen host must be a valid bind address."
+    ProxySettingsValidationError.InvalidListenPort -> "Listen port must be between 1 and 65535."
+    ProxySettingsValidationError.InvalidMaxConcurrentConnections -> "Max concurrent connections must be greater than zero."
+    ProxySettingsValidationError.InvalidRotationTiming -> "Rotation timing values must be whole seconds greater than zero."
+    ProxySettingsValidationError.InvalidProxyCredential -> "Enter both proxy username and password, or leave both blank."
+    ProxySettingsValidationError.InvalidManagementApiToken -> "Management API token cannot be blank or padded with spaces."
+    ProxySettingsValidationError.InvalidCloudflareTunnelToken -> "Cloudflare tunnel token is missing or invalid."
 }
 
 @Composable

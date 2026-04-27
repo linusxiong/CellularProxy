@@ -168,29 +168,75 @@ data class ProxySettingsFormState(
         )
     }
 
+    fun afterSuccessfulSave(savedConfig: AppConfig): ProxySettingsFormState = from(savedConfig).withEditedCloudflareFieldsFrom(this)
+
     companion object {
-        fun from(config: AppConfig): ProxySettingsFormState =
-            ProxySettingsFormState(
-                listenHost = config.proxy.listenHost,
-                listenPort = config.proxy.listenPort.toString(),
-                authEnabled = config.proxy.authEnabled,
-                maxConcurrentConnections = config.proxy.maxConcurrentConnections.toString(),
-                route = config.network.defaultRoutePolicy,
-                strictIpChangeRequired = config.rotation.strictIpChangeRequired,
-                mobileDataOffDelaySeconds =
-                    config.rotation.mobileDataOffDelay.inWholeSeconds
-                        .toString(),
-                networkReturnTimeoutSeconds =
-                    config.rotation.networkReturnTimeout.inWholeSeconds
-                        .toString(),
-                cooldownSeconds =
-                    config.rotation.cooldown.inWholeSeconds
-                        .toString(),
-                rootOperationsEnabled = config.root.operationsEnabled,
-                cloudflareEnabled = config.cloudflare.enabled,
-                cloudflareHostnameLabel = config.cloudflare.managementHostnameLabel.orEmpty(),
-            )
+        fun from(config: AppConfig): ProxySettingsFormState = ProxySettingsFormState(
+            listenHost = config.proxy.listenHost,
+            listenPort = config.proxy.listenPort.toString(),
+            authEnabled = config.proxy.authEnabled,
+            maxConcurrentConnections = config.proxy.maxConcurrentConnections.toString(),
+            route = config.network.defaultRoutePolicy,
+            strictIpChangeRequired = config.rotation.strictIpChangeRequired,
+            mobileDataOffDelaySeconds =
+                config.rotation.mobileDataOffDelay.inWholeSeconds
+                    .toString(),
+            networkReturnTimeoutSeconds =
+                config.rotation.networkReturnTimeout.inWholeSeconds
+                    .toString(),
+            cooldownSeconds =
+                config.rotation.cooldown.inWholeSeconds
+                    .toString(),
+            rootOperationsEnabled = config.root.operationsEnabled,
+            cloudflareEnabled = config.cloudflare.enabled,
+            cloudflareHostnameLabel = config.cloudflare.managementHostnameLabel.orEmpty(),
+        )
     }
+}
+
+data class ProxySettingsScreenState(
+    val form: ProxySettingsFormState,
+    val persistedForm: ProxySettingsFormState,
+    val validationErrors: Set<ProxySettingsValidationError>,
+    val availableActions: List<ProxySettingsScreenAction>,
+) {
+    companion object {
+        fun from(
+            form: ProxySettingsFormState,
+            persistedForm: ProxySettingsFormState,
+        ): ProxySettingsScreenState {
+            val validationErrors = form.validationErrors()
+            return ProxySettingsScreenState(
+                form = form,
+                persistedForm = persistedForm,
+                validationErrors = validationErrors,
+                availableActions =
+                    buildList {
+                        if (form != persistedForm && validationErrors.isEmpty()) {
+                            add(ProxySettingsScreenAction.SaveChanges)
+                        }
+                        if (form != persistedForm) {
+                            add(ProxySettingsScreenAction.DiscardChanges)
+                        }
+                    },
+            )
+        }
+    }
+}
+
+enum class ProxySettingsScreenAction {
+    SaveChanges,
+    DiscardChanges,
+}
+
+enum class ProxySettingsValidationError {
+    InvalidListenHost,
+    InvalidListenPort,
+    InvalidMaxConcurrentConnections,
+    InvalidRotationTiming,
+    InvalidProxyCredential,
+    InvalidManagementApiToken,
+    InvalidCloudflareTunnelToken,
 }
 
 sealed interface ProxySettingsFormResult {
@@ -213,6 +259,13 @@ sealed interface ProxySettingsFormResult {
 enum class ProxySettingsFormWarning {
     BroadUnauthenticatedProxy,
 }
+
+private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
+    editedForm: ProxySettingsFormState,
+): ProxySettingsFormState = copy(
+    cloudflareEnabled = editedForm.cloudflareEnabled,
+    cloudflareHostnameLabel = editedForm.cloudflareHostnameLabel,
+)
 
 class ProxySettingsFormController(
     private val loadConfig: () -> AppConfig,
@@ -338,39 +391,37 @@ private fun SensitiveConfig.withProxyCredentialEdit(
     )
 }
 
-private fun SensitiveConfigEditResult.withManagementApiTokenEdit(managementApiToken: String): SensitiveConfigEditResult =
-    when (this) {
-        SensitiveConfigEditResult.InvalidProxyCredential,
-        SensitiveConfigEditResult.InvalidManagementApiToken,
-        SensitiveConfigEditResult.InvalidCloudflareTunnelToken,
-        -> this
-        is SensitiveConfigEditResult.Valid -> {
-            if (managementApiToken.isEmpty()) {
-                this
-            } else if (managementApiToken.isBlank() || managementApiToken != managementApiToken.trim()) {
-                SensitiveConfigEditResult.InvalidManagementApiToken
-            } else {
-                SensitiveConfigEditResult.Valid(value?.copy(managementApiToken = managementApiToken))
-            }
+private fun SensitiveConfigEditResult.withManagementApiTokenEdit(managementApiToken: String): SensitiveConfigEditResult = when (this) {
+    SensitiveConfigEditResult.InvalidProxyCredential,
+    SensitiveConfigEditResult.InvalidManagementApiToken,
+    SensitiveConfigEditResult.InvalidCloudflareTunnelToken,
+    -> this
+    is SensitiveConfigEditResult.Valid -> {
+        if (managementApiToken.isEmpty()) {
+            this
+        } else if (managementApiToken.isBlank() || managementApiToken != managementApiToken.trim()) {
+            SensitiveConfigEditResult.InvalidManagementApiToken
+        } else {
+            SensitiveConfigEditResult.Valid(value?.copy(managementApiToken = managementApiToken))
         }
     }
+}
 
-private fun SensitiveConfigEditResult.withCloudflareTunnelTokenEdit(cloudflareTunnelToken: String): SensitiveConfigEditResult =
-    when (this) {
-        SensitiveConfigEditResult.InvalidProxyCredential,
-        SensitiveConfigEditResult.InvalidManagementApiToken,
-        SensitiveConfigEditResult.InvalidCloudflareTunnelToken,
-        -> this
-        is SensitiveConfigEditResult.Valid -> {
-            if (cloudflareTunnelToken.isEmpty()) {
-                this
-            } else if (cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()) {
-                SensitiveConfigEditResult.InvalidCloudflareTunnelToken
-            } else {
-                SensitiveConfigEditResult.Valid(value?.copy(cloudflareTunnelToken = cloudflareTunnelToken))
-            }
+private fun SensitiveConfigEditResult.withCloudflareTunnelTokenEdit(cloudflareTunnelToken: String): SensitiveConfigEditResult = when (this) {
+    SensitiveConfigEditResult.InvalidProxyCredential,
+    SensitiveConfigEditResult.InvalidManagementApiToken,
+    SensitiveConfigEditResult.InvalidCloudflareTunnelToken,
+    -> this
+    is SensitiveConfigEditResult.Valid -> {
+        if (cloudflareTunnelToken.isEmpty()) {
+            this
+        } else if (cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()) {
+            SensitiveConfigEditResult.InvalidCloudflareTunnelToken
+        } else {
+            SensitiveConfigEditResult.Valid(value?.copy(cloudflareTunnelToken = cloudflareTunnelToken))
         }
     }
+}
 
 private fun ProxySettingsFormState.hasInvalidProxyCredentialEdit(): Boolean {
     if (proxyUsername.isEmpty() && proxyPassword.isEmpty()) {
@@ -388,18 +439,57 @@ private fun ProxySettingsFormState.hasInvalidProxyCredentialEdit(): Boolean {
     }.isFailure
 }
 
-private fun ProxySettingsFormState.hasInvalidManagementApiTokenEdit(): Boolean =
-    managementApiToken.isNotEmpty() &&
-        (managementApiToken.isBlank() || managementApiToken != managementApiToken.trim())
+private fun ProxySettingsFormState.hasInvalidManagementApiTokenEdit(): Boolean = managementApiToken.isNotEmpty() &&
+    (managementApiToken.isBlank() || managementApiToken != managementApiToken.trim())
 
-private fun ProxySettingsFormState.hasInvalidCloudflareTunnelTokenEdit(): Boolean =
-    cloudflareTunnelToken.isNotEmpty() &&
-        cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()
+private fun ProxySettingsFormState.hasInvalidCloudflareTunnelTokenEdit(): Boolean = cloudflareTunnelToken.isNotEmpty() &&
+    cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()
 
-private fun String.isInvalidCloudflareTunnelTokenEdit(): Boolean =
-    isBlank() ||
-        this != trim() ||
-        CloudflareTunnelToken.parse(this) !is CloudflareTunnelTokenParseResult.Valid
+private fun ProxySettingsFormState.validationErrors(): Set<ProxySettingsValidationError> = buildSet {
+    if (
+        AppConfig
+            .default()
+            .copy(
+                proxy =
+                    ProxyConfig(
+                        listenHost = listenHost.trim(),
+                        listenPort = listenPort.trim().toStrictPortOrNull() ?: INVALID_PORT_SENTINEL,
+                        authEnabled = authEnabled,
+                        maxConcurrentConnections = 1,
+                    ),
+            ).validate()
+            .errors
+            .contains(ConfigValidationError.InvalidListenHost)
+    ) {
+        add(ProxySettingsValidationError.InvalidListenHost)
+    }
+    if (listenPort.trim().toStrictPortOrNull() == null) {
+        add(ProxySettingsValidationError.InvalidListenPort)
+    }
+    if (maxConcurrentConnections.trim().toStrictPositiveIntOrNull() == null) {
+        add(ProxySettingsValidationError.InvalidMaxConcurrentConnections)
+    }
+    if (
+        mobileDataOffDelaySeconds.trim().toStrictPositiveSecondsDurationOrNull() == null ||
+        networkReturnTimeoutSeconds.trim().toStrictPositiveSecondsDurationOrNull() == null ||
+        cooldownSeconds.trim().toStrictPositiveSecondsDurationOrNull() == null
+    ) {
+        add(ProxySettingsValidationError.InvalidRotationTiming)
+    }
+    if (hasInvalidProxyCredentialEdit()) {
+        add(ProxySettingsValidationError.InvalidProxyCredential)
+    }
+    if (hasInvalidManagementApiTokenEdit()) {
+        add(ProxySettingsValidationError.InvalidManagementApiToken)
+    }
+    if (hasInvalidCloudflareTunnelTokenEdit()) {
+        add(ProxySettingsValidationError.InvalidCloudflareTunnelToken)
+    }
+}
+
+private fun String.isInvalidCloudflareTunnelTokenEdit(): Boolean = isBlank() ||
+    this != trim() ||
+    CloudflareTunnelToken.parse(this) !is CloudflareTunnelTokenParseResult.Valid
 
 private fun String.toStrictPortOrNull(): Int? {
     if (isEmpty() || any { it !in '0'..'9' }) {
