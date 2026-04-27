@@ -180,4 +180,23 @@ class NotificationStatusModelTest {
         assertEquals("Service startup failed | Cloudflare tunnel token is missing", model.warningText)
         assertEquals(NotificationPriority.Warning, model.priority)
     }
+
+    @Test
+    fun `notification warns specifically when management api token is missing at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingManagementApiToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.ManagementApiTokenMissing),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Management API token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
 }

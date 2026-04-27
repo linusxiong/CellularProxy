@@ -208,6 +208,23 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns specifically when management api token is missing at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingManagementApiToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.ManagementApiTokenMissing),
+            model.warnings,
+        )
+    }
+
+    @Test
     fun `model shows root operations disabled before reporting runtime root availability`() {
         val model =
             DashboardStatusModel.from(

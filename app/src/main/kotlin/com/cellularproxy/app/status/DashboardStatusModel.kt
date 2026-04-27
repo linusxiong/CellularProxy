@@ -80,6 +80,9 @@ data class DashboardStatusModel(
                 if (status.startupError == ProxyStartupError.MissingCloudflareTunnelToken) {
                     add(DashboardWarning.CloudflareTokenMissing)
                 }
+                if (status.startupError == ProxyStartupError.MissingManagementApiToken) {
+                    add(DashboardWarning.ManagementApiTokenMissing)
+                }
                 if (status.startupError != null) {
                     add(DashboardWarning.StartupFailed)
                 }
@@ -151,6 +154,7 @@ enum class DashboardWarning {
     RootUnavailable,
     SelectedRouteUnavailable,
     CloudflareTokenMissing,
+    ManagementApiTokenMissing,
     StartupFailed,
 }
 

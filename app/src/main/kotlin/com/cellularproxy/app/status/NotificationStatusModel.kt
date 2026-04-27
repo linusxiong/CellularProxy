@@ -81,6 +81,7 @@ enum class NotificationWarning(
     RootUnavailable("Root access is unavailable"),
     SelectedRouteUnavailable("Selected route is unavailable"),
     CloudflareTokenMissing("Cloudflare tunnel token is missing"),
+    ManagementApiTokenMissing("Management API token is missing"),
 }
 
 private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState = when (this) {
@@ -130,6 +131,7 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.RootUnavailable -> NotificationWarning.RootUnavailable
         DashboardWarning.SelectedRouteUnavailable -> NotificationWarning.SelectedRouteUnavailable
         DashboardWarning.CloudflareTokenMissing -> NotificationWarning.CloudflareTokenMissing
+        DashboardWarning.ManagementApiTokenMissing -> NotificationWarning.ManagementApiTokenMissing
         DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
     }
 }
@@ -143,6 +145,7 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.RootUnavailable,
         NotificationWarning.SelectedRouteUnavailable,
         NotificationWarning.CloudflareTokenMissing,
+        NotificationWarning.ManagementApiTokenMissing,
     ).filter { it in this }
         .joinToString(" | ") { it.message }
 }
