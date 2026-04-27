@@ -51,6 +51,7 @@ class ProxyRotationExecutionCoordinator(
     publicIpProbeRunner: PublicIpProbeRunner? = null,
     private val route: RouteTarget = RouteTarget.Automatic,
     private val publicIpProbeEndpoint: PublicIpProbeEndpoint? = null,
+    private val strictIpChangeRequired: Boolean = false,
     pauseActions: ProxyRotationPauseActions? = null,
     activeProxyExchanges: (() -> Long)? = null,
     private val maxConnectionDrainTime: Duration? = null,
@@ -169,15 +170,21 @@ class ProxyRotationExecutionCoordinator(
         nowElapsedMillis = nowElapsedMillis(),
     )
 
-    fun advanceEnableCommand(): RotationTransitionResult = continueWithEnableRootCommandCoordinatorIfConfigured(
+    suspend fun advanceEnableCommand(): RotationTransitionResult = continueWithEnableRootCommandCoordinatorIfConfigured(
         commandTransition = controlPlane.currentStatus.asIgnoredTransition(),
         nowElapsedMillis = nowElapsedMillis(),
         redactionSecrets = rootCommandCoordinator?.let { secrets() },
     )
 
-    fun advanceNetworkReturn(): RotationTransitionResult = continueWithNetworkReturnCoordinatorIfConfigured(
+    suspend fun advanceNetworkReturn(): RotationTransitionResult = continueWithNetworkReturnCoordinatorIfConfigured(
         networkReturnTransition = controlPlane.currentStatus.asIgnoredTransition(),
         nowElapsedMillis = nowElapsedMillis(),
+    )
+
+    suspend fun advanceNewPublicIpProbe(): RotationTransitionResult = continueWithNewPublicIpProbeIfConfigured(
+        newPublicIpTransition = controlPlane.currentStatus.asIgnoredTransition(),
+        nowElapsedMillis = nowElapsedMillis(),
+        expectedSnapshot = null,
     )
 
     private suspend fun rotate(operation: RotationOperation): RotationTransitionResult {
@@ -431,7 +438,7 @@ class ProxyRotationExecutionCoordinator(
         return delayTransition
     }
 
-    private fun continueWithEnableRootCommandCoordinatorIfConfigured(
+    private suspend fun continueWithEnableRootCommandCoordinatorIfConfigured(
         commandTransition: RotationTransitionResult,
         nowElapsedMillis: Long,
         redactionSecrets: LogRedactionSecrets?,
@@ -470,7 +477,7 @@ class ProxyRotationExecutionCoordinator(
         }
     }
 
-    private fun continueWithNetworkReturnCoordinatorIfConfigured(
+    private suspend fun continueWithNetworkReturnCoordinatorIfConfigured(
         networkReturnTransition: RotationTransitionResult,
         nowElapsedMillis: Long,
         expectedSnapshot: RotationControlPlaneSnapshot? = null,
@@ -478,58 +485,134 @@ class ProxyRotationExecutionCoordinator(
     ): RotationTransitionResult {
         val networkProvider = availableNetworks ?: return networkReturnTransition
         val returnTimeout = requireNotNull(networkReturnTimeout)
-        val networkTransition =
+        val networkContinuation =
             synchronized(controlPlane) {
                 if (networkReturnTransition.status.state != RotationState.WaitingForNetworkReturn) {
                     networkReturnWaitState = null
-                    return networkReturnTransition
-                }
-
-                val actualSnapshot = controlPlane.snapshot()
-                val targetSnapshot = expectedSnapshot ?: actualSnapshot
-                if (actualSnapshot != targetSnapshot) {
-                    if (networkReturnWaitState?.snapshot == targetSnapshot) {
-                        networkReturnWaitState = null
-                    }
-                    return actualSnapshot.status.asIgnoredTransition()
-                }
-
-                val waitState =
-                    networkReturnWaitState
-                        ?.takeIf { it.snapshot == targetSnapshot }
-                        ?: NetworkReturnWaitState(
-                            snapshot = targetSnapshot,
-                            startedElapsedMillis = waitStartedElapsedMillis ?: nowElapsedMillis,
-                        ).also {
-                            networkReturnWaitState = it
+                    networkReturnTransition.asNetworkReturnContinuation()
+                } else {
+                    val actualSnapshot = controlPlane.snapshot()
+                    val targetSnapshot = expectedSnapshot ?: actualSnapshot
+                    if (actualSnapshot != targetSnapshot) {
+                        if (networkReturnWaitState?.snapshot == targetSnapshot) {
+                            networkReturnWaitState = null
                         }
+                        actualSnapshot.status.asIgnoredTransition().asNetworkReturnContinuation()
+                    } else {
+                        val waitState =
+                            networkReturnWaitState
+                                ?.takeIf { it.snapshot == targetSnapshot }
+                                ?: NetworkReturnWaitState(
+                                    snapshot = targetSnapshot,
+                                    startedElapsedMillis = waitStartedElapsedMillis ?: nowElapsedMillis,
+                                ).also {
+                                    networkReturnWaitState = it
+                                }
 
-                when (
-                    val networkReturnResult =
-                        networkReturnCoordinator.advance(
-                            expectedSnapshot = waitState.snapshot,
-                            routeTarget = route,
-                            networks = networkProvider(),
-                            waitStartedElapsedMillis = waitState.startedElapsedMillis,
-                            nowElapsedMillis = nowElapsedMillis,
-                            networkReturnTimeout = returnTimeout,
-                        )
-                ) {
-                    is RotationNetworkReturnAdvanceResult.Applied -> {
-                        networkReturnWaitState = null
-                        networkReturnResult.progress.transition
+                        when (
+                            val networkReturnResult =
+                                networkReturnCoordinator.advance(
+                                    expectedSnapshot = waitState.snapshot,
+                                    routeTarget = route,
+                                    networks = networkProvider(),
+                                    waitStartedElapsedMillis = waitState.startedElapsedMillis,
+                                    nowElapsedMillis = nowElapsedMillis,
+                                    networkReturnTimeout = returnTimeout,
+                                )
+                        ) {
+                            is RotationNetworkReturnAdvanceResult.Applied -> {
+                                networkReturnWaitState = null
+                                val transition = networkReturnResult.progress.transition
+                                NetworkReturnContinuation(
+                                    transition = transition,
+                                    newPublicIpProbeSnapshot =
+                                        controlPlane.snapshot().takeIf {
+                                            transition.status.state == RotationState.ProbingNewPublicIp
+                                        },
+                                )
+                            }
+                            is RotationNetworkReturnAdvanceResult.Waiting ->
+                                networkReturnTransition.asNetworkReturnContinuation()
+                            is RotationNetworkReturnAdvanceResult.NoAction -> {
+                                networkReturnWaitState = null
+                                networkReturnResult.snapshot.status
+                                    .asIgnoredTransition()
+                                    .asNetworkReturnContinuation()
+                            }
+                            is RotationNetworkReturnAdvanceResult.Stale ->
+                                networkReturnResult.actualSnapshot.status
+                                    .asIgnoredTransition()
+                                    .asNetworkReturnContinuation()
+                        }
                     }
-                    is RotationNetworkReturnAdvanceResult.Waiting -> networkReturnTransition
-                    is RotationNetworkReturnAdvanceResult.NoAction -> {
-                        networkReturnWaitState = null
-                        networkReturnResult.snapshot.status.asIgnoredTransition()
-                    }
-                    is RotationNetworkReturnAdvanceResult.Stale ->
-                        networkReturnResult.actualSnapshot.status.asIgnoredTransition()
                 }
             }
 
-        return continueWithResumeIfNeeded(networkTransition, nowElapsedMillis)
+        val probeTransition =
+            continueWithNewPublicIpProbeIfConfigured(
+                newPublicIpTransition = networkContinuation.transition,
+                nowElapsedMillis =
+                    if (networkContinuation.newPublicIpProbeSnapshot == null) {
+                        nowElapsedMillis
+                    } else {
+                        this.nowElapsedMillis()
+                    },
+                expectedSnapshot = networkContinuation.newPublicIpProbeSnapshot,
+            )
+        return continueWithResumeIfNeeded(probeTransition, nowElapsedMillis)
+    }
+
+    private suspend fun continueWithNewPublicIpProbeIfConfigured(
+        newPublicIpTransition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+        expectedSnapshot: RotationControlPlaneSnapshot?,
+    ): RotationTransitionResult {
+        val coordinator = publicIpProbeCoordinator ?: return newPublicIpTransition
+        val endpoint = requireNotNull(publicIpProbeEndpoint)
+        if (newPublicIpTransition.status.state != RotationState.ProbingNewPublicIp) {
+            return newPublicIpTransition
+        }
+        if (expectedSnapshot != null && expectedSnapshot.status != newPublicIpTransition.status) {
+            return newPublicIpTransition
+        }
+
+        val targetSnapshot = expectedSnapshot ?: controlPlane.snapshot()
+        val probeResult =
+            try {
+                coordinator.probeNewPublicIp(
+                    expectedSnapshot = targetSnapshot,
+                    route = route,
+                    endpoint = endpoint,
+                    strictIpChangeRequired = strictIpChangeRequired,
+                    nowElapsedMillis = nowElapsedMillis,
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                val failureElapsedMillis = this.nowElapsedMillis()
+                val failureTransition =
+                    synchronized(controlPlane) {
+                        val actualSnapshot = controlPlane.snapshot()
+                        if (actualSnapshot != targetSnapshot) {
+                            return actualSnapshot.status.asIgnoredTransition()
+                        }
+                        controlPlane
+                            .applyProgress(
+                                event = RotationEvent.NewPublicIpProbeFailed,
+                                nowElapsedMillis = failureElapsedMillis,
+                            ).transition
+                    }
+                return continueWithResumeIfNeeded(failureTransition, failureElapsedMillis)
+            }
+        val postProbeElapsedMillis = this.nowElapsedMillis()
+
+        val probeTransition =
+            when (probeResult) {
+                is RotationPublicIpProbeAdvanceResult.Applied -> probeResult.progress.transition
+                is RotationPublicIpProbeAdvanceResult.NoAction -> probeResult.snapshot.status.asIgnoredTransition()
+                is RotationPublicIpProbeAdvanceResult.Stale -> probeResult.actualSnapshot.status.asIgnoredTransition()
+            }
+        return continueWithResumeIfNeeded(probeTransition, postProbeElapsedMillis)
     }
 
     private fun continueWithResumeIfNeeded(
@@ -553,6 +636,16 @@ class ProxyRotationExecutionCoordinator(
 private fun RotationStatus.asIgnoredTransition(): RotationTransitionResult = RotationTransitionResult(
     disposition = RotationTransitionDisposition.Ignored,
     status = this,
+)
+
+private fun RotationTransitionResult.asNetworkReturnContinuation(): NetworkReturnContinuation = NetworkReturnContinuation(
+    transition = this,
+    newPublicIpProbeSnapshot = null,
+)
+
+private data class NetworkReturnContinuation(
+    val transition: RotationTransitionResult,
+    val newPublicIpProbeSnapshot: RotationControlPlaneSnapshot?,
 )
 
 private data class NetworkReturnWaitState(
