@@ -421,6 +421,60 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `cloudflare screen state gates lifecycle actions by token and tunnel status`() {
+        val defaultConfig = AppConfig.default()
+        val enabledConfig =
+            defaultConfig.copy(
+                cloudflare =
+                    defaultConfig.cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                    ),
+            )
+        val stoppedActions = cloudflareActions(enabledConfig, CloudflareTunnelStatus.stopped())
+        val degradedActions = cloudflareActions(enabledConfig, CloudflareTunnelStatus.degraded())
+        val connectedActions = cloudflareActions(enabledConfig, CloudflareTunnelStatus.connected())
+        val missingTokenActions =
+            cloudflareActions(
+                enabledConfig.copy(
+                    cloudflare =
+                        enabledConfig.cloudflare.copy(
+                            tunnelTokenPresent = false,
+                        ),
+                ),
+                CloudflareTunnelStatus.stopped(),
+            )
+
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.StartTunnel,
+                CloudflareScreenAction.CopyDiagnostics,
+            ),
+            stoppedActions,
+        )
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.StopTunnel,
+                CloudflareScreenAction.ReconnectTunnel,
+                CloudflareScreenAction.CopyDiagnostics,
+            ),
+            degradedActions,
+        )
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.StopTunnel,
+                CloudflareScreenAction.TestManagementTunnel,
+                CloudflareScreenAction.CopyDiagnostics,
+            ),
+            connectedActions,
+        )
+        assertEquals(
+            listOf(CloudflareScreenAction.CopyDiagnostics),
+            missingTokenActions,
+        )
+    }
+
+    @Test
     fun `cloudflare screen state derives redacted copyable diagnostics`() {
         val state =
             CloudflareScreenState.from(
@@ -954,5 +1008,17 @@ class ComposeAppShellContractTest {
         } else {
             assertNotNull(workingDirectory.parent)
         }
+    }
+
+    private fun cloudflareActions(
+        config: AppConfig,
+        tunnelStatus: CloudflareTunnelStatus,
+    ): List<CloudflareScreenAction> {
+        val state =
+            CloudflareScreenState.from(
+                config = config,
+                tunnelStatus = tunnelStatus,
+            )
+        return state.availableActions
     }
 }

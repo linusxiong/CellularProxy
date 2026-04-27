@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
@@ -51,6 +52,7 @@ internal fun CellularProxyCloudflareScreen(
 
         CloudflareActionRow(
             actionsEnabled = actionsEnabled,
+            availableActions = state.availableActions,
             onStartTunnel = onStartTunnel,
             onStopTunnel = onStopTunnel,
             onReconnectTunnel = onReconnectTunnel,
@@ -82,6 +84,7 @@ internal data class CloudflareScreenState(
     val edgeSessionSummary: String,
     val managementApiRoundTrip: String,
     val copyableDiagnostics: String,
+    val availableActions: List<CloudflareScreenAction>,
 ) {
     companion object {
         fun from(
@@ -123,9 +126,23 @@ internal data class CloudflareScreenState(
                         "Edge sessions: $redactedEdgeSessionSummary",
                         "Management API round trip: $redactedManagementApiRoundTrip",
                     ).joinToString(separator = "\n"),
+                availableActions =
+                    cloudflareScreenActions(
+                        config = config,
+                        tokenStatus = tokenStatus,
+                        tunnelStatus = tunnelStatus,
+                    ),
             )
         }
     }
+}
+
+internal enum class CloudflareScreenAction {
+    StartTunnel,
+    StopTunnel,
+    ReconnectTunnel,
+    TestManagementTunnel,
+    CopyDiagnostics,
 }
 
 internal enum class CloudflareTokenStatus(
@@ -139,6 +156,7 @@ internal enum class CloudflareTokenStatus(
 @Composable
 private fun CloudflareActionRow(
     actionsEnabled: Boolean,
+    availableActions: List<CloudflareScreenAction>,
     onStartTunnel: () -> Unit,
     onStopTunnel: () -> Unit,
     onReconnectTunnel: () -> Unit,
@@ -151,35 +169,35 @@ private fun CloudflareActionRow(
     ) {
         Button(
             onClick = onStartTunnel,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && CloudflareScreenAction.StartTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Start tunnel")
         }
         OutlinedButton(
             onClick = onStopTunnel,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && CloudflareScreenAction.StopTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Stop tunnel")
         }
         OutlinedButton(
             onClick = onReconnectTunnel,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && CloudflareScreenAction.ReconnectTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Reconnect tunnel")
         }
         OutlinedButton(
             onClick = onTestManagementTunnel,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && CloudflareScreenAction.TestManagementTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Test management tunnel")
         }
         OutlinedButton(
             onClick = onCopyDiagnostics,
-            enabled = actionsEnabled,
+            enabled = actionsEnabled && CloudflareScreenAction.CopyDiagnostics in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy diagnostics")
@@ -218,4 +236,32 @@ private fun CloudflareField(
             style = MaterialTheme.typography.bodyMedium,
         )
     }
+}
+
+private fun cloudflareScreenActions(
+    config: AppConfig,
+    tokenStatus: CloudflareTokenStatus,
+    tunnelStatus: CloudflareTunnelStatus,
+): List<CloudflareScreenAction> {
+    val actions = mutableListOf<CloudflareScreenAction>()
+    if (config.cloudflare.enabled && tokenStatus == CloudflareTokenStatus.Present) {
+        when (tunnelStatus.state) {
+            CloudflareTunnelState.Disabled,
+            CloudflareTunnelState.Stopped,
+            CloudflareTunnelState.Failed,
+            -> actions += CloudflareScreenAction.StartTunnel
+            CloudflareTunnelState.Starting,
+            CloudflareTunnelState.Connected,
+            CloudflareTunnelState.Degraded,
+            -> actions += CloudflareScreenAction.StopTunnel
+        }
+        if (tunnelStatus.state == CloudflareTunnelState.Degraded) {
+            actions += CloudflareScreenAction.ReconnectTunnel
+        }
+        if (tunnelStatus.state == CloudflareTunnelState.Connected) {
+            actions += CloudflareScreenAction.TestManagementTunnel
+        }
+    }
+    actions += CloudflareScreenAction.CopyDiagnostics
+    return actions
 }
