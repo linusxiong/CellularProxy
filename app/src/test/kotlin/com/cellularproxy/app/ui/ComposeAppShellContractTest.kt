@@ -173,6 +173,50 @@ class ComposeAppShellContractTest {
         )
     }
 
+    @Test
+    fun `dashboard route renders dedicated status screen`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val dashboardSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDashboardScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("CellularProxyDashboardScreen()"),
+            "Dashboard route must render the dedicated status screen instead of the generic placeholder.",
+        )
+        assertTrue(
+            !shellSource.contains("composable(Dashboard.route) {\n            CellularProxyDestinationPlaceholder(Dashboard)"),
+            "Dashboard route must not use the generic destination placeholder.",
+        )
+
+        listOf(
+            "Service state",
+            "Proxy endpoint",
+            "Selected route",
+            "Proxy authentication",
+            "Management API",
+            "Cloudflare tunnel",
+            "Root availability",
+            "Public IP",
+            "Active connections",
+            "Recent traffic",
+            "Recent high-severity errors",
+            "Start proxy",
+            "Stop proxy",
+            "Refresh status",
+            "Copy proxy endpoint",
+        ).forEach { label ->
+            assertTrue(
+                dashboardSource.contains(label),
+                "Dashboard screen must expose `$label`.",
+            )
+        }
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory

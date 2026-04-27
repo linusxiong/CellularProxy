@@ -161,7 +161,7 @@ private fun CellularProxyNavigationHost(
         modifier = modifier,
     ) {
         composable(Dashboard.route) {
-            CellularProxyDestinationPlaceholder(Dashboard)
+            CellularProxyDashboardScreen()
         }
         composable(Settings.route) {
             CellularProxyDestinationPlaceholder(Settings)
