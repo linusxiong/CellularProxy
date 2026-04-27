@@ -1,6 +1,8 @@
 package com.cellularproxy.app.ui
 
 import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.cloudflare.CloudflareTunnelToken
+import com.cellularproxy.cloudflare.CloudflareTunnelTokenParseResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.ProxyConfig
@@ -341,7 +343,7 @@ private fun SensitiveConfigEditResult.withCloudflareTunnelTokenEdit(
         is SensitiveConfigEditResult.Valid -> {
             if (cloudflareTunnelToken.isEmpty()) {
                 this
-            } else if (cloudflareTunnelToken.isBlank() || cloudflareTunnelToken != cloudflareTunnelToken.trim()) {
+            } else if (cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()) {
                 SensitiveConfigEditResult.InvalidCloudflareTunnelToken
             } else {
                 SensitiveConfigEditResult.Valid(value?.copy(cloudflareTunnelToken = cloudflareTunnelToken))
@@ -371,7 +373,12 @@ private fun ProxySettingsFormState.hasInvalidManagementApiTokenEdit(): Boolean =
 
 private fun ProxySettingsFormState.hasInvalidCloudflareTunnelTokenEdit(): Boolean =
     cloudflareTunnelToken.isNotEmpty() &&
-        (cloudflareTunnelToken.isBlank() || cloudflareTunnelToken != cloudflareTunnelToken.trim())
+        cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()
+
+private fun String.isInvalidCloudflareTunnelTokenEdit(): Boolean =
+    isBlank() ||
+        this != trim() ||
+        CloudflareTunnelToken.parse(this) !is CloudflareTunnelTokenParseResult.Valid
 
 private fun String.toStrictPortOrNull(): Int? {
     if (isEmpty() || any { it !in '0'..'9' }) {

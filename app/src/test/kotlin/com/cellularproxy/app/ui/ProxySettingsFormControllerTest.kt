@@ -5,6 +5,8 @@ import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
+import java.util.Base64
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -248,6 +250,7 @@ class ProxySettingsFormControllerTest {
     fun `cloudflare fields enable tunnel with encrypted token and display hostname label`() {
         val savedConfigs = mutableListOf<AppConfig>()
         val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val cloudflareToken = validCloudflareTunnelToken()
         val originalSensitiveConfig = SensitiveConfig(
             proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
             managementApiToken = "management-token",
@@ -266,7 +269,7 @@ class ProxySettingsFormControllerTest {
                 authEnabled = true,
                 route = RouteTarget.Automatic,
                 cloudflareEnabled = true,
-                cloudflareTunnelToken = "new-cloudflare-token",
+                cloudflareTunnelToken = cloudflareToken,
                 cloudflareHostnameLabel = " manage.example.com ",
             ),
         )
@@ -275,7 +278,7 @@ class ProxySettingsFormControllerTest {
         assertEquals(true, saved.config.cloudflare.enabled)
         assertEquals(true, saved.config.cloudflare.tunnelTokenPresent)
         assertEquals("manage.example.com", saved.config.cloudflare.managementHostnameLabel)
-        assertEquals("new-cloudflare-token", saved.sensitiveConfig?.cloudflareTunnelToken)
+        assertEquals(cloudflareToken, saved.sensitiveConfig?.cloudflareTunnelToken)
         assertEquals(originalSensitiveConfig.proxyCredential, saved.sensitiveConfig?.proxyCredential)
         assertEquals("management-token", saved.sensitiveConfig?.managementApiToken)
         assertEquals(listOf(saved.config), savedConfigs)
@@ -375,6 +378,37 @@ class ProxySettingsFormControllerTest {
                 authEnabled = true,
                 route = RouteTarget.Automatic,
                 cloudflareTunnelToken = "   ",
+            ),
+        )
+
+        val invalid = result as ProxySettingsSaveResult.Invalid
+        assertTrue(invalid.invalidCloudflareTunnelToken)
+        assertEquals(false, loadSensitiveConfigCalled)
+    }
+
+    @Test
+    fun `malformed cloudflare tunnel token edit is rejected before sensitive config is loaded`() {
+        var loadSensitiveConfigCalled = false
+        val controller = ProxySettingsFormController(
+            loadConfig = AppConfig::default,
+            saveConfig = {},
+            loadSensitiveConfig = {
+                loadSensitiveConfigCalled = true
+                SensitiveConfig(
+                    proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                    managementApiToken = "management-token",
+                )
+            },
+            saveSensitiveConfig = {},
+        )
+
+        val result = controller.save(
+            ProxySettingsFormState(
+                listenHost = "127.0.0.1",
+                listenPort = "8888",
+                authEnabled = true,
+                route = RouteTarget.Automatic,
+                cloudflareTunnelToken = "not-base64",
             ),
         )
 
@@ -625,5 +659,12 @@ class ProxySettingsFormControllerTest {
         val invalid = result as ProxySettingsSaveResult.Invalid
         assertTrue(invalid.invalidManagementApiToken)
         assertEquals(false, loadSensitiveConfigCalled)
+    }
+
+    private fun validCloudflareTunnelToken(): String {
+        val tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+        val secret = Base64.getEncoder().encodeToString(ByteArray(32) { index -> (index + 1).toByte() })
+        val json = """{"a":"account-tag","s":"$secret","t":"$tunnelId","e":"edge.example.com"}"""
+        return Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
     }
 }
