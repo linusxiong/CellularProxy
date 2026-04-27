@@ -41,7 +41,7 @@ object ManagementApiReadOnlyResponses {
                 append(rootOperationsEnabled)
                 append(',')
                 append(""""availability":""")
-                append(status.rootAvailability.apiValue().jsonString())
+                append(status.rootAvailabilityFor(rootOperationsEnabled).apiValue().jsonString())
                 append("}}")
             },
         )
@@ -180,6 +180,13 @@ private fun RootAvailabilityStatus.apiValue(): String =
         RootAvailabilityStatus.Unknown -> "unknown"
         RootAvailabilityStatus.Available -> "available"
         RootAvailabilityStatus.Unavailable -> "unavailable"
+    }
+
+private fun ProxyServiceStatus.rootAvailabilityFor(rootOperationsEnabled: Boolean): RootAvailabilityStatus =
+    if (rootOperationsEnabled) {
+        rootAvailability
+    } else {
+        RootAvailabilityStatus.Unknown
     }
 
 private fun ProxyStartupError.apiValue(): String =

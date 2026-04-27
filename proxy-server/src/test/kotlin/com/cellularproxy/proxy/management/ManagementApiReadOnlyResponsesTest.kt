@@ -78,7 +78,7 @@ class ManagementApiReadOnlyResponsesTest {
     }
 
     @Test
-    fun `status response distinguishes disabled root operations from runtime root availability`() {
+    fun `status response suppresses root availability when root operations are disabled`() {
         val response = ManagementApiReadOnlyResponses.status(
             status = ProxyServiceStatus.stopped(rootAvailability = RootAvailabilityStatus.Available),
             rootOperationsEnabled = false,
@@ -86,7 +86,7 @@ class ManagementApiReadOnlyResponsesTest {
 
         assertEquals(
             true,
-            response.body.contains(""""root":{"operationsEnabled":false,"availability":"available"}"""),
+            response.body.contains(""""root":{"operationsEnabled":false,"availability":"unknown"}"""),
         )
     }
 
