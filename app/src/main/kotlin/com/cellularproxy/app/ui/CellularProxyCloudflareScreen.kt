@@ -227,6 +227,96 @@ internal enum class CloudflareTokenStatus(
     Invalid("Invalid"),
 }
 
+internal class CloudflareScreenController(
+    private val configProvider: () -> AppConfig = { AppConfig.default() },
+    private val tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
+    private val tokenStatusProvider: () -> CloudflareTokenStatus = {
+        if (configProvider().cloudflare.tunnelTokenPresent) {
+            CloudflareTokenStatus.Present
+        } else {
+            CloudflareTokenStatus.Missing
+        }
+    },
+    private val edgeSessionSummaryProvider: () -> String? = { null },
+    private val managementApiRoundTripProvider: () -> String? = { null },
+    private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val actionHandler: (CloudflareScreenAction) -> Unit = {},
+) {
+    private val pendingOperations = mutableMapOf<CloudflareScreenAction, CloudflareTunnelStatus>()
+    private val pendingEffects = mutableListOf<CloudflareScreenEffect>()
+    var state: CloudflareScreenState = buildState()
+        private set
+
+    fun handle(event: CloudflareScreenEvent) {
+        when (event) {
+            CloudflareScreenEvent.CopyDiagnostics -> {
+                if (CloudflareScreenAction.CopyDiagnostics in state.availableActions) {
+                    pendingEffects.add(CloudflareScreenEffect.CopyText(state.copyableDiagnostics))
+                }
+            }
+            CloudflareScreenEvent.StartTunnel -> dispatchAction(CloudflareScreenAction.StartTunnel)
+            CloudflareScreenEvent.StopTunnel -> dispatchAction(CloudflareScreenAction.StopTunnel)
+            CloudflareScreenEvent.ReconnectTunnel -> dispatchAction(CloudflareScreenAction.ReconnectTunnel)
+            CloudflareScreenEvent.TestManagementTunnel -> dispatchAction(CloudflareScreenAction.TestManagementTunnel)
+            CloudflareScreenEvent.Refresh -> {
+                state = buildState()
+            }
+        }
+    }
+
+    fun consumeEffects(): List<CloudflareScreenEffect> {
+        val effects = pendingEffects.toList()
+        pendingEffects.clear()
+        return effects
+    }
+
+    private fun dispatchAction(action: CloudflareScreenAction) {
+        if (action in state.availableActions) {
+            pendingOperations[action] = tunnelStatusProvider()
+            actionHandler(action)
+            state = buildState()
+        }
+    }
+
+    private fun buildState(): CloudflareScreenState {
+        val currentTunnelStatus = tunnelStatusProvider()
+        val currentState =
+            CloudflareScreenState.from(
+                config = configProvider(),
+                tunnelStatus = currentTunnelStatus,
+                tokenStatus = tokenStatusProvider(),
+                edgeSessionSummary = edgeSessionSummaryProvider(),
+                managementApiRoundTrip = managementApiRoundTripProvider(),
+                secrets = secrets,
+            )
+        pendingOperations
+            .filterValues { dispatchedStatus -> dispatchedStatus != currentTunnelStatus }
+            .keys
+            .forEach(pendingOperations::remove)
+        return currentState.copy(
+            availableActions =
+                currentState.availableActions.filterNot { action ->
+                    action in pendingOperations.keys
+                },
+        )
+    }
+}
+
+internal enum class CloudflareScreenEvent {
+    StartTunnel,
+    StopTunnel,
+    ReconnectTunnel,
+    TestManagementTunnel,
+    CopyDiagnostics,
+    Refresh,
+}
+
+internal sealed interface CloudflareScreenEffect {
+    data class CopyText(
+        val text: String,
+    ) : CloudflareScreenEffect
+}
+
 internal enum class CloudflareActionDispatchMode {
     Immediate,
     ConfirmFirst,
