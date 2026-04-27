@@ -83,6 +83,9 @@ enum class NotificationWarning(
     CloudflareTokenMissing("Cloudflare tunnel token is missing"),
     ManagementApiTokenMissing("Management API token is missing"),
     PortAlreadyInUse("Proxy port is already in use"),
+    InvalidListenAddress("Proxy listen address is invalid"),
+    InvalidListenPort("Proxy listen port is invalid"),
+    InvalidMaxConcurrentConnections("Proxy connection limit is invalid"),
 }
 
 private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState = when (this) {
@@ -134,6 +137,9 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.CloudflareTokenMissing -> NotificationWarning.CloudflareTokenMissing
         DashboardWarning.ManagementApiTokenMissing -> NotificationWarning.ManagementApiTokenMissing
         DashboardWarning.PortAlreadyInUse -> NotificationWarning.PortAlreadyInUse
+        DashboardWarning.InvalidListenAddress -> NotificationWarning.InvalidListenAddress
+        DashboardWarning.InvalidListenPort -> NotificationWarning.InvalidListenPort
+        DashboardWarning.InvalidMaxConcurrentConnections -> NotificationWarning.InvalidMaxConcurrentConnections
         DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
     }
 }
@@ -149,6 +155,9 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.CloudflareTokenMissing,
         NotificationWarning.ManagementApiTokenMissing,
         NotificationWarning.PortAlreadyInUse,
+        NotificationWarning.InvalidListenAddress,
+        NotificationWarning.InvalidListenPort,
+        NotificationWarning.InvalidMaxConcurrentConnections,
     ).filter { it in this }
         .joinToString(" | ") { it.message }
 }

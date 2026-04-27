@@ -161,6 +161,27 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns specifically when proxy configuration is invalid at startup`() {
+        listOf(
+            ProxyStartupError.InvalidListenAddress to DashboardWarning.InvalidListenAddress,
+            ProxyStartupError.InvalidListenPort to DashboardWarning.InvalidListenPort,
+            ProxyStartupError.InvalidMaxConcurrentConnections to DashboardWarning.InvalidMaxConcurrentConnections,
+        ).forEach { (startupError, warning) ->
+            val model =
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = startupError),
+                )
+
+            assertEquals(
+                setOf(DashboardWarning.StartupFailed, warning),
+                model.warnings,
+                "startupError=$startupError",
+            )
+        }
+    }
+
+    @Test
     fun `model exposes explicit no-root state for dashboard display`() {
         val model =
             DashboardStatusModel.from(

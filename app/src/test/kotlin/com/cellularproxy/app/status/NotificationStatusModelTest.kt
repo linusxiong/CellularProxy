@@ -170,6 +170,45 @@ class NotificationStatusModelTest {
     }
 
     @Test
+    fun `notification warns specifically when proxy configuration is invalid at startup`() {
+        listOf(
+            Triple(
+                ProxyStartupError.InvalidListenAddress,
+                NotificationWarning.InvalidListenAddress,
+                "Service startup failed | Proxy listen address is invalid",
+            ),
+            Triple(
+                ProxyStartupError.InvalidListenPort,
+                NotificationWarning.InvalidListenPort,
+                "Service startup failed | Proxy listen port is invalid",
+            ),
+            Triple(
+                ProxyStartupError.InvalidMaxConcurrentConnections,
+                NotificationWarning.InvalidMaxConcurrentConnections,
+                "Service startup failed | Proxy connection limit is invalid",
+            ),
+        ).forEach { (startupError, warning, warningText) ->
+            val model =
+                NotificationStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = startupError),
+                )
+
+            assertEquals(
+                setOf(NotificationWarning.StartupFailed, warning),
+                model.warnings,
+                "startupError=$startupError",
+            )
+            assertEquals(
+                warningText,
+                model.warningText,
+                "startupError=$startupError",
+            )
+            assertEquals(NotificationPriority.Warning, model.priority)
+        }
+    }
+
+    @Test
     fun `notification warns specifically when selected route is unavailable at startup`() {
         val model =
             NotificationStatusModel.from(

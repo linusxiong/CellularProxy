@@ -86,6 +86,13 @@ data class DashboardStatusModel(
                 if (status.startupError == ProxyStartupError.PortAlreadyInUse) {
                     add(DashboardWarning.PortAlreadyInUse)
                 }
+                when (status.startupError) {
+                    ProxyStartupError.InvalidListenAddress -> add(DashboardWarning.InvalidListenAddress)
+                    ProxyStartupError.InvalidListenPort -> add(DashboardWarning.InvalidListenPort)
+                    ProxyStartupError.InvalidMaxConcurrentConnections ->
+                        add(DashboardWarning.InvalidMaxConcurrentConnections)
+                    else -> Unit
+                }
                 if (status.startupError != null) {
                     add(DashboardWarning.StartupFailed)
                 }
@@ -159,6 +166,9 @@ enum class DashboardWarning {
     CloudflareTokenMissing,
     ManagementApiTokenMissing,
     PortAlreadyInUse,
+    InvalidListenAddress,
+    InvalidListenPort,
+    InvalidMaxConcurrentConnections,
     StartupFailed,
 }
 

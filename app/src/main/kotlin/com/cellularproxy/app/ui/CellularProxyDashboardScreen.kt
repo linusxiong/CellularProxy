@@ -209,5 +209,8 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.CloudflareTokenMissing -> "Cloudflare tunnel token is missing"
     DashboardWarning.ManagementApiTokenMissing -> "Management API token is missing"
     DashboardWarning.PortAlreadyInUse -> "Proxy port is already in use"
+    DashboardWarning.InvalidListenAddress -> "Proxy listen address is invalid"
+    DashboardWarning.InvalidListenPort -> "Proxy listen port is invalid"
+    DashboardWarning.InvalidMaxConcurrentConnections -> "Proxy connection limit is invalid"
     DashboardWarning.StartupFailed -> "Proxy startup failed"
 }
