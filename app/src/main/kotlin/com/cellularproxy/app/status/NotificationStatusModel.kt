@@ -78,16 +78,16 @@ enum class NotificationWarning(
     StartupFailed("Service startup failed"),
     BroadUnauthenticatedProxy("Proxy authentication is off on a broad listener"),
     CloudflareFailed("Cloudflare tunnel failed"),
+    RootUnavailable("Root access is unavailable"),
 }
 
-private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState =
-    when (this) {
-        ProxyServiceState.Starting -> NotificationServiceState.Starting
-        ProxyServiceState.Running -> NotificationServiceState.Running
-        ProxyServiceState.Stopping -> NotificationServiceState.Stopping
-        ProxyServiceState.Stopped -> NotificationServiceState.Stopped
-        ProxyServiceState.Failed -> NotificationServiceState.Failed
-    }
+private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState = when (this) {
+    ProxyServiceState.Starting -> NotificationServiceState.Starting
+    ProxyServiceState.Running -> NotificationServiceState.Running
+    ProxyServiceState.Stopping -> NotificationServiceState.Stopping
+    ProxyServiceState.Stopped -> NotificationServiceState.Stopped
+    ProxyServiceState.Failed -> NotificationServiceState.Failed
+}
 
 private val DashboardStatusModel.routeText: String
     get() = boundRoute?.displayName ?: configuredRoute.label
@@ -121,14 +121,14 @@ private val DashboardRootState.label: String
             DashboardRootState.Unavailable -> "unavailable"
         }
 
-private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarning> =
-    mapTo(linkedSetOf()) {
-        when (it) {
-            DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
-            DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
-            DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
-        }
+private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarning> = mapTo(linkedSetOf()) {
+    when (it) {
+        DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
+        DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
+        DashboardWarning.RootUnavailable -> NotificationWarning.RootUnavailable
+        DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
     }
+}
 
 private fun Set<NotificationWarning>.toWarningText(): String? {
     if (isEmpty()) return null
@@ -136,6 +136,7 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.StartupFailed,
         NotificationWarning.BroadUnauthenticatedProxy,
         NotificationWarning.CloudflareFailed,
+        NotificationWarning.RootUnavailable,
     ).filter { it in this }
         .joinToString(" | ") { it.message }
 }

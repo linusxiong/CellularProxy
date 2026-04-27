@@ -56,10 +56,11 @@ class NotificationStatusModelTest {
         assertEquals("CellularProxy running", model.title)
         assertEquals("0.0.0.0:8080 | Carrier LTE | 3 active", model.contentText)
         assertEquals("IP 203.0.113.42 | Cloudflare connected | Root unavailable", model.detailText)
-        assertEquals(NotificationPriority.Foreground, model.priority)
+        assertEquals(NotificationPriority.Warning, model.priority)
         assertTrue(model.isOngoing)
         assertTrue(model.stopActionEnabled)
-        assertEquals(emptySet(), model.warnings)
+        assertEquals(setOf(NotificationWarning.RootUnavailable), model.warnings)
+        assertEquals("Root access is unavailable", model.warningText)
     }
 
     @Test

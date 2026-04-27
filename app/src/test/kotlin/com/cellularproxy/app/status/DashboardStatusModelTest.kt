@@ -157,6 +157,23 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns when root operations are enabled but root is unavailable`() {
+        val model =
+            DashboardStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        root = RootConfig(operationsEnabled = true),
+                    ),
+                status =
+                    ProxyServiceStatus.stopped(
+                        rootAvailability = RootAvailabilityStatus.Unavailable,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.RootUnavailable), model.warnings)
+    }
+
+    @Test
     fun `model shows root operations disabled before reporting runtime root availability`() {
         val model =
             DashboardStatusModel.from(

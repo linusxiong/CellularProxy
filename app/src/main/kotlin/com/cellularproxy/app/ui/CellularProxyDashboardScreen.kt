@@ -204,5 +204,6 @@ private fun trafficSummary(status: DashboardStatusModel): String = "${status.tot
 private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.BroadUnauthenticatedProxy -> "Broad unauthenticated proxy listener"
     DashboardWarning.CloudflareFailed -> "Cloudflare tunnel failed"
+    DashboardWarning.RootUnavailable -> "Root access is unavailable"
     DashboardWarning.StartupFailed -> "Proxy startup failed"
 }
