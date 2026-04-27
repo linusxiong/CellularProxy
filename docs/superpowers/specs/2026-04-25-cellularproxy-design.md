@@ -208,6 +208,7 @@ Initial configuration keys:
 - `proxy.listenHost`: default `0.0.0.0`
 - `proxy.listenPort`: default `8080`
 - `proxy.authEnabled`: default `true`
+- `proxy.maxConcurrentConnections`: default `64`
 - `proxy.authCredential`: generated or user-provided, encrypted
 - `management.apiToken`: generated on first run, always required, encrypted
 - `network.defaultRoutePolicy`: Wi-Fi, cellular, VPN, or automatic
@@ -249,7 +250,7 @@ Sensitive fields:
 
 ## Error Handling
 
-Service startup fails before binding if configuration is invalid. Startup errors include invalid listen address, invalid port, port already in use, missing management token, unavailable selected route, and missing Cloudflare tunnel token when Cloudflare is enabled.
+Service startup fails before binding if configuration is invalid. Startup errors include invalid listen address, invalid port, invalid maximum concurrent connection limit, port already in use, missing management token, unavailable selected route, and missing Cloudflare tunnel token when Cloudflare is enabled.
 
 Proxy errors are returned without leaking sensitive request data. DNS failures, socket connection failures, selected-route loss, authentication failures, idle timeouts, and client disconnects are logged with redaction.
 

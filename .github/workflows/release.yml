@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build release artifacts
+        run: |
+          ./gradlew ktlintCheck test app:assembleRelease app:bundleRelease app:packageReleaseUniversalApk --no-daemon
+          mkdir -p release-artifacts
+          for dir in app/build/outputs/apk/release app/build/outputs/bundle/release app/build/outputs/mapping/release; do
+            if [ -d "$dir" ]; then
+              find "$dir" -type f \( -name "*.apk" -o -name "*.aab" -o -name "mapping.txt" \) -exec cp {} release-artifacts/ \;
+            fi
+          done
+          (cd release-artifacts && shasum -a 256 * > SHA256SUMS)
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cellularproxy-release
+          path: release-artifacts/
