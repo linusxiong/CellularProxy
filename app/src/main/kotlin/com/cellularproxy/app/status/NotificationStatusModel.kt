@@ -78,6 +78,7 @@ enum class NotificationWarning(
     StartupFailed("Service startup failed"),
     BroadUnauthenticatedProxy("Proxy authentication is off on a broad listener"),
     CloudflareFailed("Cloudflare tunnel failed"),
+    CloudflareDegraded("Cloudflare tunnel is degraded"),
     RootUnavailable("Root access is unavailable"),
     SelectedRouteUnavailable("Selected route is unavailable"),
     CloudflareTokenMissing("Cloudflare tunnel token is missing"),
@@ -132,6 +133,7 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
     when (it) {
         DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
         DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
+        DashboardWarning.CloudflareDegraded -> NotificationWarning.CloudflareDegraded
         DashboardWarning.RootUnavailable -> NotificationWarning.RootUnavailable
         DashboardWarning.SelectedRouteUnavailable -> NotificationWarning.SelectedRouteUnavailable
         DashboardWarning.CloudflareTokenMissing -> NotificationWarning.CloudflareTokenMissing
@@ -150,6 +152,7 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.StartupFailed,
         NotificationWarning.BroadUnauthenticatedProxy,
         NotificationWarning.CloudflareFailed,
+        NotificationWarning.CloudflareDegraded,
         NotificationWarning.RootUnavailable,
         NotificationWarning.SelectedRouteUnavailable,
         NotificationWarning.CloudflareTokenMissing,

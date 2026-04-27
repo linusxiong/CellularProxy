@@ -151,6 +151,22 @@ class NotificationStatusModelTest {
     }
 
     @Test
+    fun `notification warns when Cloudflare tunnel is degraded`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.degraded(),
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.CloudflareDegraded), model.warnings)
+        assertEquals("Cloudflare tunnel is degraded", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
     fun `notification warns specifically when proxy port is already in use at startup`() {
         val model =
             NotificationStatusModel.from(

@@ -76,6 +76,9 @@ data class DashboardStatusModel(
             if (cloudflare.state == DashboardCloudflareState.Failed) {
                 add(DashboardWarning.CloudflareFailed)
             }
+            if (cloudflare.state == DashboardCloudflareState.Degraded) {
+                add(DashboardWarning.CloudflareDegraded)
+            }
             if (config.root.operationsEnabled && status.rootAvailability == RootAvailabilityStatus.Unavailable) {
                 add(DashboardWarning.RootUnavailable)
             }
@@ -166,6 +169,7 @@ enum class DashboardRootState {
 enum class DashboardWarning {
     BroadUnauthenticatedProxy,
     CloudflareFailed,
+    CloudflareDegraded,
     RootUnavailable,
     SelectedRouteUnavailable,
     CloudflareTokenMissing,

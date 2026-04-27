@@ -145,6 +145,20 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns when Cloudflare tunnel is degraded`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.degraded(),
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.CloudflareDegraded), model.warnings)
+    }
+
+    @Test
     fun `model warns specifically when proxy port is already in use at startup`() {
         val model =
             DashboardStatusModel.from(
