@@ -255,4 +255,61 @@ class DiagnosticChecksTest {
                 .run(),
         )
     }
+
+    @Test
+    fun `cloudflare management api check maps explicit remote probe outcomes`() {
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Warning,
+                errorCategory = "cloudflare-management-api-not-configured",
+                details = "Cloudflare management API check is not configured",
+            ),
+            DiagnosticChecks
+                .cloudflareManagementApi(probeResult = { CloudflareManagementApiProbeResult.NotConfigured })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Passed,
+                details = "Cloudflare management API authenticated",
+            ),
+            DiagnosticChecks
+                .cloudflareManagementApi(probeResult = { CloudflareManagementApiProbeResult.Authenticated })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "cloudflare-management-api-unavailable",
+                details = "Cloudflare management API unavailable",
+            ),
+            DiagnosticChecks
+                .cloudflareManagementApi(probeResult = { CloudflareManagementApiProbeResult.Unavailable })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "cloudflare-management-api-unauthorized",
+                details = "Cloudflare management API rejected diagnostics authentication",
+            ),
+            DiagnosticChecks
+                .cloudflareManagementApi(probeResult = { CloudflareManagementApiProbeResult.Unauthorized })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "cloudflare-management-api-error",
+                details = "Cloudflare management API probe failed",
+            ),
+            DiagnosticChecks
+                .cloudflareManagementApi(probeResult = { CloudflareManagementApiProbeResult.Error })
+                .run(),
+        )
+    }
 }

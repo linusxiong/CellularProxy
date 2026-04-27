@@ -189,9 +189,51 @@ object DiagnosticChecks {
                 )
         }
     }
+
+    fun cloudflareManagementApi(probeResult: () -> CloudflareManagementApiProbeResult): DiagnosticCheck = DiagnosticCheck {
+        when (probeResult()) {
+            CloudflareManagementApiProbeResult.NotConfigured ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Warning,
+                    errorCategory = "cloudflare-management-api-not-configured",
+                    details = "Cloudflare management API check is not configured",
+                )
+            CloudflareManagementApiProbeResult.Authenticated ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Passed,
+                    details = "Cloudflare management API authenticated",
+                )
+            CloudflareManagementApiProbeResult.Unavailable ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "cloudflare-management-api-unavailable",
+                    details = "Cloudflare management API unavailable",
+                )
+            CloudflareManagementApiProbeResult.Unauthorized ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "cloudflare-management-api-unauthorized",
+                    details = "Cloudflare management API rejected diagnostics authentication",
+                )
+            CloudflareManagementApiProbeResult.Error ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "cloudflare-management-api-error",
+                    details = "Cloudflare management API probe failed",
+                )
+        }
+    }
 }
 
 enum class LocalManagementApiProbeResult {
+    Authenticated,
+    Unavailable,
+    Unauthorized,
+    Error,
+}
+
+enum class CloudflareManagementApiProbeResult {
+    NotConfigured,
     Authenticated,
     Unavailable,
     Unauthorized,
