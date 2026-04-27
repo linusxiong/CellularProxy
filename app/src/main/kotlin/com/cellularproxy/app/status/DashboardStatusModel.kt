@@ -35,6 +35,8 @@ data class DashboardStatusModel(
             status: ProxyServiceStatus,
             recentLogs: List<DashboardLogSummary> = emptyList(),
             redactionSecrets: LogRedactionSecrets = LogRedactionSecrets(),
+            latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck =
+                DashboardCloudflareManagementApiCheck.NotRun,
         ): DashboardStatusModel {
             val cloudflare = status.cloudflare.toDashboardCloudflareStatus()
             return DashboardStatusModel(
@@ -51,7 +53,7 @@ data class DashboardStatusModel(
                 cloudflare = cloudflare,
                 root = rootState(config, status),
                 startupError = status.startupError,
-                warnings = buildWarnings(config, status, cloudflare),
+                warnings = buildWarnings(config, status, cloudflare, latestCloudflareManagementApiCheck),
                 recentHighSeverityErrors = recentLogs.toDashboardRecentErrors(redactionSecrets),
             )
         }
@@ -69,6 +71,7 @@ data class DashboardStatusModel(
             config: AppConfig,
             status: ProxyServiceStatus,
             cloudflare: DashboardCloudflareStatus,
+            latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
         ): Set<DashboardWarning> = buildSet {
             if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
                 add(DashboardWarning.BroadUnauthenticatedProxy)
@@ -78,6 +81,12 @@ data class DashboardStatusModel(
             }
             if (cloudflare.state == DashboardCloudflareState.Degraded) {
                 add(DashboardWarning.CloudflareDegraded)
+            }
+            if (
+                cloudflare.state == DashboardCloudflareState.Connected &&
+                latestCloudflareManagementApiCheck == DashboardCloudflareManagementApiCheck.Failed
+            ) {
+                add(DashboardWarning.CloudflareManagementApiCheckFailing)
             }
             if (config.root.operationsEnabled && status.rootAvailability == RootAvailabilityStatus.Unavailable) {
                 add(DashboardWarning.RootUnavailable)
@@ -170,6 +179,7 @@ enum class DashboardWarning {
     BroadUnauthenticatedProxy,
     CloudflareFailed,
     CloudflareDegraded,
+    CloudflareManagementApiCheckFailing,
     RootUnavailable,
     SelectedRouteUnavailable,
     CloudflareTokenMissing,
@@ -179,6 +189,13 @@ enum class DashboardWarning {
     InvalidListenPort,
     InvalidMaxConcurrentConnections,
     StartupFailed,
+}
+
+enum class DashboardCloudflareManagementApiCheck {
+    NotRun,
+    Running,
+    Passed,
+    Failed,
 }
 
 enum class DashboardLogSeverity {

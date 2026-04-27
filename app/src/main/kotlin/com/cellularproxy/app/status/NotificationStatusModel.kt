@@ -19,8 +19,15 @@ data class NotificationStatusModel(
         fun from(
             config: AppConfig,
             status: ProxyServiceStatus,
+            latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck =
+                DashboardCloudflareManagementApiCheck.NotRun,
         ): NotificationStatusModel {
-            val dashboard = DashboardStatusModel.from(config = config, status = status)
+            val dashboard =
+                DashboardStatusModel.from(
+                    config = config,
+                    status = status,
+                    latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
+                )
             val serviceState = status.state.toNotificationServiceState()
             val warnings = dashboard.warnings.toNotificationWarnings()
             return NotificationStatusModel(
@@ -79,6 +86,7 @@ enum class NotificationWarning(
     BroadUnauthenticatedProxy("Proxy authentication is off on a broad listener"),
     CloudflareFailed("Cloudflare tunnel failed"),
     CloudflareDegraded("Cloudflare tunnel is degraded"),
+    CloudflareManagementApiCheckFailing("Cloudflare management API check is failing"),
     RootUnavailable("Root access is unavailable"),
     SelectedRouteUnavailable("Selected route is unavailable"),
     CloudflareTokenMissing("Cloudflare tunnel token is missing"),
@@ -134,6 +142,8 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.BroadUnauthenticatedProxy -> NotificationWarning.BroadUnauthenticatedProxy
         DashboardWarning.CloudflareFailed -> NotificationWarning.CloudflareFailed
         DashboardWarning.CloudflareDegraded -> NotificationWarning.CloudflareDegraded
+        DashboardWarning.CloudflareManagementApiCheckFailing ->
+            NotificationWarning.CloudflareManagementApiCheckFailing
         DashboardWarning.RootUnavailable -> NotificationWarning.RootUnavailable
         DashboardWarning.SelectedRouteUnavailable -> NotificationWarning.SelectedRouteUnavailable
         DashboardWarning.CloudflareTokenMissing -> NotificationWarning.CloudflareTokenMissing
@@ -153,6 +163,7 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.BroadUnauthenticatedProxy,
         NotificationWarning.CloudflareFailed,
         NotificationWarning.CloudflareDegraded,
+        NotificationWarning.CloudflareManagementApiCheckFailing,
         NotificationWarning.RootUnavailable,
         NotificationWarning.SelectedRouteUnavailable,
         NotificationWarning.CloudflareTokenMissing,

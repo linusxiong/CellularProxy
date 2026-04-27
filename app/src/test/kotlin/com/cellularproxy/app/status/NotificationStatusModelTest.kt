@@ -167,6 +167,23 @@ class NotificationStatusModelTest {
     }
 
     @Test
+    fun `notification warns when connected Cloudflare management api check is failing`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.connected(),
+                    ),
+                latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+            )
+
+        assertEquals(setOf(NotificationWarning.CloudflareManagementApiCheckFailing), model.warnings)
+        assertEquals("Cloudflare management API check is failing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
     fun `notification warns specifically when proxy port is already in use at startup`() {
         val model =
             NotificationStatusModel.from(

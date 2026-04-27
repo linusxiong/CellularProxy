@@ -159,6 +159,21 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns when connected Cloudflare management api check is failing`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.connected(),
+                    ),
+                latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+            )
+
+        assertEquals(setOf(DashboardWarning.CloudflareManagementApiCheckFailing), model.warnings)
+    }
+
+    @Test
     fun `model warns specifically when proxy port is already in use at startup`() {
         val model =
             DashboardStatusModel.from(
