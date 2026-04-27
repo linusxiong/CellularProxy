@@ -144,4 +144,24 @@ class ManagementApiRotationActionResponsesTest {
             response.body,
         )
     }
+
+    @Test
+    fun `execution unavailable rotation rejection renders structured failure reason`() {
+        val response = ManagementApiRotationActionResponses.transition(
+            RotationTransitionResult(
+                disposition = RotationTransitionDisposition.Rejected,
+                status = RotationStatus(
+                    state = RotationState.Failed,
+                    operation = RotationOperation.AirplaneMode,
+                    failureReason = RotationFailureReason.ExecutionUnavailable,
+                ),
+            ),
+        )
+
+        assertEquals(409, response.statusCode)
+        assertEquals(
+            """{"accepted":false,"disposition":"rejected","rotation":{"state":"failed","operation":"airplane_mode","oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":"execution_unavailable"}}""",
+            response.body,
+        )
+    }
 }

@@ -92,4 +92,5 @@ private fun RotationFailureReason.apiValue(): String =
         RotationFailureReason.NewPublicIpProbeFailed -> "new_public_ip_probe_failed"
         RotationFailureReason.StrictIpChangeRequired -> "strict_ip_change_required"
         RotationFailureReason.RootOperationsDisabled -> "root_operations_disabled"
+        RotationFailureReason.ExecutionUnavailable -> "execution_unavailable"
     }

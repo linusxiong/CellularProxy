@@ -24,6 +24,9 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
@@ -94,8 +97,12 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStatus: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
-        rotateMobileData: () -> RotationTransitionResult = ::ignoredRotationTransition,
-        rotateAirplaneMode: () -> RotationTransitionResult = ::ignoredRotationTransition,
+        rotateMobileData: () -> RotationTransitionResult = {
+            unavailableRotationExecutionTransition(RotationOperation.MobileData)
+        },
+        rotateAirplaneMode: () -> RotationTransitionResult = {
+            unavailableRotationExecutionTransition(RotationOperation.AirplaneMode)
+        },
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
@@ -138,8 +145,12 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStatus: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
-        rotateMobileData: () -> RotationTransitionResult = ::ignoredRotationTransition,
-        rotateAirplaneMode: () -> RotationTransitionResult = ::ignoredRotationTransition,
+        rotateMobileData: () -> RotationTransitionResult = {
+            unavailableRotationExecutionTransition(RotationOperation.MobileData)
+        },
+        rotateAirplaneMode: () -> RotationTransitionResult = {
+            unavailableRotationExecutionTransition(RotationOperation.AirplaneMode)
+        },
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
@@ -259,10 +270,16 @@ private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult =
         status = CloudflareTunnelStatus.disabled(),
     )
 
-private fun ignoredRotationTransition(): RotationTransitionResult =
+internal fun unavailableRotationExecutionTransition(
+    operation: RotationOperation,
+): RotationTransitionResult =
     RotationTransitionResult(
-        disposition = RotationTransitionDisposition.Ignored,
-        status = RotationStatus.idle(),
+        disposition = RotationTransitionDisposition.Rejected,
+        status = RotationStatus(
+            state = RotationState.Failed,
+            operation = operation,
+            failureReason = RotationFailureReason.ExecutionUnavailable,
+        ),
     )
 
 internal fun createRootAvailabilityProvider(

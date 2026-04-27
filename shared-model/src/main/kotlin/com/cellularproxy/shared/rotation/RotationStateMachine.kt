@@ -121,6 +121,7 @@ enum class RotationFailureReason {
     NewPublicIpProbeFailed,
     StrictIpChangeRequired,
     RootOperationsDisabled,
+    ExecutionUnavailable,
 }
 
 sealed interface RotationEvent {
