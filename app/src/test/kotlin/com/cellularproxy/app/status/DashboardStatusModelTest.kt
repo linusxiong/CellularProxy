@@ -5,6 +5,7 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
@@ -264,6 +265,87 @@ class DashboardStatusModelTest {
             setOf(DashboardWarning.StartupFailed, DashboardWarning.ManagementApiTokenMissing),
             model.warnings,
         )
+    }
+
+    @Test
+    fun `model exposes newest failed log rows as bounded recent high severity errors`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                recentLogs =
+                    listOf(
+                        DashboardLogSummary(
+                            id = "old-failed",
+                            occurredAtEpochMillis = 100,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Old failure",
+                            detail = "Old failed detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "new-warning",
+                            occurredAtEpochMillis = 500,
+                            severity = DashboardLogSeverity.Warning,
+                            title = "Newest warning",
+                            detail = "Newest warning detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "newest-failed",
+                            occurredAtEpochMillis = 400,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Newest failure",
+                            detail = "Newest failed detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "middle-failed",
+                            occurredAtEpochMillis = 300,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Middle failure",
+                            detail = "Middle failed detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "third-failed",
+                            occurredAtEpochMillis = 200,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Third failure",
+                            detail = "Third failed detail",
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            listOf("newest-failed", "middle-failed", "third-failed"),
+            model.recentHighSeverityErrors.map(DashboardRecentError::id),
+        )
+    }
+
+    @Test
+    fun `model redacts recent high severity error text before dashboard display`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                recentLogs =
+                    listOf(
+                        DashboardLogSummary(
+                            id = "failed-management",
+                            occurredAtEpochMillis = 100,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Management failed with plain-secret-token",
+                            detail = "Authorization: Bearer secret-token\nhttps://example.test/api/status?token=secret-token",
+                        ),
+                    ),
+                redactionSecrets =
+                    LogRedactionSecrets(
+                        managementApiToken = "plain-secret-token",
+                    ),
+            )
+        val error = model.recentHighSeverityErrors.single()
+
+        assertFalse(error.title.contains("plain-secret-token"))
+        assertFalse(error.detail.contains("secret-token"))
+        assertTrue(error.title.contains("[REDACTED]"))
+        assertTrue(error.detail.contains("[REDACTED]"))
     }
 
     @Test

@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.status.DashboardBoundRoute
+import com.cellularproxy.app.status.DashboardRecentError
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.status.DashboardWarning
 import com.cellularproxy.shared.config.AppConfig
@@ -36,6 +37,8 @@ internal fun CellularProxyDashboardScreen(
     onRefreshStatus: () -> Unit = {},
     onCopyProxyEndpoint: () -> Unit = {},
 ) {
+    val screenState = DashboardScreenState.from(status)
+
     Column(
         modifier =
             Modifier
@@ -86,20 +89,50 @@ internal fun CellularProxyDashboardScreen(
         }
 
         DashboardSection("Recent high-severity errors") {
-            if (status.warnings.isEmpty()) {
+            if (screenState.recentHighSeverityErrors.isEmpty()) {
                 Text(
                     text = "None",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                status.warnings.forEach { warning ->
+                screenState.recentHighSeverityErrors.forEach { recentError ->
                     Text(
-                        text = warning.toDashboardText(),
+                        text = recentError,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
         }
+
+        DashboardSection("Risk states") {
+            if (screenState.riskWarnings.isEmpty()) {
+                Text(
+                    text = "None",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                screenState.riskWarnings.forEach { warning ->
+                    Text(
+                        text = warning,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal data class DashboardScreenState(
+    val status: DashboardStatusModel,
+    val riskWarnings: List<String>,
+    val recentHighSeverityErrors: List<String>,
+) {
+    companion object {
+        fun from(status: DashboardStatusModel): DashboardScreenState = DashboardScreenState(
+            status = status,
+            riskWarnings = status.warnings.map(DashboardWarning::toDashboardText),
+            recentHighSeverityErrors = status.recentHighSeverityErrors.map(DashboardRecentError::toDashboardText),
+        )
     }
 }
 
@@ -214,3 +247,5 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.InvalidMaxConcurrentConnections -> "Proxy connection limit is invalid"
     DashboardWarning.StartupFailed -> "Proxy startup failed"
 }
+
+private fun DashboardRecentError.toDashboardText(): String = "$title: $detail"

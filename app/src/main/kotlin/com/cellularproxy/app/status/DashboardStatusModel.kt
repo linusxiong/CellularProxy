@@ -3,6 +3,8 @@ package com.cellularproxy.app.status
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.logging.LogRedactor
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceState
@@ -25,11 +27,14 @@ data class DashboardStatusModel(
     val root: DashboardRootState,
     val startupError: ProxyStartupError?,
     val warnings: Set<DashboardWarning>,
+    val recentHighSeverityErrors: List<DashboardRecentError> = emptyList(),
 ) {
     companion object {
         fun from(
             config: AppConfig,
             status: ProxyServiceStatus,
+            recentLogs: List<DashboardLogSummary> = emptyList(),
+            redactionSecrets: LogRedactionSecrets = LogRedactionSecrets(),
         ): DashboardStatusModel {
             val cloudflare = status.cloudflare.toDashboardCloudflareStatus()
             return DashboardStatusModel(
@@ -47,6 +52,7 @@ data class DashboardStatusModel(
                 root = rootState(config, status),
                 startupError = status.startupError,
                 warnings = buildWarnings(config, status, cloudflare),
+                recentHighSeverityErrors = recentLogs.toDashboardRecentErrors(redactionSecrets),
             )
         }
 
@@ -63,40 +69,39 @@ data class DashboardStatusModel(
             config: AppConfig,
             status: ProxyServiceStatus,
             cloudflare: DashboardCloudflareStatus,
-        ): Set<DashboardWarning> =
-            buildSet {
-                if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
-                    add(DashboardWarning.BroadUnauthenticatedProxy)
-                }
-                if (cloudflare.state == DashboardCloudflareState.Failed) {
-                    add(DashboardWarning.CloudflareFailed)
-                }
-                if (config.root.operationsEnabled && status.rootAvailability == RootAvailabilityStatus.Unavailable) {
-                    add(DashboardWarning.RootUnavailable)
-                }
-                if (status.startupError == ProxyStartupError.UnavailableSelectedRoute) {
-                    add(DashboardWarning.SelectedRouteUnavailable)
-                }
-                if (status.startupError == ProxyStartupError.MissingCloudflareTunnelToken) {
-                    add(DashboardWarning.CloudflareTokenMissing)
-                }
-                if (status.startupError == ProxyStartupError.MissingManagementApiToken) {
-                    add(DashboardWarning.ManagementApiTokenMissing)
-                }
-                if (status.startupError == ProxyStartupError.PortAlreadyInUse) {
-                    add(DashboardWarning.PortAlreadyInUse)
-                }
-                when (status.startupError) {
-                    ProxyStartupError.InvalidListenAddress -> add(DashboardWarning.InvalidListenAddress)
-                    ProxyStartupError.InvalidListenPort -> add(DashboardWarning.InvalidListenPort)
-                    ProxyStartupError.InvalidMaxConcurrentConnections ->
-                        add(DashboardWarning.InvalidMaxConcurrentConnections)
-                    else -> Unit
-                }
-                if (status.startupError != null) {
-                    add(DashboardWarning.StartupFailed)
-                }
+        ): Set<DashboardWarning> = buildSet {
+            if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
+                add(DashboardWarning.BroadUnauthenticatedProxy)
             }
+            if (cloudflare.state == DashboardCloudflareState.Failed) {
+                add(DashboardWarning.CloudflareFailed)
+            }
+            if (config.root.operationsEnabled && status.rootAvailability == RootAvailabilityStatus.Unavailable) {
+                add(DashboardWarning.RootUnavailable)
+            }
+            if (status.startupError == ProxyStartupError.UnavailableSelectedRoute) {
+                add(DashboardWarning.SelectedRouteUnavailable)
+            }
+            if (status.startupError == ProxyStartupError.MissingCloudflareTunnelToken) {
+                add(DashboardWarning.CloudflareTokenMissing)
+            }
+            if (status.startupError == ProxyStartupError.MissingManagementApiToken) {
+                add(DashboardWarning.ManagementApiTokenMissing)
+            }
+            if (status.startupError == ProxyStartupError.PortAlreadyInUse) {
+                add(DashboardWarning.PortAlreadyInUse)
+            }
+            when (status.startupError) {
+                ProxyStartupError.InvalidListenAddress -> add(DashboardWarning.InvalidListenAddress)
+                ProxyStartupError.InvalidListenPort -> add(DashboardWarning.InvalidListenPort)
+                ProxyStartupError.InvalidMaxConcurrentConnections ->
+                    add(DashboardWarning.InvalidMaxConcurrentConnections)
+                else -> Unit
+            }
+            if (status.startupError != null) {
+                add(DashboardWarning.StartupFailed)
+            }
+        }
 
         private fun rootState(
             config: AppConfig,
@@ -172,6 +177,27 @@ enum class DashboardWarning {
     StartupFailed,
 }
 
+enum class DashboardLogSeverity {
+    Info,
+    Warning,
+    Failed,
+}
+
+data class DashboardLogSummary(
+    val id: String,
+    val occurredAtEpochMillis: Long,
+    val severity: DashboardLogSeverity,
+    val title: String,
+    val detail: String,
+)
+
+data class DashboardRecentError(
+    val id: String,
+    val occurredAtEpochMillis: Long,
+    val title: String,
+    val detail: String,
+)
+
 private fun ProxyServiceState.toDashboardServiceState(): DashboardServiceState = when (this) {
     ProxyServiceState.Starting -> DashboardServiceState.Starting
     ProxyServiceState.Running -> DashboardServiceState.Running
@@ -221,3 +247,20 @@ private fun RootAvailabilityStatus.toDashboardRootState(): DashboardRootState = 
     RootAvailabilityStatus.Available -> DashboardRootState.Available
     RootAvailabilityStatus.Unavailable -> DashboardRootState.Unavailable
 }
+
+private fun List<DashboardLogSummary>.toDashboardRecentErrors(
+    redactionSecrets: LogRedactionSecrets,
+): List<DashboardRecentError> = filter { log ->
+    log.severity == DashboardLogSeverity.Failed
+}.sortedByDescending(DashboardLogSummary::occurredAtEpochMillis)
+    .take(MAX_RECENT_HIGH_SEVERITY_ERRORS)
+    .map { log ->
+        DashboardRecentError(
+            id = log.id,
+            occurredAtEpochMillis = log.occurredAtEpochMillis,
+            title = LogRedactor.redact(log.title, redactionSecrets),
+            detail = LogRedactor.redact(log.detail, redactionSecrets),
+        )
+    }
+
+private const val MAX_RECENT_HIGH_SEVERITY_ERRORS = 3

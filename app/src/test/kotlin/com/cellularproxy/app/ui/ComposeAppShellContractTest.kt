@@ -5,9 +5,14 @@ import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticRunRecord
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
+import com.cellularproxy.app.status.DashboardLogSeverity
+import com.cellularproxy.app.status.DashboardLogSummary
+import com.cellularproxy.app.status.DashboardStatusModel
+import com.cellularproxy.app.status.DashboardWarning
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
@@ -230,6 +235,44 @@ class ComposeAppShellContractTest {
                 "Dashboard screen must expose `$label`.",
             )
         }
+    }
+
+    @Test
+    fun `dashboard screen state keeps risk warnings separate from recent high severity errors`() {
+        val state =
+            DashboardScreenState.from(
+                status =
+                    DashboardStatusModel.from(
+                        config =
+                            AppConfig.default().copy(
+                                proxy =
+                                    AppConfig.default().proxy.copy(
+                                        authEnabled = false,
+                                    ),
+                            ),
+                        status = ProxyServiceStatus.stopped(),
+                        recentLogs =
+                            listOf(
+                                DashboardLogSummary(
+                                    id = "failed-management",
+                                    occurredAtEpochMillis = 200,
+                                    severity = DashboardLogSeverity.Failed,
+                                    title = "Management API failed",
+                                    detail = "HTTP 503",
+                                ),
+                            ),
+                    ),
+            )
+
+        assertEquals(
+            listOf("Broad unauthenticated proxy listener"),
+            state.riskWarnings,
+        )
+        assertEquals(
+            listOf("Management API failed: HTTP 503"),
+            state.recentHighSeverityErrors,
+        )
+        assertTrue(DashboardWarning.BroadUnauthenticatedProxy in state.status.warnings)
     }
 
     @Test
