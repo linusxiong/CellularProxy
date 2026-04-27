@@ -2,6 +2,11 @@ package com.cellularproxy.app.ui
 
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
@@ -363,6 +368,92 @@ class ComposeAppShellContractTest {
             state.tokenStatus,
             "Cloudflare token status must distinguish invalid tokens from present tokens.",
         )
+    }
+
+    @Test
+    fun `rotation route renders dedicated rotation control screen`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val rotationSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyRotationScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("CellularProxyRotationScreen()"),
+            "Rotation route must render the dedicated root rotation screen instead of the generic placeholder.",
+        )
+        assertTrue(
+            !shellSource.contains("composable(Rotation.route) {\n            CellularProxyDestinationPlaceholder(Rotation)"),
+            "Rotation route must not use the generic destination placeholder.",
+        )
+
+        listOf(
+            "Root availability",
+            "Root operations",
+            "Cooldown status",
+            "Last rotation result",
+            "Old public IP",
+            "New public IP",
+            "Current phase",
+            "Pause/drain status",
+            "Strict IP change",
+            "Check root",
+            "Probe current public IP",
+            "Rotate mobile data",
+            "Rotate airplane mode",
+            "Copy diagnostics",
+        ).forEach { label ->
+            assertTrue(
+                rotationSource.contains(label),
+                "Rotation screen must expose `$label`.",
+            )
+        }
+        assertTrue(
+            rotationSource.contains("actionsEnabled: Boolean = false"),
+            "Rotation route actions must be disabled by default until runtime handlers are wired.",
+        )
+    }
+
+    @Test
+    fun `rotation screen state summarizes active and failed rotation status`() {
+        val activeState =
+            RotationScreenState.from(
+                config = AppConfig.default(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.DrainingConnections,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+                rootAvailability = RootAvailabilityStatus.Available,
+                cooldownRemainingSeconds = 17,
+                activeConnections = 2,
+            )
+
+        assertEquals("Available", activeState.rootAvailability)
+        assertEquals("17 seconds remaining", activeState.cooldownStatus)
+        assertEquals("In progress: MobileData", activeState.lastRotationResult)
+        assertEquals("DrainingConnections", activeState.currentPhase)
+        assertEquals("2 active connections draining", activeState.pauseDrainStatus)
+
+        val failedState =
+            RotationScreenState.from(
+                config = AppConfig.default(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.AirplaneMode,
+                        failureReason = RotationFailureReason.RootUnavailable,
+                    ),
+                rootAvailability = RootAvailabilityStatus.Unavailable,
+            )
+
+        assertEquals("Failed: RootUnavailable", failedState.lastRotationResult)
+        assertEquals("Unavailable", failedState.oldPublicIp)
+        assertEquals("Unavailable", failedState.newPublicIp)
     }
 
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->

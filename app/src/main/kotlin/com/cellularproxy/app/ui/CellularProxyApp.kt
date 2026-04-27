@@ -170,7 +170,7 @@ private fun CellularProxyNavigationHost(
             CellularProxyCloudflareScreen()
         }
         composable(Rotation.route) {
-            CellularProxyDestinationPlaceholder(Rotation)
+            CellularProxyRotationScreen()
         }
         composable(Diagnostics.route) {
             CellularProxyDestinationPlaceholder(Diagnostics)
