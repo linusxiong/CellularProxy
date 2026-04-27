@@ -1,0 +1,63 @@
+package com.cellularproxy.app.ui
+
+import com.cellularproxy.app.diagnostics.DiagnosticCheckType
+import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
+import com.cellularproxy.shared.logging.LogRedactionSecrets
+
+internal class DiagnosticsScreenController(
+    private val suiteController: DiagnosticsSuiteController,
+    private val secrets: LogRedactionSecrets,
+) {
+    private val pendingEffects = mutableListOf<DiagnosticsScreenEffect>()
+    var state: DiagnosticsScreenState = buildState()
+        private set
+
+    fun handle(event: DiagnosticsScreenEvent) {
+        when (event) {
+            DiagnosticsScreenEvent.CopySummary -> {
+                if (DiagnosticsScreenAction.CopySummary in state.availableActions) {
+                    pendingEffects.add(DiagnosticsScreenEffect.CopyText(state.copyableSummary))
+                }
+            }
+            DiagnosticsScreenEvent.RunAllChecks -> {
+                if (DiagnosticsScreenAction.RunAllChecks in state.availableActions) {
+                    DiagnosticCheckType.entries.forEach(suiteController::run)
+                    state = buildState()
+                }
+            }
+            is DiagnosticsScreenEvent.RunCheck -> {
+                val item = state.items.singleOrNull { screenItem -> screenItem.type == event.type }
+                if (item != null && DiagnosticsScreenAction.RunCheck in item.availableActions) {
+                    suiteController.run(event.type)
+                    state = buildState()
+                }
+            }
+        }
+    }
+
+    fun consumeEffects(): List<DiagnosticsScreenEffect> {
+        val effects = pendingEffects.toList()
+        pendingEffects.clear()
+        return effects
+    }
+
+    private fun buildState(): DiagnosticsScreenState = DiagnosticsScreenState.from(
+        model = suiteController.resultModel(secrets),
+    )
+}
+
+internal sealed interface DiagnosticsScreenEvent {
+    data class RunCheck(
+        val type: DiagnosticCheckType,
+    ) : DiagnosticsScreenEvent
+
+    data object RunAllChecks : DiagnosticsScreenEvent
+
+    data object CopySummary : DiagnosticsScreenEvent
+}
+
+internal sealed interface DiagnosticsScreenEffect {
+    data class CopyText(
+        val text: String,
+    ) : DiagnosticsScreenEffect
+}
