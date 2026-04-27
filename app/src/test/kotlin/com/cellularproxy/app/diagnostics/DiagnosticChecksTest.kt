@@ -4,6 +4,9 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceState
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -143,6 +146,113 @@ class DiagnosticChecksTest {
                 details = "Cloudflare tunnel failed",
             ),
             DiagnosticChecks.cloudflareTunnel(status = { CloudflareTunnelStatus.failed("edge rejected secret-token") }).run(),
+        )
+    }
+
+    @Test
+    fun `proxy bind check maps bound warning and startup failure states`() {
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Passed,
+                details = "Proxy listening on 127.0.0.1:8080",
+            ),
+            DiagnosticChecks
+                .proxyBind(
+                    status = {
+                        ProxyServiceStatus.running(
+                            listenHost = "127.0.0.1",
+                            listenPort = 8080,
+                            configuredRoute = RouteTarget.Automatic,
+                            boundRoute = null,
+                            publicIp = null,
+                            hasHighSecurityRisk = false,
+                        )
+                    },
+                ).run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Warning,
+                errorCategory = "proxy-bind-not-ready",
+                details = "Proxy is stopped and not bound",
+            ),
+            DiagnosticChecks.proxyBind(status = { ProxyServiceStatus.stopped() }).run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Warning,
+                errorCategory = "proxy-bind-not-ready",
+                details = "Proxy is starting and not bound",
+            ),
+            DiagnosticChecks.proxyBind(status = { ProxyServiceStatus(state = ProxyServiceState.Starting) }).run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "proxy-bind-failed",
+                details = "Proxy bind failed: PortAlreadyInUse",
+            ),
+            DiagnosticChecks.proxyBind(status = { ProxyServiceStatus.failed(ProxyStartupError.PortAlreadyInUse) }).run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "proxy-startup-blocked",
+                details = "Proxy startup blocked before bind: MissingManagementApiToken",
+            ),
+            DiagnosticChecks
+                .proxyBind(status = { ProxyServiceStatus.failed(ProxyStartupError.MissingManagementApiToken) })
+                .run(),
+        )
+    }
+
+    @Test
+    fun `local management api check maps authenticated unavailable unauthorized and error probe results`() {
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Passed,
+                details = "Local management API authenticated",
+            ),
+            DiagnosticChecks
+                .localManagementApi(probeResult = { LocalManagementApiProbeResult.Authenticated })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "local-management-api-unavailable",
+                details = "Local management API unavailable",
+            ),
+            DiagnosticChecks
+                .localManagementApi(probeResult = { LocalManagementApiProbeResult.Unavailable })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "local-management-api-unauthorized",
+                details = "Local management API rejected diagnostics authentication",
+            ),
+            DiagnosticChecks
+                .localManagementApi(probeResult = { LocalManagementApiProbeResult.Unauthorized })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "local-management-api-error",
+                details = "Local management API probe failed",
+            ),
+            DiagnosticChecks
+                .localManagementApi(probeResult = { LocalManagementApiProbeResult.Error })
+                .run(),
         )
     }
 }

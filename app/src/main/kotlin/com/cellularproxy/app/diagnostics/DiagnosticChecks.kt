@@ -5,6 +5,9 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceState
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 
 object DiagnosticChecks {
@@ -136,6 +139,77 @@ object DiagnosticChecks {
                 )
         }
     }
+
+    fun proxyBind(status: () -> ProxyServiceStatus): DiagnosticCheck = DiagnosticCheck {
+        val proxyStatus = status()
+        when (proxyStatus.state) {
+            ProxyServiceState.Running ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Passed,
+                    details = "Proxy listening on ${proxyStatus.listenHost}:${proxyStatus.listenPort}",
+                )
+            ProxyServiceState.Failed ->
+                proxyStatus.startupError.toProxyBindFailureResult()
+            ProxyServiceState.Starting,
+            ProxyServiceState.Stopping,
+            ProxyServiceState.Stopped,
+            ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Warning,
+                    errorCategory = "proxy-bind-not-ready",
+                    details = "Proxy is ${proxyStatus.state.name.lowercase()} and not bound",
+                )
+        }
+    }
+
+    fun localManagementApi(probeResult: () -> LocalManagementApiProbeResult): DiagnosticCheck = DiagnosticCheck {
+        when (probeResult()) {
+            LocalManagementApiProbeResult.Authenticated ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Passed,
+                    details = "Local management API authenticated",
+                )
+            LocalManagementApiProbeResult.Unavailable ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "local-management-api-unavailable",
+                    details = "Local management API unavailable",
+                )
+            LocalManagementApiProbeResult.Unauthorized ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "local-management-api-unauthorized",
+                    details = "Local management API rejected diagnostics authentication",
+                )
+            LocalManagementApiProbeResult.Error ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "local-management-api-error",
+                    details = "Local management API probe failed",
+                )
+        }
+    }
+}
+
+enum class LocalManagementApiProbeResult {
+    Authenticated,
+    Unavailable,
+    Unauthorized,
+    Error,
+}
+
+private fun ProxyStartupError?.toProxyBindFailureResult(): DiagnosticCheckResult = if (this == ProxyStartupError.PortAlreadyInUse) {
+    DiagnosticCheckResult(
+        status = DiagnosticResultStatus.Failed,
+        errorCategory = "proxy-bind-failed",
+        details = "Proxy bind failed: $this",
+    )
+} else {
+    DiagnosticCheckResult(
+        status = DiagnosticResultStatus.Failed,
+        errorCategory = "proxy-startup-blocked",
+        details = "Proxy startup blocked before bind: $this",
+    )
 }
 
 private val RouteTarget.networkCategory: NetworkCategory?
