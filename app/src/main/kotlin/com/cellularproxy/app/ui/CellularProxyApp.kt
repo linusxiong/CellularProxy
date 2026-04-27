@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -117,7 +118,9 @@ private fun CellularProxyNavigationBar(navController: NavHostController) {
                 label = {
                     Text(destination.label)
                 },
-                icon = {},
+                icon = {
+                    Icon(destination.icon, contentDescription = null)
+                },
             )
         }
     }
@@ -144,7 +147,9 @@ private fun CellularProxyNavigationRail(navController: NavHostController) {
                 label = {
                     Text(destination.label)
                 },
-                icon = {},
+                icon = {
+                    Icon(destination.icon, contentDescription = null)
+                },
             )
         }
     }

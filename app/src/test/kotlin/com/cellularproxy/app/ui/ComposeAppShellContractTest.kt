@@ -49,6 +49,10 @@ class ComposeAppShellContractTest {
             appBuild.contains("androidx.navigation:navigation-compose"),
             "App build must include Navigation Compose for the operator console graph.",
         )
+        assertTrue(
+            appBuild.contains("androidx.compose.material:material-icons-extended"),
+            "App build must include Compose Material icons for recognizable navigation controls.",
+        )
     }
 
     @Test
@@ -133,6 +137,14 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("navController.navigate(destination.route)"),
             "Top-level navigation items must navigate to their destination route.",
+        )
+        assertTrue(
+            shellSource.contains("Icon(destination.icon, contentDescription = null)"),
+            "Top-level navigation items must render a recognizable destination icon.",
+        )
+        assertFalse(
+            shellSource.contains("icon = {}"),
+            "Top-level navigation items must not render blank icon slots.",
         )
         assertTrue(
             shellSource.contains("launchSingleTop = true"),
