@@ -36,9 +36,8 @@ class CloudflareTunnelToken private constructor(
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.Blank)
             }
 
-            val decodedBytes = try {
-                Base64.getDecoder().decode(token)
-            } catch (_: IllegalArgumentException) {
+            val decodedBytes = token.decodeBase64Flexible()
+            if (decodedBytes == null) {
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.NotBase64)
             }
             val decoded = decodedBytes.decodeStrictUtf8()
@@ -61,9 +60,8 @@ class CloudflareTunnelToken private constructor(
             if (tunnelSecretText.isBlank()) {
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.MissingTunnelSecret)
             }
-            val tunnelSecret = try {
-                Base64.getDecoder().decode(tunnelSecretText)
-            } catch (_: IllegalArgumentException) {
+            val tunnelSecret = tunnelSecretText.decodeBase64Flexible()
+            if (tunnelSecret == null) {
                 return CloudflareTunnelTokenParseResult.Invalid(CloudflareTunnelTokenInvalidReason.InvalidTunnelSecret)
             }
             if (tunnelSecret.size < MIN_TUNNEL_SECRET_BYTES) {
@@ -133,6 +131,17 @@ private fun ByteArray.decodeStrictUtf8(): String? =
             .decode(ByteBuffer.wrap(this))
             .toString()
     } catch (_: CharacterCodingException) {
+        null
+    }
+
+private fun String.decodeBase64Flexible(): ByteArray? =
+    decodeBase64OrNull(Base64.getDecoder())
+        ?: decodeBase64OrNull(Base64.getUrlDecoder())
+
+private fun String.decodeBase64OrNull(decoder: Base64.Decoder): ByteArray? =
+    try {
+        decoder.decode(this)
+    } catch (_: IllegalArgumentException) {
         null
     }
 

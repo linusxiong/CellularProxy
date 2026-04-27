@@ -28,6 +28,23 @@ class CloudflareTunnelTokenTest {
     }
 
     @Test
+    fun `parses url-safe unpadded tunnel token and secret encodings`() {
+        val tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+        val secret = ByteArray(32) { 0xFF.toByte() }
+        val token = urlSafeEncodedToken(
+            """{"a":"account-tag","s":"${secret.base64UrlNoPadding()}","t":"$tunnelId","e":":bk%*Wa3&4w}AxL5kC7?"}""",
+        )
+
+        val result = CloudflareTunnelToken.parse(token)
+
+        val parsed = assertIs<CloudflareTunnelTokenParseResult.Valid>(result).token
+        assertEquals("account-tag", parsed.credentials.accountTag)
+        assertEquals(tunnelId, parsed.credentials.tunnelId)
+        assertContentEquals(secret, parsed.credentials.tunnelSecret)
+        assertEquals(":bk%*Wa3&4w}AxL5kC7?", parsed.credentials.endpoint)
+    }
+
+    @Test
     fun `tunnel secret bytes are defensively copied`() {
         val tokenSecret = ByteArray(32) { index -> (index + 1).toByte() }
         val credentials = CloudflareTunnelCredentials(
@@ -144,6 +161,12 @@ class CloudflareTunnelTokenTest {
     private fun encodedToken(json: String): String =
         Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
 
+    private fun urlSafeEncodedToken(json: String): String =
+        Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
+
     private fun ByteArray.base64(): String =
         Base64.getEncoder().encodeToString(this)
+
+    private fun ByteArray.base64UrlNoPadding(): String =
+        Base64.getUrlEncoder().withoutPadding().encodeToString(this)
 }
