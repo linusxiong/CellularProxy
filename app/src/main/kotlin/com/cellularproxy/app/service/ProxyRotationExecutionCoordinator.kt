@@ -5,6 +5,9 @@ import com.cellularproxy.network.PublicIpProbeRunner
 import com.cellularproxy.network.RotationPublicIpProbeAdvanceResult
 import com.cellularproxy.network.RotationPublicIpProbeController
 import com.cellularproxy.network.RotationPublicIpProbeCoordinator
+import com.cellularproxy.proxy.server.ProxyRotationConnectionDrainAdvanceResult
+import com.cellularproxy.proxy.server.ProxyRotationConnectionDrainController
+import com.cellularproxy.proxy.server.ProxyRotationConnectionDrainCoordinator
 import com.cellularproxy.proxy.server.ProxyRotationPauseActions
 import com.cellularproxy.proxy.server.ProxyRotationPauseAdvanceResult
 import com.cellularproxy.proxy.server.ProxyRotationPauseCoordinator
@@ -26,8 +29,9 @@ import kotlin.time.Duration
 
 /**
  * Owns the first production-safe rotation execution boundary: cooldown, root
- * availability, and optional old-public-IP probing. It intentionally stops
- * before pausing requests unless follow-on phase orchestrators are present.
+ * availability, and optional old-public-IP probing, pause, and connection drain.
+ * It intentionally stops before root command execution until follow-on phase
+ * orchestrators are present.
  */
 class ProxyRotationExecutionCoordinator(
     private val controlPlane: RotationControlPlane,
@@ -39,6 +43,8 @@ class ProxyRotationExecutionCoordinator(
     private val route: RouteTarget = RouteTarget.Automatic,
     private val publicIpProbeEndpoint: PublicIpProbeEndpoint? = null,
     pauseActions: ProxyRotationPauseActions? = null,
+    activeProxyExchanges: (() -> Long)? = null,
+    private val maxConnectionDrainTime: Duration? = null,
     private val secrets: () -> LogRedactionSecrets = { LogRedactionSecrets() },
 ) {
     private val rootAvailabilityCoordinator =
@@ -60,6 +66,14 @@ class ProxyRotationExecutionCoordinator(
                 controlPlane = controlPlane,
             )
         }
+    private val connectionDrainCoordinator =
+        activeProxyExchanges?.let { countActiveProxyExchanges ->
+            ProxyRotationConnectionDrainCoordinator(
+                drainController = ProxyRotationConnectionDrainController(countActiveProxyExchanges),
+                controlPlane = controlPlane,
+            )
+        }
+    private var drainStartedElapsedMillis: Long? = null
 
     init {
         require(rootAvailabilityTimeoutMillis > 0) {
@@ -68,11 +82,28 @@ class ProxyRotationExecutionCoordinator(
         require((publicIpProbeRunner == null) == (publicIpProbeEndpoint == null)) {
             "Rotation public IP probe runner and endpoint must be configured together"
         }
+        require((activeProxyExchanges == null) == (maxConnectionDrainTime == null)) {
+            "Rotation active proxy exchange counter and maximum drain time must be configured together"
+        }
+        require(activeProxyExchanges == null || pauseActions != null) {
+            "Rotation connection drain requires pause actions"
+        }
+        require(maxConnectionDrainTime == null || !maxConnectionDrainTime.isNegative()) {
+            "Rotation maximum connection drain time must not be negative"
+        }
     }
 
     suspend fun rotateMobileData(): RotationTransitionResult = rotate(RotationOperation.MobileData)
 
     suspend fun rotateAirplaneMode(): RotationTransitionResult = rotate(RotationOperation.AirplaneMode)
+
+    fun advanceConnectionDrain(): RotationTransitionResult {
+        val now = nowElapsedMillis()
+        return continueWithConnectionDrainCoordinatorIfConfigured(
+            pauseTransition = controlPlane.currentStatus.asIgnoredTransition(),
+            nowElapsedMillis = now,
+        )
+    }
 
     private suspend fun rotate(operation: RotationOperation): RotationTransitionResult {
         val now = nowElapsedMillis()
@@ -171,7 +202,6 @@ class ProxyRotationExecutionCoordinator(
             is RotationPublicIpProbeAdvanceResult.Applied ->
                 continueWithPauseCoordinatorIfConfigured(
                     oldPublicIpTransition = probeResult.progress.transition,
-                    nowElapsedMillis = nowElapsedMillis,
                 )
             is RotationPublicIpProbeAdvanceResult.NoAction ->
                 probeResult.snapshot.status.asIgnoredTransition()
@@ -182,16 +212,56 @@ class ProxyRotationExecutionCoordinator(
 
     private fun continueWithPauseCoordinatorIfConfigured(
         oldPublicIpTransition: RotationTransitionResult,
-        nowElapsedMillis: Long,
     ): RotationTransitionResult {
         val coordinator = pauseCoordinator ?: return oldPublicIpTransition
         if (oldPublicIpTransition.status.state != RotationState.PausingNewRequests) {
             return oldPublicIpTransition
         }
 
-        return when (val pauseResult = coordinator.advance(nowElapsedMillis)) {
-            is ProxyRotationPauseAdvanceResult.Applied -> pauseResult.progress.transition
+        val pauseElapsedMillis = nowElapsedMillis()
+        return when (val pauseResult = coordinator.advance(pauseElapsedMillis)) {
+            is ProxyRotationPauseAdvanceResult.Applied ->
+                continueWithConnectionDrainCoordinatorIfConfigured(
+                    pauseTransition = pauseResult.progress.transition,
+                    nowElapsedMillis = pauseElapsedMillis,
+                )
             is ProxyRotationPauseAdvanceResult.NoAction -> pauseResult.snapshot.status.asIgnoredTransition()
+        }
+    }
+
+    private fun continueWithConnectionDrainCoordinatorIfConfigured(
+        pauseTransition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+    ): RotationTransitionResult {
+        val coordinator = connectionDrainCoordinator ?: return pauseTransition
+        synchronized(controlPlane) {
+            if (pauseTransition.status.state != RotationState.DrainingConnections) {
+                drainStartedElapsedMillis = null
+                return pauseTransition
+            }
+            val drainStarted =
+                drainStartedElapsedMillis ?: nowElapsedMillis.also {
+                    drainStartedElapsedMillis = it
+                }
+
+            return when (
+                val drainResult =
+                    coordinator.advance(
+                        drainStartedElapsedMillis = drainStarted,
+                        nowElapsedMillis = nowElapsedMillis,
+                        maxDrainTime = requireNotNull(maxConnectionDrainTime),
+                    )
+            ) {
+                is ProxyRotationConnectionDrainAdvanceResult.Applied -> {
+                    drainStartedElapsedMillis = null
+                    drainResult.progress.transition
+                }
+                is ProxyRotationConnectionDrainAdvanceResult.Waiting -> pauseTransition
+                is ProxyRotationConnectionDrainAdvanceResult.NoAction -> {
+                    drainStartedElapsedMillis = null
+                    drainResult.snapshot.status.asIgnoredTransition()
+                }
+            }
         }
     }
 }

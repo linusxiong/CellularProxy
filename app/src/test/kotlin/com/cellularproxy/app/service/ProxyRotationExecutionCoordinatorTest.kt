@@ -183,6 +183,172 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `successful pause advances through supplied connection drain when no proxy exchanges are active`() {
+        val rootChecks = mutableListOf<Long>()
+        val publicIpRunner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.10",
+                    network = network("cell", NetworkCategory.Cellular),
+                ),
+            )
+        val endpoint = PublicIpProbeEndpoint(host = "ip.example")
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe =
+                    recordingRootAvailabilityProbe(rootChecks) {
+                        rootAvailableCheckResult()
+                    },
+                publicIpProbeRunner = publicIpRunner,
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = endpoint,
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                nowElapsedMillis = { 12_000 },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val result = runSuspend { coordinator.rotateMobileData() }
+
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        assertEquals(RotationState.RunningDisableCommand, result.status.state)
+        assertEquals(RotationOperation.MobileData, result.status.operation)
+        assertEquals("198.51.100.10", result.status.oldPublicIp)
+        assertEquals(result.status, controlPlane.currentStatus)
+        assertEquals(listOf(2_000L), rootChecks)
+        assertEquals(listOf(PublicIpProbeCall(RouteTarget.Cellular, endpoint)), publicIpRunner.calls)
+        assertTrue(pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(0, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `connection drain can continue after active proxy exchanges finish`() {
+        var now = 12_000L
+        var activeProxyExchanges = 1L
+        val publicIpRunner =
+            RecordingPublicIpProbeRunner(
+                PublicIpProbeResult.Success(
+                    publicIp = "198.51.100.10",
+                    network = network("cell", NetworkCategory.Cellular),
+                ),
+            )
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner = publicIpRunner,
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { activeProxyExchanges },
+                maxConnectionDrainTime = 30.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val waiting = runSuspend { coordinator.rotateMobileData() }
+        activeProxyExchanges = 0
+        now = 13_000
+        val drained = coordinator.advanceConnectionDrain()
+
+        assertEquals(RotationTransitionDisposition.Accepted, waiting.disposition)
+        assertEquals(RotationState.DrainingConnections, waiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, drained.disposition)
+        assertEquals(RotationState.RunningDisableCommand, drained.status.state)
+        assertEquals("198.51.100.10", drained.status.oldPublicIp)
+        assertEquals(drained.status, controlPlane.currentStatus)
+        assertTrue(pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(0, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `connection drain can continue after maximum drain time elapses`() {
+        var now = 12_000L
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 1 },
+                maxConnectionDrainTime = 30.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val waiting = runSuspend { coordinator.rotateMobileData() }
+        now = 42_000
+        val drained = coordinator.advanceConnectionDrain()
+
+        assertEquals(RotationState.DrainingConnections, waiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, drained.disposition)
+        assertEquals(RotationState.RunningDisableCommand, drained.status.state)
+        assertEquals(drained.status, controlPlane.currentStatus)
+        assertTrue(pauseActions.proxyRequestsPaused)
+    }
+
+    @Test
+    fun `connection drain timeout starts after pause rather than rotation start`() {
+        var now = 12_000L
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    MutatingPublicIpProbeRunner(
+                        result =
+                            PublicIpProbeResult.Success(
+                                publicIp = "198.51.100.10",
+                                network = network("cell", NetworkCategory.Cellular),
+                            ),
+                    ) {
+                        now = 42_000
+                    },
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 1 },
+                maxConnectionDrainTime = 30.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        val waiting = runSuspend { coordinator.rotateMobileData() }
+        now = 42_001
+        val stillDraining = coordinator.advanceConnectionDrain()
+
+        assertEquals(RotationState.DrainingConnections, waiting.status.state)
+        assertEquals(RotationTransitionDisposition.Ignored, stillDraining.disposition)
+        assertEquals(RotationState.DrainingConnections, stillDraining.status.state)
+        assertEquals(stillDraining.status, controlPlane.currentStatus)
+        assertTrue(pauseActions.proxyRequestsPaused)
+    }
+
+    @Test
     fun `old public ip probe failure fails active rotation closed`() {
         val publicIpRunner =
             RecordingPublicIpProbeRunner(
@@ -421,6 +587,27 @@ class ProxyRotationExecutionCoordinatorTest {
             }
 
         assertEquals("Rotation root availability timeout must be positive", failure.message)
+        assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
+    }
+
+    @Test
+    fun `connection drain configuration requires pause actions`() {
+        val controlPlane = RotationControlPlane()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                ProxyRotationExecutionCoordinator(
+                    controlPlane = controlPlane,
+                    rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                    activeProxyExchanges = { 0 },
+                    maxConnectionDrainTime = 30.seconds,
+                    nowElapsedMillis = { 10_000 },
+                    cooldown = 180.seconds,
+                    rootAvailabilityTimeoutMillis = 2_000,
+                )
+            }
+
+        assertEquals("Rotation connection drain requires pause actions", failure.message)
         assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
     }
 
