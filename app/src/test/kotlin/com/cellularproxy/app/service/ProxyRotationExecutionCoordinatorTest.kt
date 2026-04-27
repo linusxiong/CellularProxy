@@ -694,6 +694,231 @@ class ProxyRotationExecutionCoordinatorTest {
     }
 
     @Test
+    fun `network return continuation advances returned selected route to new public ip probe boundary`() {
+        var now = 12_000L
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                availableNetworks = {
+                    listOf(network("cell", NetworkCategory.Cellular))
+                },
+                networkReturnTimeout = 60.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        coordinator.advanceToggleDelay()
+        val returned = coordinator.advanceEnableCommand()
+
+        assertEquals(RotationTransitionDisposition.Accepted, returned.disposition)
+        assertEquals(RotationState.ProbingNewPublicIp, returned.status.state)
+        assertEquals("198.51.100.10", returned.status.oldPublicIp)
+        assertEquals(returned.status, controlPlane.currentStatus)
+        assertTrue(pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(0, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `network return continuation keeps waiting until selected route returns or timeout elapses`() {
+        var now = 12_000L
+        var networks = emptyList<NetworkDescriptor>()
+        val controlPlane = RotationControlPlane()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = RecordingPauseActions(),
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                availableNetworks = { networks },
+                networkReturnTimeout = 60.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        coordinator.advanceToggleDelay()
+        val waitingForNetwork = coordinator.advanceEnableCommand()
+        now = 74_999
+        val stillWaiting = coordinator.advanceNetworkReturn()
+        networks = listOf(network("cell", NetworkCategory.Cellular))
+        now = 75_000
+        val returned = coordinator.advanceNetworkReturn()
+
+        assertEquals(RotationTransitionDisposition.Accepted, waitingForNetwork.disposition)
+        assertEquals(RotationState.WaitingForNetworkReturn, waitingForNetwork.status.state)
+        assertEquals(RotationTransitionDisposition.Ignored, stillWaiting.disposition)
+        assertEquals(RotationState.WaitingForNetworkReturn, stillWaiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, returned.disposition)
+        assertEquals(RotationState.ProbingNewPublicIp, returned.status.state)
+        assertEquals(returned.status, controlPlane.currentStatus)
+    }
+
+    @Test
+    fun `network return timeout resumes proxy requests and fails the rotation`() {
+        var now = 12_000L
+        val controlPlane = RotationControlPlane()
+        val pauseActions = RecordingPauseActions()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = pauseActions,
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                availableNetworks = { emptyList() },
+                networkReturnTimeout = 60.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 180.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        coordinator.advanceToggleDelay()
+        val waitingForNetwork = coordinator.advanceEnableCommand()
+        now = 75_000
+        val timedOut = coordinator.advanceNetworkReturn()
+
+        assertEquals(RotationTransitionDisposition.Accepted, waitingForNetwork.disposition)
+        assertEquals(RotationState.WaitingForNetworkReturn, waitingForNetwork.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, timedOut.disposition)
+        assertEquals(RotationState.Failed, timedOut.status.state)
+        assertEquals(RotationFailureReason.NetworkReturnTimedOut, timedOut.status.failureReason)
+        assertEquals(75_000, controlPlane.lastTerminalElapsedMillis)
+        assertEquals(timedOut.status, controlPlane.currentStatus)
+        assertTrue(!pauseActions.proxyRequestsPaused)
+        assertEquals(1, pauseActions.pauseCalls)
+        assertEquals(1, pauseActions.resumeCalls)
+    }
+
+    @Test
+    fun `stale network return wait state is not reused for a newer waiting rotation`() {
+        var now = 12_000L
+        var networks = emptyList<NetworkDescriptor>()
+        val controlPlane = RotationControlPlane()
+        val coordinator =
+            ProxyRotationExecutionCoordinator(
+                controlPlane = controlPlane,
+                rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                publicIpProbeRunner =
+                    RecordingPublicIpProbeRunner(
+                        PublicIpProbeResult.Success(
+                            publicIp = "198.51.100.10",
+                            network = network("cell", NetworkCategory.Cellular),
+                        ),
+                    ),
+                route = RouteTarget.Cellular,
+                publicIpProbeEndpoint = PublicIpProbeEndpoint(host = "ip.example"),
+                pauseActions = RecordingPauseActions(),
+                activeProxyExchanges = { 0 },
+                maxConnectionDrainTime = 30.seconds,
+                rootCommandController =
+                    rotationRootCommandController(mutableListOf()) {
+                        RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+                    },
+                rootCommandTimeoutMillis = 4_000,
+                toggleDelay = 3.seconds,
+                availableNetworks = { networks },
+                networkReturnTimeout = 60.seconds,
+                nowElapsedMillis = { now },
+                cooldown = 0.seconds,
+                rootAvailabilityTimeoutMillis = 2_000,
+            )
+
+        runSuspend { coordinator.rotateMobileData() }
+        now = 15_000
+        coordinator.advanceToggleDelay()
+        val firstWaiting = coordinator.advanceEnableCommand()
+        controlPlane.applyProgress(
+            event = RotationEvent.NetworkReturnTimedOut,
+            nowElapsedMillis = 16_001,
+        )
+        controlPlane.applyProgress(
+            event = RotationEvent.ProxyRequestsResumed,
+            nowElapsedMillis = 16_002,
+        )
+        networks = emptyList()
+        now = 20_000
+        runSuspend { coordinator.rotateAirplaneMode() }
+        now = 23_000
+        coordinator.advanceToggleDelay()
+        val secondWaiting = coordinator.advanceEnableCommand()
+        now = 76_000
+        val stillWaiting = coordinator.advanceNetworkReturn()
+        now = 83_000
+        val timedOut = coordinator.advanceNetworkReturn()
+
+        assertEquals(RotationState.WaitingForNetworkReturn, firstWaiting.status.state)
+        assertEquals(RotationState.WaitingForNetworkReturn, secondWaiting.status.state)
+        assertEquals(RotationOperation.AirplaneMode, secondWaiting.status.operation)
+        assertEquals(RotationTransitionDisposition.Ignored, stillWaiting.disposition)
+        assertEquals(RotationState.WaitingForNetworkReturn, stillWaiting.status.state)
+        assertEquals(RotationTransitionDisposition.Accepted, timedOut.disposition)
+        assertEquals(RotationState.Failed, timedOut.status.state)
+        assertEquals(RotationFailureReason.NetworkReturnTimedOut, timedOut.status.failureReason)
+        assertEquals(RotationOperation.AirplaneMode, timedOut.status.operation)
+        assertEquals(83_000, controlPlane.lastTerminalElapsedMillis)
+    }
+
+    @Test
     fun `toggle delay continuation can advance an already waiting rotation`() {
         var now = 15_000L
         val waitingStatus =
@@ -752,6 +977,30 @@ class ProxyRotationExecutionCoordinatorTest {
             }
 
         assertEquals("Rotation toggle delay continuation requires root command configuration", failure.message)
+        assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
+    }
+
+    @Test
+    fun `network return configuration requires root command configuration`() {
+        val controlPlane = RotationControlPlane()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                ProxyRotationExecutionCoordinator(
+                    controlPlane = controlPlane,
+                    rootAvailabilityProbe = recordingRootAvailabilityProbe { rootAvailableCheckResult() },
+                    pauseActions = RecordingPauseActions(),
+                    activeProxyExchanges = { 0 },
+                    maxConnectionDrainTime = 30.seconds,
+                    availableNetworks = { emptyList() },
+                    networkReturnTimeout = 60.seconds,
+                    nowElapsedMillis = { 10_000 },
+                    cooldown = 180.seconds,
+                    rootAvailabilityTimeoutMillis = 2_000,
+                )
+            }
+
+        assertEquals("Rotation network return continuation requires root command configuration", failure.message)
         assertEquals(RotationStatus.idle(), controlPlane.currentStatus)
     }
 

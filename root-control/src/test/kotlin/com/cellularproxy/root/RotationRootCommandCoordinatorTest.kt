@@ -3,6 +3,7 @@ package com.cellularproxy.root
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.root.RootCommandCategory
 import com.cellularproxy.shared.rotation.RotationControlPlane
+import com.cellularproxy.shared.rotation.RotationControlPlaneSnapshot
 import com.cellularproxy.shared.rotation.RotationEvent
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
@@ -89,6 +90,8 @@ class RotationRootCommandCoordinatorTest {
         )
         assertEquals(RotationTransitionDisposition.Accepted, applied.progress.transition.disposition)
         assertEquals(RotationState.WaitingForNetworkReturn, controlPlane.currentStatus.state)
+        assertEquals(controlPlane.snapshot(), applied.snapshot)
+        assertEquals(RotationState.WaitingForNetworkReturn, applied.snapshot.status.state)
         assertEquals(
             listOf(RotationRootCommandCall(RootShellCommands.airplaneModeDisable(), 3_000)),
             calls,
@@ -311,6 +314,11 @@ class RotationRootCommandCoordinatorTest {
             RotationRootCommandAdvanceResult.Applied(
                 commandResult = commandResult,
                 progress = ignoredProgress,
+                snapshot =
+                    RotationControlPlaneSnapshot(
+                        status = ignoredProgress.status,
+                        lastTerminalElapsedMillis = null,
+                    ),
             )
         }
     }
@@ -399,32 +407,29 @@ class RotationRootCommandCoordinatorTest {
     private fun runningCommandControlPlane(
         state: RotationState,
         operation: RotationOperation = RotationOperation.MobileData,
-    ): RotationControlPlane =
-        RotationControlPlane(
-            initialStatus =
-                RotationStatus(
-                    state = state,
-                    operation = operation,
-                    oldPublicIp = "198.51.100.10",
-                ),
-        )
+    ): RotationControlPlane = RotationControlPlane(
+        initialStatus =
+            RotationStatus(
+                state = state,
+                operation = operation,
+                oldPublicIp = "198.51.100.10",
+            ),
+    )
 
-    private fun rootCommandExecution(category: RootCommandCategory): RootCommandExecution =
-        RootCommandExecutor(
-            processExecutor =
-                RootCommandProcessExecutor { _, _ ->
-                    RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
-                },
-        ).execute(rootShellCommand(category), timeoutMillis = 1_000)
+    private fun rootCommandExecution(category: RootCommandCategory): RootCommandExecution = RootCommandExecutor(
+        processExecutor =
+            RootCommandProcessExecutor { _, _ ->
+                RootCommandProcessResult.Completed(exitCode = 0, stdout = "", stderr = "")
+            },
+    ).execute(rootShellCommand(category), timeoutMillis = 1_000)
 
-    private fun rootShellCommand(category: RootCommandCategory): RootShellCommand =
-        when (category) {
-            RootCommandCategory.MobileDataDisable -> RootShellCommands.mobileDataDisable()
-            RootCommandCategory.MobileDataEnable -> RootShellCommands.mobileDataEnable()
-            RootCommandCategory.AirplaneModeEnable -> RootShellCommands.airplaneModeEnable()
-            RootCommandCategory.AirplaneModeDisable -> RootShellCommands.airplaneModeDisable()
-            RootCommandCategory.RootAvailabilityCheck,
-            RootCommandCategory.ServiceRestart,
-            -> error("Unexpected rotation root command category: $category")
-        }
+    private fun rootShellCommand(category: RootCommandCategory): RootShellCommand = when (category) {
+        RootCommandCategory.MobileDataDisable -> RootShellCommands.mobileDataDisable()
+        RootCommandCategory.MobileDataEnable -> RootShellCommands.mobileDataEnable()
+        RootCommandCategory.AirplaneModeEnable -> RootShellCommands.airplaneModeEnable()
+        RootCommandCategory.AirplaneModeDisable -> RootShellCommands.airplaneModeDisable()
+        RootCommandCategory.RootAvailabilityCheck,
+        RootCommandCategory.ServiceRestart,
+        -> error("Unexpected rotation root command category: $category")
+    }
 }

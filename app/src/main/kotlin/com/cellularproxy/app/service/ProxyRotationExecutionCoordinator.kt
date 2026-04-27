@@ -20,8 +20,12 @@ import com.cellularproxy.root.RotationRootCommandController
 import com.cellularproxy.root.RotationRootCommandCoordinator
 import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.rotation.RotationControlPlane
+import com.cellularproxy.shared.rotation.RotationControlPlaneSnapshot
 import com.cellularproxy.shared.rotation.RotationEvent
+import com.cellularproxy.shared.rotation.RotationNetworkReturnAdvanceResult
+import com.cellularproxy.shared.rotation.RotationNetworkReturnCoordinator
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
@@ -53,6 +57,8 @@ class ProxyRotationExecutionCoordinator(
     rootCommandController: RotationRootCommandController? = null,
     private val rootCommandTimeoutMillis: Long? = null,
     private val toggleDelay: Duration? = null,
+    private val availableNetworks: (() -> List<NetworkDescriptor>)? = null,
+    private val networkReturnTimeout: Duration? = null,
     private val secrets: () -> LogRedactionSecrets = { LogRedactionSecrets() },
 ) {
     private val rootAvailabilityCoordinator =
@@ -89,8 +95,10 @@ class ProxyRotationExecutionCoordinator(
             )
         }
     private val toggleDelayCoordinator = RotationToggleDelayCoordinator(controlPlane)
+    private val networkReturnCoordinator = RotationNetworkReturnCoordinator(controlPlane)
     private var drainStartedElapsedMillis: Long? = null
     private var toggleDelayStartedElapsedMillis: Long? = null
+    private var networkReturnWaitState: NetworkReturnWaitState? = null
 
     init {
         require(rootAvailabilityTimeoutMillis > 0) {
@@ -126,6 +134,15 @@ class ProxyRotationExecutionCoordinator(
         require(toggleDelay == null || !toggleDelay.isNegative()) {
             "Rotation toggle delay must not be negative"
         }
+        require((availableNetworks == null) == (networkReturnTimeout == null)) {
+            "Rotation available network provider and network return timeout must be configured together"
+        }
+        require(availableNetworks == null || rootCommandController != null) {
+            "Rotation network return continuation requires root command configuration"
+        }
+        require(networkReturnTimeout == null || !networkReturnTimeout.isNegative()) {
+            "Rotation network return timeout must not be negative"
+        }
     }
 
     suspend fun rotateMobileData(): RotationTransitionResult = rotate(RotationOperation.MobileData)
@@ -156,6 +173,11 @@ class ProxyRotationExecutionCoordinator(
         commandTransition = controlPlane.currentStatus.asIgnoredTransition(),
         nowElapsedMillis = nowElapsedMillis(),
         redactionSecrets = rootCommandCoordinator?.let { secrets() },
+    )
+
+    fun advanceNetworkReturn(): RotationTransitionResult = continueWithNetworkReturnCoordinatorIfConfigured(
+        networkReturnTransition = controlPlane.currentStatus.asIgnoredTransition(),
+        nowElapsedMillis = nowElapsedMillis(),
     )
 
     private suspend fun rotate(operation: RotationOperation): RotationTransitionResult {
@@ -427,13 +449,87 @@ class ProxyRotationExecutionCoordinator(
                     secrets = requireNotNull(redactionSecrets),
                 )
         ) {
-            is RotationRootCommandAdvanceResult.Applied ->
-                continueWithResumeIfNeeded(commandResult.progress.transition, nowElapsedMillis())
+            is RotationRootCommandAdvanceResult.Applied -> {
+                val postCommandElapsedMillis = nowElapsedMillis()
+                val transition = commandResult.progress.transition
+                if (transition.status.state == RotationState.WaitingForNetworkReturn) {
+                    continueWithNetworkReturnCoordinatorIfConfigured(
+                        networkReturnTransition = transition,
+                        nowElapsedMillis = postCommandElapsedMillis,
+                        expectedSnapshot = commandResult.snapshot,
+                        waitStartedElapsedMillis = postCommandElapsedMillis,
+                    )
+                } else {
+                    continueWithResumeIfNeeded(transition, postCommandElapsedMillis)
+                }
+            }
             is RotationRootCommandAdvanceResult.NoAction ->
                 continueWithResumeIfNeeded(commandResult.snapshot.status.asIgnoredTransition(), nowElapsedMillis)
             is RotationRootCommandAdvanceResult.Stale ->
                 continueWithResumeIfNeeded(commandResult.snapshot.status.asIgnoredTransition(), nowElapsedMillis)
         }
+    }
+
+    private fun continueWithNetworkReturnCoordinatorIfConfigured(
+        networkReturnTransition: RotationTransitionResult,
+        nowElapsedMillis: Long,
+        expectedSnapshot: RotationControlPlaneSnapshot? = null,
+        waitStartedElapsedMillis: Long? = null,
+    ): RotationTransitionResult {
+        val networkProvider = availableNetworks ?: return networkReturnTransition
+        val returnTimeout = requireNotNull(networkReturnTimeout)
+        val networkTransition =
+            synchronized(controlPlane) {
+                if (networkReturnTransition.status.state != RotationState.WaitingForNetworkReturn) {
+                    networkReturnWaitState = null
+                    return networkReturnTransition
+                }
+
+                val actualSnapshot = controlPlane.snapshot()
+                val targetSnapshot = expectedSnapshot ?: actualSnapshot
+                if (actualSnapshot != targetSnapshot) {
+                    if (networkReturnWaitState?.snapshot == targetSnapshot) {
+                        networkReturnWaitState = null
+                    }
+                    return actualSnapshot.status.asIgnoredTransition()
+                }
+
+                val waitState =
+                    networkReturnWaitState
+                        ?.takeIf { it.snapshot == targetSnapshot }
+                        ?: NetworkReturnWaitState(
+                            snapshot = targetSnapshot,
+                            startedElapsedMillis = waitStartedElapsedMillis ?: nowElapsedMillis,
+                        ).also {
+                            networkReturnWaitState = it
+                        }
+
+                when (
+                    val networkReturnResult =
+                        networkReturnCoordinator.advance(
+                            expectedSnapshot = waitState.snapshot,
+                            routeTarget = route,
+                            networks = networkProvider(),
+                            waitStartedElapsedMillis = waitState.startedElapsedMillis,
+                            nowElapsedMillis = nowElapsedMillis,
+                            networkReturnTimeout = returnTimeout,
+                        )
+                ) {
+                    is RotationNetworkReturnAdvanceResult.Applied -> {
+                        networkReturnWaitState = null
+                        networkReturnResult.progress.transition
+                    }
+                    is RotationNetworkReturnAdvanceResult.Waiting -> networkReturnTransition
+                    is RotationNetworkReturnAdvanceResult.NoAction -> {
+                        networkReturnWaitState = null
+                        networkReturnResult.snapshot.status.asIgnoredTransition()
+                    }
+                    is RotationNetworkReturnAdvanceResult.Stale ->
+                        networkReturnResult.actualSnapshot.status.asIgnoredTransition()
+                }
+            }
+
+        return continueWithResumeIfNeeded(networkTransition, nowElapsedMillis)
     }
 
     private fun continueWithResumeIfNeeded(
@@ -457,4 +553,9 @@ class ProxyRotationExecutionCoordinator(
 private fun RotationStatus.asIgnoredTransition(): RotationTransitionResult = RotationTransitionResult(
     disposition = RotationTransitionDisposition.Ignored,
     status = this,
+)
+
+private data class NetworkReturnWaitState(
+    val snapshot: RotationControlPlaneSnapshot,
+    val startedElapsedMillis: Long,
 )

@@ -75,6 +75,7 @@ class RotationRootCommandCoordinator(
                         event = event,
                         nowElapsedMillis = nowElapsedMillis,
                     ),
+                snapshot = controlPlane.snapshot(),
             )
         }
     }
@@ -97,10 +98,14 @@ sealed interface RotationRootCommandAdvanceResult {
     data class Applied(
         val commandResult: RotationRootCommandResult,
         val progress: RotationProgressGateResult,
+        val snapshot: RotationControlPlaneSnapshot,
     ) : RotationRootCommandAdvanceResult {
         init {
             require(progress.transition.accepted) {
                 "Applied rotation root command results require an accepted transition"
+            }
+            require(snapshot.status == progress.transition.status) {
+                "Applied rotation root command snapshot must match transition status"
             }
         }
     }
