@@ -26,9 +26,9 @@ internal fun CellularProxyLogsAuditScreen(
     state: LogsAuditScreenState = LogsAuditScreenState.from(),
     actionsEnabled: Boolean = false,
     onSelectRecord: (String) -> Unit = {},
-    onCopySelectedRecord: () -> Unit = {},
-    onCopyFilteredSummary: () -> Unit = {},
-    onExportRedactedBundle: () -> Unit = {},
+    onCopySelectedRecord: (String) -> Unit = {},
+    onCopyFilteredSummary: (String) -> Unit = {},
+    onExportRedactedBundle: (LogsAuditScreenExportBundle) -> Unit = {},
 ) {
     Column(
         modifier =
@@ -272,30 +272,30 @@ private fun LogsAuditFilterSummary(state: LogsAuditScreenState) {
 private fun LogsAuditActionRow(
     state: LogsAuditScreenState,
     actionsEnabled: Boolean,
-    onCopySelectedRecord: () -> Unit,
-    onCopyFilteredSummary: () -> Unit,
-    onExportRedactedBundle: () -> Unit,
+    onCopySelectedRecord: (String) -> Unit,
+    onCopyFilteredSummary: (String) -> Unit,
+    onExportRedactedBundle: (LogsAuditScreenExportBundle) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(
-            onClick = onCopySelectedRecord,
+            onClick = { state.copyableSelectedRecord?.let(onCopySelectedRecord) },
             enabled = actionsEnabled && LogsAuditScreenAction.CopySelectedRecord in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy selected record")
         }
         OutlinedButton(
-            onClick = onCopyFilteredSummary,
+            onClick = { onCopyFilteredSummary(state.copyableFilteredSummary) },
             enabled = actionsEnabled && LogsAuditScreenAction.CopyFilteredSummary in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Copy filtered summary")
         }
         OutlinedButton(
-            onClick = onExportRedactedBundle,
+            onClick = { state.exportBundle?.let(onExportRedactedBundle) },
             enabled = actionsEnabled && LogsAuditScreenAction.ExportRedactedBundle in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {

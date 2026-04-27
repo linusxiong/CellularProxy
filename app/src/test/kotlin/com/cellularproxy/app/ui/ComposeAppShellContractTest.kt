@@ -1397,6 +1397,39 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `logs audit copy and export callbacks dispatch redacted payloads`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains("onCopySelectedRecord: (String) -> Unit = {}"),
+            "Copy selected record must hand the redacted selected-record payload to clipboard/runtime wiring.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onCopyFilteredSummary: (String) -> Unit = {}"),
+            "Copy filtered summary must hand the redacted filtered summary payload to clipboard/runtime wiring.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onExportRedactedBundle: (LogsAuditScreenExportBundle) -> Unit = {}"),
+            "Export must hand the typed redacted export bundle to runtime wiring.",
+        )
+        assertTrue(
+            logsAuditSource.contains("state.copyableSelectedRecord?.let(onCopySelectedRecord)"),
+            "Copy selected record must derive its payload from LogsAuditScreenState.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onCopyFilteredSummary(state.copyableFilteredSummary)"),
+            "Copy filtered summary must derive its payload from LogsAuditScreenState.",
+        )
+        assertTrue(
+            logsAuditSource.contains("state.exportBundle?.let(onExportRedactedBundle)"),
+            "Export must derive its payload from LogsAuditScreenState.",
+        )
+    }
+
+    @Test
     fun `logs audit screen state redacts unsafe search display text`() {
         val state =
             LogsAuditScreenState.from(
