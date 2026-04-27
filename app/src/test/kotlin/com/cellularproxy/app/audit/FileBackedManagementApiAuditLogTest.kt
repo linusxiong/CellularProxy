@@ -218,7 +218,7 @@ class FileBackedManagementApiAuditLogTest {
                     operation = ManagementApiOperation.ServiceStop,
                     outcome = ManagementApiAuditOutcome.RouteRejected,
                     statusCode = 404,
-                    disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
+                    disposition = ManagementApiStreamExchangeDisposition.Routed,
                 )
             }
         }

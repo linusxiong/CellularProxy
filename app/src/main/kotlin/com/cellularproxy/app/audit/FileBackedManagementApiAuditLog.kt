@@ -35,7 +35,6 @@ data class ManagementApiAuditRecord(
                 }
             }
             ManagementApiAuditOutcome.RouteRejected -> {
-                require(operation == null) { "Route-rejected management API audit records cannot have an operation" }
                 require(statusCode != null) { "Route-rejected management API audit records require a status code" }
                 require(disposition == ManagementApiStreamExchangeDisposition.RouteRejected) {
                     "Route-rejected management API audit records require a route-rejected disposition"

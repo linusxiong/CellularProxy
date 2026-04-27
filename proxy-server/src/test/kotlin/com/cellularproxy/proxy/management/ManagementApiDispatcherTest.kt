@@ -23,6 +23,7 @@ class ManagementApiDispatcherTest {
         )
 
         val responded = assertIs<ManagementApiDispatchDecision.Respond>(decision)
+        assertEquals(ManagementApiOperation.Status, responded.operation)
         assertEquals(200, responded.response.statusCode)
         assertEquals("""{"state":"running"}""", responded.response.body)
         assertEquals(listOf(ManagementApiOperation.Status), handler.operations)
@@ -39,6 +40,7 @@ class ManagementApiDispatcherTest {
         )
 
         val responded = assertIs<ManagementApiDispatchDecision.Respond>(decision)
+        assertEquals(ManagementApiOperation.RotateMobileData, responded.operation)
         assertEquals(202, responded.response.statusCode)
         assertEquals(listOf(ManagementApiOperation.RotateMobileData), handler.operations)
         assertTrue(responded.requiresAuditLog)

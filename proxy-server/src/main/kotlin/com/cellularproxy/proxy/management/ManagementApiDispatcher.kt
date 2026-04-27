@@ -17,6 +17,7 @@ class ManagementApiHandlerException(
 
 sealed interface ManagementApiDispatchDecision {
     data class Respond(
+        val operation: ManagementApiOperation,
         val response: ManagementApiResponse,
         val requiresAuditLog: Boolean,
     ) : ManagementApiDispatchDecision
@@ -140,6 +141,7 @@ object ManagementApiDispatcher {
                 }
 
                 ManagementApiDispatchDecision.Respond(
+                    operation = route.operation,
                     response = response,
                     requiresAuditLog = route.requiresAuditLog,
                 )
