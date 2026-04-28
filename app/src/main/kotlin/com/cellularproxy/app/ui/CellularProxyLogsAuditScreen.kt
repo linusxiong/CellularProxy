@@ -20,10 +20,44 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+
+@Composable
+internal fun CellularProxyLogsAuditRoute(
+    onCopyLogsAuditText: (String) -> Unit = {},
+    onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit = {},
+) {
+    val controller = remember { LogsAuditScreenController() }
+    var screenState by remember { mutableStateOf(controller.state) }
+    val dispatchEvent: (LogsAuditScreenEvent) -> Unit = { event ->
+        controller.handle(event)
+        controller.consumeEffects().forEach { effect ->
+            when (effect) {
+                is LogsAuditScreenEffect.CopyText -> onCopyLogsAuditText(effect.text)
+                is LogsAuditScreenEffect.ExportBundle -> onExportLogsAuditBundle(effect.bundle)
+            }
+        }
+        screenState = controller.state
+    }
+
+    CellularProxyLogsAuditScreen(
+        state = screenState,
+        actionsEnabled = true,
+        onSelectRecord = { rowId -> dispatchEvent(LogsAuditScreenEvent.SelectRecord(rowId)) },
+        onClearSelection = { dispatchEvent(LogsAuditScreenEvent.ClearSelection) },
+        onUpdateFilter = { filter -> dispatchEvent(LogsAuditScreenEvent.UpdateFilter(filter)) },
+        onCopySelectedRecord = { dispatchEvent(LogsAuditScreenEvent.CopySelectedRecord) },
+        onCopyFilteredSummary = { dispatchEvent(LogsAuditScreenEvent.CopyFilteredSummary) },
+        onExportRedactedBundle = { dispatchEvent(LogsAuditScreenEvent.ExportRedactedBundle) },
+    )
+}
 
 @Composable
 internal fun CellularProxyLogsAuditScreen(

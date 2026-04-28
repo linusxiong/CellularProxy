@@ -338,6 +338,83 @@ class ProxySettingsFormController(
     }
 }
 
+class ProxySettingsScreenController(
+    initialConfigProvider: () -> AppConfig,
+    private val formController: ProxySettingsFormController,
+) {
+    private val pendingEffects = mutableListOf<ProxySettingsScreenEffect>()
+    var state: ProxySettingsScreenState =
+        ProxySettingsFormState
+            .from(initialConfigProvider())
+            .let { form ->
+                ProxySettingsScreenState.from(
+                    form = form,
+                    persistedForm = form,
+                )
+            }
+        private set
+
+    fun handle(event: ProxySettingsScreenEvent) {
+        when (event) {
+            is ProxySettingsScreenEvent.UpdateForm -> updateForm(event.form)
+            ProxySettingsScreenEvent.DiscardChanges -> updateForm(state.persistedForm)
+            ProxySettingsScreenEvent.SaveChanges -> saveChanges()
+        }
+    }
+
+    fun consumeEffects(): List<ProxySettingsScreenEffect> {
+        val effects = pendingEffects.toList()
+        pendingEffects.clear()
+        return effects
+    }
+
+    private fun updateForm(form: ProxySettingsFormState) {
+        state =
+            ProxySettingsScreenState.from(
+                form = form,
+                persistedForm = state.persistedForm,
+            )
+    }
+
+    private fun saveChanges() {
+        if (state.form == state.persistedForm) {
+            return
+        }
+        when (val result = formController.save(state.form)) {
+            is ProxySettingsSaveResult.Invalid -> pendingEffects.add(ProxySettingsScreenEffect.SaveInvalid(result))
+            is ProxySettingsSaveResult.Saved -> {
+                val nextForm = state.form.afterSuccessfulSave(result.config)
+                state =
+                    ProxySettingsScreenState.from(
+                        form = nextForm,
+                        persistedForm = nextForm,
+                    )
+                pendingEffects.add(ProxySettingsScreenEffect.SaveSucceeded(result))
+            }
+        }
+    }
+}
+
+sealed interface ProxySettingsScreenEvent {
+    data class UpdateForm(
+        val form: ProxySettingsFormState,
+    ) : ProxySettingsScreenEvent
+
+    data object SaveChanges : ProxySettingsScreenEvent
+
+    data object DiscardChanges : ProxySettingsScreenEvent
+}
+
+sealed interface ProxySettingsScreenEffect {
+    data class SaveSucceeded(
+        val result: ProxySettingsSaveResult.Saved,
+    ) : ProxySettingsScreenEffect
+
+    data class SaveInvalid(
+        val result: ProxySettingsSaveResult.Invalid,
+    ) : ProxySettingsScreenEffect
+}
+
 sealed interface ProxySettingsSaveResult {
     data class Saved(
         val config: AppConfig,

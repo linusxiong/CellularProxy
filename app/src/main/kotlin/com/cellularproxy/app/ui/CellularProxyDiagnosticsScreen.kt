@@ -15,13 +15,50 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
+import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+
+@Composable
+internal fun CellularProxyDiagnosticsRoute(
+    onCopyDiagnosticsSummaryText: (String) -> Unit = {},
+) {
+    val controller =
+        remember {
+            DiagnosticsScreenController(
+                suiteController = DiagnosticsSuiteController(checks = emptyMap()),
+                secrets = LogRedactionSecrets(),
+            )
+        }
+    var screenState by remember { mutableStateOf(controller.state) }
+    val dispatchEvent: (DiagnosticsScreenEvent) -> Unit = { event ->
+        controller.handle(event)
+        controller.consumeEffects().forEach { effect ->
+            when (effect) {
+                is DiagnosticsScreenEffect.CopyText -> onCopyDiagnosticsSummaryText(effect.text)
+            }
+        }
+        screenState = controller.state
+    }
+
+    CellularProxyDiagnosticsScreen(
+        state = screenState,
+        actionsEnabled = true,
+        onRunAllChecks = { dispatchEvent(DiagnosticsScreenEvent.RunAllChecks) },
+        onRunCheck = { type -> dispatchEvent(DiagnosticsScreenEvent.RunCheck(type)) },
+        onCopySummary = { dispatchEvent(DiagnosticsScreenEvent.CopySummary) },
+    )
+}
 
 @Composable
 internal fun CellularProxyDiagnosticsScreen(

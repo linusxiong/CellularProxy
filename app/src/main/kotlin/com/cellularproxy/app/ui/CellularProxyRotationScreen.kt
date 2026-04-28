@@ -31,6 +31,33 @@ import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 
 @Composable
+internal fun CellularProxyRotationRoute(
+    onCopyRotationDiagnosticsText: (String) -> Unit = {},
+) {
+    val controller = remember { RotationScreenController() }
+    var screenState by remember { mutableStateOf(controller.state) }
+    val dispatchEvent: (RotationScreenEvent) -> Unit = { event ->
+        controller.handle(event)
+        controller.consumeEffects().forEach { effect ->
+            when (effect) {
+                is RotationScreenEffect.CopyText -> onCopyRotationDiagnosticsText(effect.text)
+            }
+        }
+        screenState = controller.state
+    }
+
+    CellularProxyRotationScreen(
+        state = screenState,
+        actionsEnabled = true,
+        onCheckRoot = { dispatchEvent(RotationScreenEvent.CheckRoot) },
+        onProbeCurrentPublicIp = { dispatchEvent(RotationScreenEvent.ProbeCurrentPublicIp) },
+        onRotateMobileData = { dispatchEvent(RotationScreenEvent.RotateMobileData) },
+        onRotateAirplaneMode = { dispatchEvent(RotationScreenEvent.RotateAirplaneMode) },
+        onCopyDiagnostics = { dispatchEvent(RotationScreenEvent.CopyDiagnostics) },
+    )
+}
+
+@Composable
 internal fun CellularProxyRotationScreen(
     state: RotationScreenState =
         RotationScreenState.from(

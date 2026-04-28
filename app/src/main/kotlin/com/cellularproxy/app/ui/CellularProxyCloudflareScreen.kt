@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,6 +29,54 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+
+@Composable
+internal fun CellularProxyCloudflareRoute(
+    onStartTunnel: () -> Unit = {},
+    onStopTunnel: () -> Unit = {},
+    onReconnectTunnel: () -> Unit = {},
+    onTestManagementTunnel: () -> Unit = {},
+    onCopyDiagnosticsText: (String) -> Unit = {},
+) {
+    val currentOnStartTunnel by rememberUpdatedState(onStartTunnel)
+    val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
+    val currentOnReconnectTunnel by rememberUpdatedState(onReconnectTunnel)
+    val currentOnTestManagementTunnel by rememberUpdatedState(onTestManagementTunnel)
+    val controller =
+        remember {
+            CloudflareScreenController(
+                actionHandler = { action ->
+                    when (action) {
+                        CloudflareScreenAction.StartTunnel -> currentOnStartTunnel()
+                        CloudflareScreenAction.StopTunnel -> currentOnStopTunnel()
+                        CloudflareScreenAction.ReconnectTunnel -> currentOnReconnectTunnel()
+                        CloudflareScreenAction.TestManagementTunnel -> currentOnTestManagementTunnel()
+                        CloudflareScreenAction.CopyDiagnostics -> Unit
+                    }
+                },
+            )
+        }
+    var screenState by remember { mutableStateOf(controller.state) }
+    val dispatchEvent: (CloudflareScreenEvent) -> Unit = { event ->
+        controller.handle(event)
+        controller.consumeEffects().forEach { effect ->
+            when (effect) {
+                is CloudflareScreenEffect.CopyText -> onCopyDiagnosticsText(effect.text)
+            }
+        }
+        screenState = controller.state
+    }
+
+    CellularProxyCloudflareScreen(
+        state = screenState,
+        actionsEnabled = true,
+        onStartTunnel = { dispatchEvent(CloudflareScreenEvent.StartTunnel) },
+        onStopTunnel = { dispatchEvent(CloudflareScreenEvent.StopTunnel) },
+        onReconnectTunnel = { dispatchEvent(CloudflareScreenEvent.ReconnectTunnel) },
+        onTestManagementTunnel = { dispatchEvent(CloudflareScreenEvent.TestManagementTunnel) },
+        onCopyDiagnostics = { dispatchEvent(CloudflareScreenEvent.CopyDiagnostics) },
+    )
+}
 
 @Composable
 internal fun CellularProxyCloudflareScreen(

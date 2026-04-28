@@ -14,6 +14,67 @@ import kotlin.time.Duration.Companion.seconds
 
 class ProxySettingsFormControllerTest {
     @Test
+    fun `screen controller edits saves discards and emits one-shot save effects`() {
+        val savedConfigs = mutableListOf<AppConfig>()
+        val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val formController =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = {
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                        managementApiToken = "management-token",
+                    )
+                },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController = formController,
+            )
+
+        val editedForm =
+            controller.state.form.copy(
+                listenPort = "9999",
+                authEnabled = false,
+                managementApiToken = "typed-secret",
+            )
+        controller.handle(ProxySettingsScreenEvent.UpdateForm(editedForm))
+
+        assertEquals(editedForm, controller.state.form)
+        assertTrue(ProxySettingsScreenAction.SaveChanges in controller.state.availableActions)
+
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        val savedEffect = controller.consumeEffects().single() as ProxySettingsScreenEffect.SaveSucceeded
+        assertEquals("9999", controller.state.form.listenPort)
+        assertEquals("", controller.state.form.managementApiToken)
+        assertEquals(controller.state.persistedForm, controller.state.form)
+        assertEquals(savedConfigs.single(), savedEffect.result.config)
+        assertEquals(setOf(ProxySettingsFormWarning.BroadUnauthenticatedProxy), savedEffect.result.warnings)
+        assertTrue(controller.consumeEffects().isEmpty())
+
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(cloudflareEnabled = true),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        val invalidEffect = controller.consumeEffects().single() as ProxySettingsScreenEffect.SaveInvalid
+        assertTrue(invalidEffect.result.invalidCloudflareTunnelToken)
+        assertEquals(true, controller.state.form.cloudflareEnabled)
+        assertEquals(listOf(savedEffect.result.config), savedConfigs)
+        assertEquals(listOf(savedEffect.result.sensitiveConfig), savedSensitiveConfigs)
+
+        controller.handle(ProxySettingsScreenEvent.DiscardChanges)
+
+        assertEquals(controller.state.persistedForm, controller.state.form)
+    }
+
+    @Test
     fun `valid form saves updated proxy settings while preserving unrelated config`() {
         val original =
             AppConfig.default().copy(

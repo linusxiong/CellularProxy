@@ -83,4 +83,20 @@ class DiagnosticsScreenControllerTest {
         assertFalse(copyText.contains("management-secret"))
         assertTrue(controller.consumeEffects().isEmpty())
     }
+
+    @Test
+    fun `controller empty suite reports explicit missing check fallback`() {
+        val controller =
+            DiagnosticsScreenController(
+                suiteController = DiagnosticsSuiteController(checks = emptyMap(), nanoTime = { 0L }),
+                secrets = LogRedactionSecrets(),
+            )
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.RootAvailability))
+
+        val rootItem = controller.state.items.single { item -> item.type == DiagnosticCheckType.RootAvailability }
+        assertEquals(DiagnosticResultStatus.Failed.label, rootItem.status)
+        assertEquals("missing-check", rootItem.errorCategory)
+        assertTrue(rootItem.details.contains("No diagnostic check registered"))
+    }
 }

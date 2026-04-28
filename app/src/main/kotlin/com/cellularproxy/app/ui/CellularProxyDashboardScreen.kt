@@ -32,6 +32,60 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 
 @Composable
+internal fun CellularProxyDashboardRoute(
+    onStartProxyService: () -> Unit = {},
+    onStopProxyService: () -> Unit = {},
+    onOpenRiskDetails: () -> Unit = {},
+    onOpenCloudflare: () -> Unit = {},
+    onOpenRotation: () -> Unit = {},
+    onOpenLogs: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {},
+    onCopyProxyEndpointText: (String) -> Unit = {},
+) {
+    val controller =
+        remember {
+            DashboardScreenController(
+                actionHandler = { action ->
+                    when (action) {
+                        DashboardScreenAction.StartProxy -> onStartProxyService()
+                        DashboardScreenAction.StopProxy -> onStopProxyService()
+                        DashboardScreenAction.OpenRiskDetails -> onOpenRiskDetails()
+                        DashboardScreenAction.OpenCloudflare -> onOpenCloudflare()
+                        DashboardScreenAction.OpenRotation -> onOpenRotation()
+                        DashboardScreenAction.OpenLogs -> onOpenLogs()
+                        DashboardScreenAction.OpenDiagnostics -> onOpenDiagnostics()
+                        else -> Unit
+                    }
+                },
+            )
+        }
+    var screenState by remember { mutableStateOf(controller.state) }
+    val dispatchEvent: (DashboardScreenEvent) -> Unit = { event ->
+        controller.handle(event)
+        controller.consumeEffects().forEach { effect ->
+            when (effect) {
+                is DashboardScreenEffect.CopyText -> onCopyProxyEndpointText(effect.text)
+            }
+        }
+        screenState = controller.state
+    }
+
+    CellularProxyDashboardScreen(
+        status = screenState.status,
+        actionsEnabled = true,
+        onStartProxy = { dispatchEvent(DashboardScreenEvent.StartProxy) },
+        onStopProxy = { dispatchEvent(DashboardScreenEvent.StopProxy) },
+        onRefreshStatus = { dispatchEvent(DashboardScreenEvent.RefreshStatus) },
+        onCopyProxyEndpoint = { dispatchEvent(DashboardScreenEvent.CopyProxyEndpoint) },
+        onOpenRiskDetails = { dispatchEvent(DashboardScreenEvent.OpenRiskDetails) },
+        onOpenCloudflare = { dispatchEvent(DashboardScreenEvent.OpenCloudflare) },
+        onOpenRotation = { dispatchEvent(DashboardScreenEvent.OpenRotation) },
+        onOpenLogs = { dispatchEvent(DashboardScreenEvent.OpenLogs) },
+        onOpenDiagnostics = { dispatchEvent(DashboardScreenEvent.OpenDiagnostics) },
+    )
+}
+
+@Composable
 internal fun CellularProxyDashboardScreen(
     status: DashboardStatusModel =
         DashboardStatusModel.from(

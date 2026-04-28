@@ -32,25 +32,31 @@ import com.cellularproxy.shared.config.RouteTarget
 
 @Composable
 internal fun CellularProxySettingsRoute() {
-    var persistedForm by remember { mutableStateOf(ProxySettingsFormState.from(AppConfig.default())) }
-    var form by remember { mutableStateOf(persistedForm) }
+    val controller =
+        remember {
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                    ),
+            )
+        }
+    var screenState by remember { mutableStateOf(controller.state) }
+    val dispatchEvent: (ProxySettingsScreenEvent) -> Unit = { event ->
+        controller.handle(event)
+        controller.consumeEffects()
+        screenState = controller.state
+    }
 
     CellularProxySettingsScreen(
-        form = form,
-        persistedForm = persistedForm,
+        form = screenState.form,
+        persistedForm = screenState.persistedForm,
         saveEnabled = true,
-        onFormChange = { updatedForm -> form = updatedForm },
-        onSaveSettings = {
-            when (val result = form.toAppConfig(AppConfig.default())) {
-                is ProxySettingsFormResult.Invalid -> Unit
-                is ProxySettingsFormResult.Valid -> {
-                    val nextForm = form.afterSuccessfulSave(result.config)
-                    persistedForm = nextForm
-                    form = nextForm
-                }
-            }
-        },
-        onDiscardChanges = { form = persistedForm },
+        onFormChange = { updatedForm -> dispatchEvent(ProxySettingsScreenEvent.UpdateForm(updatedForm)) },
+        onSaveSettings = { dispatchEvent(ProxySettingsScreenEvent.SaveChanges) },
+        onDiscardChanges = { dispatchEvent(ProxySettingsScreenEvent.DiscardChanges) },
     )
 }
 

@@ -2,6 +2,7 @@
 
 package com.cellularproxy.app.ui
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -28,6 +32,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cellularproxy.app.service.CellularProxyForegroundService
+import com.cellularproxy.app.service.ForegroundServiceActions
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Dashboard
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
@@ -39,6 +45,13 @@ import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
 @Composable
 fun CellularProxyApp() {
     val navController = rememberNavController()
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val dispatchForegroundServiceCommand: (String) -> Unit = { action ->
+        context.startForegroundService(
+            Intent(context, CellularProxyForegroundService::class.java).setAction(action),
+        )
+    }
 
     MaterialTheme {
         BoxWithConstraints {
@@ -69,12 +82,32 @@ fun CellularProxyApp() {
                         CellularProxyNavigationRail(navController)
                         CellularProxyNavigationHost(
                             navController = navController,
+                            onStartProxyService = {
+                                dispatchForegroundServiceCommand(ForegroundServiceActions.START_PROXY)
+                            },
+                            onStopProxyService = {
+                                dispatchForegroundServiceCommand(ForegroundServiceActions.STOP_PROXY)
+                            },
+                            onCopyText = { endpointText ->
+                                clipboard.setText(AnnotatedString(endpointText))
+                            },
+                            onExportLogsAuditBundle = {},
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                 } else {
                     CellularProxyNavigationHost(
                         navController = navController,
+                        onStartProxyService = {
+                            dispatchForegroundServiceCommand(ForegroundServiceActions.START_PROXY)
+                        },
+                        onStopProxyService = {
+                            dispatchForegroundServiceCommand(ForegroundServiceActions.STOP_PROXY)
+                        },
+                        onCopyText = { endpointText ->
+                            clipboard.setText(AnnotatedString(endpointText))
+                        },
+                        onExportLogsAuditBundle = {},
                         modifier =
                             Modifier
                                 .fillMaxSize()
@@ -158,6 +191,10 @@ private fun CellularProxyNavigationRail(navController: NavHostController) {
 @Composable
 private fun CellularProxyNavigationHost(
     navController: NavHostController,
+    onStartProxyService: () -> Unit,
+    onStopProxyService: () -> Unit,
+    onCopyText: (String) -> Unit,
+    onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -166,22 +203,48 @@ private fun CellularProxyNavigationHost(
         modifier = modifier,
     ) {
         composable(Dashboard.route) {
-            CellularProxyDashboardScreen()
+            CellularProxyDashboardRoute(
+                onStartProxyService = onStartProxyService,
+                onStopProxyService = onStopProxyService,
+                onOpenRiskDetails = { navController.navigate(LogsAudit.route) },
+                onOpenCloudflare = { navController.navigate(Cloudflare.route) },
+                onOpenRotation = { navController.navigate(Rotation.route) },
+                onOpenLogs = { navController.navigate(LogsAudit.route) },
+                onOpenDiagnostics = { navController.navigate(Diagnostics.route) },
+                onCopyProxyEndpointText = onCopyText,
+            )
         }
         composable(Settings.route) {
             CellularProxySettingsRoute()
         }
         composable(Cloudflare.route) {
-            CellularProxyCloudflareScreen()
+            CellularProxyCloudflareRoute(
+                onStartTunnel = {
+                },
+                onStopTunnel = {
+                },
+                onReconnectTunnel = {
+                },
+                onTestManagementTunnel = {
+                },
+                onCopyDiagnosticsText = onCopyText,
+            )
         }
         composable(Rotation.route) {
-            CellularProxyRotationScreen()
+            CellularProxyRotationRoute(
+                onCopyRotationDiagnosticsText = onCopyText,
+            )
         }
         composable(Diagnostics.route) {
-            CellularProxyDiagnosticsScreen()
+            CellularProxyDiagnosticsRoute(
+                onCopyDiagnosticsSummaryText = onCopyText,
+            )
         }
         composable(LogsAudit.route) {
-            CellularProxyLogsAuditScreen()
+            CellularProxyLogsAuditRoute(
+                onCopyLogsAuditText = onCopyText,
+                onExportLogsAuditBundle = onExportLogsAuditBundle,
+            )
         }
     }
 }

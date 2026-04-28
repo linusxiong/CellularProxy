@@ -217,8 +217,8 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("CellularProxyDashboardScreen()"),
-            "Dashboard route must render the dedicated status screen instead of the generic placeholder.",
+            shellSource.contains("CellularProxyDashboardRoute("),
+            "Dashboard route must render the dedicated status route instead of the generic placeholder.",
         )
         assertTrue(
             !shellSource.contains("composable(Dashboard.route) {\n            CellularProxyDestinationPlaceholder(Dashboard)"),
@@ -252,6 +252,66 @@ class ComposeAppShellContractTest {
                 "Dashboard screen must expose `$label`.",
             )
         }
+        assertTrue(
+            shellSource.contains("CellularProxyDashboardRoute("),
+            "Dashboard route must render through the controller-backed route.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardScreenController("),
+            "Dashboard route must use the tested screen controller boundary.",
+        )
+        assertTrue(
+            dashboardSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
+            "Dashboard route must mirror controller state into Compose state for recomposition.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardScreenEvent.StartProxy"),
+            "Dashboard route must send start actions through the dashboard controller.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardScreenEvent.StopProxy"),
+            "Dashboard route must send stop actions through the dashboard controller.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardScreenEvent.CopyProxyEndpoint"),
+            "Dashboard route must send copy endpoint actions through the dashboard controller.",
+        )
+        assertTrue(
+            dashboardSource.contains("controller.consumeEffects()"),
+            "Dashboard route must consume one-shot controller effects after dispatch.",
+        )
+        assertTrue(
+            shellSource.contains("LocalClipboardManager.current"),
+            "App shell must provide a real clipboard sink for dashboard copy effects.",
+        )
+        assertTrue(
+            shellSource.contains("clipboard.setText(AnnotatedString(endpointText))"),
+            "Dashboard copy effects must be written to the Compose clipboard as text.",
+        )
+        assertTrue(
+            shellSource.contains("LocalContext.current"),
+            "App shell must provide an Android context for dashboard foreground-service commands.",
+        )
+        assertTrue(
+            shellSource.contains("ForegroundServiceActions.START_PROXY"),
+            "Dashboard start actions must use the existing foreground service start command.",
+        )
+        assertTrue(
+            shellSource.contains("ForegroundServiceActions.STOP_PROXY"),
+            "Dashboard stop actions must use the existing foreground service stop command.",
+        )
+        assertTrue(
+            shellSource.contains("context.startForegroundService("),
+            "Dashboard start/stop actions must dispatch to the Android foreground service.",
+        )
+        assertTrue(
+            shellSource.contains("Intent(context, CellularProxyForegroundService::class.java).setAction(action)"),
+            "Dashboard foreground-service dispatch must target CellularProxyForegroundService with explicit command actions.",
+        )
+        assertTrue(
+            shellSource.contains("onOpenRiskDetails = { navController.navigate(LogsAudit.route) }"),
+            "Dashboard risk-details action must navigate to a concrete detail surface instead of doing nothing.",
+        )
     }
 
     @Test
@@ -473,13 +533,28 @@ class ComposeAppShellContractTest {
             )
         }
         assertTrue(
-            settingsSource.contains("var persistedForm by remember { mutableStateOf(ProxySettingsFormState.from(AppConfig.default())) }") &&
-                settingsSource.contains("mutableStateOf(persistedForm)"),
-            "Settings route must own editable form state until ViewModel/storage wiring is added.",
+            settingsSource.contains("ProxySettingsScreenController("),
+            "Settings route must use the tested screen controller boundary.",
         )
         assertTrue(
-            settingsSource.contains("onFormChange = { updatedForm -> form = updatedForm }"),
-            "Settings route must update rendered form state after field edits.",
+            settingsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
+            "Settings route must mirror controller state into Compose state for recomposition.",
+        )
+        assertTrue(
+            settingsSource.contains("ProxySettingsScreenEvent.UpdateForm(updatedForm)"),
+            "Settings route must send field edits through the settings controller.",
+        )
+        assertTrue(
+            settingsSource.contains("ProxySettingsScreenEvent.SaveChanges"),
+            "Settings route must send save actions through the settings controller.",
+        )
+        assertTrue(
+            settingsSource.contains("ProxySettingsScreenEvent.DiscardChanges"),
+            "Settings route must send discard actions through the settings controller.",
+        )
+        assertTrue(
+            settingsSource.contains("controller.consumeEffects()"),
+            "Settings route must consume one-shot controller effects after dispatch.",
         )
         assertTrue(
             settingsSource.contains("KeyboardType.Password"),
@@ -497,10 +572,6 @@ class ComposeAppShellContractTest {
             settingsSource.contains("ProxySettingsScreenAction.DiscardChanges in state.availableActions"),
             "Discard must be enabled only when the settings screen state allows it.",
         )
-        assertTrue(
-            settingsSource.contains("afterSuccessfulSave"),
-            "Settings route save handling must reset the editable baseline through the post-save sanitizer.",
-        )
     }
 
     @Test
@@ -515,12 +586,64 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("CellularProxyCloudflareScreen()"),
-            "Cloudflare route must render the dedicated tunnel management screen instead of the generic placeholder.",
+            shellSource.contains("CellularProxyCloudflareRoute("),
+            "Cloudflare route must render the controller-backed tunnel management route instead of the stateless screen.",
         )
         assertTrue(
             !shellSource.contains("composable(Cloudflare.route) {\n            CellularProxyDestinationPlaceholder(Cloudflare)"),
             "Cloudflare route must not use the generic destination placeholder.",
+        )
+        assertTrue(
+            cloudflareSource.contains("CloudflareScreenController("),
+            "Cloudflare route must use the tested screen controller boundary.",
+        )
+        assertTrue(
+            cloudflareSource.contains("CloudflareScreenEvent.StartTunnel"),
+            "Cloudflare route must dispatch lifecycle events through the controller.",
+        )
+        assertTrue(
+            cloudflareSource.contains("CloudflareScreenEffect.CopyText"),
+            "Cloudflare route must consume copy diagnostics effects from the controller.",
+        )
+        assertTrue(
+            shellSource.contains("onCopyDiagnosticsText = onCopyText"),
+            "Cloudflare route must send diagnostics copy effects to the app clipboard sink.",
+        )
+        assertTrue(
+            cloudflareSource.contains("onStartTunnel: () -> Unit = {}"),
+            "Cloudflare route must expose a callback for start tunnel actions.",
+        )
+        assertTrue(
+            cloudflareSource.contains("onStopTunnel: () -> Unit = {}"),
+            "Cloudflare route must expose a callback for stop tunnel actions.",
+        )
+        assertTrue(
+            cloudflareSource.contains("onReconnectTunnel: () -> Unit = {}"),
+            "Cloudflare route must expose a callback for reconnect tunnel actions.",
+        )
+        assertTrue(
+            cloudflareSource.contains("onTestManagementTunnel: () -> Unit = {}"),
+            "Cloudflare route must expose a callback for management tunnel test actions.",
+        )
+        assertTrue(
+            cloudflareSource.contains("actionHandler = { action ->"),
+            "Cloudflare route must bridge controller-dispatched actions to app-level callbacks.",
+        )
+        assertTrue(
+            shellSource.contains("onStartTunnel = {"),
+            "App shell must explicitly wire the Cloudflare start action callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("onStopTunnel = {"),
+            "App shell must explicitly wire the Cloudflare stop action callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("onReconnectTunnel = {"),
+            "App shell must explicitly wire the Cloudflare reconnect action callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("onTestManagementTunnel = {"),
+            "App shell must explicitly wire the Cloudflare management test action callback, even before runtime dispatch exists.",
         )
 
         listOf(
@@ -783,12 +906,28 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("CellularProxyRotationScreen()"),
-            "Rotation route must render the dedicated root rotation screen instead of the generic placeholder.",
+            shellSource.contains("CellularProxyRotationRoute("),
+            "Rotation route must render the controller-backed root rotation route instead of the stateless screen.",
         )
         assertTrue(
             !shellSource.contains("composable(Rotation.route) {\n            CellularProxyDestinationPlaceholder(Rotation)"),
             "Rotation route must not use the generic destination placeholder.",
+        )
+        assertTrue(
+            rotationSource.contains("RotationScreenController("),
+            "Rotation route must use the tested screen controller boundary.",
+        )
+        assertTrue(
+            rotationSource.contains("RotationScreenEvent.RotateMobileData"),
+            "Rotation route must dispatch high-impact rotation events through the controller.",
+        )
+        assertTrue(
+            rotationSource.contains("RotationScreenEffect.CopyText"),
+            "Rotation route must consume copy diagnostics effects from the controller.",
+        )
+        assertTrue(
+            shellSource.contains("onCopyRotationDiagnosticsText = onCopyText"),
+            "Rotation route must send diagnostics copy effects to the app clipboard sink.",
         )
 
         listOf(
@@ -1077,12 +1216,36 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("CellularProxyDiagnosticsScreen()"),
-            "Diagnostics route must render the dedicated diagnostics screen instead of the generic placeholder.",
+            shellSource.contains("CellularProxyDiagnosticsRoute("),
+            "Diagnostics route must render the controller-backed diagnostics route instead of the stateless screen.",
         )
         assertTrue(
             !shellSource.contains("composable(Diagnostics.route) {\n            CellularProxyDestinationPlaceholder(Diagnostics)"),
             "Diagnostics route must not use the generic destination placeholder.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("DiagnosticsScreenController("),
+            "Diagnostics route must use the tested screen controller boundary.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
+            "Diagnostics route must mirror controller state into Compose state for recomposition.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("DiagnosticsScreenEvent.RunAllChecks"),
+            "Diagnostics route must dispatch run-all actions through the controller.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("DiagnosticsScreenEvent.RunCheck(type)"),
+            "Diagnostics route must dispatch per-check actions through the controller.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("DiagnosticsScreenEffect.CopyText"),
+            "Diagnostics route must consume copy summary effects from the controller.",
+        )
+        assertTrue(
+            shellSource.contains("onCopyDiagnosticsSummaryText = onCopyText"),
+            "Diagnostics route must send copy summary effects to the app clipboard sink.",
         )
 
         listOf(
@@ -1104,8 +1267,8 @@ class ComposeAppShellContractTest {
             "Diagnostics screen state must expose every registered diagnostic check label.",
         )
         assertTrue(
-            diagnosticsSource.contains("actionsEnabled: Boolean = false"),
-            "Diagnostics route actions must be disabled by default until runtime handlers are wired.",
+            diagnosticsSource.contains("actionsEnabled = true"),
+            "Diagnostics route actions must be enabled through the controller-backed route.",
         )
     }
 
@@ -1306,8 +1469,8 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("CellularProxyLogsAuditScreen()"),
-            "Logs/Audit route must render the dedicated log review screen instead of the generic placeholder.",
+            shellSource.contains("CellularProxyLogsAuditRoute("),
+            "Logs/Audit route must render through the controller-backed route.",
         )
         assertTrue(
             !shellSource.contains("composable(LogsAudit.route) {\n            CellularProxyDestinationPlaceholder(LogsAudit)"),
@@ -1333,6 +1496,26 @@ class ComposeAppShellContractTest {
         assertTrue(
             logsAuditSource.contains("actionsEnabled: Boolean = false"),
             "Logs/Audit route actions must be disabled by default until runtime handlers are wired.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditScreenController("),
+            "Logs/Audit route must own the tested screen controller.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditScreenEvent.SelectRecord"),
+            "Logs/Audit route must dispatch row-selection events through the controller.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditScreenEvent.UpdateFilter"),
+            "Logs/Audit route must dispatch filter updates through the controller.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditScreenEffect.CopyText -> onCopyLogsAuditText(effect.text)"),
+            "Logs/Audit route must forward copy effects to the app clipboard sink.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditScreenEffect.ExportBundle -> onExportLogsAuditBundle(effect.bundle)"),
+            "Logs/Audit route must forward export effects to runtime export wiring.",
         )
     }
 
