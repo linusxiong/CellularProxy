@@ -496,6 +496,28 @@ class DiagnosticsScreenControllerTest {
     }
 
     @Test
+    fun `public ip diagnostics probe rejects non literal response text`() {
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFrom {
+                LocalManagementApiActionResponse(
+                    statusCode = 200,
+                    body = """{"publicIp":"203.0.113.44?token=query-secret"}""",
+                )
+            },
+        )
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFrom {
+                LocalManagementApiActionResponse(
+                    statusCode = 200,
+                    body = """{"publicIp":"management.example.test"}""",
+                )
+            },
+        )
+    }
+
+    @Test
     fun `public ip diagnostics probe safely maps invalid sensitive config load results`() {
         assertEquals(
             PublicIpDiagnosticsProbeResult.Unavailable,

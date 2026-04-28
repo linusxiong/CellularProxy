@@ -9,6 +9,8 @@ import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import java.net.Inet6Address
+import java.net.InetAddress
 
 object DiagnosticChecks {
     fun rootAvailability(
@@ -240,6 +242,7 @@ sealed interface PublicIpDiagnosticsProbeResult {
     ) : PublicIpDiagnosticsProbeResult {
         init {
             require(address.isNotBlank()) { "Observed public IP address must not be blank" }
+            require(address.isIpLiteral()) { "Observed public IP address must be an IP literal" }
         }
     }
 }
@@ -285,3 +288,25 @@ private val RouteTarget.label: String
         }
 
 private fun String.pluralize(count: Int): String = if (count == 1) this else "${this}s"
+
+private fun String.isIpLiteral(): Boolean = isIpv4Literal() || isIpv6Literal()
+
+private fun String.isIpv4Literal(): Boolean {
+    if (!IPV4_LITERAL_REGEX.matches(this)) {
+        return false
+    }
+    return split(".").all { octet ->
+        octet.toIntOrNull()?.let { value -> value in 0..255 } == true
+    }
+}
+
+private fun String.isIpv6Literal(): Boolean {
+    if (':' !in this || !IPV6_LITERAL_CHARS_REGEX.matches(this)) {
+        return false
+    }
+    return runCatching { InetAddress.getByName(this) is Inet6Address }
+        .getOrDefault(false)
+}
+
+private val IPV4_LITERAL_REGEX = Regex("""\d{1,3}(\.\d{1,3}){3}""")
+private val IPV6_LITERAL_CHARS_REGEX = Regex("""[0-9A-Fa-f:.]+""")
