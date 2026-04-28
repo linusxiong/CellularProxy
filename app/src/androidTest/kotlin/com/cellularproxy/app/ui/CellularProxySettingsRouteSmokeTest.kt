@@ -78,4 +78,32 @@ class CellularProxySettingsRouteSmokeTest {
             .performScrollTo()
             .assertIsDisplayed()
     }
+
+    @Test
+    fun routeRendersValidationErrorsAndBlocksInvalidSaves() {
+        val configState = mutableStateOf(AppConfig.default())
+
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxySettingsRoute(
+                    initialConfigProvider = { configState.value },
+                    saveConfig = { config -> configState.value = config },
+                )
+            }
+        }
+
+        composeRule
+            .onNode(hasText("8080") and hasSetTextAction())
+            .performTextReplacement("70000")
+
+        composeRule
+            .onNodeWithText("Listen port must be between 1 and 65535.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Save settings")
+            .performScrollTo()
+            .assertIsNotEnabled()
+        assertEquals(8080, configState.value.proxy.listenPort)
+    }
 }
