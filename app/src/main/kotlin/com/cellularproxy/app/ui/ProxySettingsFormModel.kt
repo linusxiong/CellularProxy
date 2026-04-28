@@ -169,7 +169,13 @@ data class ProxySettingsFormState(
         )
     }
 
-    fun afterSuccessfulSave(savedConfig: AppConfig): ProxySettingsFormState = from(savedConfig).withEditedCloudflareFieldsFrom(this)
+    fun afterSuccessfulSave(
+        savedConfig: AppConfig,
+        savedSensitiveConfig: SensitiveConfig? = null,
+    ): ProxySettingsFormState = from(savedConfig).withEditedCloudflareFieldsFrom(
+        editedForm = this,
+        savedSensitiveConfig = savedSensitiveConfig,
+    )
 
     companion object {
         fun from(config: AppConfig): ProxySettingsFormState = ProxySettingsFormState(
@@ -308,9 +314,15 @@ private fun ProxySettingsFormState.warnings(): Set<ProxySettingsFormWarning> = b
 
 private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
     editedForm: ProxySettingsFormState,
+    savedSensitiveConfig: SensitiveConfig?,
 ): ProxySettingsFormState = copy(
     cloudflareEnabled = editedForm.cloudflareEnabled,
     cloudflareHostnameLabel = editedForm.cloudflareHostnameLabel,
+    cloudflareTunnelTokenPresent =
+        cloudflareTunnelTokenPresent ||
+            savedSensitiveConfig
+                ?.cloudflareTunnelToken
+                ?.isNotBlank() == true,
 )
 
 private fun ProxySettingsFormState.cloudflareTokenStatus(): ProxySettingsCloudflareTokenStatus = when {
@@ -497,7 +509,11 @@ class ProxySettingsScreenController(
                 pendingEffects.add(ProxySettingsScreenEffect.SaveInvalid(result))
             }
             is ProxySettingsSaveResult.Saved -> {
-                val nextForm = state.form.afterSuccessfulSave(result.config)
+                val nextForm =
+                    state.form.afterSuccessfulSave(
+                        savedConfig = result.config,
+                        savedSensitiveConfig = result.sensitiveConfig,
+                    )
                 state =
                     ProxySettingsScreenState.from(
                         form = nextForm,

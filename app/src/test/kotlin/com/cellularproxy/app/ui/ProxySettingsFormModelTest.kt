@@ -10,6 +10,7 @@ import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -419,6 +420,40 @@ class ProxySettingsFormModelTest {
         assertEquals(true, nextForm.cloudflareEnabled)
         assertEquals("manage.example.com", nextForm.cloudflareHostnameLabel)
         assertEquals("", nextForm.cloudflareTunnelToken)
+    }
+
+    @Test
+    fun `successful settings save marks Cloudflare token present only after sensitive token persistence`() {
+        val tunnelToken =
+            "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="
+        val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                        loadSensitiveConfigResult = { SensitiveConfigLoadResult.Loaded(sensitiveConfig("management-token")) },
+                        saveSensitiveConfig = savedSensitiveConfigs::add,
+                    ),
+            )
+
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(
+                    cloudflareEnabled = true,
+                    cloudflareTunnelToken = tunnelToken,
+                ),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(listOf(tunnelToken), savedSensitiveConfigs.map(SensitiveConfig::cloudflareTunnelToken))
+        assertEquals("", controller.state.form.cloudflareTunnelToken)
+        assertTrue(controller.state.form.cloudflareTunnelTokenPresent)
+        assertEquals(ProxySettingsCloudflareTokenStatus.Present, controller.state.cloudflareTokenStatus)
+        assertFalse(ProxySettingsFormWarning.CloudflareEnabledMissingTunnelToken in controller.state.warnings)
     }
 
     @Test
