@@ -60,6 +60,7 @@ import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionDispatcher
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.app.service.LocalManagementApiStatusReader
+import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Dashboard
@@ -108,6 +109,9 @@ fun CellularProxyApp() {
         )
     }
     var cloudflareManagementRoundTripState by remember { mutableStateOf<String?>(null) }
+    var cloudflareManagementApiCheckState by remember {
+        mutableStateOf(DashboardCloudflareManagementApiCheck.NotRun)
+    }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
     }
@@ -168,16 +172,19 @@ fun CellularProxyApp() {
     val cloudflareManagementApiProbeResultProvider = {
         val config = loadSettingsConfig()
         val sensitiveConfig = loadSensitiveConfig()
-        cloudflareManagementApiProbeResultFrom(
-            config = config,
-            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
-        ) {
-            localManagementApiActionDispatcher.dispatch(
-                action = LocalManagementApiAction.CloudflareManagementStatus,
+        val result =
+            cloudflareManagementApiProbeResultFrom(
                 config = config,
-                sensitiveConfig = sensitiveConfig,
-            )
-        }
+                tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
+            ) {
+                localManagementApiActionDispatcher.dispatch(
+                    action = LocalManagementApiAction.CloudflareManagementStatus,
+                    config = config,
+                    sensitiveConfig = sensitiveConfig,
+                )
+            }
+        cloudflareManagementApiCheckState = result.toDashboardCloudflareManagementApiCheck()
+        result
     }
     val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
         coroutineScope.launch {
@@ -196,6 +203,17 @@ fun CellularProxyApp() {
                 )?.let { summary ->
                     cloudflareManagementRoundTripState = summary
                 }
+                if (action == LocalManagementApiAction.CloudflareManagementStatus) {
+                    val config = loadSettingsConfig()
+                    val sensitiveConfig = loadSensitiveConfig()
+                    cloudflareManagementApiCheckState =
+                        dashboardCloudflareManagementApiCheckFrom(
+                            config = config,
+                            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
+                        ) {
+                            response
+                        }
+                }
                 if (!response.isSuccessful) {
                     Log.w(
                         CELLULAR_PROXY_APP_TAG,
@@ -205,6 +223,17 @@ fun CellularProxyApp() {
             }.onFailure { throwable ->
                 cloudflareManagementRoundTripFailureSummary(action)?.let { summary ->
                     cloudflareManagementRoundTripState = summary
+                }
+                if (action == LocalManagementApiAction.CloudflareManagementStatus) {
+                    val config = loadSettingsConfig()
+                    val sensitiveConfig = loadSensitiveConfig()
+                    cloudflareManagementApiCheckState =
+                        dashboardCloudflareManagementApiCheckFrom(
+                            config = config,
+                            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
+                        ) {
+                            throw throwable
+                        }
                 }
                 Log.w(CELLULAR_PROXY_APP_TAG, "Local management action $action failed", throwable)
             }
@@ -256,6 +285,7 @@ fun CellularProxyApp() {
                             proxyStatusProvider = loadProxyStatus,
                             observedNetworksProvider = loadObservedNetworks,
                             cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
+                            latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
                             localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                             cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                             onRefreshProxyStatus = {
@@ -289,6 +319,7 @@ fun CellularProxyApp() {
                         proxyStatusProvider = loadProxyStatus,
                         observedNetworksProvider = loadObservedNetworks,
                         cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
+                        latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
                         localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                         cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                         onRefreshProxyStatus = {
@@ -355,6 +386,25 @@ internal fun cloudflareManagementRoundTripFailureSummary(action: LocalManagement
     LocalManagementApiAction.CloudflareManagementStatus -> "Request failed"
     else -> null
 }
+
+internal fun CloudflareManagementApiProbeResult.toDashboardCloudflareManagementApiCheck(): DashboardCloudflareManagementApiCheck = when (this) {
+    CloudflareManagementApiProbeResult.NotConfigured -> DashboardCloudflareManagementApiCheck.NotRun
+    CloudflareManagementApiProbeResult.Authenticated -> DashboardCloudflareManagementApiCheck.Passed
+    CloudflareManagementApiProbeResult.Unavailable,
+    CloudflareManagementApiProbeResult.Unauthorized,
+    CloudflareManagementApiProbeResult.Error,
+    -> DashboardCloudflareManagementApiCheck.Failed
+}
+
+internal fun dashboardCloudflareManagementApiCheckFrom(
+    config: AppConfig,
+    tunnelTokenPresent: Boolean,
+    request: () -> LocalManagementApiActionResponse,
+): DashboardCloudflareManagementApiCheck = cloudflareManagementApiProbeResultFrom(
+    config = config,
+    tunnelTokenPresent = tunnelTokenPresent,
+    request = request,
+).toDashboardCloudflareManagementApiCheck()
 
 @Composable
 private fun CellularProxyNavigationBar(navController: NavHostController) {
@@ -428,6 +478,7 @@ private fun CellularProxyNavigationHost(
     proxyStatusProvider: () -> ProxyServiceStatus,
     observedNetworksProvider: () -> List<NetworkDescriptor>,
     cloudflareManagementRoundTripProvider: () -> String?,
+    latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
     localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult,
     cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult,
     onRefreshProxyStatus: () -> Unit,
@@ -450,6 +501,7 @@ private fun CellularProxyNavigationHost(
                         status = proxyStatusProvider(),
                         recentLogs = dashboardLogSummariesFromLogsAuditRows(logsAuditRowsProvider()),
                         redactionSecrets = logsAuditRedactionSecretsProvider(),
+                        latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
                         managementApiTokenPresent = settingsLoadSensitiveConfig().managementApiToken.isNotBlank(),
                     )
                 },

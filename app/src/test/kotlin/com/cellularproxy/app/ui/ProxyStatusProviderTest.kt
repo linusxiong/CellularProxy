@@ -1,7 +1,9 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
+import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.NetworkConfig
@@ -190,6 +192,66 @@ class ProxyStatusProviderTest {
             "Cloudflare route must refresh its remembered screen state when the management round-trip provider changes.",
         )
     }
+
+    @Test
+    fun `cloudflare management api probe result maps to dashboard risk check state`() {
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.NotRun,
+            CloudflareManagementApiProbeResult.NotConfigured.toDashboardCloudflareManagementApiCheck(),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Passed,
+            CloudflareManagementApiProbeResult.Authenticated.toDashboardCloudflareManagementApiCheck(),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Failed,
+            CloudflareManagementApiProbeResult.Unavailable.toDashboardCloudflareManagementApiCheck(),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Failed,
+            CloudflareManagementApiProbeResult.Unauthorized.toDashboardCloudflareManagementApiCheck(),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Failed,
+            CloudflareManagementApiProbeResult.Error.toDashboardCloudflareManagementApiCheck(),
+        )
+    }
+
+    @Test
+    fun `dashboard cloudflare management api check uses probe configuration before request failures`() {
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.NotRun,
+            dashboardCloudflareManagementApiCheckFrom(
+                config = config().copy(cloudflare = CloudflareConfig(enabled = false)),
+                tunnelTokenPresent = true,
+                request = { error("not configured") },
+            ),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Passed,
+            dashboardCloudflareManagementApiCheckFrom(
+                config = configuredCloudflare(),
+                tunnelTokenPresent = true,
+                request = { LocalManagementApiActionResponse(statusCode = 204) },
+            ),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Failed,
+            dashboardCloudflareManagementApiCheckFrom(
+                config = configuredCloudflare(),
+                tunnelTokenPresent = true,
+                request = { LocalManagementApiActionResponse(statusCode = 503) },
+            ),
+        )
+        assertEquals(
+            DashboardCloudflareManagementApiCheck.Failed,
+            dashboardCloudflareManagementApiCheckFrom(
+                config = configuredCloudflare(),
+                tunnelTokenPresent = true,
+                request = { error("connection refused") },
+            ),
+        )
+    }
 }
 
 private fun config(): AppConfig = AppConfig(
@@ -197,6 +259,15 @@ private fun config(): AppConfig = AppConfig(
     network = NetworkConfig(defaultRoutePolicy = RouteTarget.Cellular),
     rotation = RotationConfig(),
     cloudflare = CloudflareConfig(),
+)
+
+private fun configuredCloudflare(): AppConfig = AppConfig.default().copy(
+    cloudflare =
+        CloudflareConfig(
+            enabled = true,
+            tunnelTokenPresent = true,
+            managementHostnameLabel = "management.example.test",
+        ),
 )
 
 private fun repoRoot() = generateSequence(Path(requireNotNull(System.getProperty("user.dir")))) { path -> path.parent }
