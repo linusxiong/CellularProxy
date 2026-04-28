@@ -15,21 +15,41 @@ class LocalManagementApiActionDispatcher(
         sensitiveConfig: SensitiveConfig,
     ): LocalManagementApiActionResponse = transport(
         LocalManagementApiActionRequest(
-            method = "POST",
-            url = "http://${config.proxy.listenHost.toLocalManagementHost()}:${config.proxy.listenPort}${action.path}",
+            method = action.method,
+            url = action.url(config),
             bearerToken = sensitiveConfig.managementApiToken,
         ),
     )
 }
 
 enum class LocalManagementApiAction(
+    val method: String = "POST",
     val path: String,
+    private val target: LocalManagementApiActionTarget = LocalManagementApiActionTarget.Local,
 ) {
-    CloudflareStart("/api/cloudflare/start"),
-    CloudflareStop("/api/cloudflare/stop"),
-    CloudflareReconnect("/api/cloudflare/reconnect"),
-    RotateMobileData("/api/rotate/mobile-data"),
-    RotateAirplaneMode("/api/rotate/airplane-mode"),
+    CloudflareStart(path = "/api/cloudflare/start"),
+    CloudflareStop(path = "/api/cloudflare/stop"),
+    CloudflareReconnect(path = "/api/cloudflare/reconnect"),
+    CloudflareManagementStatus(
+        method = "GET",
+        path = "/api/status",
+        target = LocalManagementApiActionTarget.CloudflareManagementHostname,
+    ),
+    RotateMobileData(path = "/api/rotate/mobile-data"),
+    RotateAirplaneMode(path = "/api/rotate/airplane-mode"),
+    ;
+
+    fun url(config: AppConfig): String = when (target) {
+        LocalManagementApiActionTarget.Local ->
+            "http://${config.proxy.listenHost.toLocalManagementHost()}:${config.proxy.listenPort}$path"
+        LocalManagementApiActionTarget.CloudflareManagementHostname ->
+            config.cloudflare.managementHostnameLabel.toCloudflareManagementUrl(path)
+    }
+}
+
+private enum class LocalManagementApiActionTarget {
+    Local,
+    CloudflareManagementHostname,
 }
 
 data class LocalManagementApiActionRequest(
@@ -48,6 +68,18 @@ data class LocalManagementApiActionResponse(
 private fun String.toLocalManagementHost(): String = when (this) {
     "0.0.0.0" -> "127.0.0.1"
     else -> this
+}
+
+private fun String?.toCloudflareManagementUrl(path: String): String {
+    val label =
+        requireNotNull(this?.trim()?.takeIf(String::isNotEmpty)) {
+            "Cloudflare management hostname label is required"
+        }
+    val uri = URI(if ("://" in label) label else "https://$label")
+    val scheme = requireNotNull(uri.scheme?.lowercase()) { "Cloudflare management hostname requires a scheme" }
+    require(scheme == "http" || scheme == "https") { "Cloudflare management hostname must use HTTP or HTTPS" }
+    val authority = requireNotNull(uri.rawAuthority) { "Cloudflare management hostname requires a host" }
+    return URI(scheme, authority, path, null, null).toString()
 }
 
 private fun sendHttpRequest(request: LocalManagementApiActionRequest): LocalManagementApiActionResponse {

@@ -149,6 +149,43 @@ class LocalManagementApiActionDispatcherTest {
             requests,
         )
     }
+
+    @Test
+    fun `cloudflare management tunnel test maps to configured public hostname status endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 200)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareManagementStatus,
+            config =
+                AppConfig.default().copy(
+                    cloudflare =
+                        CloudflareConfig(
+                            enabled = true,
+                            tunnelTokenPresent = true,
+                            managementHostnameLabel = "manage.example.test",
+                        ),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "GET",
+                    url = "https://manage.example.test/api/status",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
 }
 
 private fun sensitiveConfig(): SensitiveConfig = SensitiveConfig(

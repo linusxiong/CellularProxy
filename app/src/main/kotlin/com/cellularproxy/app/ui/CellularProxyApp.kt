@@ -321,6 +321,7 @@ private fun CellularProxyNavigationHost(
                     dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareReconnect)
                 },
                 onTestManagementTunnel = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareManagementStatus)
                 },
                 onCopyDiagnosticsText = onCopyText,
             )
