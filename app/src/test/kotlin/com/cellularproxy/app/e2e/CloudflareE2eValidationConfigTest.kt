@@ -132,7 +132,7 @@ class CloudflareE2eValidationConfigTest {
     }
 
     @Test
-    fun `ready config summary strips path for url-like hostname with empty authority`() {
+    fun `ready config treats url-like hostname with empty authority as not configured`() {
         val config =
             CloudflareE2eValidationConfig.fromLocalValues(
                 mapOf(
@@ -144,11 +144,12 @@ class CloudflareE2eValidationConfigTest {
 
         val ready = assertIs<CloudflareE2eValidationConfig.Ready>(config)
 
+        assertEquals(null, ready.managementHostname)
         assertEquals(
-            "Cloudflare e2e validation configured: tunnelToken=present, managementApiToken=missing, hostname=https://",
+            "Cloudflare e2e validation configured: tunnelToken=present, managementApiToken=missing, hostname=not configured",
             ready.safeSummary,
         )
-        assertTrue(ready.toString().contains("managementHostname=https://"))
+        assertTrue(ready.toString().contains("managementHostname=not configured"))
         assertFalse(ready.safeSummary.contains("token-secret"))
         assertFalse(ready.safeSummary.contains("query-secret"))
         assertFalse(ready.safeSummary.contains("fragment-secret"))

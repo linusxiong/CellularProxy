@@ -76,7 +76,7 @@ sealed interface CloudflareE2eValidationConfig {
                     values
                         .localValueFor(CloudflareE2eValidationConfigKeys.managementHostname)
                         .trimmedOrNull()
-                        ?.safeHostnameSummary(),
+                        ?.safeManagementHostnameOrNull(),
             )
         }
     }
@@ -130,22 +130,32 @@ private fun String?.presenceLabel(): String = if (this == null) {
     "present"
 }
 
-private fun String?.safeHostnameSummary(): String {
-    val value = this?.summaryLine() ?: return "not configured"
-    if ("://" !in value) {
-        return value.safeSchemeLessHostnameSummary()
+private fun String?.safeHostnameSummary(): String = this?.safeManagementHostnameOrNull() ?: "not configured"
+
+private fun String.safeManagementHostnameOrNull(): String? {
+    val value = summaryLine()
+    if (value.isBlank()) {
+        return null
     }
-    return runCatching {
-        val uri = URI(value)
-        val scheme = uri.scheme?.lowercase()
-        val host = uri.host
-        if (scheme == null || host == null) {
-            value.safeUrlLikeHostnameFallback()
+    val summary =
+        if ("://" !in value) {
+            value.safeSchemeLessHostnameSummary()
         } else {
-            URI(scheme, null, host, uri.port, null, null, null).toString()
+            runCatching {
+                val uri = URI(value)
+                val scheme = uri.scheme?.lowercase()
+                val host = uri.host
+                if (scheme == null || host == null) {
+                    value.safeUrlLikeHostnameFallback()
+                } else {
+                    URI(scheme, null, host, uri.port, null, null, null).toString()
+                }
+            }.getOrElse { value.safeUrlLikeHostnameFallback() }
         }
-    }.getOrElse { value.safeUrlLikeHostnameFallback() }
+    return summary.takeIf { it.isUsableManagementHostnameSummary() }
 }
+
+private fun String.isUsableManagementHostnameSummary(): Boolean = isNotBlank() && !endsWith("://")
 
 private fun String.summaryLine(): String = lineSequence().firstOrNull().orEmpty()
 
