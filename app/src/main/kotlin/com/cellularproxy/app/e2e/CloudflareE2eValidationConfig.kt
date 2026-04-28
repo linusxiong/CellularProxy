@@ -75,7 +75,8 @@ sealed interface CloudflareE2eValidationConfig {
                 managementHostname =
                     values
                         .localValueFor(CloudflareE2eValidationConfigKeys.managementHostname)
-                        .trimmedOrNull(),
+                        .trimmedOrNull()
+                        ?.safeHostnameSummary(),
             )
         }
     }

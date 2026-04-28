@@ -87,10 +87,7 @@ class CloudflareE2eValidationConfigTest {
 
         val ready = assertIs<CloudflareE2eValidationConfig.Ready>(config)
 
-        assertEquals(
-            "https://operator:hostname-secret@management.example.test:8443/private/path",
-            ready.managementHostname,
-        )
+        assertEquals("https://management.example.test:8443", ready.managementHostname)
         assertEquals(
             "Cloudflare e2e validation configured: tunnelToken=present, managementApiToken=missing, hostname=https://management.example.test:8443",
             ready.safeSummary,
@@ -160,6 +157,27 @@ class CloudflareE2eValidationConfigTest {
         assertFalse(ready.toString().contains("query-secret"))
         assertFalse(ready.toString().contains("fragment-secret"))
         assertFalse(ready.toString().contains("/private"))
+    }
+
+    @Test
+    fun `ready config stores sanitized management hostname for validators`() {
+        val config =
+            CloudflareE2eValidationConfig.fromLocalValues(
+                mapOf(
+                    CloudflareE2eValidationConfigKeys.tunnelToken to validTunnelToken,
+                    CloudflareE2eValidationConfigKeys.managementHostname to
+                        "https://operator:hostname-secret@management.example.test/private/path?token=query-secret#fragment-secret",
+                ),
+            )
+
+        val ready = assertIs<CloudflareE2eValidationConfig.Ready>(config)
+
+        assertEquals("https://management.example.test", ready.managementHostname)
+        assertFalse(ready.managementHostname.orEmpty().contains("operator"))
+        assertFalse(ready.managementHostname.orEmpty().contains("hostname-secret"))
+        assertFalse(ready.managementHostname.orEmpty().contains("query-secret"))
+        assertFalse(ready.managementHostname.orEmpty().contains("fragment-secret"))
+        assertFalse(ready.managementHostname.orEmpty().contains("/private/path"))
     }
 
     @Test
@@ -414,7 +432,7 @@ class CloudflareE2eValidationConfigTest {
 
         assertEquals(validTunnelToken, ready.tunnelToken)
         assertEquals("management-secret", ready.managementApiToken)
-        assertEquals("https://operator:hostname-secret@management.example.test/private", ready.managementHostname)
+        assertEquals("https://management.example.test", ready.managementHostname)
         assertFalse(ready.safeSummary.contains("operator"))
         assertFalse(ready.safeSummary.contains("hostname-secret"))
         assertFalse(ready.safeSummary.contains("/private"))
