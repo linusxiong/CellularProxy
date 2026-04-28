@@ -56,6 +56,7 @@ import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionDispatcher
+import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.app.service.LocalManagementApiStatusReader
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
@@ -104,6 +105,7 @@ fun CellularProxyApp() {
             ProxyServiceStatus.stopped(configuredRoute = AppConfig.default().network.defaultRoutePolicy),
         )
     }
+    var cloudflareManagementRoundTripState by remember { mutableStateOf<String?>(null) }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
     }
@@ -163,6 +165,12 @@ fun CellularProxyApp() {
                     )
                 }
             }.onSuccess { response ->
+                cloudflareManagementRoundTripSummary(
+                    action = action,
+                    response = response,
+                )?.let { summary ->
+                    cloudflareManagementRoundTripState = summary
+                }
                 if (!response.isSuccessful) {
                     Log.w(
                         CELLULAR_PROXY_APP_TAG,
@@ -170,6 +178,9 @@ fun CellularProxyApp() {
                     )
                 }
             }.onFailure { throwable ->
+                cloudflareManagementRoundTripFailureSummary(action)?.let { summary ->
+                    cloudflareManagementRoundTripState = summary
+                }
                 Log.w(CELLULAR_PROXY_APP_TAG, "Local management action $action failed", throwable)
             }
             refreshProxyStatus()
@@ -219,6 +230,7 @@ fun CellularProxyApp() {
                             logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                             proxyStatusProvider = loadProxyStatus,
                             observedNetworksProvider = loadObservedNetworks,
+                            cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
                             onRefreshProxyStatus = {
                                 coroutineScope.launch { refreshProxyStatus() }
                             },
@@ -249,6 +261,7 @@ fun CellularProxyApp() {
                         logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                         proxyStatusProvider = loadProxyStatus,
                         observedNetworksProvider = loadObservedNetworks,
+                        cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
                         onRefreshProxyStatus = {
                             coroutineScope.launch { refreshProxyStatus() }
                         },
@@ -300,6 +313,19 @@ internal fun proxyStatusFromLiveStatusOrConfigFallback(
     liveStatus: () -> ProxyServiceStatus?,
 ): ProxyServiceStatus = runCatching(liveStatus).getOrNull()
     ?: ProxyServiceStatus.stopped(configuredRoute = config.network.defaultRoutePolicy)
+
+internal fun cloudflareManagementRoundTripSummary(
+    action: LocalManagementApiAction,
+    response: LocalManagementApiActionResponse,
+): String? = when (action) {
+    LocalManagementApiAction.CloudflareManagementStatus -> "HTTP ${response.statusCode}"
+    else -> null
+}
+
+internal fun cloudflareManagementRoundTripFailureSummary(action: LocalManagementApiAction): String? = when (action) {
+    LocalManagementApiAction.CloudflareManagementStatus -> "Request failed"
+    else -> null
+}
 
 @Composable
 private fun CellularProxyNavigationBar(navController: NavHostController) {
@@ -372,6 +398,7 @@ private fun CellularProxyNavigationHost(
     logsAuditRedactionSecretsProvider: () -> LogRedactionSecrets,
     proxyStatusProvider: () -> ProxyServiceStatus,
     observedNetworksProvider: () -> List<NetworkDescriptor>,
+    cloudflareManagementRoundTripProvider: () -> String?,
     onRefreshProxyStatus: () -> Unit,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
@@ -421,6 +448,7 @@ private fun CellularProxyNavigationHost(
                     cloudflareTokenStatusFrom(settingsLoadSensitiveConfig().cloudflareTunnelToken)
                 },
                 tunnelStatusProvider = { proxyStatusProvider().cloudflare },
+                managementApiRoundTripProvider = cloudflareManagementRoundTripProvider,
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onStartTunnel = {
                     dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareStart)

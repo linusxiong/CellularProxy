@@ -1,5 +1,7 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.service.LocalManagementApiAction
+import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.NetworkConfig
@@ -12,6 +14,7 @@ import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProxyStatusProviderTest {
@@ -58,6 +61,10 @@ class ProxyStatusProviderTest {
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
                 .readText()
+        val cloudflareSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyCloudflareScreen.kt")
+                .readText()
 
         assertTrue(
             shellSource.contains("var proxyStatusState by remember"),
@@ -80,6 +87,10 @@ class ProxyStatusProviderTest {
         val shellSource =
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val cloudflareSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyCloudflareScreen.kt")
                 .readText()
 
         assertTrue(
@@ -118,6 +129,65 @@ class ProxyStatusProviderTest {
                 Regex("""onRefreshProxyStatus = \{\s+coroutineScope\.launch \{ refreshProxyStatus\(\) }\s+},""")
                     .containsMatchIn(shellSource),
             "The launched Dashboard Refresh status action must refresh the cached live Management API status.",
+        )
+    }
+
+    @Test
+    fun `cloudflare management tunnel test result is cached for Cloudflare screen state`() {
+        assertEquals(
+            "HTTP 200",
+            cloudflareManagementRoundTripSummary(
+                action = LocalManagementApiAction.CloudflareManagementStatus,
+                response = LocalManagementApiActionResponse(statusCode = 200),
+            ),
+        )
+        assertEquals(
+            "HTTP 503",
+            cloudflareManagementRoundTripSummary(
+                action = LocalManagementApiAction.CloudflareManagementStatus,
+                response = LocalManagementApiActionResponse(statusCode = 503),
+            ),
+        )
+        assertEquals(
+            "Request failed",
+            cloudflareManagementRoundTripFailureSummary(LocalManagementApiAction.CloudflareManagementStatus),
+        )
+        assertNull(
+            cloudflareManagementRoundTripSummary(
+                action = LocalManagementApiAction.CloudflareStart,
+                response = LocalManagementApiActionResponse(statusCode = 200),
+            ),
+        )
+        assertNull(cloudflareManagementRoundTripFailureSummary(LocalManagementApiAction.CloudflareStart))
+
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val cloudflareSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyCloudflareScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("var cloudflareManagementRoundTripState by remember"),
+            "App shell must cache the latest Cloudflare management tunnel test result for screen state.",
+        )
+        assertTrue(
+            shellSource.contains("cloudflareManagementRoundTripSummary(") &&
+                shellSource.contains("cloudflareManagementRoundTripFailureSummary("),
+            "App shell must update the Cloudflare round-trip result for both HTTP responses and request failures.",
+        )
+        assertTrue(
+            shellSource.contains("cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState }") &&
+                shellSource.contains("managementApiRoundTripProvider = cloudflareManagementRoundTripProvider"),
+            "Launched Cloudflare route must display the cached management tunnel test result.",
+        )
+        assertTrue(
+            cloudflareSource.contains("val observedManagementApiRoundTrip = managementApiRoundTripProvider()") &&
+                cloudflareSource.contains("LaunchedEffect(observedManagementApiRoundTrip)") &&
+                cloudflareSource.contains("controller.handle(CloudflareScreenEvent.Refresh)"),
+            "Cloudflare route must refresh its remembered screen state when the management round-trip provider changes.",
         )
     }
 }

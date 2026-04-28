@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +63,7 @@ internal fun CellularProxyCloudflareRoute(
     val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
     val currentOnReconnectTunnel by rememberUpdatedState(onReconnectTunnel)
     val currentOnTestManagementTunnel by rememberUpdatedState(onTestManagementTunnel)
+    val observedManagementApiRoundTrip = managementApiRoundTripProvider()
     val controller =
         remember {
             CloudflareScreenController(
@@ -83,6 +85,10 @@ internal fun CellularProxyCloudflareRoute(
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
+    LaunchedEffect(observedManagementApiRoundTrip) {
+        controller.handle(CloudflareScreenEvent.Refresh)
+        screenState = controller.state
+    }
     val dispatchEvent: (CloudflareScreenEvent) -> Unit = { event ->
         controller.handle(event)
         controller.consumeEffects().forEach { effect ->
