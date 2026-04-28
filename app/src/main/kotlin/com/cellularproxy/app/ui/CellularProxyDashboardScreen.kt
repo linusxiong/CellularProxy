@@ -882,6 +882,13 @@ private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (t
             label = toDashboardText(),
             action = DashboardScreenAction.OpenRotation,
         )
+    DashboardWarning.RotationCooldownActive,
+    DashboardWarning.RotationInProgress,
+    ->
+        DashboardRiskItem(
+            label = toDashboardText(),
+            action = DashboardScreenAction.OpenRotation,
+        )
     DashboardWarning.SensitiveConfigurationInvalid ->
         DashboardRiskItem(
             label = toDashboardText(),

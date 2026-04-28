@@ -14,6 +14,9 @@ import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -390,6 +393,41 @@ class DashboardScreenControllerTest {
             ),
             state.riskItems,
         )
+    }
+
+    @Test
+    fun `dashboard exposes rotation blocked risks as rotation action items`() {
+        val cases =
+            listOf(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    rotationCooldownRemainingSeconds = 12,
+                ) to
+                    DashboardRiskItem(
+                        label = "Rotation blocked by cooldown",
+                        action = DashboardScreenAction.OpenRotation,
+                    ),
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    rotationStatus =
+                        RotationStatus(
+                            state = RotationState.CheckingRoot,
+                            operation = RotationOperation.MobileData,
+                        ),
+                ) to
+                    DashboardRiskItem(
+                        label = "Rotation already in progress",
+                        action = DashboardScreenAction.OpenRotation,
+                    ),
+            )
+
+        cases.forEach { (status, expectedRiskItem) ->
+            val state = DashboardScreenState.from(status)
+
+            assertEquals(listOf(expectedRiskItem), state.riskItems)
+        }
     }
 
     @Test
