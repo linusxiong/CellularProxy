@@ -86,6 +86,49 @@ class LocalManagementApiActionDispatcherTest {
     }
 
     @Test
+    fun `dispatch maps rotation read-only probes to authenticated local management endpoints`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 200)
+                },
+            )
+        val config =
+            AppConfig.default().copy(
+                proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 8181),
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.RootStatus,
+            config = config,
+            sensitiveConfig = sensitiveConfig(),
+        )
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.PublicIp,
+            config = config,
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "GET",
+                    url = "http://127.0.0.1:8181/api/status",
+                    bearerToken = "management-token",
+                ),
+                LocalManagementApiActionRequest(
+                    method = "GET",
+                    url = "http://127.0.0.1:8181/api/ip",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
     fun `response treats only 2xx management action statuses as successful`() {
         assertEquals(true, LocalManagementApiActionResponse(statusCode = 202).isSuccessful)
         assertEquals(false, LocalManagementApiActionResponse(statusCode = 409).isSuccessful)

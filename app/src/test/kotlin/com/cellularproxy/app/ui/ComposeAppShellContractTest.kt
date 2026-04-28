@@ -999,6 +999,11 @@ class ComposeAppShellContractTest {
                 shellSource.contains("LocalManagementApiAction.RotateAirplaneMode"),
             "App shell must dispatch high-impact rotation callbacks through the local Management API action dispatcher.",
         )
+        assertTrue(
+            shellSource.contains("LocalManagementApiAction.RootStatus") &&
+                shellSource.contains("LocalManagementApiAction.PublicIp"),
+            "App shell must dispatch Rotation root and current-IP probes through the local Management API action dispatcher.",
+        )
 
         listOf(
             "Root availability",

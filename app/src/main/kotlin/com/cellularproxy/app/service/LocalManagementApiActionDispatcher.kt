@@ -27,6 +27,8 @@ enum class LocalManagementApiAction(
     val path: String,
     private val target: LocalManagementApiActionTarget = LocalManagementApiActionTarget.Local,
 ) {
+    RootStatus(method = "GET", path = "/api/status"),
+    PublicIp(method = "GET", path = "/api/ip"),
     CloudflareStart(path = "/api/cloudflare/start"),
     CloudflareStop(path = "/api/cloudflare/stop"),
     CloudflareReconnect(path = "/api/cloudflare/reconnect"),

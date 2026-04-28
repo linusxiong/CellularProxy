@@ -329,8 +329,10 @@ private fun CellularProxyNavigationHost(
         composable(Rotation.route) {
             CellularProxyRotationRoute(
                 onCheckRoot = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.RootStatus)
                 },
                 onProbeCurrentPublicIp = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.PublicIp)
                 },
                 onRotateMobileData = {
                     dispatchLocalManagementApiAction(LocalManagementApiAction.RotateMobileData)
