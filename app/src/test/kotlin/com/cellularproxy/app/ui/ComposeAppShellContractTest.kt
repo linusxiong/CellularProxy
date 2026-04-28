@@ -79,6 +79,18 @@ class ComposeAppShellContractTest {
         )
         assertTrue(shellSource.contains("Scaffold"), "Compose app shell must provide the operator console scaffold.")
         assertTrue(shellSource.contains("CellularProxy"), "Compose app shell must render the product name.")
+        assertFalse(
+            activitySource.contains("android.widget.") ||
+                activitySource.contains("createContentView") ||
+                activitySource.contains("LinearLayout") ||
+                activitySource.contains("setContentView") ||
+                activitySource.contains("findViewById") ||
+                activitySource.contains("android.view.") ||
+                activitySource.contains("layoutInflater") ||
+                activitySource.contains("ViewBinding") ||
+                activitySource.contains("DataBinding"),
+            "Launcher activity must not retain the legacy native View settings/dashboard UI.",
+        )
     }
 
     @Test
