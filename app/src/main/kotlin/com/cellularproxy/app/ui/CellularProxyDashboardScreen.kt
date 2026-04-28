@@ -409,6 +409,7 @@ internal class DashboardScreenController(
             DashboardScreenEvent.Refresh -> state = buildState()
             DashboardScreenEvent.CopyProxyEndpoint -> {
                 if (DashboardScreenAction.CopyProxyEndpoint in state.availableActions) {
+                    recordAuditAction(DashboardScreenAction.CopyProxyEndpoint)?.let(pendingEffects::add)
                     pendingEffects.add(DashboardScreenEffect.CopyText(state.status.listenEndpoint))
                 }
             }
@@ -525,7 +526,8 @@ private val DashboardScreenAction.isLifecycleAction: Boolean
 private val DashboardScreenAction.isAuditedOperationalAction: Boolean
     get() =
         isLifecycleAction ||
-            this == DashboardScreenAction.RefreshStatus
+            this == DashboardScreenAction.RefreshStatus ||
+            this == DashboardScreenAction.CopyProxyEndpoint
 
 private val DashboardScreenAction.auditName: String
     get() =

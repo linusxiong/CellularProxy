@@ -227,12 +227,23 @@ class DashboardScreenControllerTest {
                 .filterIsInstance<DashboardScreenEffect.RecordAuditAction>()
                 .map(DashboardScreenEffect.RecordAuditAction::record)
 
-        assertEquals(2, auditRecords.size)
-        assertEquals(listOf("Dashboard start_proxy", "Dashboard refresh_status"), auditRecords.map { it.title })
-        assertEquals(listOf("action=start_proxy serviceState=Stopped", "action=refresh_status serviceState=Stopped"), auditRecords.map { it.detail })
-        assertEquals(listOf(123L, 123L), auditRecords.map { it.occurredAtEpochMillis })
+        assertEquals(3, auditRecords.size)
+        assertEquals(
+            listOf("Dashboard start_proxy", "Dashboard refresh_status", "Dashboard copy_proxy_endpoint"),
+            auditRecords.map { it.title },
+        )
+        assertEquals(
+            listOf(
+                "action=start_proxy serviceState=Stopped",
+                "action=refresh_status serviceState=Stopped",
+                "action=copy_proxy_endpoint serviceState=Stopped",
+            ),
+            auditRecords.map { it.detail },
+        )
+        assertEquals(listOf(123L, 123L, 123L), auditRecords.map { it.occurredAtEpochMillis })
         assertTrue(auditRecords.all { it.category == LogsAuditRecordCategory.AppRuntime })
         assertTrue(auditRecords.all { it.severity == LogsAuditRecordSeverity.Info })
+        assertTrue(auditRecords.none { record -> record.detail.contains("127.0.0.1:8080") })
     }
 
     @Test
