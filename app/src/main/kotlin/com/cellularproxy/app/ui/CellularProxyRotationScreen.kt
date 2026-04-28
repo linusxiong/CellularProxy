@@ -25,6 +25,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
@@ -46,6 +49,7 @@ internal fun CellularProxyRotationRoute(
     onRotateMobileData: () -> Unit = {},
     onRotateAirplaneMode: () -> Unit = {},
     onCopyRotationDiagnosticsText: (String) -> Unit = {},
+    onRecordRotationAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentRotationStatusProvider by rememberUpdatedState(rotationStatusProvider)
@@ -75,6 +79,7 @@ internal fun CellularProxyRotationRoute(
                 cooldownRemainingSecondsProvider = { currentCooldownRemainingSecondsProvider() },
                 activeConnectionsProvider = { currentActiveConnectionsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
+                auditActionsEnabled = true,
                 actionHandler = { action ->
                     when (action) {
                         RotationScreenAction.CheckRoot -> currentOnCheckRoot()
@@ -92,6 +97,7 @@ internal fun CellularProxyRotationRoute(
         controller.consumeEffects().forEach { effect ->
             when (effect) {
                 is RotationScreenEffect.CopyText -> onCopyRotationDiagnosticsText(effect.text)
+                is RotationScreenEffect.RecordAuditAction -> onRecordRotationAuditAction(effect.record)
             }
         }
         screenState = controller.state
@@ -387,6 +393,8 @@ internal class RotationScreenController(
     private val activeConnectionsProvider: () -> Long = { 0 },
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
     private val secretsProvider: () -> LogRedactionSecrets = { secrets },
+    private val auditActionsEnabled: Boolean = false,
+    private val auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
     private val actionHandler: (RotationScreenAction) -> Unit = {},
 ) {
     private var lastObservedRotationStatus: RotationStatus = rotationStatusProvider()
@@ -426,6 +434,7 @@ internal class RotationScreenController(
         if (action.tracksPendingOperation) {
             pendingActions.add(action)
         }
+        recordAuditAction(action)?.let(pendingEffects::add)
         actionHandler(action)
         state = buildState()
     }
@@ -462,6 +471,23 @@ internal class RotationScreenController(
                 secrets = secretsProvider(),
             ).withoutPendingActions(pendingActions)
     }
+
+    private fun recordAuditAction(action: RotationScreenAction): RotationScreenEffect.RecordAuditAction? = if (
+        auditActionsEnabled &&
+        action != RotationScreenAction.CopyDiagnostics
+    ) {
+        RotationScreenEffect.RecordAuditAction(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
+                category = LogsAuditRecordCategory.Rotation,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Rotation ${action.auditName}",
+                detail = "action=${action.auditName} phase=${rotationStatusProvider().state.name}",
+            ),
+        )
+    } else {
+        null
+    }
 }
 
 internal sealed interface RotationScreenEvent {
@@ -482,7 +508,21 @@ internal sealed interface RotationScreenEffect {
     data class CopyText(
         val text: String,
     ) : RotationScreenEffect
+
+    data class RecordAuditAction(
+        val record: PersistedLogsAuditRecord,
+    ) : RotationScreenEffect
 }
+
+private val RotationScreenAction.auditName: String
+    get() =
+        when (this) {
+            RotationScreenAction.CheckRoot -> "check_root"
+            RotationScreenAction.ProbeCurrentPublicIp -> "probe_current_public_ip"
+            RotationScreenAction.RotateMobileData -> "rotate_mobile_data"
+            RotationScreenAction.RotateAirplaneMode -> "rotate_airplane_mode"
+            RotationScreenAction.CopyDiagnostics -> "copy_diagnostics"
+        }
 
 private fun RotationScreenState.withoutPendingActions(
     pendingActions: Set<RotationScreenAction>,

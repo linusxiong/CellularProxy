@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.root.RootAvailabilityStatus
@@ -163,6 +166,64 @@ class RotationScreenControllerTest {
                 RotationScreenAction.ProbeCurrentPublicIp,
             ),
             actions,
+        )
+    }
+
+    @Test
+    fun `controller emits audit records for dispatched rotation actions`() {
+        val actions = mutableListOf<RotationScreenAction>()
+        val controller =
+            RotationScreenController(
+                configProvider = { rootEnabledConfig() },
+                rotationStatusProvider = { RotationStatus.idle() },
+                rootAvailabilityProvider = { RootAvailabilityStatus.Available },
+                currentPublicIpProvider = { "203.0.113.44" },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 12_345 },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(RotationScreenEvent.CheckRoot)
+        controller.handle(RotationScreenEvent.ProbeCurrentPublicIp)
+        controller.handle(RotationScreenEvent.RotateMobileData)
+        controller.handle(RotationScreenEvent.CopyDiagnostics)
+
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.RotateMobileData,
+            ),
+            actions,
+        )
+        assertEquals(
+            listOf(
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 12_345,
+                    category = LogsAuditRecordCategory.Rotation,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Rotation check_root",
+                    detail = "action=check_root phase=Idle",
+                ),
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 12_345,
+                    category = LogsAuditRecordCategory.Rotation,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Rotation probe_current_public_ip",
+                    detail = "action=probe_current_public_ip phase=Idle",
+                ),
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 12_345,
+                    category = LogsAuditRecordCategory.Rotation,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Rotation rotate_mobile_data",
+                    detail = "action=rotate_mobile_data phase=Idle",
+                ),
+            ),
+            controller
+                .consumeEffects()
+                .filterIsInstance<RotationScreenEffect.RecordAuditAction>()
+                .map(RotationScreenEffect.RecordAuditAction::record),
         )
     }
 

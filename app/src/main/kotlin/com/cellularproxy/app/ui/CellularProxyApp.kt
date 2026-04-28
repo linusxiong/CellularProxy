@@ -892,6 +892,7 @@ internal fun CellularProxyNavigationHost(
                     dispatchLocalManagementApiAction(LocalManagementApiAction.RotateAirplaneMode)
                 },
                 onCopyRotationDiagnosticsText = onCopyText,
+                onRecordRotationAuditAction = onRecordLogsAuditAction,
             )
         }
         composable(Diagnostics.route) {
