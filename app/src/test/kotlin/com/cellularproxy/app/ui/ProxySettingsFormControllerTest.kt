@@ -502,6 +502,40 @@ class ProxySettingsFormControllerTest {
     }
 
     @Test
+    fun `cloudflare hostname label save strips unsafe url details before persistence`() {
+        val cloudflareToken = validCloudflareTunnelToken()
+        val originalSensitiveConfig =
+            SensitiveConfig(
+                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                managementApiToken = "management-token",
+            )
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfig = { originalSensitiveConfig },
+                saveSensitiveConfig = {},
+            )
+
+        val result =
+            controller.save(
+                ProxySettingsFormState(
+                    listenHost = "127.0.0.1",
+                    listenPort = "8888",
+                    authEnabled = true,
+                    route = RouteTarget.Automatic,
+                    cloudflareEnabled = true,
+                    cloudflareTunnelToken = cloudflareToken,
+                    cloudflareHostnameLabel =
+                        " https://operator:hostname-secret@manage.example.com/private?token=query-secret#fragment ",
+                ),
+            )
+
+        val saved = result as ProxySettingsSaveResult.Saved
+        assertEquals("https://manage.example.com", saved.config.cloudflare.managementHostnameLabel)
+    }
+
+    @Test
     fun `blank cloudflare token field preserves existing token while allowing hostname removal`() {
         val originalConfig =
             AppConfig.default().copy(

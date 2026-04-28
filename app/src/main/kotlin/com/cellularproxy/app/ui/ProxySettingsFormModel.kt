@@ -152,7 +152,12 @@ data class ProxySettingsFormState(
                         base.cloudflare.copy(
                             enabled = cloudflareEnabled,
                             tunnelTokenPresent = tunnelTokenPresent,
-                            managementHostnameLabel = cloudflareHostnameLabel.trim().takeIf(String::isNotEmpty),
+                            managementHostnameLabel =
+                                cloudflareHostnameLabel
+                                    .trim()
+                                    .takeIf(String::isNotEmpty)
+                                    ?.safeCloudflareManagementHostnameLabel()
+                                    ?.takeIf(String::isNotEmpty),
                         )
                     } else {
                         base.cloudflare
