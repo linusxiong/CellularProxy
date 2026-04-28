@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
@@ -287,6 +290,37 @@ class CloudflareScreenControllerTest {
 
         assertEquals("None", controller.state.pendingOperation)
         assertEquals(emptySet(), controller.state.warnings)
+    }
+
+    @Test
+    fun `controller emits audit records for dispatched cloudflare actions`() {
+        val actions = mutableListOf<CloudflareScreenAction>()
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true, managementHostname = "management.example.test") },
+                tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
+                actionHandler = { action -> actions += action },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 1234L },
+            )
+
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+
+        assertEquals(listOf(CloudflareScreenAction.TestManagementTunnel), actions)
+        assertEquals(
+            listOf(
+                CloudflareScreenEffect.RecordAuditAction(
+                    PersistedLogsAuditRecord(
+                        occurredAtEpochMillis = 1234L,
+                        category = LogsAuditRecordCategory.CloudflareTunnel,
+                        severity = LogsAuditRecordSeverity.Info,
+                        title = "Cloudflare test_management_tunnel",
+                        detail = "action=test_management_tunnel lifecycle=Connected",
+                    ),
+                ),
+            ),
+            controller.consumeEffects(),
+        )
     }
 
     @Test

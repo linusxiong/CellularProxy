@@ -867,6 +867,7 @@ internal fun CellularProxyNavigationHost(
                     dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareManagementStatus)
                 },
                 onCopyDiagnosticsText = onCopyText,
+                onRecordCloudflareAuditAction = onRecordLogsAuditAction,
             )
         }
         composable(Rotation.route) {

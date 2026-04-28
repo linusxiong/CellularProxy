@@ -25,6 +25,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.cloudflare.CloudflareTunnelToken
 import com.cellularproxy.cloudflare.CloudflareTunnelTokenParseResult
@@ -55,6 +58,8 @@ internal fun CellularProxyCloudflareRoute(
     onReconnectTunnel: () -> Unit = {},
     onTestManagementTunnel: () -> Unit = {},
     onCopyDiagnosticsText: (String) -> Unit = {},
+    onRecordCloudflareAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
+    auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentTokenStatusProvider by rememberUpdatedState(tokenStatusProvider)
@@ -84,6 +89,8 @@ internal fun CellularProxyCloudflareRoute(
                 managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() },
                 managementApiRoundTripVersionProvider = { currentManagementApiRoundTripVersionProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
                 actionHandler = { action ->
                     when (action) {
                         CloudflareScreenAction.StartTunnel -> currentOnStartTunnel()
@@ -113,6 +120,7 @@ internal fun CellularProxyCloudflareRoute(
         controller.consumeEffects().forEach { effect ->
             when (effect) {
                 is CloudflareScreenEffect.CopyText -> onCopyDiagnosticsText(effect.text)
+                is CloudflareScreenEffect.RecordAuditAction -> onRecordCloudflareAuditAction(effect.record)
             }
         }
         screenState = controller.state
@@ -395,6 +403,8 @@ internal class CloudflareScreenController(
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
     private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val actionHandler: (CloudflareScreenAction) -> Unit = {},
+    private val auditActionsEnabled: Boolean = false,
+    private val auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     private val pendingOperations = mutableMapOf<CloudflareScreenAction, PendingCloudflareOperation>()
     private val pendingEffects = mutableListOf<CloudflareScreenEffect>()
@@ -434,6 +444,7 @@ internal class CloudflareScreenController(
                     managementApiRoundTripVersion = managementApiRoundTripVersionProvider(),
                 )
             actionHandler(action)
+            recordAuditAction(action)?.let(pendingEffects::add)
             state = buildState()
         }
     }
@@ -477,6 +488,20 @@ internal class CloudflareScreenController(
     private fun pendingOperationLabel(): String = pendingOperations.keys.firstOrNull()?.let { action ->
         "In progress: ${action.label}"
     } ?: "None"
+
+    private fun recordAuditAction(action: CloudflareScreenAction): CloudflareScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
+        CloudflareScreenEffect.RecordAuditAction(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
+                category = LogsAuditRecordCategory.CloudflareTunnel,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Cloudflare ${action.auditName}",
+                detail = "action=${action.auditName} lifecycle=${tunnelStatusProvider().state.name}",
+            ),
+        )
+    } else {
+        null
+    }
 }
 
 private fun CloudflareScreenState.withPendingOperation(
@@ -543,6 +568,10 @@ internal sealed interface CloudflareScreenEffect {
     data class CopyText(
         val text: String,
     ) : CloudflareScreenEffect
+
+    data class RecordAuditAction(
+        val record: PersistedLogsAuditRecord,
+    ) : CloudflareScreenEffect
 }
 
 internal enum class CloudflareActionDispatchMode {
@@ -570,6 +599,16 @@ private val CloudflareScreenAction.label: String
             CloudflareScreenAction.ReconnectTunnel -> "Reconnect tunnel"
             CloudflareScreenAction.TestManagementTunnel -> "Test management tunnel"
             CloudflareScreenAction.CopyDiagnostics -> "Copy diagnostics"
+        }
+
+private val CloudflareScreenAction.auditName: String
+    get() =
+        when (this) {
+            CloudflareScreenAction.StartTunnel -> "start_tunnel"
+            CloudflareScreenAction.StopTunnel -> "stop_tunnel"
+            CloudflareScreenAction.ReconnectTunnel -> "reconnect_tunnel"
+            CloudflareScreenAction.TestManagementTunnel -> "test_management_tunnel"
+            CloudflareScreenAction.CopyDiagnostics -> "copy_diagnostics"
         }
 
 private fun CloudflareScreenAction.isTunnelLifecycleAction(): Boolean = when (this) {
