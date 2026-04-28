@@ -929,6 +929,42 @@ class ComposeAppShellContractTest {
             shellSource.contains("onCopyRotationDiagnosticsText = onCopyText"),
             "Rotation route must send diagnostics copy effects to the app clipboard sink.",
         )
+        assertTrue(
+            rotationSource.contains("onCheckRoot: () -> Unit = {}"),
+            "Rotation route must expose a callback for root checks.",
+        )
+        assertTrue(
+            rotationSource.contains("onProbeCurrentPublicIp: () -> Unit = {}"),
+            "Rotation route must expose a callback for current public IP probes.",
+        )
+        assertTrue(
+            rotationSource.contains("onRotateMobileData: () -> Unit = {}"),
+            "Rotation route must expose a callback for mobile-data rotation actions.",
+        )
+        assertTrue(
+            rotationSource.contains("onRotateAirplaneMode: () -> Unit = {}"),
+            "Rotation route must expose a callback for airplane-mode rotation actions.",
+        )
+        assertTrue(
+            rotationSource.contains("actionHandler = { action ->"),
+            "Rotation route must bridge controller-dispatched actions to app-level callbacks.",
+        )
+        assertTrue(
+            shellSource.contains("onCheckRoot = {"),
+            "App shell must explicitly wire the Rotation root-check callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("onProbeCurrentPublicIp = {"),
+            "App shell must explicitly wire the Rotation public-IP probe callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("onRotateMobileData = {"),
+            "App shell must explicitly wire the Rotation mobile-data callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("onRotateAirplaneMode = {"),
+            "App shell must explicitly wire the Rotation airplane-mode callback, even before runtime dispatch exists.",
+        )
 
         listOf(
             "Root availability",

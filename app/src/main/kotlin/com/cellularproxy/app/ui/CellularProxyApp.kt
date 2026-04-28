@@ -232,6 +232,14 @@ private fun CellularProxyNavigationHost(
         }
         composable(Rotation.route) {
             CellularProxyRotationRoute(
+                onCheckRoot = {
+                },
+                onProbeCurrentPublicIp = {
+                },
+                onRotateMobileData = {
+                },
+                onRotateAirplaneMode = {
+                },
                 onCopyRotationDiagnosticsText = onCopyText,
             )
         }

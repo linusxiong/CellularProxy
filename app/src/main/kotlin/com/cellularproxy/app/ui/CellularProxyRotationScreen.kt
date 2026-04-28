@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,9 +33,30 @@ import com.cellularproxy.shared.rotation.RotationStatus
 
 @Composable
 internal fun CellularProxyRotationRoute(
+    onCheckRoot: () -> Unit = {},
+    onProbeCurrentPublicIp: () -> Unit = {},
+    onRotateMobileData: () -> Unit = {},
+    onRotateAirplaneMode: () -> Unit = {},
     onCopyRotationDiagnosticsText: (String) -> Unit = {},
 ) {
-    val controller = remember { RotationScreenController() }
+    val currentOnCheckRoot by rememberUpdatedState(onCheckRoot)
+    val currentOnProbeCurrentPublicIp by rememberUpdatedState(onProbeCurrentPublicIp)
+    val currentOnRotateMobileData by rememberUpdatedState(onRotateMobileData)
+    val currentOnRotateAirplaneMode by rememberUpdatedState(onRotateAirplaneMode)
+    val controller =
+        remember {
+            RotationScreenController(
+                actionHandler = { action ->
+                    when (action) {
+                        RotationScreenAction.CheckRoot -> currentOnCheckRoot()
+                        RotationScreenAction.ProbeCurrentPublicIp -> currentOnProbeCurrentPublicIp()
+                        RotationScreenAction.RotateMobileData -> currentOnRotateMobileData()
+                        RotationScreenAction.RotateAirplaneMode -> currentOnRotateAirplaneMode()
+                        RotationScreenAction.CopyDiagnostics -> Unit
+                    }
+                },
+            )
+        }
     var screenState by remember { mutableStateOf(controller.state) }
     val dispatchEvent: (RotationScreenEvent) -> Unit = { event ->
         controller.handle(event)
