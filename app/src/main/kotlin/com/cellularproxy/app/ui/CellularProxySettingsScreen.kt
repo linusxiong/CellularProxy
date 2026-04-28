@@ -27,19 +27,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
 
 @Composable
-internal fun CellularProxySettingsRoute() {
+internal fun CellularProxySettingsRoute(
+    initialConfigProvider: () -> AppConfig = AppConfig::default,
+    saveConfig: (AppConfig) -> Unit = {},
+    loadSensitiveConfig: (() -> SensitiveConfig)? = null,
+    saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
+) {
     val controller =
         remember {
             ProxySettingsScreenController(
-                initialConfigProvider = AppConfig::default,
+                initialConfigProvider = initialConfigProvider,
                 formController =
                     ProxySettingsFormController(
-                        loadConfig = AppConfig::default,
-                        saveConfig = {},
+                        loadConfig = initialConfigProvider,
+                        saveConfig = saveConfig,
+                        loadSensitiveConfig = loadSensitiveConfig,
+                        saveSensitiveConfig = saveSensitiveConfig,
                     ),
             )
         }

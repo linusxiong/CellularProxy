@@ -491,8 +491,18 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("CellularProxySettingsRoute()"),
+            shellSource.contains("CellularProxySettingsRoute("),
             "Settings route must render the dedicated configuration route instead of the generic placeholder.",
+        )
+        assertTrue(
+            shellSource.contains("CellularProxyPlainConfigStore.repository(context)") &&
+                shellSource.contains("SensitiveConfigRepositoryFactory.create(context)") &&
+                shellSource.contains("loadOrCreateSensitiveConfig("),
+            "Settings route must be wired to the real app config and sensitive config repositories.",
+        )
+        assertFalse(
+            shellSource.contains("CellularProxySettingsRoute()"),
+            "Settings route must not use the default no-op persistence callbacks from the app shell.",
         )
         assertTrue(
             !shellSource.contains("composable(Settings.route) {\n            CellularProxyDestinationPlaceholder(Settings)"),
@@ -535,6 +545,18 @@ class ComposeAppShellContractTest {
         assertTrue(
             settingsSource.contains("ProxySettingsScreenController("),
             "Settings route must use the tested screen controller boundary.",
+        )
+        assertTrue(
+            settingsSource.contains("initialConfigProvider: () -> AppConfig = AppConfig::default") &&
+                settingsSource.contains("saveConfig: (AppConfig) -> Unit = {}") &&
+                settingsSource.contains("loadSensitiveConfig: (() -> SensitiveConfig)? = null") &&
+                settingsSource.contains("saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null"),
+            "Settings route must expose callbacks for persistent plain and sensitive config wiring.",
+        )
+        assertTrue(
+            settingsSource.contains("loadSensitiveConfig = loadSensitiveConfig") &&
+                settingsSource.contains("saveSensitiveConfig = saveSensitiveConfig"),
+            "Settings route controller must use the injected sensitive config callbacks.",
         )
         assertTrue(
             settingsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),

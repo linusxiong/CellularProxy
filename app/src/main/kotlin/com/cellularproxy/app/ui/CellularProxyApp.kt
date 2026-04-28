@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +33,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cellularproxy.app.config.CellularProxyPlainConfigStore
+import com.cellularproxy.app.config.SecureRandomSensitiveConfigGenerator
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigGenerator
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
+import com.cellularproxy.app.config.SensitiveConfigRepository
+import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
 import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
@@ -40,6 +48,8 @@ import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.LogsAudit
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Rotation
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
+import com.cellularproxy.shared.config.AppConfig
+import kotlinx.coroutines.runBlocking
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,9 +57,24 @@ fun CellularProxyApp() {
     val navController = rememberNavController()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
+    val plainConfigRepository = remember(context) { CellularProxyPlainConfigStore.repository(context) }
+    val sensitiveRepository = remember(context) { SensitiveConfigRepositoryFactory.create(context) }
+    val sensitiveConfigGenerator = remember { SecureRandomSensitiveConfigGenerator() }
     val dispatchForegroundServiceCommand: (String) -> Unit = { action ->
         context.startForegroundService(
             Intent(context, CellularProxyForegroundService::class.java).setAction(action),
+        )
+    }
+    val loadSettingsConfig: () -> AppConfig = {
+        runBlocking { plainConfigRepository.load() }
+    }
+    val saveSettingsConfig: (AppConfig) -> Unit = { config ->
+        runBlocking { plainConfigRepository.save(config) }
+    }
+    val loadSensitiveConfig: () -> SensitiveConfig = {
+        loadOrCreateSensitiveConfig(
+            repository = sensitiveRepository,
+            generator = sensitiveConfigGenerator,
         )
     }
 
@@ -88,6 +113,10 @@ fun CellularProxyApp() {
                             onStopProxyService = {
                                 dispatchForegroundServiceCommand(ForegroundServiceActions.STOP_PROXY)
                             },
+                            settingsInitialConfigProvider = loadSettingsConfig,
+                            settingsSaveConfig = saveSettingsConfig,
+                            settingsLoadSensitiveConfig = loadSensitiveConfig,
+                            settingsSaveSensitiveConfig = sensitiveRepository::save,
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
                             },
@@ -104,6 +133,10 @@ fun CellularProxyApp() {
                         onStopProxyService = {
                             dispatchForegroundServiceCommand(ForegroundServiceActions.STOP_PROXY)
                         },
+                        settingsInitialConfigProvider = loadSettingsConfig,
+                        settingsSaveConfig = saveSettingsConfig,
+                        settingsLoadSensitiveConfig = loadSensitiveConfig,
+                        settingsSaveSensitiveConfig = sensitiveRepository::save,
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
                         },
@@ -193,6 +226,10 @@ private fun CellularProxyNavigationHost(
     navController: NavHostController,
     onStartProxyService: () -> Unit,
     onStopProxyService: () -> Unit,
+    settingsInitialConfigProvider: () -> AppConfig,
+    settingsSaveConfig: (AppConfig) -> Unit,
+    settingsLoadSensitiveConfig: () -> SensitiveConfig,
+    settingsSaveSensitiveConfig: (SensitiveConfig) -> Unit,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
     modifier: Modifier = Modifier,
@@ -215,7 +252,12 @@ private fun CellularProxyNavigationHost(
             )
         }
         composable(Settings.route) {
-            CellularProxySettingsRoute()
+            CellularProxySettingsRoute(
+                initialConfigProvider = settingsInitialConfigProvider,
+                saveConfig = settingsSaveConfig,
+                loadSensitiveConfig = settingsLoadSensitiveConfig,
+                saveSensitiveConfig = settingsSaveSensitiveConfig,
+            )
         }
         composable(Cloudflare.route) {
             CellularProxyCloudflareRoute(
@@ -255,6 +297,18 @@ private fun CellularProxyNavigationHost(
             )
         }
     }
+}
+
+private fun loadOrCreateSensitiveConfig(
+    repository: SensitiveConfigRepository,
+    generator: SensitiveConfigGenerator,
+): SensitiveConfig = when (val result = repository.load()) {
+    is SensitiveConfigLoadResult.Loaded -> result.config
+    SensitiveConfigLoadResult.MissingRequiredSecrets ->
+        generator
+            .generateDefaultSensitiveConfig()
+            .also(repository::save)
+    is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
 }
 
 @Composable
