@@ -118,6 +118,35 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `controller refreshes redaction secrets before copying diagnostics`() {
+        var secrets = LogRedactionSecrets()
+        val controller =
+            CloudflareScreenController(
+                configProvider = {
+                    enabledCloudflareConfig(tokenPresent = true).copy(
+                        cloudflare =
+                            enabledCloudflareConfig(tokenPresent = true).cloudflare.copy(
+                                managementHostnameLabel = "https://example.test/manage?token=fresh-secret",
+                            ),
+                    )
+                },
+                tunnelStatusProvider = {
+                    CloudflareTunnelStatus.failed("Authorization: Bearer fresh-secret")
+                },
+                tokenStatusProvider = { CloudflareTokenStatus.Present },
+                managementApiRoundTripProvider = { "HTTP 503 for token=fresh-secret" },
+                secretsProvider = { secrets },
+            )
+        secrets = LogRedactionSecrets(cloudflareTunnelToken = "fresh-secret")
+
+        controller.handle(CloudflareScreenEvent.CopyDiagnostics)
+
+        val copyText = (controller.consumeEffects().single() as CloudflareScreenEffect.CopyText).text
+        assertFalse(copyText.contains("fresh-secret"))
+        assertTrue(copyText.contains("[REDACTED]"))
+    }
+
+    @Test
     fun `cloudflare token status distinguishes missing invalid and valid stored tokens`() {
         assertEquals(CloudflareTokenStatus.Missing, cloudflareTokenStatusFrom(null))
         assertEquals(CloudflareTokenStatus.Missing, cloudflareTokenStatusFrom(""))

@@ -343,6 +343,7 @@ internal class CloudflareScreenController(
     fun handle(event: CloudflareScreenEvent) {
         when (event) {
             CloudflareScreenEvent.CopyDiagnostics -> {
+                state = buildState()
                 if (CloudflareScreenAction.CopyDiagnostics in state.availableActions) {
                     pendingEffects.add(CloudflareScreenEffect.CopyText(state.copyableDiagnostics))
                 }
