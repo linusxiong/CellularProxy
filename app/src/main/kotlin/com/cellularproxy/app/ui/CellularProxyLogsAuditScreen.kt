@@ -299,8 +299,10 @@ internal data class LogsAuditScreenFilter(
     }
 
     fun matches(row: LogsAuditScreenRow): Boolean {
-        val normalizedSearch = search.trim().lowercase()
-        val searchableText = "${row.category.label} ${row.severity.label} ${row.title} ${row.detail}".lowercase()
+        val normalizedSearch = search.normalizedLogsAuditSearchText()
+        val searchableText =
+            "${row.category.label} ${row.severity.label} ${row.title} ${row.detail}"
+                .normalizedLogsAuditSearchText()
         return (category == null || row.category == category) &&
             (severity == null || row.severity == severity) &&
             (fromEpochMillis == null || row.occurredAtEpochMillis >= fromEpochMillis) &&
@@ -840,3 +842,8 @@ private fun parseEpochMillisFilterInput(input: String): Long? = if (input.isBlan
 } else {
     input.trim().toLongOrNull()?.takeIf { epochMillis -> epochMillis >= 0 }
 }
+
+private fun String.normalizedLogsAuditSearchText(): String = replace(Regex("([a-z0-9])([A-Z])"), "$1 $2")
+    .lowercase()
+    .replace(Regex("[^a-z0-9]+"), " ")
+    .trim()

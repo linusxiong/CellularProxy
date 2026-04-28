@@ -331,6 +331,35 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `search matches enum-style row text using spaced operator terms`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "cloudflare-start",
+                            category = LogsAuditScreenCategory.ManagementApi,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 100,
+                            title = "Management API CloudflareStart responded",
+                            detail = "status=202 disposition=Routed",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "rotate-mobile-data",
+                            category = LogsAuditScreenCategory.ManagementApi,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 200,
+                            title = "Management API RotateMobileData responded",
+                            detail = "status=202 disposition=Routed",
+                        ),
+                    ),
+                filter = LogsAuditScreenFilter(search = "cloudflare start"),
+            )
+
+        assertEquals(listOf("cloudflare-start"), state.rows.map(LogsAuditScreenRow::id))
+    }
+
+    @Test
     fun `controller selection preserves the current filter`() {
         val controller =
             LogsAuditScreenController(
