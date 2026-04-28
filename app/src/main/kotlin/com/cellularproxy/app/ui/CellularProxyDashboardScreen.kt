@@ -98,7 +98,7 @@ internal fun CellularProxyDashboardRoute(
     }
 
     CellularProxyDashboardScreen(
-        status = screenState.status,
+        state = screenState,
         actionsEnabled = true,
         onStartProxy = { dispatchEvent(DashboardScreenEvent.StartProxy) },
         onStopProxy = { dispatchEvent(DashboardScreenEvent.StopProxy) },
@@ -114,10 +114,12 @@ internal fun CellularProxyDashboardRoute(
 
 @Composable
 internal fun CellularProxyDashboardScreen(
-    status: DashboardStatusModel =
-        DashboardStatusModel.from(
-            config = AppConfig.default(),
-            status = ProxyServiceStatus.stopped(),
+    state: DashboardScreenState =
+        DashboardScreenState.from(
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+            ),
         ),
     actionsEnabled: Boolean = false,
     onStartProxy: () -> Unit = {},
@@ -130,7 +132,8 @@ internal fun CellularProxyDashboardScreen(
     onOpenLogs: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
 ) {
-    val screenState = DashboardScreenState.from(status)
+    val screenState = state
+    val status = screenState.status
     var pendingConfirmationAction by remember { mutableStateOf<DashboardScreenAction?>(null) }
 
     fun performAction(action: DashboardScreenAction) {

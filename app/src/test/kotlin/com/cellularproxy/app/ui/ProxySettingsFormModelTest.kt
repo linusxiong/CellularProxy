@@ -1,6 +1,8 @@
 package com.cellularproxy.app.ui
 
 import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RotationConfig
@@ -153,6 +155,38 @@ class ProxySettingsFormModelTest {
         assertEquals("8181", controller.state.form.listenPort)
         assertEquals("8181", controller.state.persistedForm.listenPort)
         assertEquals(emptyList(), controller.state.availableActions)
+    }
+
+    @Test
+    fun `settings controller exposes invalid sensitive storage after failed sensitive save`() {
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                        loadSensitiveConfigResult = {
+                            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+                        },
+                        saveSensitiveConfig = {},
+                    ),
+            )
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(managementApiToken = "new-management-token"),
+            ),
+        )
+
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(
+            setOf(ProxySettingsValidationError.InvalidSensitiveConfiguration),
+            controller.state.validationErrors,
+        )
+        assertTrue(
+            controller.consumeEffects().single() is ProxySettingsScreenEffect.SaveInvalid,
+        )
     }
 
     @Test

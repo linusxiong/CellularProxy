@@ -38,6 +38,7 @@ internal fun CellularProxyRotationRoute(
     rotationStatusProvider: () -> RotationStatus = { RotationStatus.idle() },
     currentPublicIpProvider: () -> String? = { null },
     rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
+    cooldownRemainingSecondsProvider: () -> Long? = { null },
     activeConnectionsProvider: () -> Long = { 0 },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCheckRoot: () -> Unit = {},
@@ -50,6 +51,7 @@ internal fun CellularProxyRotationRoute(
     val currentRotationStatusProvider by rememberUpdatedState(rotationStatusProvider)
     val currentCurrentPublicIpProvider by rememberUpdatedState(currentPublicIpProvider)
     val currentRootAvailabilityProvider by rememberUpdatedState(rootAvailabilityProvider)
+    val currentCooldownRemainingSecondsProvider by rememberUpdatedState(cooldownRemainingSecondsProvider)
     val currentActiveConnectionsProvider by rememberUpdatedState(activeConnectionsProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentOnCheckRoot by rememberUpdatedState(onCheckRoot)
@@ -60,6 +62,7 @@ internal fun CellularProxyRotationRoute(
     val observedRotationStatus = rotationStatusProvider()
     val observedCurrentPublicIp = currentPublicIpProvider()
     val observedRootAvailability = rootAvailabilityProvider()
+    val observedCooldownRemainingSeconds = cooldownRemainingSecondsProvider()
     val observedActiveConnections = activeConnectionsProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
     val controller =
@@ -69,6 +72,7 @@ internal fun CellularProxyRotationRoute(
                 rotationStatusProvider = { currentRotationStatusProvider() },
                 currentPublicIpProvider = { currentCurrentPublicIpProvider() },
                 rootAvailabilityProvider = { currentRootAvailabilityProvider() },
+                cooldownRemainingSecondsProvider = { currentCooldownRemainingSecondsProvider() },
                 activeConnectionsProvider = { currentActiveConnectionsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
                 actionHandler = { action ->
@@ -100,6 +104,7 @@ internal fun CellularProxyRotationRoute(
         observedRotationStatus,
         observedCurrentPublicIp,
         observedRootAvailability,
+        observedCooldownRemainingSeconds,
         observedActiveConnections,
         observedRedactionSecrets,
     ) {
@@ -224,6 +229,7 @@ internal fun CellularProxyRotationScreen(
             RotationField("Last rotation result", state.lastRotationResult)
             RotationField("Current phase", state.currentPhase)
             RotationField("Pause/drain status", state.pauseDrainStatus)
+            RotationField("Pending operation", state.pendingOperation)
         }
 
         RotationSection("Public IP") {
@@ -244,6 +250,7 @@ internal data class RotationScreenState(
     val newPublicIp: String,
     val currentPhase: String,
     val pauseDrainStatus: String,
+    val pendingOperation: String,
     val strictIpChange: String,
     val copyableDiagnostics: String,
     val availableActions: List<RotationScreenAction>,
@@ -267,6 +274,7 @@ internal data class RotationScreenState(
             val newPublicIp = rotationStatus.newPublicIp?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val currentPhase = rotationStatus.state.name
             val pauseDrainStatus = rotationStatus.toPauseDrainText(activeConnections)
+            val pendingOperation = "None"
             val strictIpChange = if (config.rotation.strictIpChangeRequired) "Required" else "Not required"
             return RotationScreenState(
                 rootAvailability = rootAvailabilityText,
@@ -278,6 +286,7 @@ internal data class RotationScreenState(
                 newPublicIp = newPublicIp,
                 currentPhase = currentPhase,
                 pauseDrainStatus = pauseDrainStatus,
+                pendingOperation = pendingOperation,
                 strictIpChange = strictIpChange,
                 copyableDiagnostics =
                     listOf(
@@ -290,6 +299,7 @@ internal data class RotationScreenState(
                         "New public IP: $newPublicIp",
                         "Current phase: $currentPhase",
                         "Pause/drain status: $pauseDrainStatus",
+                        "Pending operation: $pendingOperation",
                         "Strict IP change: $strictIpChange",
                     ).joinToString(separator = "\n"),
                 availableActions =
@@ -390,10 +400,10 @@ internal class RotationScreenController(
 
     private fun refreshPendingActions() {
         val currentStatus = rotationStatusProvider()
-        if (currentStatus != lastObservedRotationStatus) {
+        if (currentStatus != lastObservedRotationStatus && !currentStatus.isActive) {
             pendingUnsafeActions.clear()
-            lastObservedRotationStatus = currentStatus
         }
+        lastObservedRotationStatus = currentStatus
         state = buildState()
     }
 
@@ -434,14 +444,45 @@ internal sealed interface RotationScreenEffect {
 
 private fun RotationScreenState.withoutPendingUnsafeActions(
     pendingUnsafeActions: Set<RotationScreenAction>,
-): RotationScreenState = copy(
-    availableActions =
-        if (pendingUnsafeActions.any(RotationScreenAction::requiresConfirmation)) {
-            availableActions.filterNot(RotationScreenAction::requiresConfirmation)
-        } else {
-            availableActions
-        },
-)
+): RotationScreenState {
+    val pendingOperation = pendingUnsafeActions.pendingOperationLabel()
+    return copy(
+        pendingOperation = pendingOperation,
+        copyableDiagnostics = copyableDiagnosticsWithPendingOperation(pendingOperation),
+        availableActions =
+            if (pendingUnsafeActions.any(RotationScreenAction::requiresConfirmation)) {
+                availableActions.filterNot(RotationScreenAction::requiresConfirmation)
+            } else {
+                availableActions
+            },
+    )
+}
+
+private fun Set<RotationScreenAction>.pendingOperationLabel(): String = firstOrNull()?.let { action ->
+    "In progress: ${action.toButtonLabel()}"
+} ?: "None"
+
+private fun RotationScreenState.copyableDiagnosticsWithPendingOperation(pendingOperation: String): String = listOf(
+    "Root availability: $rootAvailability",
+    "Root operations: $rootOperations",
+    "Cooldown status: $cooldownStatus",
+    "Last rotation result: $lastRotationResult",
+    "Current public IP: $currentPublicIp",
+    "Old public IP: $oldPublicIp",
+    "New public IP: $newPublicIp",
+    "Current phase: $currentPhase",
+    "Pause/drain status: $pauseDrainStatus",
+    "Pending operation: $pendingOperation",
+    "Strict IP change: $strictIpChange",
+).joinToString(separator = "\n")
+
+private fun RotationScreenAction.toButtonLabel(): String = when (this) {
+    RotationScreenAction.CheckRoot -> "Check root"
+    RotationScreenAction.ProbeCurrentPublicIp -> "Probe current public IP"
+    RotationScreenAction.RotateMobileData -> "Rotate mobile data"
+    RotationScreenAction.RotateAirplaneMode -> "Rotate airplane mode"
+    RotationScreenAction.CopyDiagnostics -> "Copy diagnostics"
+}
 
 @Composable
 private fun RotationActionRow(

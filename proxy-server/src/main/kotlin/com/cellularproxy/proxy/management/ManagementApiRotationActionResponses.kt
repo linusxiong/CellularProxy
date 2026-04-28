@@ -26,7 +26,9 @@ object ManagementApiRotationActionResponses {
     )
 }
 
-internal fun RotationStatus.managementApiJson(): String = buildString {
+internal fun RotationStatus.managementApiJson(
+    cooldownRemainingMillis: Long? = null,
+): String = buildString {
     append('{')
     append(""""state":""")
     append(state.apiValue().jsonString())
@@ -45,6 +47,11 @@ internal fun RotationStatus.managementApiJson(): String = buildString {
     append(',')
     append(""""failureReason":""")
     append(failureReason?.apiValue().jsonNullableString())
+    if (cooldownRemainingMillis != null) {
+        append(',')
+        append(""""cooldownRemainingMillis":""")
+        append(cooldownRemainingMillis)
+    }
     append('}')
 }
 

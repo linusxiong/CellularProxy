@@ -23,6 +23,8 @@ object ManagementApiReadOnlyResponses {
         status: ProxyServiceStatus,
         rootOperationsEnabled: Boolean,
         rotationStatus: RotationStatus = RotationStatus.idle(),
+        rotationCooldownRemainingMillis: Long? = null,
+        cloudflareEdgeSessionSummary: String? = null,
         secrets: LogRedactionSecrets = LogRedactionSecrets(),
     ): ManagementApiResponse = ManagementApiResponse.json(
         statusCode = 200,
@@ -36,7 +38,7 @@ object ManagementApiReadOnlyResponses {
                 append(status.metricsJson())
                 append(',')
                 append(""""cloudflare":""")
-                append(status.cloudflare.managementApiJson(secrets))
+                append(status.cloudflare.managementApiJson(secrets, cloudflareEdgeSessionSummary))
                 append(',')
                 append(""""root":{"operationsEnabled":""")
                 append(rootOperationsEnabled)
@@ -45,7 +47,7 @@ object ManagementApiReadOnlyResponses {
                 append(status.rootAvailabilityFor(rootOperationsEnabled).apiValue().jsonString())
                 append("},")
                 append(""""rotation":""")
-                append(rotationStatus.managementApiJson())
+                append(rotationStatus.managementApiJson(cooldownRemainingMillis = rotationCooldownRemainingMillis))
                 append('}')
             },
     )
@@ -110,7 +112,13 @@ private fun ProxyServiceStatus.metricsJson(): String = "{" +
     """"bytesSent":${metrics.bytesSent}""" +
     "}"
 
-internal fun CloudflareTunnelStatus.managementApiJson(secrets: LogRedactionSecrets): String = buildString {
+internal fun CloudflareTunnelStatus.managementApiJson(secrets: LogRedactionSecrets): String =
+    managementApiJson(secrets, edgeSessionSummary = null)
+
+private fun CloudflareTunnelStatus.managementApiJson(
+    secrets: LogRedactionSecrets,
+    edgeSessionSummary: String?,
+): String = buildString {
     append('{')
     append(""""state":""")
     append(state.apiValue().jsonString())
@@ -120,6 +128,11 @@ internal fun CloudflareTunnelStatus.managementApiJson(secrets: LogRedactionSecre
     append(',')
     append(""""failureReason":""")
     append(failureReason?.let { LogRedactor.redact(it, secrets) }.jsonNullableString())
+    edgeSessionSummary?.let { summary ->
+        append(',')
+        append(""""edgeSessionSummary":""")
+        append(LogRedactor.redact(summary, secrets).jsonString())
+    }
     append('}')
 }
 

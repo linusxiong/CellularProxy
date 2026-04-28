@@ -1,5 +1,7 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
@@ -12,6 +14,19 @@ internal fun localManagementApiProbeResultFrom(
         onSuccess = { response -> response.statusCode.toLocalManagementApiProbeResult() },
         onFailure = { LocalManagementApiProbeResult.Unavailable },
     )
+
+internal fun localManagementApiProbeResultFromSensitiveConfigLoadResult(
+    result: SensitiveConfigLoadResult,
+    request: (SensitiveConfig) -> LocalManagementApiActionResponse,
+): LocalManagementApiProbeResult = when (result) {
+    is SensitiveConfigLoadResult.Loaded ->
+        localManagementApiProbeResultFrom {
+            request(result.config)
+        }
+    SensitiveConfigLoadResult.MissingRequiredSecrets,
+    is SensitiveConfigLoadResult.Invalid,
+    -> LocalManagementApiProbeResult.Unavailable
+}
 
 internal fun cloudflareManagementApiProbeResultFrom(
     config: AppConfig,
@@ -30,6 +45,28 @@ internal fun cloudflareManagementApiProbeResultFrom(
             onSuccess = { response -> response.statusCode.toCloudflareManagementApiProbeResult() },
             onFailure = { CloudflareManagementApiProbeResult.Error },
         )
+}
+
+internal fun cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(
+    config: AppConfig,
+    result: SensitiveConfigLoadResult,
+    request: (SensitiveConfig) -> LocalManagementApiActionResponse,
+): CloudflareManagementApiProbeResult = when (result) {
+    is SensitiveConfigLoadResult.Loaded ->
+        cloudflareManagementApiProbeResultFrom(
+            config = config,
+            tunnelTokenPresent = result.config.cloudflareTunnelToken != null,
+        ) {
+            request(result.config)
+        }
+    SensitiveConfigLoadResult.MissingRequiredSecrets ->
+        cloudflareManagementApiProbeResultFrom(
+            config = config,
+            tunnelTokenPresent = false,
+        ) {
+            error("Cloudflare management API probe should not dispatch without required sensitive config")
+        }
+    is SensitiveConfigLoadResult.Invalid -> CloudflareManagementApiProbeResult.Error
 }
 
 private fun Int.toLocalManagementApiProbeResult(): LocalManagementApiProbeResult = when (this) {

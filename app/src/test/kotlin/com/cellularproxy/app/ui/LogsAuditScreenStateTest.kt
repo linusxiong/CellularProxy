@@ -433,6 +433,34 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `controller export bundle uses timestamp captured at export time`() {
+        var generatedAtEpochMillis = 300L
+        val controller =
+            LogsAuditScreenController(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "runtime",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 200,
+                            title = "Runtime started",
+                            detail = "No issue",
+                        ),
+                    ),
+                exportSupported = true,
+                exportGeneratedAtEpochMillisProvider = { generatedAtEpochMillis },
+            )
+
+        generatedAtEpochMillis = 450
+        controller.handle(LogsAuditScreenEvent.ExportRedactedBundle)
+
+        val export = (controller.consumeEffects().single() as LogsAuditScreenEffect.ExportBundle).bundle
+        assertEquals(450, export.generatedAtEpochMillis)
+        assertEquals("cellularproxy-logs-audit-450.txt", export.fileName)
+    }
+
+    @Test
     fun `provider backed controller refreshes rows and redaction secrets when handling events`() {
         var rows =
             listOf(

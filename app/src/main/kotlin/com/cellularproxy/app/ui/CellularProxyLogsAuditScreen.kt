@@ -58,7 +58,7 @@ internal fun CellularProxyLogsAuditRoute(
                 rowsProvider = { currentRowsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
                 exportSupported = true,
-                exportGeneratedAtEpochMillis = System.currentTimeMillis(),
+                exportGeneratedAtEpochMillisProvider = System::currentTimeMillis,
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
@@ -354,6 +354,7 @@ internal class LogsAuditScreenController(
     private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val exportSupported: Boolean = false,
     private val exportGeneratedAtEpochMillis: Long = 0,
+    private val exportGeneratedAtEpochMillisProvider: () -> Long = { exportGeneratedAtEpochMillis },
     private val maxRows: Int? = null,
 ) {
     private val pendingEffects = mutableListOf<LogsAuditScreenEffect>()
@@ -416,7 +417,7 @@ internal class LogsAuditScreenController(
         filter = filter,
         secrets = secretsProvider(),
         exportSupported = exportSupported,
-        exportGeneratedAtEpochMillis = exportGeneratedAtEpochMillis,
+        exportGeneratedAtEpochMillis = exportGeneratedAtEpochMillisProvider(),
         maxRows = maxRows,
     )
 }

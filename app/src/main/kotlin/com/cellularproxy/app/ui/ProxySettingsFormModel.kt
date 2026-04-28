@@ -1,6 +1,7 @@
 package com.cellularproxy.app.ui
 
 import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.cloudflare.CloudflareTunnelToken
 import com.cellularproxy.cloudflare.CloudflareTunnelTokenParseResult
 import com.cellularproxy.shared.config.AppConfig
@@ -29,11 +30,10 @@ data class ProxySettingsFormState(
     val cloudflareTunnelToken: String = "",
     val cloudflareHostnameLabel: String = "",
 ) {
-    fun toAppConfig(base: AppConfig): ProxySettingsFormResult =
-        toSettings(
-            base = base,
-            sensitiveConfig = null,
-        )
+    fun toAppConfig(base: AppConfig): ProxySettingsFormResult = toSettings(
+        base = base,
+        sensitiveConfig = null,
+    )
 
     fun toSettings(
         base: AppConfig,
@@ -204,8 +204,9 @@ data class ProxySettingsScreenState(
         fun from(
             form: ProxySettingsFormState,
             persistedForm: ProxySettingsFormState,
+            extraValidationErrors: Set<ProxySettingsValidationError> = emptySet(),
         ): ProxySettingsScreenState {
-            val validationErrors = form.validationErrors()
+            val validationErrors = form.validationErrors() + extraValidationErrors
             return ProxySettingsScreenState(
                 form = form,
                 persistedForm = persistedForm,
@@ -237,6 +238,7 @@ enum class ProxySettingsValidationError {
     InvalidProxyCredential,
     InvalidManagementApiToken,
     InvalidCloudflareTunnelToken,
+    InvalidSensitiveConfiguration,
 }
 
 sealed interface ProxySettingsFormResult {
@@ -267,12 +269,21 @@ private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
     cloudflareHostnameLabel = editedForm.cloudflareHostnameLabel,
 )
 
+private fun ProxySettingsFormState.requiresSensitiveConfig(base: AppConfig): Boolean = proxyUsername.isNotEmpty() ||
+    proxyPassword.isNotEmpty() ||
+    managementApiToken.isNotEmpty() ||
+    cloudflareTunnelToken.isNotEmpty() ||
+    cloudflareEnabled != base.cloudflare.enabled ||
+    cloudflareHostnameLabel.trim() != base.cloudflare.managementHostnameLabel.orEmpty()
+
 class ProxySettingsFormController(
     private val loadConfig: () -> AppConfig,
     private val saveConfig: (AppConfig) -> Unit,
     private val loadSensitiveConfig: (() -> SensitiveConfig)? = null,
+    private val loadSensitiveConfigResult: (() -> SensitiveConfigLoadResult)? = null,
     private val saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
     private val loadSensitiveConfigProvider: () -> (() -> SensitiveConfig)? = { loadSensitiveConfig },
+    private val loadSensitiveConfigResultProvider: () -> (() -> SensitiveConfigLoadResult)? = { loadSensitiveConfigResult },
     private val saveSensitiveConfigProvider: () -> ((SensitiveConfig) -> Unit)? = { saveSensitiveConfig },
 ) {
     fun loadCurrentConfig(): AppConfig = loadConfig()
@@ -314,7 +325,25 @@ class ProxySettingsFormController(
         val result =
             form.toSettings(
                 base = baseConfig,
-                sensitiveConfig = loadSensitiveConfigProvider()?.invoke(),
+                sensitiveConfig =
+                    if (form.requiresSensitiveConfig(baseConfig)) {
+                        when (val loadResult = loadSensitiveConfigForSave()) {
+                            is SensitiveConfigLoadResult.Loaded -> loadResult.config
+                            SensitiveConfigLoadResult.MissingRequiredSecrets ->
+                                return ProxySettingsSaveResult.Invalid(
+                                    errors = emptyList(),
+                                    invalidSensitiveConfiguration = true,
+                                )
+                            is SensitiveConfigLoadResult.Invalid ->
+                                return ProxySettingsSaveResult.Invalid(
+                                    errors = emptyList(),
+                                    invalidSensitiveConfiguration = true,
+                                )
+                            null -> null
+                        }
+                    } else {
+                        null
+                    },
             )
         return when (result) {
             is ProxySettingsFormResult.Invalid ->
@@ -340,6 +369,9 @@ class ProxySettingsFormController(
             }
         }
     }
+
+    private fun loadSensitiveConfigForSave(): SensitiveConfigLoadResult? = loadSensitiveConfigResultProvider()?.invoke()
+        ?: loadSensitiveConfigProvider()?.invoke()?.let(SensitiveConfigLoadResult::Loaded)
 }
 
 class ProxySettingsScreenController(
@@ -403,7 +435,15 @@ class ProxySettingsScreenController(
             return
         }
         when (val result = formController.save(state.form)) {
-            is ProxySettingsSaveResult.Invalid -> pendingEffects.add(ProxySettingsScreenEffect.SaveInvalid(result))
+            is ProxySettingsSaveResult.Invalid -> {
+                state =
+                    ProxySettingsScreenState.from(
+                        form = state.form,
+                        persistedForm = state.persistedForm,
+                        extraValidationErrors = result.validationErrors(),
+                    )
+                pendingEffects.add(ProxySettingsScreenEffect.SaveInvalid(result))
+            }
             is ProxySettingsSaveResult.Saved -> {
                 val nextForm = state.form.afterSuccessfulSave(result.config)
                 state =
@@ -414,6 +454,12 @@ class ProxySettingsScreenController(
                 pendingEffects.add(ProxySettingsScreenEffect.SaveSucceeded(result))
             }
         }
+    }
+}
+
+private fun ProxySettingsSaveResult.Invalid.validationErrors(): Set<ProxySettingsValidationError> = buildSet {
+    if (invalidSensitiveConfiguration) {
+        add(ProxySettingsValidationError.InvalidSensitiveConfiguration)
     }
 }
 
@@ -453,6 +499,7 @@ sealed interface ProxySettingsSaveResult {
         val invalidCloudflareTunnelToken: Boolean = false,
         val invalidMaxConcurrentConnections: Boolean = false,
         val invalidRotationTiming: Boolean = false,
+        val invalidSensitiveConfiguration: Boolean = false,
     ) : ProxySettingsSaveResult
 }
 

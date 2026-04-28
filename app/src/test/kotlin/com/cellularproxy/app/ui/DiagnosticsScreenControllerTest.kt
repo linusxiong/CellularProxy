@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheck
 import com.cellularproxy.app.diagnostics.DiagnosticCheckResult
@@ -11,6 +14,7 @@ import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -304,6 +308,53 @@ class DiagnosticsScreenControllerTest {
             ),
         )
     }
+
+    @Test
+    fun `management diagnostics probes safely map invalid sensitive config load results`() {
+        assertEquals(
+            LocalManagementApiProbeResult.Unavailable,
+            localManagementApiProbeResultFromSensitiveConfigLoadResult(
+                SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            ) { _ ->
+                error("invalid sensitive storage must not dispatch local management probe")
+            },
+        )
+        assertEquals(
+            LocalManagementApiProbeResult.Unavailable,
+            localManagementApiProbeResultFromSensitiveConfigLoadResult(
+                SensitiveConfigLoadResult.MissingRequiredSecrets,
+            ) { _ ->
+                error("missing sensitive storage must not dispatch local management probe")
+            },
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.Error,
+            cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(
+                config = configuredCloudflare(),
+                result = SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            ) { _ ->
+                error("invalid sensitive storage must not dispatch Cloudflare management probe")
+            },
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.NotConfigured,
+            cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(
+                config = configuredCloudflare(),
+                result = SensitiveConfigLoadResult.MissingRequiredSecrets,
+            ) { _ ->
+                error("missing sensitive storage must not dispatch Cloudflare management probe")
+            },
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.Authenticated,
+            cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(
+                config = configuredCloudflare(),
+                result = SensitiveConfigLoadResult.Loaded(validSensitiveConfig()),
+            ) { _ ->
+                LocalManagementApiActionResponse(statusCode = 200)
+            },
+        )
+    }
 }
 
 private fun configuredCloudflare(tunnelTokenPresent: Boolean = true): AppConfig = AppConfig.default().copy(
@@ -313,4 +364,11 @@ private fun configuredCloudflare(tunnelTokenPresent: Boolean = true): AppConfig 
             tunnelTokenPresent = tunnelTokenPresent,
             managementHostnameLabel = "management.example.test",
         ),
+)
+
+private fun validSensitiveConfig() = SensitiveConfig(
+    proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+    managementApiToken = "management-token",
+    cloudflareTunnelToken =
+        "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0=",
 )

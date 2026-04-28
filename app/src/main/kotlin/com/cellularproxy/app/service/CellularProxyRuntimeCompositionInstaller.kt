@@ -12,6 +12,18 @@ import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
 import com.cellularproxy.app.network.AndroidBoundNetworkSocketConnector
 import com.cellularproxy.app.network.AndroidNetworkRouteMonitor
+import com.cellularproxy.cloudflare.CloudflareTunnelConnectionCoordinatorResult
+import com.cellularproxy.cloudflare.CloudflareTunnelEdgeConnector
+import com.cellularproxy.cloudflare.CloudflareTunnelEdgeSessionRegistry
+import com.cellularproxy.cloudflare.CloudflareTunnelReconnectCoordinator
+import com.cellularproxy.cloudflare.CloudflareTunnelReconnectCoordinatorResult
+import com.cellularproxy.cloudflare.CloudflareTunnelStartAndConnectCoordinator
+import com.cellularproxy.cloudflare.CloudflareTunnelStartAndConnectCoordinatorResult
+import com.cellularproxy.cloudflare.CloudflareTunnelStartCoordinatorResult
+import com.cellularproxy.cloudflare.CloudflareTunnelStartupDecision
+import com.cellularproxy.cloudflare.CloudflareTunnelStartupPolicy
+import com.cellularproxy.cloudflare.CloudflareTunnelStopCoordinator
+import com.cellularproxy.cloudflare.CloudflareTunnelStopCoordinatorResult
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.PublicIpProbeEndpoint
 import com.cellularproxy.network.RouteBoundPublicIpProbe
@@ -28,6 +40,7 @@ import com.cellularproxy.root.RootAvailabilityChecker
 import com.cellularproxy.root.RootCommandExecutor
 import com.cellularproxy.root.RootCommandProcessExecutor
 import com.cellularproxy.root.RotationRootCommandController
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelControlPlane
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
@@ -93,12 +106,26 @@ object CellularProxyRuntimeCompositionInstaller {
             )
         val managementAuditLog = CellularProxyManagementAuditStore.managementApiAuditLog(appContext)
         val rootCommandProcessExecutor = BlockingRootCommandProcessExecutor()
+        val productionCloudflareRuntime =
+            when (bootstrapResult) {
+                is AppConfigBootstrapResult.Ready ->
+                    createProductionCloudflareTunnelRuntime(
+                        plainConfig = bootstrapResult.plainConfig,
+                        sensitiveConfig = bootstrapResult.sensitiveConfig,
+                    )
+                is AppConfigBootstrapResult.InvalidSensitiveConfig -> null
+            }
         return install(
             bootstrapResult = bootstrapResult,
             observedNetworks = routeMonitor::observedNetworks,
             routeMonitor = routeMonitor,
             socketConnector = AndroidBoundNetworkSocketConnector.create(appContext),
             executorResources = RuntimeCompositionExecutorResources.create(),
+            cloudflareStatus = productionCloudflareRuntime?.status ?: { CloudflareTunnelStatus.disabled() },
+            cloudflareEdgeSessionSummary = productionCloudflareRuntime?.edgeSessionSummary ?: { null },
+            cloudflareStart = productionCloudflareRuntime?.start ?: ::ignoredCloudflareTransition,
+            cloudflareStop = productionCloudflareRuntime?.stop ?: ::ignoredCloudflareTransition,
+            cloudflareReconnect = productionCloudflareRuntime?.reconnect ?: ::ignoredCloudflareTransition,
             rootOperationsEnabled = rootOperationsEnabled,
             rootCommandProcessExecutor = rootCommandProcessExecutor,
             recordRootAudit = recordRootAudit,
@@ -125,6 +152,7 @@ object CellularProxyRuntimeCompositionInstaller {
         executorResources: RuntimeCompositionExecutorResources,
         publicIp: () -> String? = { null },
         cloudflareStatus: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
+        cloudflareEdgeSessionSummary: () -> String? = { null },
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
@@ -157,6 +185,7 @@ object CellularProxyRuntimeCompositionInstaller {
         executorResources = executorResources,
         publicIp = publicIp,
         cloudflareStatus = cloudflareStatus,
+        cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
         cloudflareStart = cloudflareStart,
         cloudflareStop = cloudflareStop,
         cloudflareReconnect = cloudflareReconnect,
@@ -184,6 +213,7 @@ object CellularProxyRuntimeCompositionInstaller {
         executorResources: RuntimeCompositionExecutorResources,
         publicIp: () -> String? = { null },
         cloudflareStatus: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
+        cloudflareEdgeSessionSummary: () -> String? = { null },
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
@@ -217,6 +247,7 @@ object CellularProxyRuntimeCompositionInstaller {
                     socketConnector = socketConnector,
                     publicIp = publicIp,
                     cloudflareStatus = cloudflareStatus,
+                    cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
                     cloudflareStart = cloudflareStart,
                     cloudflareStop = cloudflareStop,
                     cloudflareReconnect = cloudflareReconnect,
@@ -275,6 +306,100 @@ object CellularProxyRuntimeCompositionInstaller {
             cleanup = cleanup,
         )
     }
+}
+
+internal class ProductionCloudflareTunnelRuntime(
+    val status: () -> CloudflareTunnelStatus,
+    val edgeSessionSummary: () -> String?,
+    val start: () -> CloudflareTunnelTransitionResult,
+    val stop: () -> CloudflareTunnelTransitionResult,
+    val reconnect: () -> CloudflareTunnelTransitionResult,
+)
+
+internal fun createProductionCloudflareTunnelRuntime(
+    plainConfig: AppConfig,
+    sensitiveConfig: SensitiveConfig,
+    edgeConnector: CloudflareTunnelEdgeConnector? = null,
+): ProductionCloudflareTunnelRuntime {
+    val controlPlane = CloudflareTunnelControlPlane()
+    val sessionRegistry = CloudflareTunnelEdgeSessionRegistry()
+
+    return ProductionCloudflareTunnelRuntime(
+        status = controlPlane::currentStatus,
+        edgeSessionSummary = sessionRegistry::activeSessionSummaryOrNull,
+        start = {
+            val connector =
+                edgeConnector ?: return@ProductionCloudflareTunnelRuntime ignoredCloudflareTransition(controlPlane.currentStatus)
+            CloudflareTunnelStartAndConnectCoordinator(
+                controlPlane = controlPlane,
+                connector = connector,
+                sessionRegistry = sessionRegistry,
+            ).startAndConnectIfEnabled(
+                enabled = plainConfig.cloudflare.enabled,
+                rawTunnelToken = sensitiveConfig.cloudflareTunnelToken,
+            ).transitionResultOrNull()
+                ?: ignoredCloudflareTransition(controlPlane.currentStatus)
+        },
+        stop = {
+            CloudflareTunnelStopCoordinator(
+                controlPlane = controlPlane,
+                sessionRegistry = sessionRegistry,
+            ).stopIfCurrent(controlPlane.snapshot()).transitionResultOrCurrent()
+        },
+        reconnect = {
+            val connector =
+                edgeConnector ?: return@ProductionCloudflareTunnelRuntime ignoredCloudflareTransition(controlPlane.currentStatus)
+            val credentials =
+                when (
+                    val decision =
+                        CloudflareTunnelStartupPolicy.evaluate(
+                            enabled = plainConfig.cloudflare.enabled,
+                            rawTunnelToken = sensitiveConfig.cloudflareTunnelToken,
+                        )
+                ) {
+                    is CloudflareTunnelStartupDecision.Ready -> decision.credentials
+                    CloudflareTunnelStartupDecision.Disabled,
+                    is CloudflareTunnelStartupDecision.Failed,
+                    -> return@ProductionCloudflareTunnelRuntime ignoredCloudflareTransition(controlPlane.currentStatus)
+                }
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector = connector,
+                sessionRegistry = sessionRegistry,
+            ).reconnectIfDegraded(
+                expectedSnapshot = controlPlane.snapshot(),
+                credentials = credentials,
+            ).transitionResultOrCurrent()
+        },
+    )
+}
+
+private fun CloudflareTunnelStartAndConnectCoordinatorResult.transitionResultOrNull(): CloudflareTunnelTransitionResult? = when (this) {
+    is CloudflareTunnelStartAndConnectCoordinatorResult.ConnectionAttempted ->
+        when (val result = connectionResult) {
+            is CloudflareTunnelConnectionCoordinatorResult.Applied -> result.transition.transition
+            is CloudflareTunnelConnectionCoordinatorResult.NoAction -> ignoredCloudflareTransition(result.snapshot.status)
+            is CloudflareTunnelConnectionCoordinatorResult.Stale ->
+                ignoredCloudflareTransition(result.actualSnapshot.status)
+        }
+    is CloudflareTunnelStartAndConnectCoordinatorResult.NoConnectionAttempt ->
+        when (val result = startResult) {
+            is CloudflareTunnelStartCoordinatorResult.Ready -> result.transition.transition
+            is CloudflareTunnelStartCoordinatorResult.Disabled -> ignoredCloudflareTransition(result.snapshot.status)
+            is CloudflareTunnelStartCoordinatorResult.FailedStartup -> null
+        }
+}
+
+private fun CloudflareTunnelStopCoordinatorResult.transitionResultOrCurrent(): CloudflareTunnelTransitionResult = when (this) {
+    is CloudflareTunnelStopCoordinatorResult.Applied -> transition.transition
+    is CloudflareTunnelStopCoordinatorResult.NoAction -> ignoredCloudflareTransition(snapshot.status)
+    is CloudflareTunnelStopCoordinatorResult.Stale -> ignoredCloudflareTransition(actualSnapshot.status)
+}
+
+private fun CloudflareTunnelReconnectCoordinatorResult.transitionResultOrCurrent(): CloudflareTunnelTransitionResult = when (this) {
+    is CloudflareTunnelReconnectCoordinatorResult.Applied -> transition.transition
+    is CloudflareTunnelReconnectCoordinatorResult.NoAction -> ignoredCloudflareTransition(snapshot.status)
+    is CloudflareTunnelReconnectCoordinatorResult.Stale -> ignoredCloudflareTransition(actualSnapshot.status)
 }
 
 internal class RuntimeCompositionExecutorResources(
@@ -406,6 +531,11 @@ private fun SensitiveConfig.logRedactionSecrets(): LogRedactionSecrets = LogReda
 private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
     disposition = CloudflareTunnelTransitionDisposition.Ignored,
     status = CloudflareTunnelStatus.disabled(),
+)
+
+private fun ignoredCloudflareTransition(status: CloudflareTunnelStatus): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = status,
 )
 
 internal fun unavailableRotationExecutionTransition(operation: RotationOperation): RotationTransitionResult = RotationTransitionResult(

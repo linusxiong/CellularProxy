@@ -82,6 +82,7 @@ internal fun CellularProxyDiagnosticsRoute(
         }
     var screenState by remember { mutableStateOf(controller.state) }
     val dispatchEvent: (DiagnosticsScreenEvent) -> Unit = { event ->
+        screenState = screenState.withRunningChecks(event.runningTypes())
         coroutineScope.launch {
             val result =
                 withContext(Dispatchers.IO) {
@@ -170,6 +171,30 @@ internal fun CellularProxyDiagnosticsScreen(
             )
         }
     }
+}
+
+internal fun DiagnosticsScreenState.withRunningChecks(
+    runningTypes: Set<DiagnosticCheckType>,
+): DiagnosticsScreenState {
+    if (runningTypes.isEmpty()) {
+        return this
+    }
+    return DiagnosticsScreenState.from(
+        DiagnosticsResultModel(
+            results =
+                items.map { item ->
+                    item.toDiagnosticResultItem(
+                        statusOverride =
+                            if (item.type in runningTypes) {
+                                DiagnosticResultStatus.Running
+                            } else {
+                                null
+                            },
+                    )
+                },
+            copyableSummary = copyableSummary,
+        ),
+    )
 }
 
 internal data class DiagnosticsScreenState(
@@ -353,3 +378,29 @@ private fun DiagnosticResultItem.toScreenItem(): DiagnosticsScreenItem = Diagnos
             listOf(DiagnosticsScreenAction.RunCheck)
         },
 )
+
+private fun DiagnosticsScreenItem.toDiagnosticResultItem(
+    statusOverride: DiagnosticResultStatus?,
+): DiagnosticResultItem {
+    val status = statusOverride ?: statusFromLabel()
+    return DiagnosticResultItem(
+        type = type,
+        label = label,
+        status = status,
+        durationMillis = if (status == DiagnosticResultStatus.Running) null else duration.removeSuffix(" ms").toLongOrNull(),
+        errorCategory = if (status == DiagnosticResultStatus.Running) null else errorCategory.takeUnless { it == "None" },
+        details = if (status == DiagnosticResultStatus.Running) null else details.takeUnless { it == "None" },
+    )
+}
+
+private fun DiagnosticsScreenItem.statusFromLabel(): DiagnosticResultStatus = DiagnosticResultStatus.entries
+    .single { status -> status.label == this.status }
+
+private fun DiagnosticsScreenEvent.runningTypes(): Set<DiagnosticCheckType> = when (this) {
+    DiagnosticsScreenEvent.RunAllChecks -> DiagnosticCheckType.entries.toSet()
+    is DiagnosticsScreenEvent.RunCheck -> setOf(type)
+    is DiagnosticsScreenEvent.CopyCheck,
+    DiagnosticsScreenEvent.CopySummary,
+    DiagnosticsScreenEvent.Refresh,
+    -> emptySet()
+}

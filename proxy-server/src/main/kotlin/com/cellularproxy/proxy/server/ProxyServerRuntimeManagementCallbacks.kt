@@ -7,6 +7,8 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationControlPlane
+import com.cellularproxy.shared.rotation.RotationCooldownDecision
+import com.cellularproxy.shared.rotation.RotationCooldownPolicy
 import com.cellularproxy.shared.rotation.RotationFailureReason
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationStartGateResult
@@ -41,6 +43,13 @@ object ProxyServerRuntimeManagementCallbacks {
         rootOperationsEnabled = rootOperationsEnabled,
         rootAvailability = rootAvailability,
         rotationStatus = { rotationControlPlane.currentStatus },
+        rotationCooldownRemainingMillis = {
+            rotationCooldownRemainingMillis(
+                rotationControlPlane = rotationControlPlane,
+                nowElapsedMillis = nowElapsedMillis,
+                rotationCooldown = rotationCooldown,
+            )
+        },
         rotateMobileData = {
             requestRotationIfRootEnabled(
                 operation = RotationOperation.MobileData,
@@ -72,6 +81,8 @@ object ProxyServerRuntimeManagementCallbacks {
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rotationStatus: () -> RotationStatus = { RotationStatus.idle() },
+        rotationCooldownRemainingMillis: () -> Long? = { null },
+        cloudflareEdgeSessionSummary: () -> String? = { null },
         rootOperationsEnabled: () -> Boolean,
         rootAvailability: () -> RootAvailabilityStatus,
     ): ManagementApiCallbacks = ManagementApiCallbacks(
@@ -107,8 +118,26 @@ object ProxyServerRuntimeManagementCallbacks {
                 operation = RotationOperation.AirplaneMode,
             ),
         rotationStatus = rotationStatus,
+        rotationCooldownRemainingMillis = rotationCooldownRemainingMillis,
+        cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
         serviceStop = { runtime.requestStop() },
     )
+}
+
+private fun rotationCooldownRemainingMillis(
+    rotationControlPlane: RotationControlPlane,
+    nowElapsedMillis: () -> Long,
+    rotationCooldown: Duration,
+): Long? = when (
+    val decision =
+        RotationCooldownPolicy.evaluate(
+            lastTerminalRotationElapsedMillis = rotationControlPlane.lastTerminalElapsedMillis,
+            nowElapsedMillis = nowElapsedMillis(),
+            cooldown = rotationCooldown,
+        )
+) {
+    RotationCooldownDecision.Passed -> null
+    is RotationCooldownDecision.Rejected -> decision.remainingCooldown.inWholeMilliseconds
 }
 
 private fun RotationStartGateResult.toManagementTransition(): RotationTransitionResult = cooldownTransition ?: startTransition

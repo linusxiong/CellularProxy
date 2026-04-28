@@ -1,5 +1,6 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
@@ -9,6 +10,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticRunRecord
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
+import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardLogSummary
 import com.cellularproxy.app.status.DashboardStatusModel
@@ -16,6 +18,7 @@ import com.cellularproxy.app.status.DashboardWarning
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationFailureReason
@@ -331,6 +334,14 @@ class ComposeAppShellContractTest {
             "Dashboard route must mirror controller state into Compose state for recomposition.",
         )
         assertTrue(
+            dashboardSource.contains("state = screenState"),
+            "Dashboard route must pass the full controller-backed screen state so pending duplicate actions disable visibly.",
+        )
+        assertTrue(
+            dashboardSource.contains("state: DashboardScreenState ="),
+            "Dashboard screen must render controller-derived available actions instead of rebuilding them from status only.",
+        )
+        assertTrue(
             dashboardSource.contains("DashboardScreenEvent.StartProxy"),
             "Dashboard route must send start actions through the dashboard controller.",
         )
@@ -437,6 +448,68 @@ class ComposeAppShellContractTest {
                         invalidSensitiveConfigReason = projection.invalidSensitiveConfigReason,
                     ).warnings,
         )
+    }
+
+    @Test
+    fun `app shell projects redaction secrets from safe sensitive config load results`() {
+        val loadedSecrets =
+            logRedactionSecretsFromSensitiveConfigLoadResult(
+                SensitiveConfigLoadResult.Loaded(
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        managementApiToken = "management-token",
+                        cloudflareTunnelToken = "cloudflare-token",
+                    ),
+                ),
+            )
+        val invalidSecrets =
+            logRedactionSecretsFromSensitiveConfigLoadResult(
+                SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            )
+        val missingSecrets =
+            logRedactionSecretsFromSensitiveConfigLoadResult(SensitiveConfigLoadResult.MissingRequiredSecrets)
+
+        assertEquals("management-token", loadedSecrets.managementApiToken)
+        assertEquals("proxy-user:proxy-pass", loadedSecrets.proxyCredential)
+        assertEquals("cloudflare-token", loadedSecrets.cloudflareTunnelToken)
+        assertEquals(LogRedactionSecrets(), invalidSecrets)
+        assertEquals(LogRedactionSecrets(), missingSecrets)
+
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        assertTrue(
+            shellSource.contains("logRedactionSecretsFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
+                !shellSource.contains("val sensitiveConfig = loadSensitiveConfig()\n        LogRedactionSecrets("),
+            "App-level logs/audit redaction secrets must use safe sensitive load results instead of throwing on invalid sensitive storage.",
+        )
+    }
+
+    @Test
+    fun `cloudflare management dashboard check uses safe sensitive config load results`() {
+        var invoked = false
+
+        val invalidResult =
+            dashboardCloudflareManagementApiCheckFromSensitiveConfigLoadResult(
+                config = AppConfig.default(),
+                result = SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            ) { _: SensitiveConfig ->
+                invoked = true
+                LocalManagementApiActionResponse(statusCode = 200, body = "{}")
+            }
+        val missingResult =
+            dashboardCloudflareManagementApiCheckFromSensitiveConfigLoadResult(
+                config = AppConfig.default(),
+                result = SensitiveConfigLoadResult.MissingRequiredSecrets,
+            ) { _: SensitiveConfig ->
+                invoked = true
+                LocalManagementApiActionResponse(statusCode = 200, body = "{}")
+            }
+
+        assertEquals(DashboardCloudflareManagementApiCheck.Failed, invalidResult)
+        assertEquals(DashboardCloudflareManagementApiCheck.NotRun, missingResult)
+        assertFalse(invoked)
     }
 
     @Test
@@ -587,6 +660,10 @@ class ComposeAppShellContractTest {
                 shellSource.contains("loadOrCreateSensitiveConfig("),
             "Settings route must be wired to the real app config and sensitive config repositories.",
         )
+        assertTrue(
+            shellSource.contains("loadSensitiveConfigResult = settingsLoadSensitiveConfigResult"),
+            "Settings route must use the non-throwing sensitive config load-result path for sensitive saves.",
+        )
         assertFalse(
             shellSource.contains("CellularProxySettingsRoute()"),
             "Settings route must not use the default no-op persistence callbacks from the app shell.",
@@ -727,7 +804,8 @@ class ComposeAppShellContractTest {
                 "tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() }",
             ) &&
                 cloudflareSource.contains("edgeSessionSummaryProvider: () -> String? = { null }") &&
-                cloudflareSource.contains("managementApiRoundTripProvider: () -> String? = { null }"),
+                cloudflareSource.contains("managementApiRoundTripProvider: () -> String? = { null }") &&
+                cloudflareSource.contains("managementApiRoundTripVersionProvider: () -> Long = { 0L }"),
             "Cloudflare route must accept injectable runtime health providers.",
         )
         assertTrue(
@@ -737,6 +815,9 @@ class ComposeAppShellContractTest {
                 cloudflareSource.contains("edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() }") &&
                 cloudflareSource.contains(
                     "managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() }",
+                ) &&
+                cloudflareSource.contains(
+                    "managementApiRoundTripVersionProvider = { currentManagementApiRoundTripVersionProvider() }",
                 ),
             "Cloudflare route controller must be backed by injected Cloudflare state and health providers.",
         )
@@ -757,14 +838,21 @@ class ComposeAppShellContractTest {
             "Cloudflare app-shell route must read the persisted app config.",
         )
         assertTrue(
-            shellSource.contains("cloudflareTokenStatusFrom(settingsLoadSensitiveConfig().cloudflareTunnelToken)") &&
+            shellSource.contains("cloudflareTokenStatusFrom(settingsLoadSensitiveConfigResult())") &&
+                !shellSource.contains("cloudflareTokenStatusFrom(settingsLoadSensitiveConfig().cloudflareTunnelToken)") &&
                 shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider"),
-            "Cloudflare app-shell route must derive token status and full diagnostics redaction from sensitive storage.",
+            "Cloudflare app-shell route must derive token status from safe sensitive load results and diagnostics redaction from sensitive storage.",
         )
         assertTrue(
             shellSource.contains("proxyStatusProvider: () -> ProxyServiceStatus") &&
                 shellSource.contains("tunnelStatusProvider = { proxyStatusProvider().cloudflare }"),
             "Cloudflare app-shell route must derive tunnel lifecycle status from the shared proxy status provider.",
+        )
+        assertTrue(
+            shellSource.contains("cloudflareEdgeSessionSummaryProvider: () -> String? = { null }") &&
+                shellSource.contains("cloudflareEdgeSessionSummaryProvider = { cloudflareEdgeSessionSummaryState }") &&
+                shellSource.contains("edgeSessionSummaryProvider = cloudflareEdgeSessionSummaryProvider"),
+            "Cloudflare app-shell route must pass the refreshed edge/session summary into the Cloudflare route.",
         )
         assertTrue(
             cloudflareSource.contains("val observedTunnelStatus = tunnelStatusProvider()") &&
@@ -776,6 +864,7 @@ class ComposeAppShellContractTest {
                         "        observedTunnelStatus,\n" +
                         "        observedEdgeSessionSummary,\n" +
                         "        observedManagementApiRoundTrip,\n" +
+                        "        observedManagementApiRoundTripVersion,\n" +
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ),
@@ -792,6 +881,7 @@ class ComposeAppShellContractTest {
                         "        observedTunnelStatus,\n" +
                         "        observedEdgeSessionSummary,\n" +
                         "        observedManagementApiRoundTrip,\n" +
+                        "        observedManagementApiRoundTripVersion,\n" +
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ),
@@ -849,6 +939,7 @@ class ComposeAppShellContractTest {
             "Last connection error",
             "Edge sessions",
             "Management API round trip",
+            "Pending operation",
             "Start tunnel",
             "Stop tunnel",
             "Reconnect tunnel",
@@ -1079,6 +1170,7 @@ class ComposeAppShellContractTest {
                 "Last connection error: Authorization: [REDACTED]\nhttps://example.test/api/status?[REDACTED]",
                 "Edge sessions: 2 sessions",
                 "Management API round trip: HTTP 503 for token=[REDACTED]",
+                "Pending operation: None",
             ).joinToString(separator = "\n")
 
         assertEquals(
@@ -1242,6 +1334,7 @@ class ComposeAppShellContractTest {
             "New public IP",
             "Current phase",
             "Pause/drain status",
+            "Pending operation",
             "Strict IP change",
             "Check root",
             "Probe current public IP",
@@ -1435,6 +1528,7 @@ class ComposeAppShellContractTest {
                 "New public IP: Authorization: [REDACTED]",
                 "Current phase: Completed",
                 "Pause/drain status: Not active",
+                "Pending operation: None",
                 "Strict IP change: Not required",
             ).joinToString(separator = "\n"),
             state.copyableDiagnostics,
@@ -1667,6 +1761,12 @@ class ComposeAppShellContractTest {
                     "cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider",
                 ),
             "App shell must wire Diagnostics to persisted config, live status, redaction, and runtime probe providers.",
+        )
+        assertTrue(
+            shellSource.contains("localManagementApiProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
+                shellSource.contains("cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(") &&
+                shellSource.contains("result = sensitiveConfigResult"),
+            "Diagnostics management probes must use safe sensitive-config load results before dispatching runtime probes.",
         )
         assertTrue(
             !diagnosticsSource.contains("DiagnosticsSuiteController(checks = emptyMap())"),
@@ -1924,6 +2024,65 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `diagnostics route surfaces optimistic running state while checks execute`() {
+        val diagnosticsSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDiagnosticsScreen.kt")
+                .readText()
+        val idleState = DiagnosticsScreenState.from(DiagnosticsResultModel.empty())
+
+        val runningRootState = idleState.withRunningChecks(setOf(DiagnosticCheckType.RootAvailability))
+        val runningAllState = idleState.withRunningChecks(DiagnosticCheckType.entries.toSet())
+
+        assertEquals(
+            DiagnosticResultStatus.Running.label,
+            runningRootState.items
+                .single { item -> item.type == DiagnosticCheckType.RootAvailability }
+                .status,
+        )
+        assertFalse(DiagnosticsScreenAction.RunAllChecks in runningRootState.availableActions)
+        assertTrue(
+            runningAllState.items.all { item -> item.status == DiagnosticResultStatus.Running.label },
+            "Run-all must immediately show every check as running while synchronous diagnostics execute.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("screenState = screenState.withRunningChecks(event.runningTypes())"),
+            "Diagnostics route must update Compose state to running before dispatching synchronous check work to IO.",
+        )
+    }
+
+    @Test
+    fun `rotation route receives live cooldown remaining from management status snapshots`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val rotationSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyRotationScreen.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("var rotationCooldownRemainingSecondsState by remember"),
+            "The app shell must retain cooldown remaining from live management status snapshots.",
+        )
+        assertTrue(
+            shellSource.contains("refreshedRotationCooldownRemainingSeconds = snapshot.rotationCooldownRemainingSeconds"),
+            "Refreshing management status must update the live cooldown remaining state.",
+        )
+        assertTrue(
+            shellSource.contains("rotationCooldownRemainingSecondsProvider = { rotationCooldownRemainingSecondsState }"),
+            "The Rotation route must receive the live cooldown remaining provider.",
+        )
+        assertTrue(
+            rotationSource.contains("cooldownRemainingSecondsProvider: () -> Long? = { null }") &&
+                rotationSource.contains("val observedCooldownRemainingSeconds = cooldownRemainingSecondsProvider()") &&
+                rotationSource.contains("cooldownRemainingSecondsProvider = { currentCooldownRemainingSecondsProvider() }"),
+            "RotationRoute must observe and pass through cooldown remaining state to its controller.",
+        )
+    }
+
+    @Test
     fun `logs audit route renders dedicated review screen`() {
         val shellSource =
             repoRoot()
@@ -2004,9 +2163,7 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets") &&
-                shellSource.contains("managementApiToken = sensitiveConfig.managementApiToken") &&
-                shellSource.contains("proxyCredential = sensitiveConfig.proxyCredential.canonicalBasicPayload()") &&
-                shellSource.contains("cloudflareTunnelToken = sensitiveConfig.cloudflareTunnelToken") &&
+                shellSource.contains("logRedactionSecretsFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
                 shellSource.contains("logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets") &&
                 shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider") &&
                 logsAuditSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets") &&

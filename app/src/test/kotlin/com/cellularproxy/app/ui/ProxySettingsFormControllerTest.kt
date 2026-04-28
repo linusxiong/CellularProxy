@@ -1,6 +1,8 @@
 package com.cellularproxy.app.ui
 
 import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RouteTarget
@@ -127,6 +129,68 @@ class ProxySettingsFormControllerTest {
         assertEquals(true, saved.config.root.operationsEnabled)
         assertEquals(original.cloudflare, saved.config.cloudflare)
         assertEquals(listOf(saved.config), savedConfigs)
+    }
+
+    @Test
+    fun `valid plain settings save does not load sensitive config`() {
+        var loadSensitiveConfigCalled = false
+        val savedConfigs = mutableListOf<AppConfig>()
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfig = {
+                    loadSensitiveConfigCalled = true
+                    error("plain settings save must not require sensitive config")
+                },
+                saveSensitiveConfig = {},
+            )
+
+        val result =
+            controller.save(
+                ProxySettingsFormState
+                    .from(AppConfig.default())
+                    .copy(listenPort = "8181"),
+            )
+
+        val saved = result as ProxySettingsSaveResult.Saved
+        assertEquals(8181, saved.config.proxy.listenPort)
+        assertEquals(listOf(saved.config), savedConfigs)
+        assertEquals(false, loadSensitiveConfigCalled)
+    }
+
+    @Test
+    fun `sensitive edit save reports invalid sensitive storage without saving plain config`() {
+        listOf(
+            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            SensitiveConfigLoadResult.MissingRequiredSecrets,
+        ).forEach { loadResult ->
+            assertSensitiveEditSaveReportsInvalidSensitiveStorage(loadResult)
+        }
+    }
+
+    private fun assertSensitiveEditSaveReportsInvalidSensitiveStorage(loadResult: SensitiveConfigLoadResult) {
+        val savedConfigs = mutableListOf<AppConfig>()
+        val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = savedConfigs::add,
+                loadSensitiveConfigResult = { loadResult },
+                saveSensitiveConfig = savedSensitiveConfigs::add,
+            )
+
+        val result =
+            controller.save(
+                ProxySettingsFormState
+                    .from(AppConfig.default())
+                    .copy(managementApiToken = "new-management-token"),
+            )
+
+        val invalid = result as ProxySettingsSaveResult.Invalid
+        assertTrue(invalid.invalidSensitiveConfiguration)
+        assertTrue(savedConfigs.isEmpty())
+        assertTrue(savedSensitiveConfigs.isEmpty())
     }
 
     @Test
@@ -570,12 +634,15 @@ class ProxySettingsFormControllerTest {
                     listenPort = "8888",
                     authEnabled = true,
                     route = RouteTarget.Automatic,
+                    proxyUsername = "new-user",
+                    proxyPassword = "new-pass",
                 ),
             )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals("management-token", saved.sensitiveConfig?.managementApiToken)
-        assertEquals(listOf(originalSensitiveConfig), savedSensitiveConfigs)
+        assertEquals(ProxyCredential(username = "new-user", password = "new-pass"), saved.sensitiveConfig?.proxyCredential)
+        assertEquals(listOf(saved.sensitiveConfig), savedSensitiveConfigs)
     }
 
     @Test
@@ -635,12 +702,14 @@ class ProxySettingsFormControllerTest {
                     listenPort = "8888",
                     authEnabled = true,
                     route = RouteTarget.Automatic,
+                    managementApiToken = "new-management-token",
                 ),
             )
 
         val saved = result as ProxySettingsSaveResult.Saved
         assertEquals(originalSensitiveConfig.proxyCredential, saved.sensitiveConfig?.proxyCredential)
-        assertEquals(listOf(originalSensitiveConfig), savedSensitiveConfigs)
+        assertEquals("new-management-token", saved.sensitiveConfig?.managementApiToken)
+        assertEquals(listOf(saved.sensitiveConfig), savedSensitiveConfigs)
     }
 
     @Test

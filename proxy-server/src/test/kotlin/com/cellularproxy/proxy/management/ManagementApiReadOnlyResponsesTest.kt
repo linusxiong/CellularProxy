@@ -144,6 +144,40 @@ class ManagementApiReadOnlyResponsesTest {
     }
 
     @Test
+    fun `status response includes live rotation cooldown remaining when available`() {
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.stopped(),
+                rootOperationsEnabled = true,
+                rotationCooldownRemainingMillis = 17_250,
+            )
+
+        assertEquals(
+            true,
+            response.body.contains(
+                """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null,"cooldownRemainingMillis":17250}""",
+            ),
+        )
+    }
+
+    @Test
+    fun `status response includes redacted cloudflare edge session summary when available`() {
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.stopped(),
+                rootOperationsEnabled = true,
+                cloudflareEdgeSessionSummary = "connected edge session for tunnel-secret",
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
+            )
+
+        assertEquals(
+            true,
+            response.body.contains(""""edgeSessionSummary":"connected edge session for [REDACTED]""""),
+        )
+        assertFalse(response.body.contains("tunnel-secret"))
+    }
+
+    @Test
     fun `status response includes invalid maximum concurrent connections startup error`() {
         val response =
             ManagementApiReadOnlyResponses.status(

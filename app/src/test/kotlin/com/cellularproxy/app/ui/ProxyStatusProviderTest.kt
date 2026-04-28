@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
@@ -10,12 +13,15 @@ import com.cellularproxy.shared.config.NetworkConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RotationConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -58,14 +64,46 @@ class ProxyStatusProviderTest {
     }
 
     @Test
+    fun `safe sensitive config helper creates defaults only for missing storage`() {
+        var createDefaultInvoked = false
+        val defaultSensitiveConfig = sensitiveConfig("generated-management-token")
+
+        assertEquals(
+            defaultSensitiveConfig,
+            sensitiveConfigFromLoadResultOrCreateDefault(SensitiveConfigLoadResult.MissingRequiredSecrets) {
+                createDefaultInvoked = true
+                defaultSensitiveConfig
+            },
+        )
+        assertTrue(createDefaultInvoked)
+
+        createDefaultInvoked = false
+        val loadedSensitiveConfig = sensitiveConfig("loaded-management-token")
+        assertEquals(
+            loadedSensitiveConfig,
+            sensitiveConfigFromLoadResultOrCreateDefault(SensitiveConfigLoadResult.Loaded(loadedSensitiveConfig)) {
+                createDefaultInvoked = true
+                defaultSensitiveConfig
+            },
+        )
+        assertFalse(createDefaultInvoked)
+
+        assertNull(
+            sensitiveConfigFromLoadResultOrCreateDefault(
+                SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            ) {
+                createDefaultInvoked = true
+                defaultSensitiveConfig
+            },
+        )
+        assertFalse(createDefaultInvoked)
+    }
+
+    @Test
     fun `app shell refreshes live proxy status off the compose state construction path`() {
         val shellSource =
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
-                .readText()
-        val cloudflareSource =
-            repoRoot()
-                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyCloudflareScreen.kt")
                 .readText()
 
         assertTrue(
@@ -75,8 +113,19 @@ class ProxyStatusProviderTest {
         assertTrue(
             shellSource.contains("LaunchedEffect(") &&
                 shellSource.contains("withContext(Dispatchers.IO)") &&
-                shellSource.contains("localManagementApiStatusReader\n                    .loadSnapshot("),
+                Regex("""localManagementApiStatusReader\s+\.loadSnapshot\(""")
+                    .containsMatchIn(shellSource),
             "Live Management API status refresh must run from a coroutine on Dispatchers.IO.",
+        )
+        val refreshProxyStatusBlock =
+            assertNotNull(
+                Regex("""val refreshProxyStatus: suspend \(\) -> Unit = \{([\s\S]*?)\n    }""")
+                    .find(shellSource),
+            ).groupValues[1]
+        assertTrue(
+            refreshProxyStatusBlock.contains("sensitiveConfigFromLoadResultOrCreateDefault(loadSensitiveConfigResult())") &&
+                !refreshProxyStatusBlock.contains("sensitiveConfig = loadSensitiveConfig()"),
+            "Live status refresh must avoid the throwing sensitive-config loader when encrypted storage is invalid.",
         )
         assertTrue(
             shellSource.contains("val loadProxyStatus: () -> ProxyServiceStatus = {\n        proxyStatusState\n    }"),
@@ -92,7 +141,7 @@ class ProxyStatusProviderTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains("localManagementApiStatusReader\n                    .loadSnapshot(") &&
+            Regex("""localManagementApiStatusReader\s+\.loadSnapshot\(""").containsMatchIn(shellSource) &&
                 shellSource.contains("refreshedRotationStatus = snapshot.rotationStatus") &&
                 shellSource.contains("rotationStatusState = rotationStatus"),
             "The shared live status refresh must update Rotation state from GET /api/status, not only rotation action responses.",
@@ -209,6 +258,7 @@ class ProxyStatusProviderTest {
                         "        observedTunnelStatus,\n" +
                         "        observedEdgeSessionSummary,\n" +
                         "        observedManagementApiRoundTrip,\n" +
+                        "        observedManagementApiRoundTripVersion,\n" +
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ) &&
@@ -292,6 +342,11 @@ private fun configuredCloudflare(): AppConfig = AppConfig.default().copy(
             tunnelTokenPresent = true,
             managementHostnameLabel = "management.example.test",
         ),
+)
+
+private fun sensitiveConfig(managementApiToken: String): SensitiveConfig = SensitiveConfig(
+    proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+    managementApiToken = managementApiToken,
 )
 
 private fun repoRoot() = generateSequence(Path(requireNotNull(System.getProperty("user.dir")))) { path -> path.parent }

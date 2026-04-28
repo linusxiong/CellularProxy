@@ -3,11 +3,15 @@ package com.cellularproxy.app.service
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.cloudflare.CloudflareTunnelEdgeConnectionResult
+import com.cellularproxy.cloudflare.CloudflareTunnelEdgeConnector
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
@@ -21,6 +25,8 @@ import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
+import java.util.Base64
+import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -323,6 +329,44 @@ class CellularProxyRuntimeCompositionInstallerTest {
         }
     }
 
+    @Test
+    fun `production cloudflare runtime shares control plane and edge session registry`() {
+        var closedConnections = 0
+        val runtime =
+            createProductionCloudflareTunnelRuntime(
+                plainConfig =
+                    readyBootstrap().plainConfig.copy(
+                        cloudflare = AppConfig.default().cloudflare.copy(enabled = true),
+                    ),
+                sensitiveConfig =
+                    readyBootstrap().sensitiveConfig.copy(
+                        cloudflareTunnelToken = validCloudflareTunnelToken(),
+                    ),
+                edgeConnector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Connected(
+                            connection = { closedConnections += 1 },
+                        )
+                    },
+            )
+
+        val start = runtime.start()
+
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, start.disposition)
+        assertEquals(CloudflareTunnelState.Connected, runtime.status().state)
+        assertEquals(
+            "Active edge session: Connected (generation 2)",
+            runtime.edgeSessionSummary(),
+        )
+
+        val stop = runtime.stop()
+
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, stop.disposition)
+        assertEquals(CloudflareTunnelState.Stopped, runtime.status().state)
+        assertEquals(null, runtime.edgeSessionSummary())
+        assertEquals(1, closedConnections)
+    }
+
     private fun readyBootstrap(): AppConfigBootstrapResult.Ready = AppConfigBootstrapResult.Ready(
         plainConfig =
             AppConfig.default().copy(
@@ -351,6 +395,13 @@ class CellularProxyRuntimeCompositionInstallerTest {
         displayName = "Home Wi-Fi",
         isAvailable = true,
     )
+
+    private fun validCloudflareTunnelToken(): String {
+        val tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+        val secret = Base64.getEncoder().encodeToString(ByteArray(32) { index -> (index + 1).toByte() })
+        val json = """{"a":"account-tag","s":"$secret","t":"$tunnelId","e":"edge.example.com"}"""
+        return Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
+    }
 }
 
 private class RecordingRouteMonitor(

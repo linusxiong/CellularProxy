@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -123,11 +124,14 @@ fun CellularProxyApp() {
             ProxyServiceStatus.stopped(configuredRoute = AppConfig.default().network.defaultRoutePolicy),
         )
     }
+    var cloudflareEdgeSessionSummaryState by remember { mutableStateOf<String?>(null) }
     var cloudflareManagementRoundTripState by remember { mutableStateOf<String?>(null) }
+    var cloudflareManagementRoundTripVersion by remember { mutableLongStateOf(0L) }
     var cloudflareManagementApiCheckState by remember {
         mutableStateOf(DashboardCloudflareManagementApiCheck.NotRun)
     }
     var rotationStatusState by remember { mutableStateOf(RotationStatus.idle()) }
+    var rotationCooldownRemainingSecondsState by remember { mutableStateOf<Long?>(null) }
     var currentPublicIpState by remember {
         mutableStateOf<PublicIpProbeActionResult>(PublicIpProbeActionResult.NotPublicIpAction)
     }
@@ -153,19 +157,32 @@ fun CellularProxyApp() {
     }
     val refreshProxyStatus: suspend () -> Unit = {
         var refreshedRotationStatus: RotationStatus? = null
+        var refreshedRotationCooldownRemainingSeconds: Long? = null
+        var refreshedCloudflareEdgeSessionSummary: String? = null
         val refreshedProxyStatus =
             withContext(Dispatchers.IO) {
                 val config = loadSettingsConfig()
-                localManagementApiStatusReader
-                    .loadSnapshot(
-                        config = config,
-                        sensitiveConfig = loadSensitiveConfig(),
-                    )?.also { snapshot ->
-                        refreshedRotationStatus = snapshot.rotationStatus
-                    }?.proxyStatus
-                    ?: ProxyServiceStatus.stopped(configuredRoute = config.network.defaultRoutePolicy)
+                val sensitiveConfig =
+                    sensitiveConfigFromLoadResultOrCreateDefault(loadSensitiveConfigResult()) {
+                        sensitiveConfigGenerator
+                            .generateDefaultSensitiveConfig()
+                            .also(sensitiveRepository::save)
+                    }
+                sensitiveConfig?.let { loadedSensitiveConfig ->
+                    localManagementApiStatusReader
+                        .loadSnapshot(
+                            config = config,
+                            sensitiveConfig = loadedSensitiveConfig,
+                        )?.also { snapshot ->
+                            refreshedRotationStatus = snapshot.rotationStatus
+                            refreshedRotationCooldownRemainingSeconds = snapshot.rotationCooldownRemainingSeconds
+                            refreshedCloudflareEdgeSessionSummary = snapshot.cloudflareEdgeSessionSummary
+                        }?.proxyStatus
+                } ?: ProxyServiceStatus.stopped(configuredRoute = config.network.defaultRoutePolicy)
             }
         proxyStatusState = refreshedProxyStatus
+        rotationCooldownRemainingSecondsState = refreshedRotationCooldownRemainingSeconds
+        cloudflareEdgeSessionSummaryState = refreshedCloudflareEdgeSessionSummary
         recentTrafficState = recentTrafficSampler.observe(refreshedProxyStatus.metrics)
         refreshedRotationStatus?.let { rotationStatus ->
             rotationStatusState = rotationStatus
@@ -188,30 +205,26 @@ fun CellularProxyApp() {
         )
     }
     val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets = {
-        val sensitiveConfig = loadSensitiveConfig()
-        LogRedactionSecrets(
-            managementApiToken = sensitiveConfig.managementApiToken,
-            proxyCredential = sensitiveConfig.proxyCredential.canonicalBasicPayload(),
-            cloudflareTunnelToken = sensitiveConfig.cloudflareTunnelToken,
-        )
+        logRedactionSecretsFromSensitiveConfigLoadResult(loadSensitiveConfigResult())
     }
     val localManagementApiProbeResultProvider = {
-        localManagementApiProbeResultFrom {
+        val config = loadSettingsConfig()
+        localManagementApiProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult()) { sensitiveConfig ->
             localManagementApiActionDispatcher.dispatch(
                 action = LocalManagementApiAction.RootStatus,
-                config = loadSettingsConfig(),
-                sensitiveConfig = loadSensitiveConfig(),
+                config = config,
+                sensitiveConfig = sensitiveConfig,
             )
         }
     }
     val cloudflareManagementApiProbeResultProvider = {
         val config = loadSettingsConfig()
-        val sensitiveConfig = loadSensitiveConfig()
+        val sensitiveConfigResult = loadSensitiveConfigResult()
         val result =
-            cloudflareManagementApiProbeResultFrom(
+            cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(
                 config = config,
-                tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
-            ) {
+                result = sensitiveConfigResult,
+            ) { sensitiveConfig ->
                 localManagementApiActionDispatcher.dispatch(
                     action = LocalManagementApiAction.CloudflareManagementStatus,
                     config = config,
@@ -251,15 +264,15 @@ fun CellularProxyApp() {
                     response = response,
                 )?.let { summary ->
                     cloudflareManagementRoundTripState = summary
+                    cloudflareManagementRoundTripVersion += 1L
                 }
                 if (action == LocalManagementApiAction.CloudflareManagementStatus) {
                     val config = loadSettingsConfig()
-                    val sensitiveConfig = loadSensitiveConfig()
                     cloudflareManagementApiCheckState =
-                        dashboardCloudflareManagementApiCheckFrom(
+                        dashboardCloudflareManagementApiCheckFromSensitiveConfigLoadResult(
                             config = config,
-                            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
-                        ) {
+                            result = loadSensitiveConfigResult(),
+                        ) { _: SensitiveConfig ->
                             response
                         }
                 }
@@ -272,15 +285,15 @@ fun CellularProxyApp() {
             }.onFailure { throwable ->
                 cloudflareManagementRoundTripFailureSummary(action)?.let { summary ->
                     cloudflareManagementRoundTripState = summary
+                    cloudflareManagementRoundTripVersion += 1L
                 }
                 if (action == LocalManagementApiAction.CloudflareManagementStatus) {
                     val config = loadSettingsConfig()
-                    val sensitiveConfig = loadSensitiveConfig()
                     cloudflareManagementApiCheckState =
-                        dashboardCloudflareManagementApiCheckFrom(
+                        dashboardCloudflareManagementApiCheckFromSensitiveConfigLoadResult(
                             config = config,
-                            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
-                        ) {
+                            result = loadSensitiveConfigResult(),
+                        ) { _: SensitiveConfig ->
                             throw throwable
                         }
                 }
@@ -335,7 +348,9 @@ fun CellularProxyApp() {
                             proxyStatusProvider = loadProxyStatus,
                             recentTrafficProvider = { recentTrafficState },
                             observedNetworksProvider = loadObservedNetworks,
+                            cloudflareEdgeSessionSummaryProvider = { cloudflareEdgeSessionSummaryState },
                             cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
+                            cloudflareManagementRoundTripVersionProvider = { cloudflareManagementRoundTripVersion },
                             latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
                             localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                             cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
@@ -344,6 +359,7 @@ fun CellularProxyApp() {
                             },
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             rotationStatusProvider = { rotationStatusState },
+                            rotationCooldownRemainingSecondsProvider = { rotationCooldownRemainingSecondsState },
                             currentPublicIpProvider = {
                                 currentPublicIpForRotationScreen(
                                     probedPublicIp = currentPublicIpState,
@@ -378,7 +394,9 @@ fun CellularProxyApp() {
                         proxyStatusProvider = loadProxyStatus,
                         recentTrafficProvider = { recentTrafficState },
                         observedNetworksProvider = loadObservedNetworks,
+                        cloudflareEdgeSessionSummaryProvider = { cloudflareEdgeSessionSummaryState },
                         cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
+                        cloudflareManagementRoundTripVersionProvider = { cloudflareManagementRoundTripVersion },
                         latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
                         localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                         cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
@@ -387,6 +405,7 @@ fun CellularProxyApp() {
                         },
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         rotationStatusProvider = { rotationStatusState },
+                        rotationCooldownRemainingSecondsProvider = { rotationCooldownRemainingSecondsState },
                         currentPublicIpProvider = {
                             currentPublicIpForRotationScreen(
                                 probedPublicIp = currentPublicIpState,
@@ -470,6 +489,16 @@ internal fun dashboardCloudflareManagementApiCheckFrom(
 ): DashboardCloudflareManagementApiCheck = cloudflareManagementApiProbeResultFrom(
     config = config,
     tunnelTokenPresent = tunnelTokenPresent,
+    request = request,
+).toDashboardCloudflareManagementApiCheck()
+
+internal fun dashboardCloudflareManagementApiCheckFromSensitiveConfigLoadResult(
+    config: AppConfig,
+    result: SensitiveConfigLoadResult,
+    request: (SensitiveConfig) -> LocalManagementApiActionResponse,
+): DashboardCloudflareManagementApiCheck = cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(
+    config = config,
+    result = result,
     request = request,
 ).toDashboardCloudflareManagementApiCheck()
 
@@ -666,13 +695,16 @@ internal fun CellularProxyNavigationHost(
     proxyStatusProvider: () -> ProxyServiceStatus,
     recentTrafficProvider: () -> DashboardTrafficSummary?,
     observedNetworksProvider: () -> List<NetworkDescriptor>,
+    cloudflareEdgeSessionSummaryProvider: () -> String? = { null },
     cloudflareManagementRoundTripProvider: () -> String?,
+    cloudflareManagementRoundTripVersionProvider: () -> Long = { 0L },
     latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
     localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult,
     cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult,
     onRefreshProxyStatus: () -> Unit,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     rotationStatusProvider: () -> RotationStatus,
+    rotationCooldownRemainingSecondsProvider: () -> Long?,
     currentPublicIpProvider: () -> String?,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
@@ -694,7 +726,7 @@ internal fun CellularProxyNavigationHost(
                         config = config,
                         status = status,
                         recentLogs = dashboardLogSummariesFromLogsAuditRows(logsAuditRowsProvider()),
-                        redactionSecrets = sensitiveConfigResult.toLogRedactionSecrets(),
+                        redactionSecrets = logRedactionSecretsFromSensitiveConfigLoadResult(sensitiveConfigResult),
                         latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
                         managementApiTokenPresent = sensitiveConfigDashboardInputs.managementApiTokenPresent,
                         invalidSensitiveConfigReason = sensitiveConfigDashboardInputs.invalidSensitiveConfigReason,
@@ -717,6 +749,7 @@ internal fun CellularProxyNavigationHost(
                 initialConfigProvider = settingsInitialConfigProvider,
                 saveConfig = settingsSaveConfig,
                 loadSensitiveConfig = settingsLoadSensitiveConfig,
+                loadSensitiveConfigResult = settingsLoadSensitiveConfigResult,
                 saveSensitiveConfig = settingsSaveSensitiveConfig,
             )
         }
@@ -724,10 +757,12 @@ internal fun CellularProxyNavigationHost(
             CellularProxyCloudflareRoute(
                 configProvider = settingsInitialConfigProvider,
                 tokenStatusProvider = {
-                    cloudflareTokenStatusFrom(settingsLoadSensitiveConfig().cloudflareTunnelToken)
+                    cloudflareTokenStatusFrom(settingsLoadSensitiveConfigResult())
                 },
                 tunnelStatusProvider = { proxyStatusProvider().cloudflare },
+                edgeSessionSummaryProvider = cloudflareEdgeSessionSummaryProvider,
                 managementApiRoundTripProvider = cloudflareManagementRoundTripProvider,
+                managementApiRoundTripVersionProvider = cloudflareManagementRoundTripVersionProvider,
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onStartTunnel = {
                     dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareStart)
@@ -750,6 +785,7 @@ internal fun CellularProxyNavigationHost(
                 rotationStatusProvider = { rotationStatusProvider() },
                 currentPublicIpProvider = { currentPublicIpProvider() },
                 rootAvailabilityProvider = { proxyStatusProvider().rootAvailability },
+                cooldownRemainingSecondsProvider = { rotationCooldownRemainingSecondsProvider() },
                 activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections },
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onCheckRoot = {
@@ -792,13 +828,27 @@ internal fun CellularProxyNavigationHost(
 private fun loadOrCreateSensitiveConfig(
     repository: SensitiveConfigRepository,
     generator: SensitiveConfigGenerator,
-): SensitiveConfig = when (val result = repository.load()) {
-    is SensitiveConfigLoadResult.Loaded -> result.config
-    SensitiveConfigLoadResult.MissingRequiredSecrets ->
+): SensitiveConfig {
+    val result = repository.load()
+    return sensitiveConfigFromLoadResultOrCreateDefault(result) {
         generator
             .generateDefaultSensitiveConfig()
             .also(repository::save)
-    is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
+    } ?: when (result) {
+        is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
+        SensitiveConfigLoadResult.MissingRequiredSecrets,
+        is SensitiveConfigLoadResult.Loaded,
+        -> error("Sensitive config could not be loaded after default creation")
+    }
+}
+
+internal fun sensitiveConfigFromLoadResultOrCreateDefault(
+    result: SensitiveConfigLoadResult,
+    createDefaultSensitiveConfig: () -> SensitiveConfig,
+): SensitiveConfig? = when (result) {
+    is SensitiveConfigLoadResult.Loaded -> result.config
+    SensitiveConfigLoadResult.MissingRequiredSecrets -> createDefaultSensitiveConfig()
+    is SensitiveConfigLoadResult.Invalid -> null
 }
 
 internal data class SensitiveConfigDashboardInputs(
@@ -826,12 +876,14 @@ internal fun sensitiveConfigDashboardInputs(
         )
 }
 
-private fun SensitiveConfigLoadResult.toLogRedactionSecrets(): LogRedactionSecrets = when (this) {
+internal fun logRedactionSecretsFromSensitiveConfigLoadResult(
+    result: SensitiveConfigLoadResult,
+): LogRedactionSecrets = when (result) {
     is SensitiveConfigLoadResult.Loaded ->
         LogRedactionSecrets(
-            managementApiToken = config.managementApiToken,
-            proxyCredential = config.proxyCredential.canonicalBasicPayload(),
-            cloudflareTunnelToken = config.cloudflareTunnelToken,
+            managementApiToken = result.config.managementApiToken,
+            proxyCredential = result.config.proxyCredential.canonicalBasicPayload(),
+            cloudflareTunnelToken = result.config.cloudflareTunnelToken,
         )
     SensitiveConfigLoadResult.MissingRequiredSecrets,
     is SensitiveConfigLoadResult.Invalid,

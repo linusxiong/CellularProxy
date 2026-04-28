@@ -118,6 +118,40 @@ class RotationScreenControllerTest {
     }
 
     @Test
+    fun `controller exposes pending unsafe rotation action as visible state until resolved`() {
+        var rotationStatus = RotationStatus.idle()
+        val controller =
+            RotationScreenController(
+                configProvider = { rootEnabledConfig() },
+                rotationStatusProvider = { rotationStatus },
+                rootAvailabilityProvider = { RootAvailabilityStatus.Available },
+            )
+
+        controller.handle(RotationScreenEvent.RotateAirplaneMode)
+
+        assertEquals("In progress: Rotate airplane mode", controller.state.pendingOperation)
+
+        rotationStatus =
+            RotationStatus(
+                state = RotationState.CheckingRoot,
+                operation = RotationOperation.AirplaneMode,
+            )
+        controller.handle(RotationScreenEvent.Refresh)
+
+        assertEquals("In progress: Rotate airplane mode", controller.state.pendingOperation)
+
+        rotationStatus =
+            RotationStatus(
+                state = RotationState.Failed,
+                operation = RotationOperation.AirplaneMode,
+                failureReason = RotationFailureReason.RootUnavailable,
+            )
+        controller.handle(RotationScreenEvent.Refresh)
+
+        assertEquals("None", controller.state.pendingOperation)
+    }
+
+    @Test
     fun `controller emits redacted diagnostics copy effect once`() {
         val controller =
             RotationScreenController(

@@ -53,7 +53,13 @@ class ManagementApiStateHandlerTest {
             ),
             response,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status", "rotationStatus")
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
     }
 
     @Test
@@ -72,7 +78,13 @@ class ManagementApiStateHandlerTest {
                 ).body,
             response.body,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status", "rotationStatus")
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
     }
 
     @Test
@@ -93,7 +105,57 @@ class ManagementApiStateHandlerTest {
             """{"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8080,"configuredRoute":"automatic","boundRoute":null,"publicIp":"198.51.100.10","highSecurityRisk":false,"startupError":null},"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"failed with status-secret"},"root":{"operationsEnabled":true,"availability":"unknown"},"rotation":{"state":"waiting_for_network_return","operation":"airplane_mode","oldPublicIp":"198.51.100.10","newPublicIp":null,"publicIpChanged":null,"failureReason":null}}""",
             response.body,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status", "rotationStatus")
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
+    }
+
+    @Test
+    fun `status includes current rotation cooldown remaining from callback`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus()
+        callbacks.rootOperationsEnabledResult = true
+        callbacks.rotationCooldownRemainingMillisResult = 8_500
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            true,
+            response.body.contains(""""cooldownRemainingMillis":8500"""),
+        )
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
+    }
+
+    @Test
+    fun `status includes cloudflare edge session summary from callback`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus()
+        callbacks.rootOperationsEnabledResult = true
+        callbacks.cloudflareEdgeSessionSummaryResult = "Connected edge session"
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            true,
+            response.body.contains(""""edgeSessionSummary":"Connected edge session""""),
+        )
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
     }
 
     @Test
@@ -314,6 +376,8 @@ class ManagementApiStateHandlerTest {
                 RotationStatus.idle(),
             )
         var rotationStatusResult: RotationStatus = RotationStatus.idle()
+        var rotationCooldownRemainingMillisResult: Long? = null
+        var cloudflareEdgeSessionSummaryResult: String? = null
         var serviceStopResult: ProxyServiceStopTransitionResult =
             ProxyServiceStopTransitionResult(
                 ProxyServiceStopTransitionDisposition.Ignored,
@@ -334,6 +398,12 @@ class ManagementApiStateHandlerTest {
                     rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
                     rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
                     rotationStatus = { record("rotationStatus", rotationStatusResult) },
+                    rotationCooldownRemainingMillis = {
+                        record("rotationCooldownRemainingMillis", rotationCooldownRemainingMillisResult)
+                    },
+                    cloudflareEdgeSessionSummary = {
+                        record("cloudflareEdgeSessionSummary", cloudflareEdgeSessionSummaryResult)
+                    },
                     serviceStop = { record("serviceStop", serviceStopResult) },
                     rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
                 ),

@@ -639,6 +639,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                     managementHandlerReference = managementReference,
                     publicIp = { "203.0.113.20" },
                     cloudflareStatus = { CloudflareTunnelStatus.connected() },
+                    cloudflareEdgeSessionSummary = { "Connected edge session" },
                     cloudflareStart = {
                         CloudflareTunnelTransitionResult(
                             CloudflareTunnelTransitionDisposition.Duplicate,
@@ -710,6 +711,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                 assertEquals(200, statusResponse.statusCode)
                 assertContains(statusResponse.body, """"state":"running"""")
                 assertContains(statusResponse.body, """"publicIp":"203.0.113.20"""")
+                assertContains(statusResponse.body, """"edgeSessionSummary":"Connected edge session"""")
                 val reconnectResponse = managementReference.handle(ManagementApiOperation.CloudflareReconnect)
                 assertEquals(202, reconnectResponse.statusCode)
                 assertEquals(1, reconnectCalls)

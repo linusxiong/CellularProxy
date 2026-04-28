@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
 
@@ -38,11 +39,13 @@ internal fun CellularProxySettingsRoute(
     initialConfigProvider: () -> AppConfig = AppConfig::default,
     saveConfig: (AppConfig) -> Unit = {},
     loadSensitiveConfig: (() -> SensitiveConfig)? = null,
+    loadSensitiveConfigResult: (() -> SensitiveConfigLoadResult)? = null,
     saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
 ) {
     val currentInitialConfigProvider by rememberUpdatedState(initialConfigProvider)
     val currentSaveConfig by rememberUpdatedState(saveConfig)
     val currentLoadSensitiveConfig by rememberUpdatedState(loadSensitiveConfig)
+    val currentLoadSensitiveConfigResult by rememberUpdatedState(loadSensitiveConfigResult)
     val currentSaveSensitiveConfig by rememberUpdatedState(saveSensitiveConfig)
     val observedConfig = initialConfigProvider()
     val controller =
@@ -54,6 +57,7 @@ internal fun CellularProxySettingsRoute(
                         loadConfig = { currentInitialConfigProvider() },
                         saveConfig = { config -> currentSaveConfig(config) },
                         loadSensitiveConfigProvider = { currentLoadSensitiveConfig },
+                        loadSensitiveConfigResultProvider = { currentLoadSensitiveConfigResult },
                         saveSensitiveConfigProvider = { currentSaveSensitiveConfig },
                     ),
             )
@@ -276,6 +280,7 @@ private fun ProxySettingsValidationError.displayText(): String = when (this) {
     ProxySettingsValidationError.InvalidProxyCredential -> "Enter both proxy username and password, or leave both blank."
     ProxySettingsValidationError.InvalidManagementApiToken -> "Management API token cannot be blank or padded with spaces."
     ProxySettingsValidationError.InvalidCloudflareTunnelToken -> "Cloudflare tunnel token is missing or invalid."
+    ProxySettingsValidationError.InvalidSensitiveConfiguration -> "Sensitive configuration is invalid. Discard or update the affected secrets before saving."
 }
 
 @Composable

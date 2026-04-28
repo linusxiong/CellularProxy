@@ -23,6 +23,8 @@ data class ManagementApiCallbacks(
     val rotateMobileData: () -> RotationTransitionResult,
     val rotateAirplaneMode: () -> RotationTransitionResult,
     val rotationStatus: () -> RotationStatus = { RotationStatus.idle() },
+    val rotationCooldownRemainingMillis: () -> Long? = { null },
+    val cloudflareEdgeSessionSummary: () -> String? = { null },
     val serviceStop: () -> ProxyServiceStopTransitionResult,
     val rootOperationsEnabled: () -> Boolean,
 )
@@ -69,6 +71,8 @@ class ManagementApiStateHandler(
         return ManagementApiReadOnlyResponses.status(
             status = status,
             rotationStatus = callbacks.rotationStatus(),
+            rotationCooldownRemainingMillis = callbacks.rotationCooldownRemainingMillis(),
+            cloudflareEdgeSessionSummary = callbacks.cloudflareEdgeSessionSummary(),
             secrets = secrets,
             rootOperationsEnabled = rootOperationsEnabled,
         )

@@ -25,6 +25,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.cloudflare.CloudflareTunnelToken
 import com.cellularproxy.cloudflare.CloudflareTunnelTokenParseResult
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
@@ -46,6 +47,7 @@ internal fun CellularProxyCloudflareRoute(
     tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
     edgeSessionSummaryProvider: () -> String? = { null },
     managementApiRoundTripProvider: () -> String? = { null },
+    managementApiRoundTripVersionProvider: () -> Long = { 0L },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onStartTunnel: () -> Unit = {},
     onStopTunnel: () -> Unit = {},
@@ -58,6 +60,7 @@ internal fun CellularProxyCloudflareRoute(
     val currentTunnelStatusProvider by rememberUpdatedState(tunnelStatusProvider)
     val currentEdgeSessionSummaryProvider by rememberUpdatedState(edgeSessionSummaryProvider)
     val currentManagementApiRoundTripProvider by rememberUpdatedState(managementApiRoundTripProvider)
+    val currentManagementApiRoundTripVersionProvider by rememberUpdatedState(managementApiRoundTripVersionProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentOnStartTunnel by rememberUpdatedState(onStartTunnel)
     val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
@@ -68,6 +71,7 @@ internal fun CellularProxyCloudflareRoute(
     val observedTunnelStatus = tunnelStatusProvider()
     val observedEdgeSessionSummary = edgeSessionSummaryProvider()
     val observedManagementApiRoundTrip = managementApiRoundTripProvider()
+    val observedManagementApiRoundTripVersion = managementApiRoundTripVersionProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
     val controller =
         remember {
@@ -77,6 +81,7 @@ internal fun CellularProxyCloudflareRoute(
                 tunnelStatusProvider = { currentTunnelStatusProvider() },
                 edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() },
                 managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() },
+                managementApiRoundTripVersionProvider = { currentManagementApiRoundTripVersionProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
                 actionHandler = { action ->
                     when (action) {
@@ -96,6 +101,7 @@ internal fun CellularProxyCloudflareRoute(
         observedTunnelStatus,
         observedEdgeSessionSummary,
         observedManagementApiRoundTrip,
+        observedManagementApiRoundTripVersion,
         observedRedactionSecrets,
     ) {
         controller.handle(CloudflareScreenEvent.Refresh)
@@ -227,6 +233,7 @@ internal fun CellularProxyCloudflareScreen(
             CloudflareField("Last connection error", state.lastConnectionError)
             CloudflareField("Edge sessions", state.edgeSessionSummary)
             CloudflareField("Management API round trip", state.managementApiRoundTrip)
+            CloudflareField("Pending operation", state.pendingOperation)
         }
     }
 }
@@ -239,6 +246,7 @@ internal data class CloudflareScreenState(
     val lastConnectionError: String,
     val edgeSessionSummary: String,
     val managementApiRoundTrip: String,
+    val pendingOperation: String,
     val copyableDiagnostics: String,
     val availableActions: List<CloudflareScreenAction>,
 ) {
@@ -272,6 +280,7 @@ internal data class CloudflareScreenState(
                 lastConnectionError = lastConnectionError,
                 edgeSessionSummary = redactedEdgeSessionSummary,
                 managementApiRoundTrip = redactedManagementApiRoundTrip,
+                pendingOperation = "None",
                 copyableDiagnostics =
                     listOf(
                         "Tunnel enabled: $tunnelEnabled",
@@ -281,6 +290,7 @@ internal data class CloudflareScreenState(
                         "Last connection error: $lastConnectionError",
                         "Edge sessions: $redactedEdgeSessionSummary",
                         "Management API round trip: $redactedManagementApiRoundTrip",
+                        "Pending operation: None",
                     ).joinToString(separator = "\n"),
                 availableActions =
                     cloudflareScreenActions(
@@ -329,6 +339,12 @@ internal fun cloudflareTokenStatusFrom(rawToken: String?): CloudflareTokenStatus
     }
 }
 
+internal fun cloudflareTokenStatusFrom(result: SensitiveConfigLoadResult): CloudflareTokenStatus = when (result) {
+    is SensitiveConfigLoadResult.Loaded -> cloudflareTokenStatusFrom(result.config.cloudflareTunnelToken)
+    SensitiveConfigLoadResult.MissingRequiredSecrets -> CloudflareTokenStatus.Missing
+    is SensitiveConfigLoadResult.Invalid -> CloudflareTokenStatus.Invalid
+}
+
 internal class CloudflareScreenController(
     private val configProvider: () -> AppConfig = { AppConfig.default() },
     private val tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
@@ -341,11 +357,12 @@ internal class CloudflareScreenController(
     },
     private val edgeSessionSummaryProvider: () -> String? = { null },
     private val managementApiRoundTripProvider: () -> String? = { null },
+    private val managementApiRoundTripVersionProvider: () -> Long = { 0L },
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
     private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val actionHandler: (CloudflareScreenAction) -> Unit = {},
 ) {
-    private val pendingOperations = mutableMapOf<CloudflareScreenAction, CloudflareTunnelStatus>()
+    private val pendingOperations = mutableMapOf<CloudflareScreenAction, PendingCloudflareOperation>()
     private val pendingEffects = mutableListOf<CloudflareScreenEffect>()
     var state: CloudflareScreenState = buildState()
         private set
@@ -376,7 +393,12 @@ internal class CloudflareScreenController(
 
     private fun dispatchAction(action: CloudflareScreenAction) {
         if (action in state.availableActions) {
-            pendingOperations[action] = tunnelStatusProvider()
+            pendingOperations[action] =
+                PendingCloudflareOperation(
+                    tunnelStatus = tunnelStatusProvider(),
+                    managementApiRoundTrip = managementApiRoundTripProvider(),
+                    managementApiRoundTripVersion = managementApiRoundTripVersionProvider(),
+                )
             actionHandler(action)
             state = buildState()
         }
@@ -384,25 +406,81 @@ internal class CloudflareScreenController(
 
     private fun buildState(): CloudflareScreenState {
         val currentTunnelStatus = tunnelStatusProvider()
+        val currentEdgeSessionSummary = edgeSessionSummaryProvider()
+        val currentManagementApiRoundTrip = managementApiRoundTripProvider()
+        val currentManagementApiRoundTripVersion = managementApiRoundTripVersionProvider()
         val currentState =
             CloudflareScreenState.from(
                 config = configProvider(),
                 tunnelStatus = currentTunnelStatus,
                 tokenStatus = tokenStatusProvider(),
-                edgeSessionSummary = edgeSessionSummaryProvider(),
-                managementApiRoundTrip = managementApiRoundTripProvider(),
+                edgeSessionSummary = currentEdgeSessionSummary,
+                managementApiRoundTrip = currentManagementApiRoundTrip,
                 secrets = secretsProvider(),
             )
-        pendingOperations
-            .filterValues { dispatchedStatus -> dispatchedStatus != currentTunnelStatus }
-            .keys
-            .forEach(pendingOperations::remove)
-        return currentState.copy(
+        val resolvedActions =
+            pendingOperations
+                .filter { (action, pendingOperation) ->
+                    pendingOperation.isResolvedBy(
+                        action = action,
+                        currentTunnelStatus = currentTunnelStatus,
+                        currentManagementApiRoundTrip = currentManagementApiRoundTrip,
+                        currentManagementApiRoundTripVersion = currentManagementApiRoundTripVersion,
+                    )
+                }.keys
+        resolvedActions.forEach(pendingOperations::remove)
+        return currentState.withPendingOperation(
+            pendingOperation = pendingOperationLabel(),
             availableActions =
                 currentState.availableActions.filterNot { action ->
                     action in pendingOperations.keys
                 },
         )
+    }
+
+    private fun pendingOperationLabel(): String = pendingOperations.keys.firstOrNull()?.let { action ->
+        "In progress: ${action.label}"
+    } ?: "None"
+}
+
+private fun CloudflareScreenState.withPendingOperation(
+    pendingOperation: String,
+    availableActions: List<CloudflareScreenAction>,
+): CloudflareScreenState = copy(
+    pendingOperation = pendingOperation,
+    copyableDiagnostics =
+        listOf(
+            "Tunnel enabled: $tunnelEnabled",
+            "Tunnel token: $tokenStatus",
+            "Tunnel lifecycle: $lifecycleState",
+            "Management hostname: $managementHostname",
+            "Last connection error: $lastConnectionError",
+            "Edge sessions: $edgeSessionSummary",
+            "Management API round trip: $managementApiRoundTrip",
+            "Pending operation: $pendingOperation",
+        ).joinToString(separator = "\n"),
+    availableActions = availableActions,
+)
+
+private data class PendingCloudflareOperation(
+    val tunnelStatus: CloudflareTunnelStatus,
+    val managementApiRoundTrip: String?,
+    val managementApiRoundTripVersion: Long,
+) {
+    fun isResolvedBy(
+        action: CloudflareScreenAction,
+        currentTunnelStatus: CloudflareTunnelStatus,
+        currentManagementApiRoundTrip: String?,
+        currentManagementApiRoundTripVersion: Long,
+    ): Boolean = when (action) {
+        CloudflareScreenAction.TestManagementTunnel ->
+            managementApiRoundTrip != currentManagementApiRoundTrip ||
+                managementApiRoundTripVersion != currentManagementApiRoundTripVersion
+        CloudflareScreenAction.StartTunnel,
+        CloudflareScreenAction.StopTunnel,
+        CloudflareScreenAction.ReconnectTunnel,
+        -> tunnelStatus != currentTunnelStatus
+        CloudflareScreenAction.CopyDiagnostics -> true
     }
 }
 
@@ -437,6 +515,16 @@ internal fun cloudflareActionCanDispatch(
     actionsEnabled: Boolean,
     availableActions: List<CloudflareScreenAction>,
 ): Boolean = actionsEnabled && action in availableActions
+
+private val CloudflareScreenAction.label: String
+    get() =
+        when (this) {
+            CloudflareScreenAction.StartTunnel -> "Start tunnel"
+            CloudflareScreenAction.StopTunnel -> "Stop tunnel"
+            CloudflareScreenAction.ReconnectTunnel -> "Reconnect tunnel"
+            CloudflareScreenAction.TestManagementTunnel -> "Test management tunnel"
+            CloudflareScreenAction.CopyDiagnostics -> "Copy diagnostics"
+        }
 
 @Composable
 private fun CloudflareActionRow(

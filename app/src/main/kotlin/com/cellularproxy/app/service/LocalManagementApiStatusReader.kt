@@ -60,6 +60,8 @@ class LocalManagementApiStatusReader(
 data class LocalManagementApiRuntimeSnapshot(
     val proxyStatus: ProxyServiceStatus,
     val rotationStatus: RotationStatus,
+    val rotationCooldownRemainingSeconds: Long? = null,
+    val cloudflareEdgeSessionSummary: String? = null,
 )
 
 data class LocalManagementApiStatusResponse(
@@ -77,6 +79,8 @@ internal fun proxyServiceStatusFromManagementApiStatusJson(body: String): ProxyS
 internal fun localManagementApiRuntimeSnapshotFromStatusJson(body: String): LocalManagementApiRuntimeSnapshot? = runCatching {
     val root = Json.parseToJsonElement(body).jsonObject
     val service = root.objectValue("service")
+    val rotation = root.objectValue("rotation")
+    val cloudflare = root.objectValue("cloudflare")
     LocalManagementApiRuntimeSnapshot(
         proxyStatus =
             ProxyServiceStatus(
@@ -89,10 +93,15 @@ internal fun localManagementApiRuntimeSnapshotFromStatusJson(body: String): Loca
                 hasHighSecurityRisk = service.booleanValue("highSecurityRisk"),
                 startupError = service.nullableStringValue("startupError")?.toProxyStartupError(),
                 metrics = root.objectValue("metrics").toProxyTrafficMetrics(),
-                cloudflare = root.objectValue("cloudflare").toCloudflareTunnelStatus(),
+                cloudflare = cloudflare.toCloudflareTunnelStatus(),
                 rootAvailability = root.objectValue("root").stringValue("availability").toRootAvailabilityStatus(),
             ),
-        rotationStatus = root.objectValue("rotation").toRotationStatus(),
+        rotationStatus = rotation.toRotationStatus(),
+        rotationCooldownRemainingSeconds =
+            rotation
+                .nullableLongValue("cooldownRemainingMillis")
+                ?.toCeilingSeconds(),
+        cloudflareEdgeSessionSummary = cloudflare.nullableStringValue("edgeSessionSummary"),
     )
 }.getOrNull()
 
@@ -240,6 +249,10 @@ private fun JsonObject.nullableBooleanValue(name: String): Boolean? = nullableEl
 
 private fun JsonObject.longValue(name: String): Long = requireNotNull(nullableElementValue(name)?.jsonPrimitive?.longOrNull)
 
+private fun JsonObject.nullableLongValue(name: String): Long? = nullableElementValue(name)?.takeUnless(JsonElement::isJsonNull)?.jsonPrimitive?.longOrNull
+
+private fun Long.toCeilingSeconds(): Long = (this + MILLIS_PER_SECOND - 1) / MILLIS_PER_SECOND
+
 private fun JsonObject.nullableIntValue(name: String): Int? = nullableElementValue(name)?.takeUnless(JsonElement::isJsonNull)?.jsonPrimitive?.intOrNull
 
 private fun JsonObject.nullableElementValue(name: String): JsonElement? = this[name]
@@ -274,3 +287,4 @@ private fun sendStatusHttpRequest(request: LocalManagementApiActionRequest): Loc
 }
 
 private const val LOCAL_MANAGEMENT_API_STATUS_TIMEOUT_MILLIS = 5_000
+private const val MILLIS_PER_SECOND = 1_000L

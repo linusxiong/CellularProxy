@@ -97,6 +97,52 @@ class LocalManagementApiStatusReaderTest {
     }
 
     @Test
+    fun `loads runtime snapshot with live rotation cooldown remaining seconds`() {
+        val reader =
+            LocalManagementApiStatusReader {
+                LocalManagementApiStatusResponse(
+                    statusCode = 200,
+                    body =
+                        "{" +
+                            """"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8081,"configuredRoute":"cellular","boundRoute":null,"publicIp":"198.51.100.23","highSecurityRisk":false,"startupError":null},""" +
+                            """"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},""" +
+                            """"cloudflare":{"state":"connected","remoteManagementAvailable":true,"failureReason":null},""" +
+                            """"root":{"operationsEnabled":true,"availability":"available"},""" +
+                            """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null,"cooldownRemainingMillis":1250}""" +
+                            "}",
+                )
+            }
+
+        val snapshot = reader.loadSnapshot(config(), sensitiveConfig())
+
+        requireNotNull(snapshot)
+        assertEquals(2, snapshot.rotationCooldownRemainingSeconds)
+    }
+
+    @Test
+    fun `loads runtime snapshot with cloudflare edge session summary`() {
+        val reader =
+            LocalManagementApiStatusReader {
+                LocalManagementApiStatusResponse(
+                    statusCode = 200,
+                    body =
+                        "{" +
+                            """"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8081,"configuredRoute":"cellular","boundRoute":null,"publicIp":"198.51.100.23","highSecurityRisk":false,"startupError":null},""" +
+                            """"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},""" +
+                            """"cloudflare":{"state":"connected","remoteManagementAvailable":true,"failureReason":null,"edgeSessionSummary":"Connected edge session"},""" +
+                            """"root":{"operationsEnabled":true,"availability":"available"},""" +
+                            """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null}""" +
+                            "}",
+                )
+            }
+
+        val snapshot = reader.loadSnapshot(config(), sensitiveConfig())
+
+        requireNotNull(snapshot)
+        assertEquals("Connected edge session", snapshot.cloudflareEdgeSessionSummary)
+    }
+
+    @Test
     fun `returns null when management status response is unavailable or invalid`() {
         val unauthorizedReader =
             LocalManagementApiStatusReader {

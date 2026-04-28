@@ -1,8 +1,12 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -88,6 +92,92 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `controller allows another management tunnel test after round trip result changes`() {
+        val actions = mutableListOf<CloudflareScreenAction>()
+        var managementRoundTrip: String? = null
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
+                managementApiRoundTripProvider = { managementRoundTrip },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+
+        assertEquals(listOf(CloudflareScreenAction.TestManagementTunnel), actions)
+        assertFalse(CloudflareScreenAction.TestManagementTunnel in controller.state.availableActions)
+
+        managementRoundTrip = "HTTP 200 OK"
+        controller.handle(CloudflareScreenEvent.Refresh)
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.TestManagementTunnel,
+                CloudflareScreenAction.TestManagementTunnel,
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun `controller allows another management tunnel test after equal round trip result refresh`() {
+        val actions = mutableListOf<CloudflareScreenAction>()
+        var managementRoundTrip = "HTTP 200"
+        var managementRoundTripVersion = 1L
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
+                managementApiRoundTripProvider = { managementRoundTrip },
+                managementApiRoundTripVersionProvider = { managementRoundTripVersion },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+
+        assertEquals(listOf(CloudflareScreenAction.TestManagementTunnel), actions)
+        assertFalse(CloudflareScreenAction.TestManagementTunnel in controller.state.availableActions)
+
+        managementRoundTrip = "HTTP 200"
+        managementRoundTripVersion = 2L
+        controller.handle(CloudflareScreenEvent.Refresh)
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.TestManagementTunnel,
+                CloudflareScreenAction.TestManagementTunnel,
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun `controller exposes pending management tunnel test as visible state until resolved`() {
+        var managementRoundTripVersion = 1L
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
+                managementApiRoundTripProvider = { "HTTP 200" },
+                managementApiRoundTripVersionProvider = { managementRoundTripVersion },
+            )
+
+        controller.handle(CloudflareScreenEvent.TestManagementTunnel)
+
+        assertEquals("In progress: Test management tunnel", controller.state.pendingOperation)
+
+        managementRoundTripVersion = 2L
+        controller.handle(CloudflareScreenEvent.Refresh)
+
+        assertEquals("None", controller.state.pendingOperation)
+    }
+
+    @Test
     fun `controller emits redacted diagnostics copy effect once`() {
         val controller =
             CloudflareScreenController(
@@ -155,6 +245,35 @@ class CloudflareScreenControllerTest {
             CloudflareTokenStatus.Present,
             cloudflareTokenStatusFrom(
                 "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0=",
+            ),
+        )
+    }
+
+    @Test
+    fun `cloudflare token status projects safely from sensitive config load results`() {
+        val validTunnelToken =
+            "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="
+
+        assertEquals(
+            CloudflareTokenStatus.Present,
+            cloudflareTokenStatusFrom(
+                SensitiveConfigLoadResult.Loaded(
+                    SensitiveConfig(
+                        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                        managementApiToken = "management-token",
+                        cloudflareTunnelToken = validTunnelToken,
+                    ),
+                ),
+            ),
+        )
+        assertEquals(
+            CloudflareTokenStatus.Missing,
+            cloudflareTokenStatusFrom(SensitiveConfigLoadResult.MissingRequiredSecrets),
+        )
+        assertEquals(
+            CloudflareTokenStatus.Invalid,
+            cloudflareTokenStatusFrom(
+                SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
             ),
         )
     }
