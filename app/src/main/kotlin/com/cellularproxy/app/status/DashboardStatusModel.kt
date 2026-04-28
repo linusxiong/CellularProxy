@@ -11,6 +11,7 @@ import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
+import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 
 data class DashboardStatusModel(
@@ -256,6 +257,73 @@ data class DashboardTrafficSummary(
         require(bytesReceived >= 0) { "Recent received byte count must not be negative" }
         require(bytesSent >= 0) { "Recent sent byte count must not be negative" }
     }
+}
+
+class DashboardRecentTrafficSampler(
+    private val windowMillis: Long,
+    private val nowElapsedMillis: () -> Long,
+) {
+    private var baselineSample: DashboardTrafficSample? = null
+    private var latestSummary: DashboardTrafficSummary? = null
+
+    init {
+        require(windowMillis > 0) { "Recent traffic window must be positive" }
+    }
+
+    fun observe(metrics: ProxyTrafficMetrics): DashboardTrafficSummary? {
+        val currentSample =
+            DashboardTrafficSample(
+                elapsedMillis = nowElapsedMillis(),
+                bytesReceived = metrics.bytesReceived,
+                bytesSent = metrics.bytesSent,
+            )
+        val baselineSample = baselineSample
+        if (baselineSample == null) {
+            this.baselineSample = currentSample
+            return null
+        }
+        if (currentSample.isCounterResetFrom(baselineSample)) {
+            this.baselineSample = currentSample
+            latestSummary = null
+            return null
+        }
+        val elapsedMillis = currentSample.elapsedMillis - baselineSample.elapsedMillis
+        if (elapsedMillis < windowMillis) {
+            return latestSummary
+        }
+        val summary =
+            DashboardTrafficSummary(
+                windowLabel = windowLabel(elapsedMillis),
+                bytesReceived = currentSample.bytesReceived - baselineSample.bytesReceived,
+                bytesSent = currentSample.bytesSent - baselineSample.bytesSent,
+            )
+        this.baselineSample = currentSample
+        latestSummary = summary
+        return summary
+    }
+
+    private fun windowLabel(elapsedMillis: Long): String {
+        val seconds = elapsedMillis / 1_000L
+        return if (seconds > 0 && elapsedMillis % 1_000L == 0L) {
+            "Last $seconds seconds"
+        } else {
+            "Last $elapsedMillis ms"
+        }
+    }
+}
+
+private data class DashboardTrafficSample(
+    val elapsedMillis: Long,
+    val bytesReceived: Long,
+    val bytesSent: Long,
+) {
+    init {
+        require(elapsedMillis >= 0) { "Traffic sample elapsed millis must not be negative" }
+    }
+
+    fun isCounterResetFrom(previous: DashboardTrafficSample): Boolean = elapsedMillis <= previous.elapsedMillis ||
+        bytesReceived < previous.bytesReceived ||
+        bytesSent < previous.bytesSent
 }
 
 private fun ProxyServiceState.toDashboardServiceState(): DashboardServiceState = when (this) {

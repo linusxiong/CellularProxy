@@ -280,6 +280,20 @@ class ComposeAppShellContractTest {
             "Dashboard must keep cumulative traffic counters under a total-traffic label.",
         )
         assertTrue(
+            shellSource.contains("DashboardRecentTrafficSampler(") &&
+                shellSource.contains("nowElapsedMillis = SystemClock::elapsedRealtime"),
+            "App shell must create a live recent-traffic sampler instead of leaving recent traffic permanently unavailable.",
+        )
+        assertTrue(
+            shellSource.contains("recentTrafficState = recentTrafficSampler.observe(refreshedProxyStatus.metrics)") &&
+                shellSource.contains("recentTrafficProvider = { recentTrafficState }"),
+            "App shell must update recent traffic during live status refresh instead of mutating sampler state during dashboard reads.",
+        )
+        assertTrue(
+            shellSource.contains("recentTraffic = recentTrafficProvider()"),
+            "Dashboard status wiring must read the latest sampled recent traffic without advancing the sampler.",
+        )
+        assertTrue(
             dashboardSource.contains("} ?: \"Unavailable\""),
             "Dashboard recent traffic must not fall back to cumulative lifetime counters.",
         )

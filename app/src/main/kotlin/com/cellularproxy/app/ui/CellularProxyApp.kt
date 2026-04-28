@@ -4,6 +4,7 @@ package com.cellularproxy.app.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -61,7 +62,9 @@ import com.cellularproxy.app.service.LocalManagementApiActionDispatcher
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.app.service.LocalManagementApiStatusReader
 import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
+import com.cellularproxy.app.status.DashboardRecentTrafficSampler
 import com.cellularproxy.app.status.DashboardStatusModel
+import com.cellularproxy.app.status.DashboardTrafficSummary
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Dashboard
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
@@ -127,6 +130,14 @@ fun CellularProxyApp() {
     var currentPublicIpState by remember {
         mutableStateOf<PublicIpProbeActionResult>(PublicIpProbeActionResult.NotPublicIpAction)
     }
+    var recentTrafficState by remember { mutableStateOf<DashboardTrafficSummary?>(null) }
+    val recentTrafficSampler =
+        remember {
+            DashboardRecentTrafficSampler(
+                windowMillis = 60_000L,
+                nowElapsedMillis = SystemClock::elapsedRealtime,
+            )
+        }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
     }
@@ -138,7 +149,7 @@ fun CellularProxyApp() {
     }
     val refreshProxyStatus: suspend () -> Unit = {
         var refreshedRotationStatus: RotationStatus? = null
-        proxyStatusState =
+        val refreshedProxyStatus =
             withContext(Dispatchers.IO) {
                 val config = loadSettingsConfig()
                 localManagementApiStatusReader
@@ -150,6 +161,8 @@ fun CellularProxyApp() {
                     }?.proxyStatus
                     ?: ProxyServiceStatus.stopped(configuredRoute = config.network.defaultRoutePolicy)
             }
+        proxyStatusState = refreshedProxyStatus
+        recentTrafficState = recentTrafficSampler.observe(refreshedProxyStatus.metrics)
         refreshedRotationStatus?.let { rotationStatus ->
             rotationStatusState = rotationStatus
         }
@@ -315,6 +328,7 @@ fun CellularProxyApp() {
                             logsAuditRowsProvider = loadLogsAuditRows,
                             logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                             proxyStatusProvider = loadProxyStatus,
+                            recentTrafficProvider = { recentTrafficState },
                             observedNetworksProvider = loadObservedNetworks,
                             cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
                             latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
@@ -356,6 +370,7 @@ fun CellularProxyApp() {
                         logsAuditRowsProvider = loadLogsAuditRows,
                         logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                         proxyStatusProvider = loadProxyStatus,
+                        recentTrafficProvider = { recentTrafficState },
                         observedNetworksProvider = loadObservedNetworks,
                         cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
                         latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
@@ -640,6 +655,7 @@ private fun CellularProxyNavigationHost(
     logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>,
     logsAuditRedactionSecretsProvider: () -> LogRedactionSecrets,
     proxyStatusProvider: () -> ProxyServiceStatus,
+    recentTrafficProvider: () -> DashboardTrafficSummary?,
     observedNetworksProvider: () -> List<NetworkDescriptor>,
     cloudflareManagementRoundTripProvider: () -> String?,
     latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
@@ -662,13 +678,15 @@ private fun CellularProxyNavigationHost(
             CellularProxyDashboardRoute(
                 statusProvider = {
                     val config = settingsInitialConfigProvider()
+                    val status = proxyStatusProvider()
                     DashboardStatusModel.from(
                         config = config,
-                        status = proxyStatusProvider(),
+                        status = status,
                         recentLogs = dashboardLogSummariesFromLogsAuditRows(logsAuditRowsProvider()),
                         redactionSecrets = logsAuditRedactionSecretsProvider(),
                         latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
                         managementApiTokenPresent = settingsLoadSensitiveConfig().managementApiToken.isNotBlank(),
+                        recentTraffic = recentTrafficProvider(),
                     )
                 },
                 onStartProxyService = onStartProxyService,
