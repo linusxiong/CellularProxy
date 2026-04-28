@@ -1583,6 +1583,23 @@ class ComposeAppShellContractTest {
             logsAuditSource.contains("LogsAuditScreenEffect.ExportBundle -> onExportLogsAuditBundle(effect.bundle)"),
             "Logs/Audit route must forward export effects to runtime export wiring.",
         )
+        assertFalse(
+            shellSource.contains("onExportLogsAuditBundle = {}"),
+            "App shell must not drop Logs/Audit export effects at the top-level export boundary.",
+        )
+        assertTrue(
+            shellSource.contains("shareLogsAuditExportBundle(context, exportBundle)"),
+            "App shell must route Logs/Audit export effects to the Android share sheet.",
+        )
+        assertTrue(
+            shellSource.contains("Intent.ACTION_SEND") &&
+                shellSource.contains("setType(bundle.mediaType)") &&
+                shellSource.contains("Intent.EXTRA_SUBJECT") &&
+                shellSource.contains("Intent.EXTRA_TEXT") &&
+                shellSource.contains("Intent.createChooser") &&
+                shellSource.contains("context.startActivity("),
+            "Logs/Audit export wiring must share the redacted text bundle through an Android ACTION_SEND intent.",
+        )
     }
 
     @Test

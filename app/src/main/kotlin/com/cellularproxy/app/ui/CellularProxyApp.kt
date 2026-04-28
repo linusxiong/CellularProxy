@@ -2,6 +2,7 @@
 
 package com.cellularproxy.app.ui
 
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -120,7 +121,9 @@ fun CellularProxyApp() {
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
                             },
-                            onExportLogsAuditBundle = {},
+                            onExportLogsAuditBundle = { exportBundle ->
+                                shareLogsAuditExportBundle(context, exportBundle)
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -140,7 +143,9 @@ fun CellularProxyApp() {
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
                         },
-                        onExportLogsAuditBundle = {},
+                        onExportLogsAuditBundle = { exportBundle ->
+                            shareLogsAuditExportBundle(context, exportBundle)
+                        },
                         modifier =
                             Modifier
                                 .fillMaxSize()
@@ -150,6 +155,18 @@ fun CellularProxyApp() {
             }
         }
     }
+}
+
+private fun shareLogsAuditExportBundle(
+    context: Context,
+    bundle: LogsAuditScreenExportBundle,
+) {
+    val sendIntent =
+        Intent(Intent.ACTION_SEND)
+            .setType(bundle.mediaType)
+            .putExtra(Intent.EXTRA_SUBJECT, bundle.fileName)
+            .putExtra(Intent.EXTRA_TEXT, bundle.text)
+    context.startActivity(Intent.createChooser(sendIntent, "Export Logs/Audit bundle"))
 }
 
 internal enum class CellularProxyNavigationChrome {
