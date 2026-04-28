@@ -628,9 +628,10 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             settingsSource.contains("rememberUpdatedState(initialConfigProvider)") &&
-                settingsSource.contains("LaunchedEffect(Unit)") &&
+                settingsSource.contains("val observedConfig = initialConfigProvider()") &&
+                settingsSource.contains("LaunchedEffect(observedConfig)") &&
                 settingsSource.contains("ProxySettingsScreenEvent.Refresh"),
-            "Settings route must keep provider-backed state fresh when entering composition.",
+            "Settings route must refresh remembered controller state when provider-backed config changes.",
         )
         assertTrue(
             settingsSource.contains("ProxySettingsScreenEvent.UpdateForm(updatedForm)"),

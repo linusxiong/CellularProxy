@@ -382,10 +382,15 @@ class ProxySettingsScreenController(
     }
 
     private fun refreshFromProvider() {
+        val form = ProxySettingsFormState.from(formController.loadCurrentConfig())
         if (state.form != state.persistedForm) {
+            state =
+                ProxySettingsScreenState.from(
+                    form = state.form,
+                    persistedForm = form,
+                )
             return
         }
-        val form = ProxySettingsFormState.from(formController.loadCurrentConfig())
         state =
             ProxySettingsScreenState.from(
                 form = form,

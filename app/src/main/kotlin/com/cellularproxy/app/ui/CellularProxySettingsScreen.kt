@@ -44,6 +44,7 @@ internal fun CellularProxySettingsRoute(
     val currentSaveConfig by rememberUpdatedState(saveConfig)
     val currentLoadSensitiveConfig by rememberUpdatedState(loadSensitiveConfig)
     val currentSaveSensitiveConfig by rememberUpdatedState(saveSensitiveConfig)
+    val observedConfig = initialConfigProvider()
     val controller =
         remember {
             ProxySettingsScreenController(
@@ -63,7 +64,7 @@ internal fun CellularProxySettingsRoute(
         controller.consumeEffects()
         screenState = controller.state
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(observedConfig) {
         dispatchEvent(ProxySettingsScreenEvent.Refresh)
     }
 

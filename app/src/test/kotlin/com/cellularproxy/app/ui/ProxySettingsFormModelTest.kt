@@ -118,6 +118,44 @@ class ProxySettingsFormModelTest {
     }
 
     @Test
+    fun `settings controller refresh preserves dirty edits while updating persisted baseline`() {
+        var config = AppConfig.default()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = { config },
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = { config },
+                        saveConfig = { savedConfig -> config = savedConfig },
+                    ),
+            )
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(listenHost = "127.0.0.1"),
+            ),
+        )
+        config =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenPort = 8181,
+                    ),
+            )
+
+        controller.handle(ProxySettingsScreenEvent.Refresh)
+
+        assertEquals("127.0.0.1", controller.state.form.listenHost)
+        assertEquals("8080", controller.state.form.listenPort)
+        assertEquals("8181", controller.state.persistedForm.listenPort)
+
+        controller.handle(ProxySettingsScreenEvent.DiscardChanges)
+
+        assertEquals("8181", controller.state.form.listenPort)
+        assertEquals("8181", controller.state.persistedForm.listenPort)
+        assertEquals(emptyList(), controller.state.availableActions)
+    }
+
+    @Test
     fun `settings form controller saves through latest sensitive callback provider`() {
         val oldSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
         val newSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
