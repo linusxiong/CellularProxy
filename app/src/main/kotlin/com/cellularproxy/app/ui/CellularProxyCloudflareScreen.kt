@@ -751,7 +751,21 @@ private fun cloudflareScreenActions(
     return actions
 }
 
-private fun String?.isConfiguredManagementHostname(): Boolean = this?.trim()?.isNotEmpty() == true
+private fun String?.isConfiguredManagementHostname(): Boolean {
+    val sanitizedLabel =
+        this
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?.safeCloudflareManagementHostnameLabel()
+            ?.trim()
+            ?: return false
+    val hostLikePart =
+        sanitizedLabel
+            .substringAfter("://", sanitizedLabel)
+            .substringBefore(':')
+            .trim()
+    return hostLikePart.isNotEmpty()
+}
 
 private fun String.safeCloudflareManagementHostnameLabel(): String {
     val value = lineSequence().firstOrNull().orEmpty()

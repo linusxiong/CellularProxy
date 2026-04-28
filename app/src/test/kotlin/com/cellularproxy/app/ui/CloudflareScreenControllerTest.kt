@@ -186,6 +186,24 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `connected tunnel does not expose management tunnel test action for unsafe hostname without host`() {
+        val state =
+            CloudflareScreenState.from(
+                config =
+                    enabledCloudflareConfig(
+                        tokenPresent = true,
+                        managementHostname = "https://operator:hostname-secret@",
+                    ),
+                tunnelStatus = CloudflareTunnelStatus.connected(),
+                tokenStatus = CloudflareTokenStatus.Present,
+            )
+
+        assertEquals("https://", state.managementHostname)
+        assertFalse(CloudflareScreenAction.TestManagementTunnel in state.availableActions)
+        assertTrue(CloudflareScreenAction.CopyDiagnostics in state.availableActions)
+    }
+
+    @Test
     fun `management hostname display and diagnostics strip unsafe url details`() {
         val state =
             CloudflareScreenState.from(
