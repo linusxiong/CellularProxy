@@ -121,6 +121,48 @@ class DiagnosticsScreenControllerTest {
     }
 
     @Test
+    fun `controller copies selected completed diagnostic result only`() {
+        val controller =
+            DiagnosticsScreenController(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks =
+                            mapOf(
+                                DiagnosticCheckType.LocalManagementApi to
+                                    DiagnosticCheck {
+                                        DiagnosticCheckResult(
+                                            status = DiagnosticResultStatus.Failed,
+                                            errorCategory = "authorization=management-secret",
+                                            details = "Authorization: Bearer management-secret",
+                                        )
+                                    },
+                                DiagnosticCheckType.PublicIp to
+                                    DiagnosticCheck {
+                                        DiagnosticCheckResult(
+                                            status = DiagnosticResultStatus.Passed,
+                                            details = "public ip ok",
+                                        )
+                                    },
+                            ),
+                        nanoTime = { 0L },
+                    ),
+                secrets = LogRedactionSecrets(managementApiToken = "management-secret"),
+            )
+
+        controller.handle(DiagnosticsScreenEvent.CopyCheck(DiagnosticCheckType.LocalManagementApi))
+        assertTrue(controller.consumeEffects().isEmpty())
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.LocalManagementApi))
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.PublicIp))
+        controller.handle(DiagnosticsScreenEvent.CopyCheck(DiagnosticCheckType.LocalManagementApi))
+
+        val copyText = (controller.consumeEffects().single() as DiagnosticsScreenEffect.CopyText).text
+        assertTrue(copyText.contains("Local management API: failed"))
+        assertFalse(copyText.contains("Public IP"))
+        assertFalse(copyText.contains("management-secret"))
+    }
+
+    @Test
     fun `controller empty suite reports explicit missing check fallback`() {
         val controller =
             DiagnosticsScreenController(

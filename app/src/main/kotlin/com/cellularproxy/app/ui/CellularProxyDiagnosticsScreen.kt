@@ -102,6 +102,7 @@ internal fun CellularProxyDiagnosticsRoute(
         actionsEnabled = true,
         onRunAllChecks = { dispatchEvent(DiagnosticsScreenEvent.RunAllChecks) },
         onRunCheck = { type -> dispatchEvent(DiagnosticsScreenEvent.RunCheck(type)) },
+        onCopyCheck = { type -> dispatchEvent(DiagnosticsScreenEvent.CopyCheck(type)) },
         onCopySummary = { dispatchEvent(DiagnosticsScreenEvent.CopySummary) },
     )
 }
@@ -117,6 +118,7 @@ internal fun CellularProxyDiagnosticsScreen(
     actionsEnabled: Boolean = false,
     onRunAllChecks: () -> Unit = {},
     onRunCheck: (DiagnosticCheckType) -> Unit = {},
+    onCopyCheck: (DiagnosticCheckType) -> Unit = {},
     onCopySummary: () -> Unit = {},
 ) {
     Column(
@@ -150,6 +152,7 @@ internal fun CellularProxyDiagnosticsScreen(
                 item = item,
                 actionsEnabled = actionsEnabled,
                 onRunCheck = onRunCheck,
+                onCopyCheck = onCopyCheck,
             )
         }
     }
@@ -221,6 +224,7 @@ internal data class DiagnosticsScreenItem(
 internal enum class DiagnosticsScreenAction {
     RunAllChecks,
     RunCheck,
+    CopyCheck,
     CopySummary,
 }
 
@@ -260,6 +264,7 @@ private fun DiagnosticsCheckRow(
     item: DiagnosticsScreenItem,
     actionsEnabled: Boolean,
     onRunCheck: (DiagnosticCheckType) -> Unit,
+    onCopyCheck: (DiagnosticCheckType) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -287,6 +292,13 @@ private fun DiagnosticsCheckRow(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Run ${item.label}")
+        }
+        OutlinedButton(
+            onClick = { onCopyCheck(item.type) },
+            enabled = actionsEnabled && DiagnosticsScreenAction.CopyCheck in item.availableActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Copy ${item.label}")
         }
     }
 }
@@ -318,6 +330,11 @@ private fun DiagnosticResultItem.toScreenItem(): DiagnosticsScreenItem = Diagnos
     availableActions =
         if (status == DiagnosticResultStatus.Running) {
             emptyList()
+        } else if (status.isCompleted) {
+            listOf(
+                DiagnosticsScreenAction.RunCheck,
+                DiagnosticsScreenAction.CopyCheck,
+            )
         } else {
             listOf(DiagnosticsScreenAction.RunCheck)
         },

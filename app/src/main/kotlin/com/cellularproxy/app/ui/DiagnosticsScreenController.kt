@@ -34,6 +34,13 @@ internal class DiagnosticsScreenController(
                     state = buildState()
                 }
             }
+            is DiagnosticsScreenEvent.CopyCheck -> {
+                state = buildState()
+                val item = state.items.singleOrNull { screenItem -> screenItem.type == event.type }
+                if (item != null && DiagnosticsScreenAction.CopyCheck in item.availableActions) {
+                    pendingEffects.add(DiagnosticsScreenEffect.CopyText(item.summaryLine()))
+                }
+            }
         }
     }
 
@@ -50,6 +57,10 @@ internal class DiagnosticsScreenController(
 
 internal sealed interface DiagnosticsScreenEvent {
     data class RunCheck(
+        val type: DiagnosticCheckType,
+    ) : DiagnosticsScreenEvent
+
+    data class CopyCheck(
         val type: DiagnosticCheckType,
     ) : DiagnosticsScreenEvent
 
