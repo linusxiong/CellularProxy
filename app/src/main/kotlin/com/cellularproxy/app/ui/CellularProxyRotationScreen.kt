@@ -56,8 +56,12 @@ internal fun CellularProxyRotationRoute(
     val currentOnProbeCurrentPublicIp by rememberUpdatedState(onProbeCurrentPublicIp)
     val currentOnRotateMobileData by rememberUpdatedState(onRotateMobileData)
     val currentOnRotateAirplaneMode by rememberUpdatedState(onRotateAirplaneMode)
+    val observedConfig = configProvider()
     val observedRotationStatus = rotationStatusProvider()
     val observedCurrentPublicIp = currentPublicIpProvider()
+    val observedRootAvailability = rootAvailabilityProvider()
+    val observedActiveConnections = activeConnectionsProvider()
+    val observedRedactionSecrets = redactionSecretsProvider()
     val controller =
         remember {
             RotationScreenController(
@@ -91,7 +95,14 @@ internal fun CellularProxyRotationRoute(
     LaunchedEffect(Unit) {
         dispatchEvent(RotationScreenEvent.Refresh)
     }
-    LaunchedEffect(observedRotationStatus, observedCurrentPublicIp) {
+    LaunchedEffect(
+        observedConfig,
+        observedRotationStatus,
+        observedCurrentPublicIp,
+        observedRootAvailability,
+        observedActiveConnections,
+        observedRedactionSecrets,
+    ) {
         controller.handle(RotationScreenEvent.Refresh)
         screenState = controller.state
     }

@@ -1069,6 +1069,10 @@ class ComposeAppShellContractTest {
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyRotationScreen.kt")
                 .readText()
+        val rotationRefreshEffectKeys =
+            rotationSource
+                .substringAfter("LaunchedEffect(\n")
+                .substringBefore("    ) {")
 
         assertTrue(
             shellSource.contains("CellularProxyRotationRoute("),
@@ -1114,9 +1118,20 @@ class ComposeAppShellContractTest {
         assertTrue(
             rotationSource.contains("val observedRotationStatus = rotationStatusProvider()") &&
                 rotationSource.contains("val observedCurrentPublicIp = currentPublicIpProvider()") &&
-                rotationSource.contains("LaunchedEffect(observedRotationStatus, observedCurrentPublicIp)") &&
+                rotationSource.contains("val observedConfig = configProvider()") &&
+                rotationSource.contains("val observedRootAvailability = rootAvailabilityProvider()") &&
+                rotationSource.contains("val observedActiveConnections = activeConnectionsProvider()") &&
+                rotationSource.contains("val observedRedactionSecrets = redactionSecretsProvider()") &&
+                listOf(
+                    "observedConfig",
+                    "observedRotationStatus",
+                    "observedCurrentPublicIp",
+                    "observedRootAvailability",
+                    "observedActiveConnections",
+                    "observedRedactionSecrets",
+                ).all(rotationRefreshEffectKeys::contains) &&
                 rotationSource.contains("controller.handle(RotationScreenEvent.Refresh)"),
-            "Rotation route must refresh remembered controller state when observed rotation status or current public IP changes.",
+            "Rotation route must refresh remembered controller state when observed provider-backed state or redaction inputs change.",
         )
         assertTrue(
             rotationSource.contains("RotationScreenEvent.RotateMobileData"),
