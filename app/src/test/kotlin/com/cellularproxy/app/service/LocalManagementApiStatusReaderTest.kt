@@ -13,6 +13,8 @@ import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -31,7 +33,8 @@ class LocalManagementApiStatusReaderTest {
                             """"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8081,"configuredRoute":"cellular","boundRoute":{"id":"cell-1","category":"cellular","displayName":"Carrier LTE","available":true},"publicIp":"198.51.100.23","highSecurityRisk":true,"startupError":null},""" +
                             """"metrics":{"activeConnections":2,"totalConnections":5,"rejectedConnections":1,"bytesReceived":42,"bytesSent":99},""" +
                             """"cloudflare":{"state":"connected","remoteManagementAvailable":true,"failureReason":null},""" +
-                            """"root":{"operationsEnabled":true,"availability":"available"}""" +
+                            """"root":{"operationsEnabled":true,"availability":"available"},""" +
+                            """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null}""" +
                             "}",
                 )
             }
@@ -65,6 +68,32 @@ class LocalManagementApiStatusReaderTest {
         assertEquals("Carrier LTE", status.boundRoute?.displayName)
         assertEquals(CloudflareTunnelState.Connected, status.cloudflare.state)
         assertEquals(RootAvailabilityStatus.Available, status.rootAvailability)
+    }
+
+    @Test
+    fun `loads runtime snapshot with current rotation status from management status response`() {
+        val reader =
+            LocalManagementApiStatusReader {
+                LocalManagementApiStatusResponse(
+                    statusCode = 200,
+                    body =
+                        "{" +
+                            """"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8081,"configuredRoute":"cellular","boundRoute":null,"publicIp":"198.51.100.23","highSecurityRisk":false,"startupError":null},""" +
+                            """"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},""" +
+                            """"cloudflare":{"state":"connected","remoteManagementAvailable":true,"failureReason":null},""" +
+                            """"root":{"operationsEnabled":true,"availability":"available"},""" +
+                            """"rotation":{"state":"waiting_for_network_return","operation":"mobile_data","oldPublicIp":"198.51.100.23","newPublicIp":null,"publicIpChanged":null,"failureReason":null}""" +
+                            "}",
+                )
+            }
+
+        val snapshot = reader.loadSnapshot(config(), sensitiveConfig())
+
+        requireNotNull(snapshot)
+        assertEquals(ProxyServiceState.Running, snapshot.proxyStatus.state)
+        assertEquals(RotationState.WaitingForNetworkReturn, snapshot.rotationStatus.state)
+        assertEquals(RotationOperation.MobileData, snapshot.rotationStatus.operation)
+        assertEquals("198.51.100.23", snapshot.rotationStatus.oldPublicIp)
     }
 
     @Test

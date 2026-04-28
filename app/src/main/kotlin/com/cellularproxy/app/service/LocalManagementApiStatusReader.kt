@@ -12,6 +12,10 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -31,7 +35,12 @@ class LocalManagementApiStatusReader(
     fun load(
         config: AppConfig,
         sensitiveConfig: SensitiveConfig,
-    ): ProxyServiceStatus? = runCatching {
+    ): ProxyServiceStatus? = loadSnapshot(config, sensitiveConfig)?.proxyStatus
+
+    fun loadSnapshot(
+        config: AppConfig,
+        sensitiveConfig: SensitiveConfig,
+    ): LocalManagementApiRuntimeSnapshot? = runCatching {
         val response =
             transport(
                 LocalManagementApiActionRequest(
@@ -41,12 +50,17 @@ class LocalManagementApiStatusReader(
                 ),
             )
         if (response.isSuccessful) {
-            proxyServiceStatusFromManagementApiStatusJson(response.body)
+            localManagementApiRuntimeSnapshotFromStatusJson(response.body)
         } else {
             null
         }
     }.getOrNull()
 }
+
+data class LocalManagementApiRuntimeSnapshot(
+    val proxyStatus: ProxyServiceStatus,
+    val rotationStatus: RotationStatus,
+)
 
 data class LocalManagementApiStatusResponse(
     val statusCode: Int,
@@ -57,20 +71,28 @@ data class LocalManagementApiStatusResponse(
 }
 
 internal fun proxyServiceStatusFromManagementApiStatusJson(body: String): ProxyServiceStatus? = runCatching {
+    localManagementApiRuntimeSnapshotFromStatusJson(body)?.proxyStatus
+}.getOrNull()
+
+internal fun localManagementApiRuntimeSnapshotFromStatusJson(body: String): LocalManagementApiRuntimeSnapshot? = runCatching {
     val root = Json.parseToJsonElement(body).jsonObject
     val service = root.objectValue("service")
-    ProxyServiceStatus(
-        state = service.stringValue("state").toProxyServiceState(),
-        listenHost = service.nullableStringValue("listenHost"),
-        listenPort = service.nullableIntValue("listenPort"),
-        configuredRoute = service.stringValue("configuredRoute").toRouteTarget(),
-        boundRoute = service.nullableObjectValue("boundRoute")?.toNetworkDescriptor(),
-        publicIp = service.nullableStringValue("publicIp"),
-        hasHighSecurityRisk = service.booleanValue("highSecurityRisk"),
-        startupError = service.nullableStringValue("startupError")?.toProxyStartupError(),
-        metrics = root.objectValue("metrics").toProxyTrafficMetrics(),
-        cloudflare = root.objectValue("cloudflare").toCloudflareTunnelStatus(),
-        rootAvailability = root.objectValue("root").stringValue("availability").toRootAvailabilityStatus(),
+    LocalManagementApiRuntimeSnapshot(
+        proxyStatus =
+            ProxyServiceStatus(
+                state = service.stringValue("state").toProxyServiceState(),
+                listenHost = service.nullableStringValue("listenHost"),
+                listenPort = service.nullableIntValue("listenPort"),
+                configuredRoute = service.stringValue("configuredRoute").toRouteTarget(),
+                boundRoute = service.nullableObjectValue("boundRoute")?.toNetworkDescriptor(),
+                publicIp = service.nullableStringValue("publicIp"),
+                hasHighSecurityRisk = service.booleanValue("highSecurityRisk"),
+                startupError = service.nullableStringValue("startupError")?.toProxyStartupError(),
+                metrics = root.objectValue("metrics").toProxyTrafficMetrics(),
+                cloudflare = root.objectValue("cloudflare").toCloudflareTunnelStatus(),
+                rootAvailability = root.objectValue("root").stringValue("availability").toRootAvailabilityStatus(),
+            ),
+        rotationStatus = root.objectValue("rotation").toRotationStatus(),
     )
 }.getOrNull()
 
@@ -100,6 +122,15 @@ private fun JsonObject.toNetworkDescriptor(): NetworkDescriptor = NetworkDescrip
     category = stringValue("category").toNetworkCategory(),
     displayName = stringValue("displayName"),
     isAvailable = booleanValue("available"),
+)
+
+private fun JsonObject.toRotationStatus(): RotationStatus = RotationStatus(
+    state = stringValue("state").toRotationState(),
+    operation = nullableStringValue("operation")?.toRotationOperation(),
+    oldPublicIp = nullableStringValue("oldPublicIp"),
+    newPublicIp = nullableStringValue("newPublicIp"),
+    publicIpChanged = nullableBooleanValue("publicIpChanged"),
+    failureReason = nullableStringValue("failureReason")?.toRotationFailureReason(),
 )
 
 private fun String.toProxyServiceState(): ProxyServiceState = when (this) {
@@ -154,6 +185,44 @@ private fun String.toProxyStartupError(): ProxyStartupError = when (this) {
     else -> error("Unknown proxy startup error: $this")
 }
 
+private fun String.toRotationState(): RotationState = when (this) {
+    "idle" -> RotationState.Idle
+    "checking_cooldown" -> RotationState.CheckingCooldown
+    "checking_root" -> RotationState.CheckingRoot
+    "probing_old_public_ip" -> RotationState.ProbingOldPublicIp
+    "pausing_new_requests" -> RotationState.PausingNewRequests
+    "draining_connections" -> RotationState.DrainingConnections
+    "running_disable_command" -> RotationState.RunningDisableCommand
+    "waiting_for_toggle_delay" -> RotationState.WaitingForToggleDelay
+    "running_enable_command" -> RotationState.RunningEnableCommand
+    "waiting_for_network_return" -> RotationState.WaitingForNetworkReturn
+    "probing_new_public_ip" -> RotationState.ProbingNewPublicIp
+    "resuming_proxy_requests" -> RotationState.ResumingProxyRequests
+    "completed" -> RotationState.Completed
+    "failed" -> RotationState.Failed
+    else -> error("Unknown rotation state: $this")
+}
+
+private fun String.toRotationOperation(): RotationOperation = when (this) {
+    "mobile_data" -> RotationOperation.MobileData
+    "airplane_mode" -> RotationOperation.AirplaneMode
+    else -> error("Unknown rotation operation: $this")
+}
+
+private fun String.toRotationFailureReason(): RotationFailureReason = when (this) {
+    "cooldown_active" -> RotationFailureReason.CooldownActive
+    "root_unavailable" -> RotationFailureReason.RootUnavailable
+    "old_public_ip_probe_failed" -> RotationFailureReason.OldPublicIpProbeFailed
+    "root_command_failed" -> RotationFailureReason.RootCommandFailed
+    "root_command_timed_out" -> RotationFailureReason.RootCommandTimedOut
+    "network_return_timed_out" -> RotationFailureReason.NetworkReturnTimedOut
+    "new_public_ip_probe_failed" -> RotationFailureReason.NewPublicIpProbeFailed
+    "strict_ip_change_required" -> RotationFailureReason.StrictIpChangeRequired
+    "root_operations_disabled" -> RotationFailureReason.RootOperationsDisabled
+    "execution_unavailable" -> RotationFailureReason.ExecutionUnavailable
+    else -> error("Unknown rotation failure reason: $this")
+}
+
 private fun JsonObject.objectValue(name: String): JsonObject = requireNotNull(nullableObjectValue(name))
 
 private fun JsonObject.nullableObjectValue(name: String): JsonObject? = nullableElementValue(name)?.takeUnless(JsonElement::isJsonNull)?.jsonObject
@@ -163,6 +232,11 @@ private fun JsonObject.stringValue(name: String): String = requireNotNull(nullab
 private fun JsonObject.nullableStringValue(name: String): String? = nullableElementValue(name)?.takeUnless(JsonElement::isJsonNull)?.jsonPrimitive?.content
 
 private fun JsonObject.booleanValue(name: String): Boolean = requireNotNull(nullableElementValue(name)?.jsonPrimitive?.booleanOrNull)
+
+private fun JsonObject.nullableBooleanValue(name: String): Boolean? = nullableElementValue(name)
+    ?.takeUnless(JsonElement::isJsonNull)
+    ?.jsonPrimitive
+    ?.booleanOrNull
 
 private fun JsonObject.longValue(name: String): Long = requireNotNull(nullableElementValue(name)?.jsonPrimitive?.longOrNull)
 

@@ -53,7 +53,7 @@ class ManagementApiStateHandlerTest {
             ),
             response,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status")
+        callbacks.assertCalls("rootOperationsEnabled", "status", "rotationStatus")
     }
 
     @Test
@@ -72,7 +72,28 @@ class ManagementApiStateHandlerTest {
                 ).body,
             response.body,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status")
+        callbacks.assertCalls("rootOperationsEnabled", "status", "rotationStatus")
+    }
+
+    @Test
+    fun `status includes current rotation status from rotation callback`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus()
+        callbacks.rootOperationsEnabledResult = true
+        callbacks.rotationStatusResult =
+            RotationStatus(
+                state = RotationState.WaitingForNetworkReturn,
+                operation = RotationOperation.AirplaneMode,
+                oldPublicIp = "198.51.100.10",
+            )
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            """{"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8080,"configuredRoute":"automatic","boundRoute":null,"publicIp":"198.51.100.10","highSecurityRisk":false,"startupError":null},"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"failed with status-secret"},"root":{"operationsEnabled":true,"availability":"unknown"},"rotation":{"state":"waiting_for_network_return","operation":"airplane_mode","oldPublicIp":"198.51.100.10","newPublicIp":null,"publicIpChanged":null,"failureReason":null}}""",
+            response.body,
+        )
+        callbacks.assertCalls("rootOperationsEnabled", "status", "rotationStatus")
     }
 
     @Test
@@ -292,6 +313,7 @@ class ManagementApiStateHandlerTest {
                 RotationTransitionDisposition.Ignored,
                 RotationStatus.idle(),
             )
+        var rotationStatusResult: RotationStatus = RotationStatus.idle()
         var serviceStopResult: ProxyServiceStopTransitionResult =
             ProxyServiceStopTransitionResult(
                 ProxyServiceStopTransitionDisposition.Ignored,
@@ -311,6 +333,7 @@ class ManagementApiStateHandlerTest {
                     cloudflareReconnect = { record("cloudflareReconnect", cloudflareReconnectResult) },
                     rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
                     rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
+                    rotationStatus = { record("rotationStatus", rotationStatusResult) },
                     serviceStop = { record("serviceStop", serviceStopResult) },
                     rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
                 ),

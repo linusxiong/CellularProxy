@@ -134,19 +134,22 @@ fun CellularProxyApp() {
         )
     }
     val refreshProxyStatus: suspend () -> Unit = {
+        var refreshedRotationStatus: RotationStatus? = null
         proxyStatusState =
             withContext(Dispatchers.IO) {
                 val config = loadSettingsConfig()
-                proxyStatusFromLiveStatusOrConfigFallback(
-                    config = config,
-                    liveStatus = {
-                        localManagementApiStatusReader.load(
-                            config = config,
-                            sensitiveConfig = loadSensitiveConfig(),
-                        )
-                    },
-                )
+                localManagementApiStatusReader
+                    .loadSnapshot(
+                        config = config,
+                        sensitiveConfig = loadSensitiveConfig(),
+                    )?.also { snapshot ->
+                        refreshedRotationStatus = snapshot.rotationStatus
+                    }?.proxyStatus
+                    ?: ProxyServiceStatus.stopped(configuredRoute = config.network.defaultRoutePolicy)
             }
+        refreshedRotationStatus?.let { rotationStatus ->
+            rotationStatusState = rotationStatus
+        }
     }
     LaunchedEffect(Unit) {
         refreshProxyStatus()

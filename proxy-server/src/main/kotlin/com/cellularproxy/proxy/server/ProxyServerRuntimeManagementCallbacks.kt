@@ -40,6 +40,7 @@ object ProxyServerRuntimeManagementCallbacks {
         cloudflareReconnect = cloudflareReconnect,
         rootOperationsEnabled = rootOperationsEnabled,
         rootAvailability = rootAvailability,
+        rotationStatus = { rotationControlPlane.currentStatus },
         rotateMobileData = {
             requestRotationIfRootEnabled(
                 operation = RotationOperation.MobileData,
@@ -70,6 +71,7 @@ object ProxyServerRuntimeManagementCallbacks {
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        rotationStatus: () -> RotationStatus = { RotationStatus.idle() },
         rootOperationsEnabled: () -> Boolean,
         rootAvailability: () -> RootAvailabilityStatus,
     ): ManagementApiCallbacks = ManagementApiCallbacks(
@@ -104,6 +106,7 @@ object ProxyServerRuntimeManagementCallbacks {
                 rootOperationsEnabled = rootOperationsEnabled,
                 operation = RotationOperation.AirplaneMode,
             ),
+        rotationStatus = rotationStatus,
         serviceStop = { runtime.requestStop() },
     )
 }

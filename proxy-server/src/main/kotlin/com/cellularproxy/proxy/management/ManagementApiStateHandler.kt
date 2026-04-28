@@ -8,6 +8,7 @@ import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyServiceStopTransitionResult
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 
 data class ManagementApiCallbacks(
@@ -21,6 +22,7 @@ data class ManagementApiCallbacks(
     val cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
     val rotateMobileData: () -> RotationTransitionResult,
     val rotateAirplaneMode: () -> RotationTransitionResult,
+    val rotationStatus: () -> RotationStatus = { RotationStatus.idle() },
     val serviceStop: () -> ProxyServiceStopTransitionResult,
     val rootOperationsEnabled: () -> Boolean,
 )
@@ -66,6 +68,7 @@ class ManagementApiStateHandler(
             }
         return ManagementApiReadOnlyResponses.status(
             status = status,
+            rotationStatus = callbacks.rotationStatus(),
             secrets = secrets,
             rootOperationsEnabled = rootOperationsEnabled,
         )

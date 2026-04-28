@@ -75,12 +75,27 @@ class ProxyStatusProviderTest {
         assertTrue(
             shellSource.contains("LaunchedEffect(") &&
                 shellSource.contains("withContext(Dispatchers.IO)") &&
-                shellSource.contains("localManagementApiStatusReader.load("),
+                shellSource.contains("localManagementApiStatusReader\n                    .loadSnapshot("),
             "Live Management API status refresh must run from a coroutine on Dispatchers.IO.",
         )
         assertTrue(
             shellSource.contains("val loadProxyStatus: () -> ProxyServiceStatus = {\n        proxyStatusState\n    }"),
             "The Compose status provider must return cached state instead of performing blocking HTTP work.",
+        )
+    }
+
+    @Test
+    fun `app shell updates cached rotation status from live management api status refresh`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("localManagementApiStatusReader\n                    .loadSnapshot(") &&
+                shellSource.contains("refreshedRotationStatus = snapshot.rotationStatus") &&
+                shellSource.contains("rotationStatusState = rotationStatus"),
+            "The shared live status refresh must update Rotation state from GET /api/status, not only rotation action responses.",
         )
     }
 
