@@ -857,6 +857,11 @@ private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (t
             label = toDashboardText(),
             action = DashboardScreenAction.OpenSettings,
         )
+    DashboardWarning.ManagementApiTokenMissing ->
+        DashboardRiskItem(
+            label = toDashboardText(),
+            action = DashboardScreenAction.OpenSettings,
+        )
     DashboardWarning.CloudflareTokenMissing,
     DashboardWarning.CloudflareTokenInvalid,
     DashboardWarning.CloudflareManagementApiCheckFailing,

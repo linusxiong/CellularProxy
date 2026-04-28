@@ -472,6 +472,28 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `dashboard exposes missing management API token risk as settings action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    managementApiTokenPresent = false,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Management API token is missing",
+                    action = DashboardScreenAction.OpenSettings,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
     fun `dashboard log summaries preserve row data and severity for recent errors`() {
         val summaries =
             dashboardLogSummariesFromLogsAuditRows(
