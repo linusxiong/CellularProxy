@@ -410,6 +410,7 @@ internal class RotationScreenController(
         when (event) {
             RotationScreenEvent.CopyDiagnostics -> {
                 if (RotationScreenAction.CopyDiagnostics in state.availableActions) {
+                    recordAuditAction(RotationScreenAction.CopyDiagnostics)?.let(pendingEffects::add)
                     pendingEffects.add(RotationScreenEffect.CopyText(state.copyableDiagnostics))
                 }
             }
@@ -472,10 +473,7 @@ internal class RotationScreenController(
             ).withoutPendingActions(pendingActions)
     }
 
-    private fun recordAuditAction(action: RotationScreenAction): RotationScreenEffect.RecordAuditAction? = if (
-        auditActionsEnabled &&
-        action != RotationScreenAction.CopyDiagnostics
-    ) {
+    private fun recordAuditAction(action: RotationScreenAction): RotationScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
         RotationScreenEffect.RecordAuditAction(
             PersistedLogsAuditRecord(
                 occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),

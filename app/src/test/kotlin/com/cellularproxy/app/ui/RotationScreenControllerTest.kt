@@ -219,6 +219,13 @@ class RotationScreenControllerTest {
                     title = "Rotation rotate_mobile_data",
                     detail = "action=rotate_mobile_data phase=Idle",
                 ),
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 12_345,
+                    category = LogsAuditRecordCategory.Rotation,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Rotation copy_diagnostics",
+                    detail = "action=copy_diagnostics phase=Idle",
+                ),
             ),
             controller
                 .consumeEffects()
