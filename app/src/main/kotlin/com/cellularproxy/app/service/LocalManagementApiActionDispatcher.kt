@@ -83,8 +83,16 @@ private fun String?.toCloudflareManagementUrl(path: String): String {
     val uri = URI(if ("://" in label) label else "https://$label")
     val scheme = requireNotNull(uri.scheme?.lowercase()) { "Cloudflare management hostname requires a scheme" }
     require(scheme == "http" || scheme == "https") { "Cloudflare management hostname must use HTTP or HTTPS" }
-    val authority = requireNotNull(uri.rawAuthority) { "Cloudflare management hostname requires a host" }
-    return URI(scheme, authority, path, null, null).toString()
+    val host = uri.host
+    if (host != null) {
+        return URI(scheme, null, host, uri.port, path, null, null).toString()
+    }
+    val authority =
+        requireNotNull(uri.rawAuthority) { "Cloudflare management hostname requires a host" }
+            .substringAfterLast("@")
+            .takeIf(String::isNotBlank)
+    requireNotNull(authority) { "Cloudflare management hostname requires a host" }
+    return URI("$scheme://$authority$path").toString()
 }
 
 private fun sendHttpRequest(request: LocalManagementApiActionRequest): LocalManagementApiActionResponse {

@@ -7,6 +7,7 @@ import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class LocalManagementApiActionDispatcherTest {
     @Test
@@ -292,6 +293,42 @@ class LocalManagementApiActionDispatcherTest {
             ),
             requests,
         )
+    }
+
+    @Test
+    fun `cloudflare management tunnel test strips unsafe URL components from configured hostname`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 200)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareManagementStatus,
+            config =
+                AppConfig.default().copy(
+                    cloudflare =
+                        CloudflareConfig(
+                            enabled = true,
+                            tunnelTokenPresent = true,
+                            managementHostnameLabel =
+                                "https://operator:hostname-secret@management.example.test/private" +
+                                    "?token=query-secret#fragment-secret",
+                        ),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        val request = requests.single()
+        assertEquals("https://management.example.test/api/status", request.url)
+        assertFalse(request.url.contains("operator"))
+        assertFalse(request.url.contains("hostname-secret"))
+        assertFalse(request.url.contains("query-secret"))
+        assertFalse(request.url.contains("fragment-secret"))
+        assertFalse(request.url.contains("/private"))
     }
 }
 
