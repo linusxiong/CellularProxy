@@ -701,9 +701,32 @@ class ComposeAppShellContractTest {
             cloudflareSource.contains("val observedTunnelStatus = tunnelStatusProvider()") &&
                 cloudflareSource.contains("val observedEdgeSessionSummary = edgeSessionSummaryProvider()") &&
                 cloudflareSource.contains(
-                    "LaunchedEffect(observedTunnelStatus, observedEdgeSessionSummary, observedManagementApiRoundTrip)",
+                    "LaunchedEffect(\n" +
+                        "        observedConfig,\n" +
+                        "        observedTokenStatus,\n" +
+                        "        observedTunnelStatus,\n" +
+                        "        observedEdgeSessionSummary,\n" +
+                        "        observedManagementApiRoundTrip,\n" +
+                        "        observedRedactionSecrets,\n" +
+                        "    )",
                 ),
             "Cloudflare route must refresh remembered controller state when live tunnel status or edge-session health changes.",
+        )
+        assertTrue(
+            cloudflareSource.contains("val observedConfig = configProvider()") &&
+                cloudflareSource.contains("val observedTokenStatus = tokenStatusProvider()") &&
+                cloudflareSource.contains("val observedRedactionSecrets = redactionSecretsProvider()") &&
+                cloudflareSource.contains(
+                    "LaunchedEffect(\n" +
+                        "        observedConfig,\n" +
+                        "        observedTokenStatus,\n" +
+                        "        observedTunnelStatus,\n" +
+                        "        observedEdgeSessionSummary,\n" +
+                        "        observedManagementApiRoundTrip,\n" +
+                        "        observedRedactionSecrets,\n" +
+                        "    )",
+                ),
+            "Cloudflare route must refresh remembered controller state when persisted config, token status, or redaction secrets change.",
         )
         assertTrue(
             cloudflareSource.contains("onStartTunnel: () -> Unit = {}"),

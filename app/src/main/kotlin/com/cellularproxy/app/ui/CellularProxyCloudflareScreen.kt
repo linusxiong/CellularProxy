@@ -63,9 +63,12 @@ internal fun CellularProxyCloudflareRoute(
     val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
     val currentOnReconnectTunnel by rememberUpdatedState(onReconnectTunnel)
     val currentOnTestManagementTunnel by rememberUpdatedState(onTestManagementTunnel)
+    val observedConfig = configProvider()
+    val observedTokenStatus = tokenStatusProvider()
     val observedTunnelStatus = tunnelStatusProvider()
     val observedEdgeSessionSummary = edgeSessionSummaryProvider()
     val observedManagementApiRoundTrip = managementApiRoundTripProvider()
+    val observedRedactionSecrets = redactionSecretsProvider()
     val controller =
         remember {
             CloudflareScreenController(
@@ -87,7 +90,14 @@ internal fun CellularProxyCloudflareRoute(
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
-    LaunchedEffect(observedTunnelStatus, observedEdgeSessionSummary, observedManagementApiRoundTrip) {
+    LaunchedEffect(
+        observedConfig,
+        observedTokenStatus,
+        observedTunnelStatus,
+        observedEdgeSessionSummary,
+        observedManagementApiRoundTrip,
+        observedRedactionSecrets,
+    ) {
         controller.handle(CloudflareScreenEvent.Refresh)
         screenState = controller.state
     }
