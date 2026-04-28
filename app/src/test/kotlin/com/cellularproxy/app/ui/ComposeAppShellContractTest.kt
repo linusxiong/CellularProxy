@@ -667,6 +667,11 @@ class ComposeAppShellContractTest {
             shellSource.contains("onTestManagementTunnel = {"),
             "App shell must explicitly wire the Cloudflare management test action callback, even before runtime dispatch exists.",
         )
+        assertTrue(
+            shellSource.contains("LocalManagementApiAction.CloudflareStart") &&
+                shellSource.contains("LocalManagementApiAction.CloudflareStop"),
+            "App shell must dispatch Cloudflare lifecycle callbacks through the local Management API action dispatcher.",
+        )
 
         listOf(
             "Tunnel enabled",
@@ -986,6 +991,11 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("onRotateAirplaneMode = {"),
             "App shell must explicitly wire the Rotation airplane-mode callback, even before runtime dispatch exists.",
+        )
+        assertTrue(
+            shellSource.contains("LocalManagementApiAction.RotateMobileData") &&
+                shellSource.contains("LocalManagementApiAction.RotateAirplaneMode"),
+            "App shell must dispatch high-impact rotation callbacks through the local Management API action dispatcher.",
         )
 
         listOf(

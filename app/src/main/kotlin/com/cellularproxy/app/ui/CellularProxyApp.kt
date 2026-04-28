@@ -4,6 +4,7 @@ package com.cellularproxy.app.ui
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +45,8 @@ import com.cellularproxy.app.config.SensitiveConfigRepository
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
 import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
+import com.cellularproxy.app.service.LocalManagementApiAction
+import com.cellularproxy.app.service.LocalManagementApiActionDispatcher
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Dashboard
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
@@ -50,17 +54,21 @@ import com.cellularproxy.app.ui.CellularProxyNavigationDestination.LogsAudit
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Rotation
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
 import com.cellularproxy.shared.config.AppConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CellularProxyApp() {
     val navController = rememberNavController()
+    val coroutineScope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val plainConfigRepository = remember(context) { CellularProxyPlainConfigStore.repository(context) }
     val sensitiveRepository = remember(context) { SensitiveConfigRepositoryFactory.create(context) }
     val sensitiveConfigGenerator = remember { SecureRandomSensitiveConfigGenerator() }
+    val localManagementApiActionDispatcher = remember { LocalManagementApiActionDispatcher() }
     val dispatchForegroundServiceCommand: (String) -> Unit = { action ->
         context.startForegroundService(
             Intent(context, CellularProxyForegroundService::class.java).setAction(action),
@@ -77,6 +85,26 @@ fun CellularProxyApp() {
             repository = sensitiveRepository,
             generator = sensitiveConfigGenerator,
         )
+    }
+    val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
+        coroutineScope.launch(Dispatchers.IO) {
+            runCatching {
+                localManagementApiActionDispatcher.dispatch(
+                    action = action,
+                    config = loadSettingsConfig(),
+                    sensitiveConfig = loadSensitiveConfig(),
+                )
+            }.onSuccess { response ->
+                if (!response.isSuccessful) {
+                    Log.w(
+                        CELLULAR_PROXY_APP_TAG,
+                        "Local management action $action returned HTTP ${response.statusCode}",
+                    )
+                }
+            }.onFailure { throwable ->
+                Log.w(CELLULAR_PROXY_APP_TAG, "Local management action $action failed", throwable)
+            }
+        }
     }
 
     MaterialTheme {
@@ -118,6 +146,7 @@ fun CellularProxyApp() {
                             settingsSaveConfig = saveSettingsConfig,
                             settingsLoadSensitiveConfig = loadSensitiveConfig,
                             settingsSaveSensitiveConfig = sensitiveRepository::save,
+                            dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
                             },
@@ -140,6 +169,7 @@ fun CellularProxyApp() {
                         settingsSaveConfig = saveSettingsConfig,
                         settingsLoadSensitiveConfig = loadSensitiveConfig,
                         settingsSaveSensitiveConfig = sensitiveRepository::save,
+                        dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
                         },
@@ -156,6 +186,8 @@ fun CellularProxyApp() {
         }
     }
 }
+
+private const val CELLULAR_PROXY_APP_TAG = "CellularProxyApp"
 
 private fun shareLogsAuditExportBundle(
     context: Context,
@@ -247,6 +279,7 @@ private fun CellularProxyNavigationHost(
     settingsSaveConfig: (AppConfig) -> Unit,
     settingsLoadSensitiveConfig: () -> SensitiveConfig,
     settingsSaveSensitiveConfig: (SensitiveConfig) -> Unit,
+    dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
     modifier: Modifier = Modifier,
@@ -279,8 +312,10 @@ private fun CellularProxyNavigationHost(
         composable(Cloudflare.route) {
             CellularProxyCloudflareRoute(
                 onStartTunnel = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareStart)
                 },
                 onStopTunnel = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareStop)
                 },
                 onReconnectTunnel = {
                 },
@@ -296,8 +331,10 @@ private fun CellularProxyNavigationHost(
                 onProbeCurrentPublicIp = {
                 },
                 onRotateMobileData = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.RotateMobileData)
                 },
                 onRotateAirplaneMode = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.RotateAirplaneMode)
                 },
                 onCopyRotationDiagnosticsText = onCopyText,
             )
