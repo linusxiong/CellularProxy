@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
@@ -22,6 +25,59 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DiagnosticsScreenControllerTest {
+    @Test
+    fun `controller records audit effects for executed diagnostics actions`() {
+        val controller =
+            DiagnosticsScreenController(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks =
+                            mapOf(
+                                DiagnosticCheckType.LocalManagementApi to
+                                    DiagnosticCheck {
+                                        DiagnosticCheckResult(
+                                            status = DiagnosticResultStatus.Passed,
+                                            details = "local ok",
+                                        )
+                                    },
+                            ),
+                        nanoTime = { 0L },
+                    ),
+                secrets = LogRedactionSecrets(),
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 42L },
+            )
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.LocalManagementApi))
+        controller.handle(DiagnosticsScreenEvent.CopyCheck(DiagnosticCheckType.LocalManagementApi))
+
+        val auditRecords =
+            controller
+                .consumeEffects()
+                .filterIsInstance<DiagnosticsScreenEffect.RecordAuditAction>()
+                .map(DiagnosticsScreenEffect.RecordAuditAction::record)
+
+        assertEquals(
+            listOf(
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 42L,
+                    category = LogsAuditRecordCategory.Audit,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Diagnostics run_check",
+                    detail = "action=run_check check=local_management_api",
+                ),
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 42L,
+                    category = LogsAuditRecordCategory.Audit,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Diagnostics copy_check",
+                    detail = "action=copy_check check=local_management_api",
+                ),
+            ),
+            auditRecords,
+        )
+    }
+
     @Test
     fun `controller runs selected and bulk-safe diagnostics into screen state`() {
         val runCounts = DiagnosticCheckType.entries.associateWith { 0 }.toMutableMap()

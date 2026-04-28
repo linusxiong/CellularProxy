@@ -905,6 +905,7 @@ internal fun CellularProxyNavigationHost(
                 localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                 cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                 onCopyDiagnosticsSummaryText = onCopyText,
+                onRecordDiagnosticsAuditAction = onRecordLogsAuditAction,
             )
         }
         composable(LogsAudit.route) {

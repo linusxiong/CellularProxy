@@ -24,6 +24,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultItem
@@ -53,6 +54,7 @@ internal fun CellularProxyDiagnosticsRoute(
         CloudflareManagementApiProbeResult.NotConfigured
     },
     onCopyDiagnosticsSummaryText: (String) -> Unit = {},
+    onRecordDiagnosticsAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentProxyStatusProvider by rememberUpdatedState(proxyStatusProvider)
@@ -78,6 +80,7 @@ internal fun CellularProxyDiagnosticsRoute(
                         cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
                     ),
                 secretsProvider = { currentRedactionSecretsProvider() },
+                auditActionsEnabled = true,
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
@@ -97,6 +100,7 @@ internal fun CellularProxyDiagnosticsRoute(
             result.effects.forEach { effect ->
                 when (effect) {
                     is DiagnosticsScreenEffect.CopyText -> onCopyDiagnosticsSummaryText(effect.text)
+                    is DiagnosticsScreenEffect.RecordAuditAction -> onRecordDiagnosticsAuditAction(effect.record)
                 }
             }
             screenState = result.state

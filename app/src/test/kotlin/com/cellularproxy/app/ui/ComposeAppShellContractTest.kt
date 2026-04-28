@@ -1947,8 +1947,17 @@ class ComposeAppShellContractTest {
             "Diagnostics route must consume copy summary effects from the controller.",
         )
         assertTrue(
+            diagnosticsSource.contains("DiagnosticsScreenEffect.RecordAuditAction") &&
+                diagnosticsSource.contains("onRecordDiagnosticsAuditAction(effect.record)"),
+            "Diagnostics route must consume audit effects from the controller.",
+        )
+        assertTrue(
             shellSource.contains("onCopyDiagnosticsSummaryText = onCopyText"),
             "Diagnostics route must send copy summary effects to the app clipboard sink.",
+        )
+        assertTrue(
+            shellSource.contains("onRecordDiagnosticsAuditAction = onRecordLogsAuditAction"),
+            "Diagnostics route must persist diagnostics UI audit actions through the app Logs/Audit store.",
         )
 
         listOf(
