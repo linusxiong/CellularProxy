@@ -698,6 +698,14 @@ class ComposeAppShellContractTest {
             "Cloudflare app-shell route must derive tunnel lifecycle status from the shared proxy status provider.",
         )
         assertTrue(
+            cloudflareSource.contains("val observedTunnelStatus = tunnelStatusProvider()") &&
+                cloudflareSource.contains("val observedEdgeSessionSummary = edgeSessionSummaryProvider()") &&
+                cloudflareSource.contains(
+                    "LaunchedEffect(observedTunnelStatus, observedEdgeSessionSummary, observedManagementApiRoundTrip)",
+                ),
+            "Cloudflare route must refresh remembered controller state when live tunnel status or edge-session health changes.",
+        )
+        assertTrue(
             cloudflareSource.contains("onStartTunnel: () -> Unit = {}"),
             "Cloudflare route must expose a callback for start tunnel actions.",
         )

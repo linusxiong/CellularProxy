@@ -202,7 +202,9 @@ class ProxyStatusProviderTest {
         )
         assertTrue(
             cloudflareSource.contains("val observedManagementApiRoundTrip = managementApiRoundTripProvider()") &&
-                cloudflareSource.contains("LaunchedEffect(observedManagementApiRoundTrip)") &&
+                cloudflareSource.contains(
+                    "LaunchedEffect(observedTunnelStatus, observedEdgeSessionSummary, observedManagementApiRoundTrip)",
+                ) &&
                 cloudflareSource.contains("controller.handle(CloudflareScreenEvent.Refresh)"),
             "Cloudflare route must refresh its remembered screen state when the management round-trip provider changes.",
         )
