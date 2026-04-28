@@ -315,6 +315,12 @@ class ComposeAppShellContractTest {
             "Dashboard route must preserve the latest status provider across recomposition.",
         )
         assertTrue(
+            dashboardSource.contains("val observedStatus = statusProvider()") &&
+                dashboardSource.contains("LaunchedEffect(observedStatus)") &&
+                dashboardSource.contains("DashboardScreenEvent.Refresh"),
+            "Dashboard route must refresh remembered controller state when provider-backed status changes.",
+        )
+        assertTrue(
             dashboardSource.contains("DashboardScreenController("),
             "Dashboard route must use the tested screen controller boundary.",
         )

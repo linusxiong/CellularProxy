@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +62,7 @@ internal fun CellularProxyDashboardRoute(
     val currentOnOpenRotation by rememberUpdatedState(onOpenRotation)
     val currentOnOpenLogs by rememberUpdatedState(onOpenLogs)
     val currentOnOpenDiagnostics by rememberUpdatedState(onOpenDiagnostics)
+    val observedStatus = statusProvider()
     val controller =
         remember {
             DashboardScreenController(
@@ -88,6 +90,10 @@ internal fun CellularProxyDashboardRoute(
                 is DashboardScreenEffect.CopyText -> onCopyProxyEndpointText(effect.text)
             }
         }
+        screenState = controller.state
+    }
+    LaunchedEffect(observedStatus) {
+        controller.handle(DashboardScreenEvent.Refresh)
         screenState = controller.state
     }
 
