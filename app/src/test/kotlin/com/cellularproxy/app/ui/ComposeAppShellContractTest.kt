@@ -1653,6 +1653,22 @@ class ComposeAppShellContractTest {
             diagnosticsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
             "Diagnostics route must mirror controller state into Compose state for recomposition.",
         )
+        val diagnosticsRefreshEffectKeys =
+            Regex("""LaunchedEffect\(([\s\S]*?)\)\s+\{\s+dispatchEvent\(DiagnosticsScreenEvent\.Refresh\)\s+}""")
+                .find(diagnosticsSource)
+                ?.groupValues
+                ?.get(1)
+                .orEmpty()
+        assertTrue(
+            listOf(
+                "observedConfig",
+                "observedProxyStatus",
+                "observedNetworks",
+                "observedRedactionSecrets",
+            ).all(diagnosticsRefreshEffectKeys::contains) &&
+                !diagnosticsRefreshEffectKeys.contains("ManagementApiProbeResult"),
+            "Diagnostics route must refresh remembered controller state when passive provider-backed inputs or redaction secrets change without running management probes during composition.",
+        )
         assertTrue(
             diagnosticsSource.contains("val eventMutex = remember { Mutex() }") &&
                 diagnosticsSource.contains("eventMutex.withLock"),

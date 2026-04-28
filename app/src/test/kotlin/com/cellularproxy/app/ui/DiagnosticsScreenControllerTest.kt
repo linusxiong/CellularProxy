@@ -121,6 +121,51 @@ class DiagnosticsScreenControllerTest {
     }
 
     @Test
+    fun `controller refresh rebuilds visible diagnostics with latest redaction secrets without effects`() {
+        var secrets = LogRedactionSecrets()
+        val controller =
+            DiagnosticsScreenController(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks =
+                            mapOf(
+                                DiagnosticCheckType.LocalManagementApi to
+                                    DiagnosticCheck {
+                                        DiagnosticCheckResult(
+                                            status = DiagnosticResultStatus.Failed,
+                                            details = "Proxy credential rotated-management-token",
+                                        )
+                                    },
+                            ),
+                        nanoTime = { 0L },
+                    ),
+                secretsProvider = { secrets },
+            )
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.LocalManagementApi))
+        val unredactedDetails =
+            controller
+                .state
+                .items
+                .single { item -> item.type == DiagnosticCheckType.LocalManagementApi }
+                .details
+        assertTrue(unredactedDetails.contains("rotated-management-token"))
+
+        secrets = LogRedactionSecrets(proxyCredential = "rotated-management-token")
+        controller.handle(DiagnosticsScreenEvent.Refresh)
+
+        val redactedDetails =
+            controller
+                .state
+                .items
+                .single { item -> item.type == DiagnosticCheckType.LocalManagementApi }
+                .details
+        assertFalse(redactedDetails.contains("rotated-management-token"))
+        assertTrue(redactedDetails.contains("[REDACTED]"))
+        assertTrue(controller.consumeEffects().isEmpty())
+    }
+
+    @Test
     fun `controller copies selected completed diagnostic result only`() {
         val controller =
             DiagnosticsScreenController(

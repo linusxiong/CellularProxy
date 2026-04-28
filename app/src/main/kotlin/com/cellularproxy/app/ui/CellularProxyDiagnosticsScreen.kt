@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,10 @@ internal fun CellularProxyDiagnosticsRoute(
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentLocalManagementApiProbeResultProvider by rememberUpdatedState(localManagementApiProbeResultProvider)
     val currentCloudflareManagementApiProbeResultProvider by rememberUpdatedState(cloudflareManagementApiProbeResultProvider)
+    val observedConfig = configProvider()
+    val observedProxyStatus = proxyStatusProvider()
+    val observedNetworks = observedNetworksProvider()
+    val observedRedactionSecrets = redactionSecretsProvider()
     val coroutineScope = rememberCoroutineScope()
     val eventMutex = remember { Mutex() }
     val controller =
@@ -95,6 +100,15 @@ internal fun CellularProxyDiagnosticsRoute(
             }
             screenState = result.state
         }
+    }
+
+    LaunchedEffect(
+        observedConfig,
+        observedProxyStatus,
+        observedNetworks,
+        observedRedactionSecrets,
+    ) {
+        dispatchEvent(DiagnosticsScreenEvent.Refresh)
     }
 
     CellularProxyDiagnosticsScreen(

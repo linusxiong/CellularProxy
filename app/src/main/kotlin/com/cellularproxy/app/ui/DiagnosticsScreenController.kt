@@ -41,6 +41,7 @@ internal class DiagnosticsScreenController(
                     pendingEffects.add(DiagnosticsScreenEffect.CopyText(item.summaryLine()))
                 }
             }
+            DiagnosticsScreenEvent.Refresh -> state = buildState()
         }
     }
 
@@ -67,6 +68,8 @@ internal sealed interface DiagnosticsScreenEvent {
     data object RunAllChecks : DiagnosticsScreenEvent
 
     data object CopySummary : DiagnosticsScreenEvent
+
+    data object Refresh : DiagnosticsScreenEvent
 }
 
 internal sealed interface DiagnosticsScreenEffect {
