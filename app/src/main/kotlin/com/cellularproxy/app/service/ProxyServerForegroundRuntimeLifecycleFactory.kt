@@ -23,6 +23,7 @@ import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
@@ -87,6 +88,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareStatus: () -> CloudflareTunnelStatus,
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
@@ -115,6 +117,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareStatus = cloudflareStatus,
         cloudflareStart = cloudflareStart,
         cloudflareStop = cloudflareStop,
+        cloudflareReconnect = cloudflareReconnect,
         rotateMobileData = rotateMobileData,
         rotateAirplaneMode = rotateAirplaneMode,
         rootOperationsEnabled = rootOperationsEnabled,
@@ -140,6 +143,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareStatus: () -> CloudflareTunnelStatus,
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
@@ -196,6 +200,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                                 cloudflareStatus = cloudflareStatus,
                                 cloudflareStart = cloudflareStart,
                                 cloudflareStop = cloudflareStop,
+                                cloudflareReconnect = cloudflareReconnect,
                                 rootOperationsEnabled = rootOperationsEnabled,
                                 rootAvailability = rootAvailability,
                                 rotateMobileData = rotateMobileDataIfRootEnabled,
@@ -395,5 +400,10 @@ private fun Closeable.closeSuppressingExceptions() {
         // Startup failure cleanup must not hide the original installation error.
     }
 }
+
+private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = CloudflareTunnelStatus.disabled(),
+)
 
 private const val DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L

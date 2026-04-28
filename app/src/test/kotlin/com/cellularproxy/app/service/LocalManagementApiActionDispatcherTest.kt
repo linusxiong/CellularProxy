@@ -120,6 +120,35 @@ class LocalManagementApiActionDispatcherTest {
             requests,
         )
     }
+
+    @Test
+    fun `cloudflare reconnect maps to management reconnect endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareReconnect,
+            config = AppConfig.default(),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8080/api/cloudflare/reconnect",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
 }
 
 private fun sensitiveConfig(): SensitiveConfig = SensitiveConfig(

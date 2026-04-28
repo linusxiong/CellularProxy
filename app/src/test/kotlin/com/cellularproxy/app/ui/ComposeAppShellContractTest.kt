@@ -669,7 +669,8 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("LocalManagementApiAction.CloudflareStart") &&
-                shellSource.contains("LocalManagementApiAction.CloudflareStop"),
+                shellSource.contains("LocalManagementApiAction.CloudflareStop") &&
+                shellSource.contains("LocalManagementApiAction.CloudflareReconnect"),
             "App shell must dispatch Cloudflare lifecycle callbacks through the local Management API action dispatcher.",
         )
 

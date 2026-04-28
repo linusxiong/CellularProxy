@@ -178,6 +178,8 @@ private fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull()
             ManagementApiOperation.CloudflareStart
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/stop" ->
             ManagementApiOperation.CloudflareStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/reconnect" ->
+            ManagementApiOperation.CloudflareReconnect
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/mobile-data" ->
             ManagementApiOperation.RotateMobileData
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/airplane-mode" ->
@@ -194,10 +196,9 @@ private fun logManagementAuditFailure(exception: Exception) {
 
 private const val MANAGEMENT_AUDIT_LOG_TAG = "CellularProxyAudit"
 
-private fun ProxyErrorResponse.toCloudflareResponse(): CloudflareTunnelResponse =
-    CloudflareTunnelResponse(
-        statusCode = statusCode,
-        reasonPhrase = reasonPhrase,
-        headers = headers,
-        body = body,
-    )
+private fun ProxyErrorResponse.toCloudflareResponse(): CloudflareTunnelResponse = CloudflareTunnelResponse(
+    statusCode = statusCode,
+    reasonPhrase = reasonPhrase,
+    headers = headers,
+    body = body,
+)

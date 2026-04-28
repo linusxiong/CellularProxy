@@ -548,6 +548,7 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             val connector = RecordingBoundNetworkSocketConnector(origin)
             val managementReference = RuntimeManagementApiHandlerReference()
             var boundListener: BoundProxyServerSocket? = null
+            var reconnectCalls = 0
             val lifecycle =
                 ProxyServerForegroundRuntimeLifecycleFactory.create(
                     plainConfig =
@@ -573,6 +574,13 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                         CloudflareTunnelTransitionResult(
                             CloudflareTunnelTransitionDisposition.Accepted,
                             CloudflareTunnelStatus.stopped(),
+                        )
+                    },
+                    cloudflareReconnect = {
+                        reconnectCalls += 1
+                        CloudflareTunnelTransitionResult(
+                            CloudflareTunnelTransitionDisposition.Accepted,
+                            CloudflareTunnelStatus.connected(),
                         )
                     },
                     rotateMobileData = {
@@ -627,6 +635,9 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
                 assertEquals(200, statusResponse.statusCode)
                 assertContains(statusResponse.body, """"state":"running"""")
                 assertContains(statusResponse.body, """"publicIp":"203.0.113.20"""")
+                val reconnectResponse = managementReference.handle(ManagementApiOperation.CloudflareReconnect)
+                assertEquals(202, reconnectResponse.statusCode)
+                assertEquals(1, reconnectCalls)
                 assertNull(origin.failure.get())
             } finally {
                 lifecycle.close()

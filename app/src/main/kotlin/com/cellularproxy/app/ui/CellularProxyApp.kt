@@ -318,6 +318,7 @@ private fun CellularProxyNavigationHost(
                     dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareStop)
                 },
                 onReconnectTunnel = {
+                    dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareReconnect)
                 },
                 onTestManagementTunnel = {
                 },

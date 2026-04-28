@@ -27,6 +27,7 @@ enum class LocalManagementApiAction(
 ) {
     CloudflareStart("/api/cloudflare/start"),
     CloudflareStop("/api/cloudflare/stop"),
+    CloudflareReconnect("/api/cloudflare/reconnect"),
     RotateMobileData("/api/rotate/mobile-data"),
     RotateAirplaneMode("/api/rotate/airplane-mode"),
 }

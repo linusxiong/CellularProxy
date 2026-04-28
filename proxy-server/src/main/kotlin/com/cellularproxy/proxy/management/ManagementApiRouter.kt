@@ -12,6 +12,7 @@ enum class ManagementApiOperation {
     CloudflareStatus,
     CloudflareStart,
     CloudflareStop,
+    CloudflareReconnect,
     RotateMobileData,
     RotateAirplaneMode,
     ServiceStop,
@@ -83,6 +84,11 @@ private val ENDPOINTS =
             ManagementApiEndpoint(
                 method = HttpMethod.Post,
                 operation = ManagementApiOperation.CloudflareStop,
+            ),
+        "/api/cloudflare/reconnect" to
+            ManagementApiEndpoint(
+                method = HttpMethod.Post,
+                operation = ManagementApiOperation.CloudflareReconnect,
             ),
         "/api/rotate/mobile-data" to
             ManagementApiEndpoint(

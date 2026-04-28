@@ -125,6 +125,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStatus: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult = {
             unavailableRotationExecutionTransition(RotationOperation.MobileData)
         },
@@ -155,6 +156,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStatus = cloudflareStatus,
         cloudflareStart = cloudflareStart,
         cloudflareStop = cloudflareStop,
+        cloudflareReconnect = cloudflareReconnect,
         rotateMobileData = rotateMobileData,
         rotateAirplaneMode = rotateAirplaneMode,
         rootOperationsEnabled = rootOperationsEnabled,
@@ -180,6 +182,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStatus: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult = {
             unavailableRotationExecutionTransition(RotationOperation.MobileData)
         },
@@ -211,6 +214,7 @@ object CellularProxyRuntimeCompositionInstaller {
                     cloudflareStatus = cloudflareStatus,
                     cloudflareStart = cloudflareStart,
                     cloudflareStop = cloudflareStop,
+                    cloudflareReconnect = cloudflareReconnect,
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
                     rootOperationsEnabled = rootOperationsEnabled,

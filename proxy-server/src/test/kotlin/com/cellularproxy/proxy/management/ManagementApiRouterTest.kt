@@ -46,6 +46,7 @@ class ManagementApiRouterTest {
             mapOf(
                 "/api/cloudflare/start" to ManagementApiOperation.CloudflareStart,
                 "/api/cloudflare/stop" to ManagementApiOperation.CloudflareStop,
+                "/api/cloudflare/reconnect" to ManagementApiOperation.CloudflareReconnect,
                 "/api/rotate/mobile-data" to ManagementApiOperation.RotateMobileData,
                 "/api/rotate/airplane-mode" to ManagementApiOperation.RotateAirplaneMode,
                 "/api/service/stop" to ManagementApiOperation.ServiceStop,
@@ -78,6 +79,7 @@ class ManagementApiRouterTest {
                 HttpMethod.Get to "/api/cloudflare/status",
                 HttpMethod.Post to "/api/cloudflare/start",
                 HttpMethod.Post to "/api/cloudflare/stop",
+                HttpMethod.Post to "/api/cloudflare/reconnect",
                 HttpMethod.Post to "/api/rotate/mobile-data",
                 HttpMethod.Post to "/api/rotate/airplane-mode",
                 HttpMethod.Post to "/api/service/stop",
@@ -151,11 +153,10 @@ class ManagementApiRouterTest {
         originTarget: String,
         requiresToken: Boolean = originTarget.startsWith("/api/"),
         requiresAuditLog: Boolean = false,
-    ): ParsedProxyRequest.Management =
-        ParsedProxyRequest.Management(
-            method = method,
-            originTarget = originTarget,
-            requiresToken = requiresToken,
-            requiresAuditLog = requiresAuditLog,
-        )
+    ): ParsedProxyRequest.Management = ParsedProxyRequest.Management(
+        method = method,
+        originTarget = originTarget,
+        requiresToken = requiresToken,
+        requiresAuditLog = requiresAuditLog,
+    )
 }

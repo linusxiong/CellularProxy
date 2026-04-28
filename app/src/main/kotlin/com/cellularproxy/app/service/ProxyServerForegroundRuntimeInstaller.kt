@@ -9,6 +9,7 @@ import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.root.RootAvailabilityStatus
@@ -38,6 +39,7 @@ object ProxyServerForegroundRuntimeInstaller {
         cloudflareStatus: () -> CloudflareTunnelStatus,
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
         rootOperationsEnabled: () -> Boolean = {
@@ -71,6 +73,7 @@ object ProxyServerForegroundRuntimeInstaller {
                     cloudflareStatus = cloudflareStatus,
                     cloudflareStart = cloudflareStart,
                     cloudflareStop = cloudflareStop,
+                    cloudflareReconnect = cloudflareReconnect,
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
                     rootOperationsEnabled = rootOperationsEnabled,
@@ -94,5 +97,10 @@ object ProxyServerForegroundRuntimeInstaller {
         }
     }
 }
+
+private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = CloudflareTunnelStatus.disabled(),
+)
 
 private const val INSTALLER_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L

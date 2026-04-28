@@ -158,17 +158,16 @@ class ManagementApiStreamExchangeHandler(
     }
 }
 
-private fun ManagementApiStreamExchangeHandlingResult.Responded.toAuditEvent(): ManagementApiStreamAuditEvent =
-    ManagementApiStreamAuditEvent(
-        operation = operation,
-        outcome =
-            when (disposition) {
-                ManagementApiStreamExchangeDisposition.Routed -> ManagementApiStreamAuditOutcome.Responded
-                ManagementApiStreamExchangeDisposition.RouteRejected -> ManagementApiStreamAuditOutcome.RouteRejected
-            },
-        statusCode = statusCode,
-        disposition = disposition,
-    )
+private fun ManagementApiStreamExchangeHandlingResult.Responded.toAuditEvent(): ManagementApiStreamAuditEvent = ManagementApiStreamAuditEvent(
+    operation = operation,
+    outcome =
+        when (disposition) {
+            ManagementApiStreamExchangeDisposition.Routed -> ManagementApiStreamAuditOutcome.Responded
+            ManagementApiStreamExchangeDisposition.RouteRejected -> ManagementApiStreamAuditOutcome.RouteRejected
+        },
+    statusCode = statusCode,
+    disposition = disposition,
+)
 
 internal fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull(): ManagementApiOperation? {
     val path = originTarget.substringBefore('?').substringBefore('#')
@@ -177,6 +176,8 @@ internal fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull(
             ManagementApiOperation.CloudflareStart
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/stop" ->
             ManagementApiOperation.CloudflareStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/reconnect" ->
+            ManagementApiOperation.CloudflareReconnect
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/mobile-data" ->
             ManagementApiOperation.RotateMobileData
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/airplane-mode" ->

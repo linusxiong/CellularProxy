@@ -1,6 +1,7 @@
 package com.cellularproxy.proxy.management
 
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkDescriptor
@@ -17,6 +18,7 @@ data class ManagementApiCallbacks(
     val cloudflareStatus: () -> CloudflareTunnelStatus,
     val cloudflareStart: () -> CloudflareTunnelTransitionResult,
     val cloudflareStop: () -> CloudflareTunnelTransitionResult,
+    val cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
     val rotateMobileData: () -> RotationTransitionResult,
     val rotateAirplaneMode: () -> RotationTransitionResult,
     val serviceStop: () -> ProxyServiceStopTransitionResult,
@@ -27,29 +29,30 @@ class ManagementApiStateHandler(
     private val callbacks: ManagementApiCallbacks,
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
 ) : ManagementApiHandler {
-    override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-        when (operation) {
-            ManagementApiOperation.Health ->
-                ManagementApiReadOnlyResponses.health(callbacks.healthStatus())
-            ManagementApiOperation.Status ->
-                renderStatus()
-            ManagementApiOperation.Networks ->
-                ManagementApiReadOnlyResponses.networks(callbacks.networks())
-            ManagementApiOperation.PublicIp ->
-                ManagementApiReadOnlyResponses.publicIp(callbacks.publicIp())
-            ManagementApiOperation.CloudflareStatus ->
-                ManagementApiReadOnlyResponses.cloudflareStatus(callbacks.cloudflareStatus(), secrets)
-            ManagementApiOperation.CloudflareStart ->
-                ManagementApiCloudflareActionResponses.transition(callbacks.cloudflareStart(), secrets)
-            ManagementApiOperation.CloudflareStop ->
-                ManagementApiCloudflareActionResponses.transition(callbacks.cloudflareStop(), secrets)
-            ManagementApiOperation.RotateMobileData ->
-                ManagementApiRotationActionResponses.transition(callbacks.rotateMobileData())
-            ManagementApiOperation.RotateAirplaneMode ->
-                ManagementApiRotationActionResponses.transition(callbacks.rotateAirplaneMode())
-            ManagementApiOperation.ServiceStop ->
-                ManagementApiServiceStopActionResponses.transition(callbacks.serviceStop())
-        }
+    override fun handle(operation: ManagementApiOperation): ManagementApiResponse = when (operation) {
+        ManagementApiOperation.Health ->
+            ManagementApiReadOnlyResponses.health(callbacks.healthStatus())
+        ManagementApiOperation.Status ->
+            renderStatus()
+        ManagementApiOperation.Networks ->
+            ManagementApiReadOnlyResponses.networks(callbacks.networks())
+        ManagementApiOperation.PublicIp ->
+            ManagementApiReadOnlyResponses.publicIp(callbacks.publicIp())
+        ManagementApiOperation.CloudflareStatus ->
+            ManagementApiReadOnlyResponses.cloudflareStatus(callbacks.cloudflareStatus(), secrets)
+        ManagementApiOperation.CloudflareStart ->
+            ManagementApiCloudflareActionResponses.transition(callbacks.cloudflareStart(), secrets)
+        ManagementApiOperation.CloudflareStop ->
+            ManagementApiCloudflareActionResponses.transition(callbacks.cloudflareStop(), secrets)
+        ManagementApiOperation.CloudflareReconnect ->
+            ManagementApiCloudflareActionResponses.transition(callbacks.cloudflareReconnect(), secrets)
+        ManagementApiOperation.RotateMobileData ->
+            ManagementApiRotationActionResponses.transition(callbacks.rotateMobileData())
+        ManagementApiOperation.RotateAirplaneMode ->
+            ManagementApiRotationActionResponses.transition(callbacks.rotateAirplaneMode())
+        ManagementApiOperation.ServiceStop ->
+            ManagementApiServiceStopActionResponses.transition(callbacks.serviceStop())
+    }
 
     private fun renderStatus(): ManagementApiResponse {
         val rootOperationsEnabled = callbacks.rootOperationsEnabled()
@@ -68,3 +71,8 @@ class ManagementApiStateHandler(
         )
     }
 }
+
+private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = CloudflareTunnelStatus.disabled(),
+)
