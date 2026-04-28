@@ -26,15 +26,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.ManagementApiAuditOutcome
+import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
+import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+import com.cellularproxy.shared.root.RootCommandAuditPhase
+import com.cellularproxy.shared.root.RootCommandOutcome
 
 @Composable
 internal fun CellularProxyLogsAuditRoute(
+    logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow> = { emptyList() },
     onCopyLogsAuditText: (String) -> Unit = {},
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit = {},
 ) {
-    val controller = remember { LogsAuditScreenController() }
+    val controller =
+        remember {
+            LogsAuditScreenController(
+                rows = logsAuditRowsProvider(),
+                exportSupported = true,
+                exportGeneratedAtEpochMillis = System.currentTimeMillis(),
+            )
+        }
     var screenState by remember { mutableStateOf(controller.state) }
     val dispatchEvent: (LogsAuditScreenEvent) -> Unit = { event ->
         controller.handle(event)
@@ -406,6 +419,13 @@ internal sealed interface LogsAuditScreenEffect {
     ) : LogsAuditScreenEffect
 }
 
+internal fun logsAuditScreenRowsFromPersistedAuditRecords(
+    managementRecords: List<PersistedManagementApiAuditRecord>,
+    rootRecords: List<PersistedRootCommandAuditRecord>,
+): List<LogsAuditScreenInputRow> = managementRecords
+    .mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) } +
+    rootRecords.mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) }
+
 @Composable
 private fun LogsAuditSelectedRecord(
     selectedRow: LogsAuditScreenRow?,
@@ -696,6 +716,62 @@ private fun LogsAuditScreenInputRow.toScreenRow(secrets: LogRedactionSecrets): L
     title = LogRedactor.redact(title, secrets),
     detail = LogRedactor.redact(detail, secrets),
 )
+
+private fun PersistedManagementApiAuditRecord.toLogsAuditScreenInputRow(index: Int): LogsAuditScreenInputRow {
+    val operationLabel = operation?.name ?: "unknown"
+    return LogsAuditScreenInputRow(
+        id = "management-api-$index-$occurredAtEpochMillis-$operationLabel-${outcome.name}",
+        category = LogsAuditScreenCategory.ManagementApi,
+        severity = managementAuditSeverity(),
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        title = "Management API $operationLabel ${outcome.titleSuffix()}",
+        detail = "status=${statusCode?.toString() ?: "none"} disposition=${disposition?.name ?: "none"}",
+    )
+}
+
+private fun PersistedManagementApiAuditRecord.managementAuditSeverity(): LogsAuditScreenSeverity = when (outcome) {
+    ManagementApiAuditOutcome.Responded ->
+        when (statusCode) {
+            in 100..399 -> LogsAuditScreenSeverity.Info
+            in 400..499 -> LogsAuditScreenSeverity.Warning
+            else -> LogsAuditScreenSeverity.Failed
+        }
+    ManagementApiAuditOutcome.RouteRejected,
+    ManagementApiAuditOutcome.AuthorizationRejected,
+    -> LogsAuditScreenSeverity.Warning
+    ManagementApiAuditOutcome.HandlerFailed -> LogsAuditScreenSeverity.Failed
+}
+
+private fun ManagementApiAuditOutcome.titleSuffix(): String = when (this) {
+    ManagementApiAuditOutcome.Responded -> "responded"
+    ManagementApiAuditOutcome.RouteRejected -> "route rejected"
+    ManagementApiAuditOutcome.HandlerFailed -> "handler failed"
+    ManagementApiAuditOutcome.AuthorizationRejected -> "authorization rejected"
+}
+
+private fun PersistedRootCommandAuditRecord.toLogsAuditScreenInputRow(index: Int): LogsAuditScreenInputRow = LogsAuditScreenInputRow(
+    id = "root-command-$index-$occurredAtEpochMillis-${category.name}-${phase.name}",
+    category = LogsAuditScreenCategory.RootCommands,
+    severity = rootAuditSeverity(),
+    occurredAtEpochMillis = occurredAtEpochMillis,
+    title = "Root command ${category.name} ${phase.titleSuffix()}",
+    detail =
+        "outcome=${outcome?.name ?: "none"} " +
+            "exitCode=${exitCode?.toString() ?: "none"} " +
+            "stdout=${stdout ?: "none"} " +
+            "stderr=${stderr ?: "none"}",
+)
+
+private fun PersistedRootCommandAuditRecord.rootAuditSeverity(): LogsAuditScreenSeverity = when {
+    phase == RootCommandAuditPhase.Started -> LogsAuditScreenSeverity.Info
+    outcome == RootCommandOutcome.Success -> LogsAuditScreenSeverity.Info
+    else -> LogsAuditScreenSeverity.Failed
+}
+
+private fun RootCommandAuditPhase.titleSuffix(): String = when (this) {
+    RootCommandAuditPhase.Started -> "started"
+    RootCommandAuditPhase.Completed -> "completed"
+}
 
 private fun LogsAuditScreenFilter.timeWindowText(): String = when {
     fromEpochMillis == null && toEpochMillis == null -> "All"

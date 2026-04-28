@@ -36,6 +36,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cellularproxy.app.audit.CellularProxyManagementAuditStore
+import com.cellularproxy.app.audit.CellularProxyRootAuditStore
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
 import com.cellularproxy.app.config.SecureRandomSensitiveConfigGenerator
 import com.cellularproxy.app.config.SensitiveConfig
@@ -84,6 +86,12 @@ fun CellularProxyApp() {
         loadOrCreateSensitiveConfig(
             repository = sensitiveRepository,
             generator = sensitiveConfigGenerator,
+        )
+    }
+    val loadLogsAuditRows: () -> List<LogsAuditScreenInputRow> = {
+        logsAuditScreenRowsFromPersistedAuditRecords(
+            managementRecords = CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll(),
+            rootRecords = CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll(),
         )
     }
     val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
@@ -146,6 +154,7 @@ fun CellularProxyApp() {
                             settingsSaveConfig = saveSettingsConfig,
                             settingsLoadSensitiveConfig = loadSensitiveConfig,
                             settingsSaveSensitiveConfig = sensitiveRepository::save,
+                            logsAuditRowsProvider = loadLogsAuditRows,
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
@@ -169,6 +178,7 @@ fun CellularProxyApp() {
                         settingsSaveConfig = saveSettingsConfig,
                         settingsLoadSensitiveConfig = loadSensitiveConfig,
                         settingsSaveSensitiveConfig = sensitiveRepository::save,
+                        logsAuditRowsProvider = loadLogsAuditRows,
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
@@ -279,6 +289,7 @@ private fun CellularProxyNavigationHost(
     settingsSaveConfig: (AppConfig) -> Unit,
     settingsLoadSensitiveConfig: () -> SensitiveConfig,
     settingsSaveSensitiveConfig: (SensitiveConfig) -> Unit,
+    logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
@@ -350,6 +361,7 @@ private fun CellularProxyNavigationHost(
         }
         composable(LogsAudit.route) {
             CellularProxyLogsAuditRoute(
+                logsAuditRowsProvider = logsAuditRowsProvider,
                 onCopyLogsAuditText = onCopyText,
                 onExportLogsAuditBundle = onExportLogsAuditBundle,
             )

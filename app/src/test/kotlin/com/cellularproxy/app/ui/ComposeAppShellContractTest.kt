@@ -1585,6 +1585,19 @@ class ComposeAppShellContractTest {
             "Logs/Audit route must own the tested screen controller.",
         )
         assertTrue(
+            shellSource.contains("CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll()") &&
+                shellSource.contains("CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll()") &&
+                shellSource.contains("logsAuditScreenRowsFromPersistedAuditRecords("),
+            "App shell must load persisted Management API and root command audit records for the Logs/Audit route.",
+        )
+        assertTrue(
+            shellSource.contains("logsAuditRowsProvider = loadLogsAuditRows") &&
+                logsAuditSource.contains("logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>") &&
+                logsAuditSource.contains("rows = logsAuditRowsProvider()") &&
+                logsAuditSource.contains("exportSupported = true"),
+            "Logs/Audit route must build its controller from persisted audit rows with export enabled.",
+        )
+        assertTrue(
             logsAuditSource.contains("LogsAuditScreenEvent.SelectRecord"),
             "Logs/Audit route must dispatch row-selection events through the controller.",
         )

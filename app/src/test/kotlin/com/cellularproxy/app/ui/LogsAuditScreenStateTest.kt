@@ -1,6 +1,14 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.ManagementApiAuditOutcome
+import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
+import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
+import com.cellularproxy.proxy.management.ManagementApiOperation
+import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.root.RootCommandAuditPhase
+import com.cellularproxy.shared.root.RootCommandCategory
+import com.cellularproxy.shared.root.RootCommandOutcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -8,6 +16,123 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LogsAuditScreenStateTest {
+    @Test
+    fun `persisted management and root audit records map to screen input rows`() {
+        val rows =
+            logsAuditScreenRowsFromPersistedAuditRecords(
+                managementRecords =
+                    listOf(
+                        PersistedManagementApiAuditRecord(
+                            occurredAtEpochMillis = 100,
+                            operation = ManagementApiOperation.CloudflareStart,
+                            outcome = ManagementApiAuditOutcome.Responded,
+                            statusCode = 202,
+                            disposition = ManagementApiStreamExchangeDisposition.Routed,
+                        ),
+                        PersistedManagementApiAuditRecord(
+                            occurredAtEpochMillis = 110,
+                            operation = ManagementApiOperation.RotateMobileData,
+                            outcome = ManagementApiAuditOutcome.HandlerFailed,
+                            statusCode = null,
+                            disposition = null,
+                        ),
+                    ),
+                rootRecords =
+                    listOf(
+                        PersistedRootCommandAuditRecord(
+                            occurredAtEpochMillis = 120,
+                            phase = RootCommandAuditPhase.Started,
+                            category = RootCommandCategory.RootAvailabilityCheck,
+                            outcome = null,
+                            exitCode = null,
+                            stdout = null,
+                            stderr = null,
+                        ),
+                        PersistedRootCommandAuditRecord(
+                            occurredAtEpochMillis = 130,
+                            phase = RootCommandAuditPhase.Completed,
+                            category = RootCommandCategory.MobileDataEnable,
+                            outcome = RootCommandOutcome.Failure,
+                            exitCode = 1,
+                            stdout = "token=secret-token",
+                            stderr = "failed",
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "management-api-0-100-CloudflareStart-Responded",
+                    category = LogsAuditScreenCategory.ManagementApi,
+                    severity = LogsAuditScreenSeverity.Info,
+                    occurredAtEpochMillis = 100,
+                    title = "Management API CloudflareStart responded",
+                    detail = "status=202 disposition=Routed",
+                ),
+                LogsAuditScreenInputRow(
+                    id = "management-api-1-110-RotateMobileData-HandlerFailed",
+                    category = LogsAuditScreenCategory.ManagementApi,
+                    severity = LogsAuditScreenSeverity.Failed,
+                    occurredAtEpochMillis = 110,
+                    title = "Management API RotateMobileData handler failed",
+                    detail = "status=none disposition=none",
+                ),
+                LogsAuditScreenInputRow(
+                    id = "root-command-0-120-RootAvailabilityCheck-Started",
+                    category = LogsAuditScreenCategory.RootCommands,
+                    severity = LogsAuditScreenSeverity.Info,
+                    occurredAtEpochMillis = 120,
+                    title = "Root command RootAvailabilityCheck started",
+                    detail = "outcome=none exitCode=none stdout=none stderr=none",
+                ),
+                LogsAuditScreenInputRow(
+                    id = "root-command-1-130-MobileDataEnable-Completed",
+                    category = LogsAuditScreenCategory.RootCommands,
+                    severity = LogsAuditScreenSeverity.Failed,
+                    occurredAtEpochMillis = 130,
+                    title = "Root command MobileDataEnable completed",
+                    detail = "outcome=Failure exitCode=1 stdout=token=secret-token stderr=failed",
+                ),
+            ),
+            rows,
+        )
+    }
+
+    @Test
+    fun `persisted audit row ids include read order to disambiguate timestamp collisions`() {
+        val duplicateManagementRecord =
+            PersistedManagementApiAuditRecord(
+                occurredAtEpochMillis = 100,
+                operation = ManagementApiOperation.CloudflareStart,
+                outcome = ManagementApiAuditOutcome.Responded,
+                statusCode = 202,
+                disposition = ManagementApiStreamExchangeDisposition.Routed,
+            )
+        val duplicateRootRecord =
+            PersistedRootCommandAuditRecord(
+                occurredAtEpochMillis = 200,
+                phase = RootCommandAuditPhase.Completed,
+                category = RootCommandCategory.MobileDataEnable,
+                outcome = RootCommandOutcome.Success,
+                exitCode = 0,
+                stdout = null,
+                stderr = null,
+            )
+
+        val rows =
+            logsAuditScreenRowsFromPersistedAuditRecords(
+                managementRecords = listOf(duplicateManagementRecord, duplicateManagementRecord),
+                rootRecords = listOf(duplicateRootRecord, duplicateRootRecord),
+            )
+        val controller = LogsAuditScreenController(rows = rows)
+
+        controller.handle(LogsAuditScreenEvent.SelectRecord("management-api-1-100-CloudflareStart-Responded"))
+
+        assertEquals(rows.map(LogsAuditScreenInputRow::id).distinct(), rows.map(LogsAuditScreenInputRow::id))
+        assertEquals("management-api-1-100-CloudflareStart-Responded", controller.state.selectedRow?.id)
+    }
+
     @Test
     fun `controller selection updates state and copy selected emits redacted payload`() {
         val controller =
