@@ -35,6 +35,8 @@ import com.cellularproxy.shared.rotation.RotationStatus
 @Composable
 internal fun CellularProxyRotationRoute(
     configProvider: () -> AppConfig = AppConfig::default,
+    rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
+    activeConnectionsProvider: () -> Long = { 0 },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCheckRoot: () -> Unit = {},
     onProbeCurrentPublicIp: () -> Unit = {},
@@ -43,6 +45,8 @@ internal fun CellularProxyRotationRoute(
     onCopyRotationDiagnosticsText: (String) -> Unit = {},
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
+    val currentRootAvailabilityProvider by rememberUpdatedState(rootAvailabilityProvider)
+    val currentActiveConnectionsProvider by rememberUpdatedState(activeConnectionsProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentOnCheckRoot by rememberUpdatedState(onCheckRoot)
     val currentOnProbeCurrentPublicIp by rememberUpdatedState(onProbeCurrentPublicIp)
@@ -52,6 +56,8 @@ internal fun CellularProxyRotationRoute(
         remember {
             RotationScreenController(
                 configProvider = { currentConfigProvider() },
+                rootAvailabilityProvider = { currentRootAvailabilityProvider() },
+                activeConnectionsProvider = { currentActiveConnectionsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
                 actionHandler = { action ->
                     when (action) {

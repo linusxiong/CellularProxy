@@ -432,6 +432,8 @@ private fun CellularProxyNavigationHost(
         composable(Rotation.route) {
             CellularProxyRotationRoute(
                 configProvider = settingsInitialConfigProvider,
+                rootAvailabilityProvider = { proxyStatusProvider().rootAvailability },
+                activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections },
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onCheckRoot = {
                     dispatchLocalManagementApiAction(LocalManagementApiAction.RootStatus)

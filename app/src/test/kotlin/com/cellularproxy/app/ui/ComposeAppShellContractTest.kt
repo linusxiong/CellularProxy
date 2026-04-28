@@ -1016,8 +1016,15 @@ class ComposeAppShellContractTest {
             "Rotation route must accept injectable config and redaction providers.",
         )
         assertTrue(
+            rotationSource.contains("rootAvailabilityProvider: () -> RootAvailabilityStatus") &&
+                rotationSource.contains("activeConnectionsProvider: () -> Long"),
+            "Rotation route must accept injectable live root availability and active connection providers.",
+        )
+        assertTrue(
             rotationSource.contains("configProvider = { currentConfigProvider() }") &&
-                rotationSource.contains("secretsProvider = { currentRedactionSecretsProvider() }"),
+                rotationSource.contains("secretsProvider = { currentRedactionSecretsProvider() }") &&
+                rotationSource.contains("rootAvailabilityProvider = { currentRootAvailabilityProvider() }") &&
+                rotationSource.contains("activeConnectionsProvider = { currentActiveConnectionsProvider() }"),
             "Rotation route controller must be backed by injected Rotation state providers.",
         )
         assertTrue(
@@ -1046,6 +1053,11 @@ class ComposeAppShellContractTest {
             shellSource.contains("configProvider = settingsInitialConfigProvider") &&
                 shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider"),
             "Rotation app-shell route must read persisted app config and shared diagnostics redaction secrets.",
+        )
+        assertTrue(
+            shellSource.contains("rootAvailabilityProvider = { proxyStatusProvider().rootAvailability }") &&
+                shellSource.contains("activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections }"),
+            "Rotation app-shell route must derive live root availability and active connection state from the shared proxy status provider.",
         )
         assertTrue(
             rotationSource.contains("onCheckRoot: () -> Unit = {}"),
