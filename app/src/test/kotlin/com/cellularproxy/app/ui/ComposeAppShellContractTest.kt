@@ -1588,8 +1588,9 @@ class ComposeAppShellContractTest {
             shellSource.contains("CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll()") &&
                 shellSource.contains("CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll()") &&
                 shellSource.contains("CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(context).readAll()") &&
+                shellSource.contains("CellularProxyLogsAuditStore.logsAuditLog(context).readAll()") &&
                 shellSource.contains("logsAuditScreenRowsFromPersistedAuditRecords("),
-            "App shell must load persisted Management API, root command, and foreground-service audit records for the Logs/Audit route.",
+            "App shell must load persisted Management API, root command, foreground-service, and generic log records for the Logs/Audit route.",
         )
         val serviceSource =
             repoRoot()
@@ -1605,7 +1606,7 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("logsAuditRowsProvider = loadLogsAuditRows") &&
                 logsAuditSource.contains("logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>") &&
-                logsAuditSource.contains("rows = logsAuditRowsProvider()") &&
+                logsAuditSource.contains("rowsProvider = logsAuditRowsProvider") &&
                 logsAuditSource.contains("exportSupported = true"),
             "Logs/Audit route must build its controller from persisted audit rows with export enabled.",
         )
@@ -1617,7 +1618,7 @@ class ComposeAppShellContractTest {
                 shellSource.contains("logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets") &&
                 shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider") &&
                 logsAuditSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets") &&
-                logsAuditSource.contains("secrets = redactionSecretsProvider()"),
+                logsAuditSource.contains("secretsProvider = redactionSecretsProvider"),
             "Logs/Audit route must pass sensitive-config-derived redaction secrets into persisted audit row rendering.",
         )
         assertTrue(

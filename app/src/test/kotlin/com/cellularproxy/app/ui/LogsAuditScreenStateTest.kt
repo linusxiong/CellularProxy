@@ -1,7 +1,10 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
 import com.cellularproxy.app.audit.PersistedForegroundServiceAuditRecord
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
 import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
 import com.cellularproxy.app.service.ForegroundServiceAuditEvent
@@ -166,15 +169,15 @@ class LogsAuditScreenStateTest {
                     listOf(
                         PersistedLogsAuditRecord(
                             occurredAtEpochMillis = 210,
-                            category = LogsAuditScreenCategory.ProxyServer,
-                            severity = LogsAuditScreenSeverity.Warning,
+                            category = LogsAuditRecordCategory.ProxyServer,
+                            severity = LogsAuditRecordSeverity.Warning,
                             title = "Connection limit near capacity",
                             detail = "active=60 max=64",
                         ),
                         PersistedLogsAuditRecord(
                             occurredAtEpochMillis = 220,
-                            category = LogsAuditScreenCategory.CloudflareTunnel,
-                            severity = LogsAuditScreenSeverity.Failed,
+                            category = LogsAuditRecordCategory.CloudflareTunnel,
+                            severity = LogsAuditRecordSeverity.Failed,
                             title = "Tunnel degraded",
                             detail = "edge=iad error=token-secret",
                         ),
@@ -398,6 +401,51 @@ class LogsAuditScreenStateTest {
         val export = (effects[1] as LogsAuditScreenEffect.ExportBundle).bundle
         assertEquals("cellularproxy-logs-audit-300.txt", export.fileName)
         assertFalse(export.text.contains("secret-token"))
+    }
+
+    @Test
+    fun `provider backed controller refreshes rows and redaction secrets when handling events`() {
+        var rows =
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "initial",
+                    category = LogsAuditScreenCategory.AppRuntime,
+                    severity = LogsAuditScreenSeverity.Info,
+                    occurredAtEpochMillis = 100,
+                    title = "Runtime started",
+                    detail = "No issue",
+                ),
+            )
+        var secrets = LogRedactionSecrets()
+        val controller =
+            LogsAuditScreenController(
+                rowsProvider = { rows },
+                secretsProvider = { secrets },
+            )
+
+        rows =
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "new-secret",
+                    category = LogsAuditScreenCategory.CloudflareTunnel,
+                    severity = LogsAuditScreenSeverity.Failed,
+                    occurredAtEpochMillis = 200,
+                    title = "Tunnel failed for new-token",
+                    detail = "Authorization: Bearer new-token",
+                ),
+            )
+        secrets = LogRedactionSecrets(cloudflareTunnelToken = "new-token")
+        controller.handle(LogsAuditScreenEvent.CopyFilteredSummary)
+
+        assertEquals(listOf("new-secret"), controller.state.rows.map(LogsAuditScreenRow::id))
+        assertEquals(
+            listOf(
+                LogsAuditScreenEffect.CopyText(
+                    "Cloudflare tunnel | Failed | 200 | Tunnel failed for [REDACTED]\nAuthorization: [REDACTED]",
+                ),
+            ),
+            controller.consumeEffects(),
+        )
     }
 
     @Test

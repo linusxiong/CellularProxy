@@ -37,6 +37,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cellularproxy.app.audit.CellularProxyForegroundServiceAuditStore
+import com.cellularproxy.app.audit.CellularProxyLogsAuditStore
 import com.cellularproxy.app.audit.CellularProxyManagementAuditStore
 import com.cellularproxy.app.audit.CellularProxyRootAuditStore
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
@@ -96,6 +97,7 @@ fun CellularProxyApp() {
             rootRecords = CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll(),
             foregroundServiceRecords =
                 CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(context).readAll(),
+            genericRecords = CellularProxyLogsAuditStore.logsAuditLog(context).readAll(),
         )
     }
     val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets = {

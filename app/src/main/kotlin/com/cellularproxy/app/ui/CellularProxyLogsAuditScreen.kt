@@ -26,8 +26,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
 import com.cellularproxy.app.audit.PersistedForegroundServiceAuditRecord
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
 import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
 import com.cellularproxy.app.service.ForegroundServiceAuditOutcome
@@ -46,8 +49,8 @@ internal fun CellularProxyLogsAuditRoute(
     val controller =
         remember {
             LogsAuditScreenController(
-                rows = logsAuditRowsProvider(),
-                secrets = redactionSecretsProvider(),
+                rowsProvider = logsAuditRowsProvider,
+                secretsProvider = redactionSecretsProvider,
                 exportSupported = true,
                 exportGeneratedAtEpochMillis = System.currentTimeMillis(),
             )
@@ -235,18 +238,6 @@ internal data class LogsAuditScreenInputRow(
     }
 }
 
-internal data class PersistedLogsAuditRecord(
-    val occurredAtEpochMillis: Long,
-    val category: LogsAuditScreenCategory,
-    val severity: LogsAuditScreenSeverity,
-    val title: String,
-    val detail: String,
-) {
-    init {
-        require(occurredAtEpochMillis >= 0) { "Log record timestamp must be non-negative." }
-    }
-}
-
 internal data class LogsAuditScreenRow(
     val id: String,
     val category: LogsAuditScreenCategory,
@@ -347,6 +338,8 @@ internal enum class LogsAuditScreenAction {
 internal class LogsAuditScreenController(
     private val rows: List<LogsAuditScreenInputRow> = emptyList(),
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val rowsProvider: () -> List<LogsAuditScreenInputRow> = { rows },
+    private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val exportSupported: Boolean = false,
     private val exportGeneratedAtEpochMillis: Long = 0,
     private val maxRows: Int? = null,
@@ -358,16 +351,19 @@ internal class LogsAuditScreenController(
     fun handle(event: LogsAuditScreenEvent) {
         when (event) {
             LogsAuditScreenEvent.CopyFilteredSummary -> {
+                state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
                 if (LogsAuditScreenAction.CopyFilteredSummary in state.availableActions) {
                     pendingEffects.add(LogsAuditScreenEffect.CopyText(state.copyableFilteredSummary))
                 }
             }
             LogsAuditScreenEvent.CopySelectedRecord -> {
+                state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
                 state.copyableSelectedRecord?.let { copyText ->
                     pendingEffects.add(LogsAuditScreenEffect.CopyText(copyText))
                 }
             }
             LogsAuditScreenEvent.ExportRedactedBundle -> {
+                state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
                 state.exportBundle?.let { bundle ->
                     pendingEffects.add(LogsAuditScreenEffect.ExportBundle(bundle))
                 }
@@ -397,10 +393,10 @@ internal class LogsAuditScreenController(
         filter: LogsAuditScreenFilter = LogsAuditScreenFilter(),
         selectedRowId: String? = null,
     ): LogsAuditScreenState = LogsAuditScreenState.from(
-        rows = rows,
+        rows = rowsProvider(),
         selectedRowId = selectedRowId,
         filter = filter,
-        secrets = secrets,
+        secrets = secretsProvider(),
         exportSupported = exportSupported,
         exportGeneratedAtEpochMillis = exportGeneratedAtEpochMillis,
         maxRows = maxRows,
@@ -811,12 +807,26 @@ private fun PersistedForegroundServiceAuditRecord.foregroundServiceAuditSeverity
 
 private fun PersistedLogsAuditRecord.toLogsAuditScreenInputRow(index: Int): LogsAuditScreenInputRow = LogsAuditScreenInputRow(
     id = "generic-log-$index-$occurredAtEpochMillis-${category.name}-${severity.name}",
-    category = category,
-    severity = severity,
+    category = category.toScreenCategory(),
+    severity = severity.toScreenSeverity(),
     occurredAtEpochMillis = occurredAtEpochMillis,
     title = title,
     detail = detail,
 )
+
+private fun LogsAuditRecordCategory.toScreenCategory(): LogsAuditScreenCategory = when (this) {
+    LogsAuditRecordCategory.AppRuntime -> LogsAuditScreenCategory.AppRuntime
+    LogsAuditRecordCategory.ProxyServer -> LogsAuditScreenCategory.ProxyServer
+    LogsAuditRecordCategory.CloudflareTunnel -> LogsAuditScreenCategory.CloudflareTunnel
+    LogsAuditRecordCategory.Rotation -> LogsAuditScreenCategory.Rotation
+    LogsAuditRecordCategory.Audit -> LogsAuditScreenCategory.Audit
+}
+
+private fun LogsAuditRecordSeverity.toScreenSeverity(): LogsAuditScreenSeverity = when (this) {
+    LogsAuditRecordSeverity.Info -> LogsAuditScreenSeverity.Info
+    LogsAuditRecordSeverity.Warning -> LogsAuditScreenSeverity.Warning
+    LogsAuditRecordSeverity.Failed -> LogsAuditScreenSeverity.Failed
+}
 
 private fun LogsAuditScreenFilter.timeWindowText(): String = when {
     fromEpochMillis == null && toEpochMillis == null -> "All"
