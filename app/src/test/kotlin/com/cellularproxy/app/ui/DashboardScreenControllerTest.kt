@@ -306,6 +306,30 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `dashboard exposes unavailable selected route risk as diagnostics action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.UnavailableSelectedRoute,
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Selected route is unavailable",
+                    action = DashboardScreenAction.OpenDiagnostics,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
     fun `dashboard log summaries preserve row data and severity for recent errors`() {
         val summaries =
             dashboardLogSummariesFromLogsAuditRows(
