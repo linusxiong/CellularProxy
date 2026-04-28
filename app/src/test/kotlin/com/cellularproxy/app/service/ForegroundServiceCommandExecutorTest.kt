@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class ForegroundServiceCommandExecutorTest {
     @Test
@@ -182,6 +183,73 @@ class ForegroundServiceCommandExecutorTest {
             events,
         )
         assertIs<ForegroundProxyRuntimeActionResult.Failed>(execution.runtimeActionResult)
+    }
+
+    @Test
+    fun `accepted service commands emit outcome-bearing audit records`() {
+        val events = mutableListOf<String>()
+        val auditRecords = mutableListOf<ForegroundServiceAuditRecord>()
+
+        ForegroundServiceCommandExecutor.execute(
+            commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.START_PROXY),
+            runtimeLifecycle = RecordingRuntimeLifecycle(events),
+            applyServiceEffect = { effect -> events += "service:$effect" },
+            clock = { 123L },
+            recordAudit = auditRecords::add,
+        )
+
+        assertEquals(
+            listOf(
+                ForegroundServiceAuditRecord(
+                    occurredAtEpochMillis = 123L,
+                    event = ForegroundServiceAuditEvent.StartRequested,
+                    command = ForegroundServiceCommand.Start,
+                    source = ForegroundServiceCommandSource.App,
+                    outcome = ForegroundServiceAuditOutcome.RuntimeStarted,
+                ),
+            ),
+            auditRecords,
+        )
+    }
+
+    @Test
+    fun `ignored service commands do not emit audit records`() {
+        val auditRecords = mutableListOf<ForegroundServiceAuditRecord>()
+
+        ForegroundServiceCommandExecutor.execute(
+            commandResult = ForegroundServiceCommandParser.parse(null),
+            runtimeLifecycle = RecordingRuntimeLifecycle(mutableListOf()),
+            applyServiceEffect = {},
+            recordAudit = auditRecords::add,
+        )
+
+        assertTrue(auditRecords.isEmpty())
+    }
+
+    @Test
+    fun `audit recorder failures are reported without changing command execution`() {
+        val events = mutableListOf<String>()
+        val auditFailure = IllegalStateException("audit store unavailable")
+        val reportedFailures = mutableListOf<Exception>()
+
+        val execution =
+            ForegroundServiceCommandExecutor.execute(
+                commandResult = ForegroundServiceCommandParser.parse(ForegroundServiceActions.STOP_PROXY),
+                runtimeLifecycle = RecordingRuntimeLifecycle(events),
+                applyServiceEffect = { effect -> events += "service:$effect" },
+                recordAudit = { throw auditFailure },
+                reportAuditFailure = reportedFailures::add,
+            )
+
+        assertEquals(ForegroundProxyRuntimeActionResult.Stopped, execution.runtimeActionResult)
+        assertEquals(
+            listOf(
+                "runtime:stop",
+                "service:${ForegroundServiceCommandEffect.StopForegroundAndSelf}",
+            ),
+            events,
+        )
+        assertEquals(listOf<Exception>(auditFailure), reportedFailures)
     }
 }
 

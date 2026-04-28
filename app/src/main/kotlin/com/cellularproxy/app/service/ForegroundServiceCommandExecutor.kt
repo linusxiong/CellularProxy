@@ -44,11 +44,67 @@ data class ForegroundServiceCommandExecution(
     }
 }
 
+enum class ForegroundServiceAuditOutcome {
+    RuntimeStarted,
+    RuntimeStopped,
+    RuntimeFailed,
+}
+
+data class ForegroundServiceAuditRecord(
+    val occurredAtEpochMillis: Long,
+    val event: ForegroundServiceAuditEvent,
+    val command: ForegroundServiceCommand,
+    val source: ForegroundServiceCommandSource,
+    val outcome: ForegroundServiceAuditOutcome,
+) {
+    init {
+        require(occurredAtEpochMillis >= 0) { "Foreground service audit timestamp must be non-negative" }
+        when (event) {
+            ForegroundServiceAuditEvent.StartRequested -> {
+                require(command == ForegroundServiceCommand.Start) {
+                    "Start foreground service audit events require a start command"
+                }
+                require(source == ForegroundServiceCommandSource.App) {
+                    "Start foreground service audit events require the app source"
+                }
+                require(outcome != ForegroundServiceAuditOutcome.RuntimeStopped) {
+                    "Start foreground service audit events cannot report runtime stopped"
+                }
+            }
+            ForegroundServiceAuditEvent.StopRequested -> {
+                require(command == ForegroundServiceCommand.Stop) {
+                    "Stop foreground service audit events require a stop command"
+                }
+                require(source == ForegroundServiceCommandSource.App) {
+                    "Stop foreground service audit events require the app source"
+                }
+                require(outcome != ForegroundServiceAuditOutcome.RuntimeStarted) {
+                    "Stop foreground service audit events cannot report runtime started"
+                }
+            }
+            ForegroundServiceAuditEvent.NotificationStopRequested -> {
+                require(command == ForegroundServiceCommand.Stop) {
+                    "Notification-stop foreground service audit events require a stop command"
+                }
+                require(source == ForegroundServiceCommandSource.Notification) {
+                    "Notification-stop foreground service audit events require the notification source"
+                }
+                require(outcome != ForegroundServiceAuditOutcome.RuntimeStarted) {
+                    "Notification-stop foreground service audit events cannot report runtime started"
+                }
+            }
+        }
+    }
+}
+
 object ForegroundServiceCommandExecutor {
     fun execute(
         commandResult: ForegroundServiceCommandResult,
         runtimeLifecycle: ForegroundProxyRuntimeLifecycle,
         applyServiceEffect: (ForegroundServiceCommandEffect) -> Unit,
+        clock: () -> Long = System::currentTimeMillis,
+        recordAudit: (ForegroundServiceAuditRecord) -> Unit = {},
+        reportAuditFailure: (Exception) -> Unit = {},
     ): ForegroundServiceCommandExecution {
         val plan = ForegroundServiceCommandEffectPlanner.plan(commandResult)
         val runtimeResult =
@@ -78,19 +134,51 @@ object ForegroundServiceCommandExecutor {
                 }
             }
 
+        if (commandResult is ForegroundServiceCommandResult.Accepted) {
+            val auditRecord =
+                commandResult.decision.toAuditRecord(
+                    occurredAtEpochMillis = clock(),
+                    runtimeActionResult = runtimeResult,
+                )
+            try {
+                recordAudit(auditRecord)
+            } catch (exception: Exception) {
+                reportAuditFailure(exception)
+            }
+        }
+
         return ForegroundServiceCommandExecution(
             plan = plan,
             runtimeActionResult = runtimeResult,
         )
     }
 
-    private inline fun invokeRuntimeAction(action: () -> Unit): RuntimeActionInvocationResult =
-        try {
-            action()
-            RuntimeActionInvocationResult.Completed
-        } catch (exception: Exception) {
-            RuntimeActionInvocationResult.Failed(exception)
-        }
+    private inline fun invokeRuntimeAction(action: () -> Unit): RuntimeActionInvocationResult = try {
+        action()
+        RuntimeActionInvocationResult.Completed
+    } catch (exception: Exception) {
+        RuntimeActionInvocationResult.Failed(exception)
+    }
+}
+
+private fun ForegroundServiceCommandDecision.toAuditRecord(
+    occurredAtEpochMillis: Long,
+    runtimeActionResult: ForegroundProxyRuntimeActionResult,
+): ForegroundServiceAuditRecord = ForegroundServiceAuditRecord(
+    occurredAtEpochMillis = occurredAtEpochMillis,
+    event = auditEvent,
+    command = command,
+    source = source,
+    outcome = runtimeActionResult.toForegroundServiceAuditOutcome(),
+)
+
+private fun ForegroundProxyRuntimeActionResult.toForegroundServiceAuditOutcome(): ForegroundServiceAuditOutcome = when (this) {
+    ForegroundProxyRuntimeActionResult.Started -> ForegroundServiceAuditOutcome.RuntimeStarted
+    ForegroundProxyRuntimeActionResult.Stopped -> ForegroundServiceAuditOutcome.RuntimeStopped
+    is ForegroundProxyRuntimeActionResult.Failed -> ForegroundServiceAuditOutcome.RuntimeFailed
+    ForegroundProxyRuntimeActionResult.NotRequested -> {
+        throw IllegalArgumentException("Accepted foreground service commands require a runtime audit outcome")
+    }
 }
 
 private sealed interface RuntimeActionInvocationResult {
@@ -101,17 +189,15 @@ private sealed interface RuntimeActionInvocationResult {
     ) : RuntimeActionInvocationResult
 }
 
-private fun RuntimeActionInvocationResult.startedOrFailed(): ForegroundProxyRuntimeActionResult =
-    when (this) {
-        RuntimeActionInvocationResult.Completed -> ForegroundProxyRuntimeActionResult.Started
-        is RuntimeActionInvocationResult.Failed -> ForegroundProxyRuntimeActionResult.Failed(exception)
-    }
+private fun RuntimeActionInvocationResult.startedOrFailed(): ForegroundProxyRuntimeActionResult = when (this) {
+    RuntimeActionInvocationResult.Completed -> ForegroundProxyRuntimeActionResult.Started
+    is RuntimeActionInvocationResult.Failed -> ForegroundProxyRuntimeActionResult.Failed(exception)
+}
 
-private fun RuntimeActionInvocationResult.stoppedOrFailed(): ForegroundProxyRuntimeActionResult =
-    when (this) {
-        RuntimeActionInvocationResult.Completed -> ForegroundProxyRuntimeActionResult.Stopped
-        is RuntimeActionInvocationResult.Failed -> ForegroundProxyRuntimeActionResult.Failed(exception)
-    }
+private fun RuntimeActionInvocationResult.stoppedOrFailed(): ForegroundProxyRuntimeActionResult = when (this) {
+    RuntimeActionInvocationResult.Completed -> ForegroundProxyRuntimeActionResult.Stopped
+    is RuntimeActionInvocationResult.Failed -> ForegroundProxyRuntimeActionResult.Failed(exception)
+}
 
 object UninstalledForegroundProxyRuntimeLifecycle : ForegroundProxyRuntimeLifecycle {
     override fun startProxyRuntime(): Nothing = throw IllegalStateException("Foreground proxy runtime lifecycle is not installed")
