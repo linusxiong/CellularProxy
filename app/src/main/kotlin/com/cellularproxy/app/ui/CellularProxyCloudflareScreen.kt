@@ -827,9 +827,21 @@ private fun String.safeCloudflareErrorCategory(secrets: LogRedactionSecrets): St
             .substringBefore(':')
             .trim()
     return redactedCategory
-        .takeIf { category -> category.isNotBlank() && "[REDACTED]" !in category }
+        .takeIf { category ->
+            category.isNotBlank() &&
+                "[REDACTED]" !in category &&
+                category.lowercase() !in unsafeCloudflareErrorCategories
+        }
         ?: "Cloudflare tunnel failed"
 }
+
+private val unsafeCloudflareErrorCategories: Set<String> =
+    setOf(
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "set-cookie",
+    )
 
 private fun String?.isFailingManagementApiRoundTrip(): Boolean {
     val summary = this?.trim() ?: return false

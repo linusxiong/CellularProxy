@@ -1301,7 +1301,7 @@ class ComposeAppShellContractTest {
                 "Tunnel enabled: Enabled",
                 "Tunnel token: Present",
                 "Tunnel lifecycle: Failed",
-                "Management hostname: https://proxy.example.test/manage?[REDACTED]",
+                "Management hostname: https://proxy.example.test",
                 "Last connection error: Cloudflare tunnel failed",
                 "Edge sessions: 2 sessions",
                 "Management API round trip: HTTP 503 for token=[REDACTED]",

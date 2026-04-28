@@ -29,22 +29,32 @@ android {
                 }
             }
 
-        fun cloudflareE2eValue(localProperty: String): String? = e2eLocalProperties
+        fun cloudflareE2eValue(
+            localProperty: String,
+            environmentVariable: String,
+        ): String? = e2eLocalProperties
             .getProperty(localProperty)
             .trimmedOrNull()
+            ?: providers
+                .environmentVariable(environmentVariable)
+                .orNull
+                .trimmedOrNull()
 
         mapOf(
             "cloudflareTunnelToken" to
                 cloudflareE2eValue(
                     localProperty = "cellularproxy.e2e.cloudflareTunnelToken",
+                    environmentVariable = "CELLULARPROXY_E2E_CLOUDFLARE_TUNNEL_TOKEN",
                 ),
             "cloudflareManagementHostname" to
                 cloudflareE2eValue(
                     localProperty = "cellularproxy.e2e.cloudflareManagementHostname",
+                    environmentVariable = "CELLULARPROXY_E2E_CLOUDFLARE_MANAGEMENT_HOSTNAME",
                 ),
             "cloudflareManagementApiToken" to
                 cloudflareE2eValue(
                     localProperty = "cellularproxy.e2e.cloudflareManagementApiToken",
+                    environmentVariable = "CELLULARPROXY_E2E_MANAGEMENT_API_TOKEN",
                 ),
         ).forEach { (argumentName, value) ->
             if (value != null) {

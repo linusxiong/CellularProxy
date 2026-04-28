@@ -450,7 +450,7 @@ class CloudflareE2eValidationConfigTest {
     }
 
     @Test
-    fun `android instrumentation receives Cloudflare e2e arguments from local only sources`() {
+    fun `android instrumentation receives Cloudflare e2e arguments from local file or environment only sources`() {
         val repoRoot = repoRoot()
         val appBuild = repoRoot.resolve("app/build.gradle.kts").readText()
         val gitIgnore = repoRoot.resolve(".gitignore").readText()
@@ -461,9 +461,11 @@ class CloudflareE2eValidationConfigTest {
         assertTrue(appBuild.contains("cloudflareManagementApiToken"))
         assertTrue(appBuild.contains("cellularproxy.e2e.cloudflareTunnelToken"))
         assertTrue(appBuild.contains("e2e.local.properties"))
-        assertFalse(appBuild.contains("CELLULARPROXY_E2E_CLOUDFLARE_TUNNEL_TOKEN"))
+        assertTrue(appBuild.contains("CELLULARPROXY_E2E_CLOUDFLARE_TUNNEL_TOKEN"))
+        assertTrue(appBuild.contains("CELLULARPROXY_E2E_CLOUDFLARE_MANAGEMENT_HOSTNAME"))
+        assertTrue(appBuild.contains("CELLULARPROXY_E2E_MANAGEMENT_API_TOKEN"))
         assertFalse(appBuild.contains("providers.gradleProperty"))
-        assertFalse(appBuild.contains("providers.environmentVariable"))
+        assertTrue(appBuild.contains("environmentVariable(environmentVariable)"))
 
         assertTrue(gitIgnore.lineSequence().any { it == "e2e.local.properties" })
         assertTrue(gitIgnore.lineSequence().any { it == "*.local.properties" })
