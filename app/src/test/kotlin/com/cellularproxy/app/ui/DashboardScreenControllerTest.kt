@@ -2,6 +2,7 @@ package com.cellularproxy.app.ui
 
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
@@ -256,6 +257,36 @@ class DashboardScreenControllerTest {
             listOf(
                 DashboardRiskItem(
                     label = "Cloudflare tunnel token is missing",
+                    action = DashboardScreenAction.OpenCloudflare,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes Cloudflare invalid token risk as action item`() {
+        val defaultConfig = AppConfig.default()
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        defaultConfig.copy(
+                            cloudflare =
+                                defaultConfig.cloudflare.copy(
+                                    enabled = true,
+                                    tunnelTokenPresent = true,
+                                ),
+                        ),
+                    status = ProxyServiceStatus.stopped(),
+                    invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Cloudflare tunnel token is invalid",
                     action = DashboardScreenAction.OpenCloudflare,
                 ),
             ),

@@ -824,7 +824,9 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
 }
 
 private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (this) {
-    DashboardWarning.CloudflareTokenMissing ->
+    DashboardWarning.CloudflareTokenMissing,
+    DashboardWarning.CloudflareTokenInvalid,
+    ->
         DashboardRiskItem(
             label = toDashboardText(),
             action = DashboardScreenAction.OpenCloudflare,
