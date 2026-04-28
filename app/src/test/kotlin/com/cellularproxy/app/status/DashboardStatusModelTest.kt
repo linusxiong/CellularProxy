@@ -95,10 +95,49 @@ class DashboardStatusModelTest {
         assertEquals(1, model.rejectedConnections)
         assertEquals(1_024, model.bytesReceived)
         assertEquals(2_048, model.bytesSent)
+        assertNull(model.recentTraffic)
         assertEquals(DashboardCloudflareState.Connected, model.cloudflare.state)
         assertTrue(model.cloudflare.remoteManagementAvailable)
         assertEquals(DashboardRootState.Available, model.root)
         assertEquals(setOf(DashboardWarning.BroadUnauthenticatedProxy), model.warnings)
+    }
+
+    @Test
+    fun `model exposes recent traffic only from explicit recent sample`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8181,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = null,
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                        metrics =
+                            ProxyTrafficMetrics(
+                                totalConnections = 7,
+                                bytesReceived = 1_024,
+                                bytesSent = 2_048,
+                            ),
+                    ),
+                recentTraffic =
+                    DashboardTrafficSummary(
+                        windowLabel = "Last 60 seconds",
+                        bytesReceived = 128,
+                        bytesSent = 256,
+                    ),
+            )
+
+        assertEquals(
+            DashboardTrafficSummary(
+                windowLabel = "Last 60 seconds",
+                bytesReceived = 128,
+                bytesSent = 256,
+            ),
+            model.recentTraffic,
+        )
     }
 
     @Test

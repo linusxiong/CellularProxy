@@ -227,7 +227,8 @@ internal fun CellularProxyDashboardScreen(
 
         DashboardSection("Traffic") {
             DashboardField("Active connections", status.activeConnections.toString())
-            DashboardField("Recent traffic", trafficSummary(status))
+            DashboardField("Recent traffic", recentTrafficSummary(status))
+            DashboardField("Total traffic", totalTrafficSummary(status))
             DashboardField("Rejected connections", status.rejectedConnections.toString())
         }
 
@@ -640,7 +641,11 @@ private fun managementApiSummary(status: DashboardStatusModel): String = if (sta
     "Remote management unavailable"
 }
 
-private fun trafficSummary(status: DashboardStatusModel): String = "${status.totalConnections} total, " +
+private fun recentTrafficSummary(status: DashboardStatusModel): String = status.recentTraffic?.let { traffic ->
+    "${traffic.windowLabel}: ${traffic.bytesReceived} B received, ${traffic.bytesSent} B sent"
+} ?: "Unavailable"
+
+private fun totalTrafficSummary(status: DashboardStatusModel): String = "${status.totalConnections} total, " +
     "${status.bytesReceived} B received, ${status.bytesSent} B sent"
 
 private fun DashboardWarning.toDashboardText(): String = when (this) {

@@ -24,6 +24,7 @@ data class DashboardStatusModel(
     val rejectedConnections: Long,
     val bytesReceived: Long,
     val bytesSent: Long,
+    val recentTraffic: DashboardTrafficSummary? = null,
     val cloudflare: DashboardCloudflareStatus,
     val root: DashboardRootState,
     val startupError: ProxyStartupError?,
@@ -40,6 +41,7 @@ data class DashboardStatusModel(
                 DashboardCloudflareManagementApiCheck.NotRun,
             managementApiTokenPresent: Boolean = true,
             invalidSensitiveConfigReason: SensitiveConfigInvalidReason? = null,
+            recentTraffic: DashboardTrafficSummary? = null,
         ): DashboardStatusModel {
             val cloudflare = status.cloudflare.toDashboardCloudflareStatus()
             return DashboardStatusModel(
@@ -53,6 +55,7 @@ data class DashboardStatusModel(
                 rejectedConnections = status.metrics.rejectedConnections,
                 bytesReceived = status.metrics.bytesReceived,
                 bytesSent = status.metrics.bytesSent,
+                recentTraffic = recentTraffic,
                 cloudflare = cloudflare,
                 root = rootState(config, status),
                 startupError = status.startupError,
@@ -242,6 +245,18 @@ data class DashboardRecentError(
     val title: String,
     val detail: String,
 )
+
+data class DashboardTrafficSummary(
+    val windowLabel: String,
+    val bytesReceived: Long,
+    val bytesSent: Long,
+) {
+    init {
+        require(windowLabel.isNotBlank()) { "Traffic summary window label must not be blank" }
+        require(bytesReceived >= 0) { "Recent received byte count must not be negative" }
+        require(bytesSent >= 0) { "Recent sent byte count must not be negative" }
+    }
+}
 
 private fun ProxyServiceState.toDashboardServiceState(): DashboardServiceState = when (this) {
     ProxyServiceState.Starting -> DashboardServiceState.Starting

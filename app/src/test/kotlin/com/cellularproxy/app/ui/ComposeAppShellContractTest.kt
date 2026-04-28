@@ -238,6 +238,7 @@ class ComposeAppShellContractTest {
             "Public IP",
             "Active connections",
             "Recent traffic",
+            "Total traffic",
             "Recent high-severity errors",
             "Start proxy",
             "Stop proxy",
@@ -269,6 +270,18 @@ class ComposeAppShellContractTest {
         assertTrue(
             dashboardSource.contains("statusProvider = { currentStatusProvider() }"),
             "Dashboard route controller must be backed by the injected status provider.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardField(\"Recent traffic\", recentTrafficSummary(status))"),
+            "Dashboard must render recent traffic from the explicit recent-traffic summary.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardField(\"Total traffic\", totalTrafficSummary(status))"),
+            "Dashboard must keep cumulative traffic counters under a total-traffic label.",
+        )
+        assertTrue(
+            dashboardSource.contains("} ?: \"Unavailable\""),
+            "Dashboard recent traffic must not fall back to cumulative lifetime counters.",
         )
         assertTrue(
             dashboardSource.contains("rememberUpdatedState(statusProvider)") &&
