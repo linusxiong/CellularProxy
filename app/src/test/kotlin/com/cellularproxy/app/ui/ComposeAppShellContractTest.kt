@@ -1442,6 +1442,39 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `logs audit screen exposes search filter update callback`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter: (LogsAuditScreenFilter) -> Unit = {}"),
+            "Logs/Audit screen must expose a filter-update callback for runtime/controller wiring.",
+        )
+        assertTrue(
+            logsAuditSource.contains("label = { Text(\"Search logs\") }"),
+            "Logs/Audit screen must render an editable search filter control.",
+        )
+        assertTrue(
+            logsAuditSource.contains("value = state.searchDisplayText"),
+            "Logs/Audit search input must display the redacted search text from screen state.",
+        )
+        assertTrue(
+            !logsAuditSource.contains("value = state.filter.search"),
+            "Logs/Audit search input must not echo raw search filter text.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter(state.filter.copy(search = search))"),
+            "Search edits must dispatch an updated LogsAuditScreenFilter instead of mutating local-only UI state.",
+        )
+        assertTrue(
+            !logsAuditSource.contains("enabled = actionsEnabled,\n        label = { Text(\"Search logs\") }"),
+            "Logs/Audit search editing must not be gated by copy/export action enablement.",
+        )
+    }
+
+    @Test
     fun `logs audit screen state redacts unsafe search display text`() {
         val state =
             LogsAuditScreenState.from(

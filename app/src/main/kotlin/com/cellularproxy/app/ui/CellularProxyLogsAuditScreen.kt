@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ internal fun CellularProxyLogsAuditScreen(
     state: LogsAuditScreenState = LogsAuditScreenState.from(),
     actionsEnabled: Boolean = false,
     onSelectRecord: (String) -> Unit = {},
+    onUpdateFilter: (LogsAuditScreenFilter) -> Unit = {},
     onCopySelectedRecord: (String) -> Unit = {},
     onCopyFilteredSummary: (String) -> Unit = {},
     onExportRedactedBundle: (LogsAuditScreenExportBundle) -> Unit = {},
@@ -47,6 +49,10 @@ internal fun CellularProxyLogsAuditScreen(
             style = MaterialTheme.typography.titleMedium,
         )
         LogsAuditFilterSummary(state)
+        LogsAuditSearchFilter(
+            state = state,
+            onUpdateFilter = onUpdateFilter,
+        )
         LogsAuditActionRow(
             state = state,
             actionsEnabled = actionsEnabled,
@@ -357,6 +363,20 @@ private fun LogsAuditFilterSummary(state: LogsAuditScreenState) {
         LogsAuditField("Time window", filter.timeWindowText())
         LogsAuditField("Search", state.searchDisplayText.ifBlank { "None" })
     }
+}
+
+@Composable
+private fun LogsAuditSearchFilter(
+    state: LogsAuditScreenState,
+    onUpdateFilter: (LogsAuditScreenFilter) -> Unit,
+) {
+    OutlinedTextField(
+        value = state.searchDisplayText,
+        onValueChange = { search -> onUpdateFilter(state.filter.copy(search = search)) },
+        label = { Text("Search logs") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
