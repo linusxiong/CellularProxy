@@ -272,7 +272,11 @@ class ProxySettingsFormController(
     private val saveConfig: (AppConfig) -> Unit,
     private val loadSensitiveConfig: (() -> SensitiveConfig)? = null,
     private val saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
+    private val loadSensitiveConfigProvider: () -> (() -> SensitiveConfig)? = { loadSensitiveConfig },
+    private val saveSensitiveConfigProvider: () -> ((SensitiveConfig) -> Unit)? = { saveSensitiveConfig },
 ) {
+    fun loadCurrentConfig(): AppConfig = loadConfig()
+
     fun save(form: ProxySettingsFormState): ProxySettingsSaveResult {
         val baseConfig = loadConfig()
         when (val plainResult = form.toAppConfig(base = baseConfig)) {
@@ -310,7 +314,7 @@ class ProxySettingsFormController(
         val result =
             form.toSettings(
                 base = baseConfig,
-                sensitiveConfig = loadSensitiveConfig?.invoke(),
+                sensitiveConfig = loadSensitiveConfigProvider()?.invoke(),
             )
         return when (result) {
             is ProxySettingsFormResult.Invalid ->
@@ -324,7 +328,7 @@ class ProxySettingsFormController(
                 )
             is ProxySettingsFormResult.Valid -> {
                 result.sensitiveConfig?.let { sensitiveConfig ->
-                    saveSensitiveConfig?.invoke(sensitiveConfig)
+                    saveSensitiveConfigProvider()?.invoke(sensitiveConfig)
                         ?: error("Sensitive config save callback is required when sensitive config is loaded")
                 }
                 saveConfig(result.config)
@@ -359,6 +363,7 @@ class ProxySettingsScreenController(
             is ProxySettingsScreenEvent.UpdateForm -> updateForm(event.form)
             ProxySettingsScreenEvent.DiscardChanges -> updateForm(state.persistedForm)
             ProxySettingsScreenEvent.SaveChanges -> saveChanges()
+            ProxySettingsScreenEvent.Refresh -> refreshFromProvider()
         }
     }
 
@@ -373,6 +378,18 @@ class ProxySettingsScreenController(
             ProxySettingsScreenState.from(
                 form = form,
                 persistedForm = state.persistedForm,
+            )
+    }
+
+    private fun refreshFromProvider() {
+        if (state.form != state.persistedForm) {
+            return
+        }
+        val form = ProxySettingsFormState.from(formController.loadCurrentConfig())
+        state =
+            ProxySettingsScreenState.from(
+                form = form,
+                persistedForm = form,
             )
     }
 
@@ -401,6 +418,8 @@ sealed interface ProxySettingsScreenEvent {
     ) : ProxySettingsScreenEvent
 
     data object SaveChanges : ProxySettingsScreenEvent
+
+    data object Refresh : ProxySettingsScreenEvent
 
     data object DiscardChanges : ProxySettingsScreenEvent
 }

@@ -257,6 +257,23 @@ class ComposeAppShellContractTest {
             "Dashboard route must render through the controller-backed route.",
         )
         assertTrue(
+            shellSource.contains("statusProvider = {"),
+            "Dashboard app-shell wiring must provide repository-backed status instead of the default stopped state.",
+        )
+        assertTrue(
+            dashboardSource.contains("statusProvider: () -> DashboardStatusModel"),
+            "Dashboard route must accept an injectable status provider for app-shell runtime data.",
+        )
+        assertTrue(
+            dashboardSource.contains("statusProvider = { currentStatusProvider() }"),
+            "Dashboard route controller must be backed by the injected status provider.",
+        )
+        assertTrue(
+            dashboardSource.contains("rememberUpdatedState(statusProvider)") &&
+                dashboardSource.contains("currentStatusProvider()"),
+            "Dashboard route must preserve the latest status provider across recomposition.",
+        )
+        assertTrue(
             dashboardSource.contains("DashboardScreenController("),
             "Dashboard route must use the tested screen controller boundary.",
         )
@@ -554,13 +571,19 @@ class ComposeAppShellContractTest {
             "Settings route must expose callbacks for persistent plain and sensitive config wiring.",
         )
         assertTrue(
-            settingsSource.contains("loadSensitiveConfig = loadSensitiveConfig") &&
-                settingsSource.contains("saveSensitiveConfig = saveSensitiveConfig"),
+            settingsSource.contains("loadSensitiveConfigProvider = { currentLoadSensitiveConfig }") &&
+                settingsSource.contains("saveSensitiveConfigProvider = { currentSaveSensitiveConfig }"),
             "Settings route controller must use the injected sensitive config callbacks.",
         )
         assertTrue(
             settingsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
             "Settings route must mirror controller state into Compose state for recomposition.",
+        )
+        assertTrue(
+            settingsSource.contains("rememberUpdatedState(initialConfigProvider)") &&
+                settingsSource.contains("LaunchedEffect(Unit)") &&
+                settingsSource.contains("ProxySettingsScreenEvent.Refresh"),
+            "Settings route must keep provider-backed state fresh when entering composition.",
         )
         assertTrue(
             settingsSource.contains("ProxySettingsScreenEvent.UpdateForm(updatedForm)"),
@@ -620,6 +643,33 @@ class ComposeAppShellContractTest {
             "Cloudflare route must use the tested screen controller boundary.",
         )
         assertTrue(
+            cloudflareSource.contains("configProvider: () -> AppConfig = AppConfig::default"),
+            "Cloudflare route must accept an injectable config provider for app-shell runtime data.",
+        )
+        assertTrue(
+            cloudflareSource.contains("tokenStatusProvider: () -> CloudflareTokenStatus") &&
+                cloudflareSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets"),
+            "Cloudflare route must accept injectable token status and redaction providers.",
+        )
+        assertTrue(
+            cloudflareSource.contains(
+                "tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() }",
+            ) &&
+                cloudflareSource.contains("edgeSessionSummaryProvider: () -> String? = { null }") &&
+                cloudflareSource.contains("managementApiRoundTripProvider: () -> String? = { null }"),
+            "Cloudflare route must accept injectable runtime health providers.",
+        )
+        assertTrue(
+            cloudflareSource.contains("configProvider = { currentConfigProvider() }") &&
+                cloudflareSource.contains("tokenStatusProvider = { currentTokenStatusProvider() }") &&
+                cloudflareSource.contains("tunnelStatusProvider = { currentTunnelStatusProvider() }") &&
+                cloudflareSource.contains("edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() }") &&
+                cloudflareSource.contains(
+                    "managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() }",
+                ),
+            "Cloudflare route controller must be backed by injected Cloudflare state and health providers.",
+        )
+        assertTrue(
             cloudflareSource.contains("CloudflareScreenEvent.StartTunnel"),
             "Cloudflare route must dispatch lifecycle events through the controller.",
         )
@@ -630,6 +680,20 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("onCopyDiagnosticsText = onCopyText"),
             "Cloudflare route must send diagnostics copy effects to the app clipboard sink.",
+        )
+        assertTrue(
+            shellSource.contains("configProvider = settingsInitialConfigProvider"),
+            "Cloudflare app-shell route must read the persisted app config.",
+        )
+        assertTrue(
+            shellSource.contains("cloudflareTokenStatusFrom(settingsLoadSensitiveConfig().cloudflareTunnelToken)") &&
+                shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider"),
+            "Cloudflare app-shell route must derive token status and full diagnostics redaction from sensitive storage.",
+        )
+        assertTrue(
+            shellSource.contains("proxyStatusProvider: () -> ProxyServiceStatus") &&
+                shellSource.contains("tunnelStatusProvider = { proxyStatusProvider().cloudflare }"),
+            "Cloudflare app-shell route must derive tunnel lifecycle status from the shared proxy status provider.",
         )
         assertTrue(
             cloudflareSource.contains("onStartTunnel: () -> Unit = {}"),
@@ -947,6 +1011,26 @@ class ComposeAppShellContractTest {
             "Rotation route must use the tested screen controller boundary.",
         )
         assertTrue(
+            rotationSource.contains("configProvider: () -> AppConfig = AppConfig::default") &&
+                rotationSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets"),
+            "Rotation route must accept injectable config and redaction providers.",
+        )
+        assertTrue(
+            rotationSource.contains("configProvider = { currentConfigProvider() }") &&
+                rotationSource.contains("secretsProvider = { currentRedactionSecretsProvider() }"),
+            "Rotation route controller must be backed by injected Rotation state providers.",
+        )
+        assertTrue(
+            rotationSource.contains("rememberUpdatedState(configProvider)") &&
+                rotationSource.contains("currentConfigProvider()"),
+            "Rotation route must preserve the latest config provider across recomposition.",
+        )
+        assertTrue(
+            rotationSource.contains("LaunchedEffect(Unit)") &&
+                rotationSource.contains("dispatchEvent(RotationScreenEvent.Refresh)"),
+            "Rotation route must refresh provider-backed state when it enters composition.",
+        )
+        assertTrue(
             rotationSource.contains("RotationScreenEvent.RotateMobileData"),
             "Rotation route must dispatch high-impact rotation events through the controller.",
         )
@@ -957,6 +1041,11 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("onCopyRotationDiagnosticsText = onCopyText"),
             "Rotation route must send diagnostics copy effects to the app clipboard sink.",
+        )
+        assertTrue(
+            shellSource.contains("configProvider = settingsInitialConfigProvider") &&
+                shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider"),
+            "Rotation app-shell route must read persisted app config and shared diagnostics redaction secrets.",
         )
         assertTrue(
             rotationSource.contains("onCheckRoot: () -> Unit = {}"),
@@ -1307,12 +1396,38 @@ class ComposeAppShellContractTest {
             "Diagnostics route must use the provider-backed diagnostics suite factory by default.",
         )
         assertTrue(
+            diagnosticsSource.contains("configProvider: () -> AppConfig") &&
+                diagnosticsSource.contains("proxyStatusProvider: () -> ProxyServiceStatus") &&
+                diagnosticsSource.contains("observedNetworksProvider: () -> List<NetworkDescriptor>") &&
+                diagnosticsSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets"),
+            "Diagnostics route must accept app-shell providers for config, live proxy status, observed networks, and redaction secrets.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("config = { currentConfigProvider() }") &&
+                diagnosticsSource.contains("proxyStatus = { currentProxyStatusProvider() }") &&
+                diagnosticsSource.contains("observedNetworks = { currentObservedNetworksProvider() }") &&
+                diagnosticsSource.contains("secretsProvider = { currentRedactionSecretsProvider() }"),
+            "Diagnostics controller construction must use the latest injected providers instead of static defaults.",
+        )
+        assertTrue(
+            shellSource.contains("configProvider = settingsInitialConfigProvider") &&
+                shellSource.contains("proxyStatusProvider = proxyStatusProvider") &&
+                shellSource.contains("observedNetworksProvider = observedNetworksProvider") &&
+                shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider"),
+            "App shell must wire Diagnostics to the same persisted config, live status, and redaction providers as other screens.",
+        )
+        assertTrue(
             !diagnosticsSource.contains("DiagnosticsSuiteController(checks = emptyMap())"),
             "Diagnostics route must not hard-code an empty diagnostics suite that reports every check as missing.",
         )
         assertTrue(
             diagnosticsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
             "Diagnostics route must mirror controller state into Compose state for recomposition.",
+        )
+        assertTrue(
+            diagnosticsSource.contains("val eventMutex = remember { Mutex() }") &&
+                diagnosticsSource.contains("eventMutex.withLock"),
+            "Diagnostics route must serialize async controller event handling because the controller owns mutable state.",
         )
         assertTrue(
             diagnosticsSource.contains("DiagnosticsScreenEvent.RunAllChecks"),

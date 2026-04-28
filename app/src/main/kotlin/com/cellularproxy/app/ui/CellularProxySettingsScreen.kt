@@ -19,9 +19,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -38,16 +40,20 @@ internal fun CellularProxySettingsRoute(
     loadSensitiveConfig: (() -> SensitiveConfig)? = null,
     saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
 ) {
+    val currentInitialConfigProvider by rememberUpdatedState(initialConfigProvider)
+    val currentSaveConfig by rememberUpdatedState(saveConfig)
+    val currentLoadSensitiveConfig by rememberUpdatedState(loadSensitiveConfig)
+    val currentSaveSensitiveConfig by rememberUpdatedState(saveSensitiveConfig)
     val controller =
         remember {
             ProxySettingsScreenController(
-                initialConfigProvider = initialConfigProvider,
+                initialConfigProvider = { currentInitialConfigProvider() },
                 formController =
                     ProxySettingsFormController(
-                        loadConfig = initialConfigProvider,
-                        saveConfig = saveConfig,
-                        loadSensitiveConfig = loadSensitiveConfig,
-                        saveSensitiveConfig = saveSensitiveConfig,
+                        loadConfig = { currentInitialConfigProvider() },
+                        saveConfig = { config -> currentSaveConfig(config) },
+                        loadSensitiveConfigProvider = { currentLoadSensitiveConfig },
+                        saveSensitiveConfigProvider = { currentSaveSensitiveConfig },
                     ),
             )
         }
@@ -56,6 +62,9 @@ internal fun CellularProxySettingsRoute(
         controller.handle(event)
         controller.consumeEffects()
         screenState = controller.state
+    }
+    LaunchedEffect(Unit) {
+        dispatchEvent(ProxySettingsScreenEvent.Refresh)
     }
 
     CellularProxySettingsScreen(

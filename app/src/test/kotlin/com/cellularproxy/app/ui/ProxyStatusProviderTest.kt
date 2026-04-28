@@ -1,0 +1,106 @@
+package com.cellularproxy.app.ui
+
+import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
+import com.cellularproxy.shared.config.NetworkConfig
+import com.cellularproxy.shared.config.ProxyConfig
+import com.cellularproxy.shared.config.RotationConfig
+import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.proxy.ProxyServiceState
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import kotlin.io.path.Path
+import kotlin.io.path.readText
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class ProxyStatusProviderTest {
+    @Test
+    fun `uses live management api status when it is available`() {
+        val liveStatus = ProxyServiceStatus(state = ProxyServiceState.Starting)
+
+        val status =
+            proxyStatusFromLiveStatusOrConfigFallback(
+                config = config(),
+                liveStatus = { liveStatus },
+            )
+
+        assertEquals(liveStatus, status)
+    }
+
+    @Test
+    fun `falls back to configured stopped route when live management api status is unavailable`() {
+        val status =
+            proxyStatusFromLiveStatusOrConfigFallback(
+                config = config(),
+                liveStatus = { null },
+            )
+
+        assertEquals(ProxyServiceState.Stopped, status.state)
+        assertEquals(RouteTarget.Cellular, status.configuredRoute)
+    }
+
+    @Test
+    fun `falls back to configured stopped route when live management api status throws`() {
+        val status =
+            proxyStatusFromLiveStatusOrConfigFallback(
+                config = config(),
+                liveStatus = { error("connection refused") },
+            )
+
+        assertEquals(ProxyServiceState.Stopped, status.state)
+        assertEquals(RouteTarget.Cellular, status.configuredRoute)
+    }
+
+    @Test
+    fun `app shell refreshes live proxy status off the compose state construction path`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("var proxyStatusState by remember"),
+            "App shell must hold a cached proxy status state for synchronous UI consumers.",
+        )
+        assertTrue(
+            shellSource.contains("LaunchedEffect(") &&
+                shellSource.contains("withContext(Dispatchers.IO)") &&
+                shellSource.contains("localManagementApiStatusReader.load("),
+            "Live Management API status refresh must run from a coroutine on Dispatchers.IO.",
+        )
+        assertTrue(
+            shellSource.contains("val loadProxyStatus: () -> ProxyServiceStatus = {\n        proxyStatusState\n    }"),
+            "The Compose status provider must return cached state instead of performing blocking HTTP work.",
+        )
+    }
+
+    @Test
+    fun `app shell refreshes cached live status after management api actions`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("val refreshProxyStatus: suspend () -> Unit"),
+            "App shell must expose a single refresh path for the cached live proxy status.",
+        )
+        assertTrue(
+            Regex(
+                """localManagementApiActionDispatcher\.dispatch\([\s\S]*?\.onFailure \{ throwable ->[\s\S]*?refreshProxyStatus\(\)""",
+            ).containsMatchIn(shellSource),
+            "Management API actions must refresh cached proxy status after dispatch so provider-backed screens do not stay on the first snapshot.",
+        )
+    }
+}
+
+private fun config(): AppConfig = AppConfig(
+    proxy = ProxyConfig(),
+    network = NetworkConfig(defaultRoutePolicy = RouteTarget.Cellular),
+    rotation = RotationConfig(),
+    cloudflare = CloudflareConfig(),
+)
+
+private fun repoRoot() = generateSequence(Path(requireNotNull(System.getProperty("user.dir")))) { path -> path.parent }
+    .first { path -> path.resolve("settings.gradle.kts").toFile().exists() }

@@ -1,9 +1,11 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RotationConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -86,6 +88,59 @@ class ProxySettingsFormModelTest {
             ),
             changedSensitiveSettingState.availableActions,
         )
+    }
+
+    @Test
+    fun `settings controller refreshes clean form from latest persisted config provider`() {
+        var config = AppConfig.default()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = { config },
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = { config },
+                        saveConfig = { savedConfig -> config = savedConfig },
+                    ),
+            )
+        config =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenPort = 8181,
+                    ),
+            )
+
+        controller.handle(ProxySettingsScreenEvent.Refresh)
+
+        assertEquals("8181", controller.state.form.listenPort)
+        assertEquals("8181", controller.state.persistedForm.listenPort)
+        assertEquals(emptyList(), controller.state.availableActions)
+    }
+
+    @Test
+    fun `settings form controller saves through latest sensitive callback provider`() {
+        val oldSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val newSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        var loadSensitiveConfig = { sensitiveConfig("old-management-token") }
+        var saveSensitiveConfig: (SensitiveConfig) -> Unit = oldSavedSensitiveConfigs::add
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfigProvider = { loadSensitiveConfig },
+                saveSensitiveConfigProvider = { saveSensitiveConfig },
+            )
+        loadSensitiveConfig = { sensitiveConfig("new-management-token") }
+        saveSensitiveConfig = newSavedSensitiveConfigs::add
+
+        controller.save(
+            ProxySettingsFormState
+                .from(AppConfig.default())
+                .copy(managementApiToken = "newer-management-token"),
+        )
+
+        assertEquals(emptyList(), oldSavedSensitiveConfigs)
+        assertEquals(listOf("newer-management-token"), newSavedSensitiveConfigs.map(SensitiveConfig::managementApiToken))
     }
 
     @Test
@@ -332,4 +387,9 @@ class ProxySettingsFormModelTest {
             )
         }
     }
+
+    private fun sensitiveConfig(managementApiToken: String): SensitiveConfig = SensitiveConfig(
+        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+        managementApiToken = managementApiToken,
+    )
 }

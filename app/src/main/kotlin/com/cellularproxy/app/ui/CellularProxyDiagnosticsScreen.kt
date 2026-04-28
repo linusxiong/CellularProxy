@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -31,35 +33,62 @@ import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun CellularProxyDiagnosticsRoute(
+    configProvider: () -> AppConfig = AppConfig::default,
+    proxyStatusProvider: () -> ProxyServiceStatus = { ProxyServiceStatus.stopped() },
+    observedNetworksProvider: () -> List<NetworkDescriptor> = { emptyList() },
+    redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCopyDiagnosticsSummaryText: (String) -> Unit = {},
 ) {
+    val currentConfigProvider by rememberUpdatedState(configProvider)
+    val currentProxyStatusProvider by rememberUpdatedState(proxyStatusProvider)
+    val currentObservedNetworksProvider by rememberUpdatedState(observedNetworksProvider)
+    val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
+    val coroutineScope = rememberCoroutineScope()
+    val eventMutex = remember { Mutex() }
     val controller =
         remember {
             DiagnosticsScreenController(
                 suiteController =
                     DiagnosticsSuiteControllerFactory.create(
-                        config = AppConfig::default,
-                        proxyStatus = { ProxyServiceStatus.stopped() },
-                        observedNetworks = { emptyList() },
+                        config = { currentConfigProvider() },
+                        proxyStatus = { currentProxyStatusProvider() },
+                        observedNetworks = { currentObservedNetworksProvider() },
                         localManagementApiProbeResult = { LocalManagementApiProbeResult.Unavailable },
                         cloudflareManagementApiProbeResult = { CloudflareManagementApiProbeResult.NotConfigured },
                     ),
-                secrets = LogRedactionSecrets(),
+                secretsProvider = { currentRedactionSecretsProvider() },
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
     val dispatchEvent: (DiagnosticsScreenEvent) -> Unit = { event ->
-        controller.handle(event)
-        controller.consumeEffects().forEach { effect ->
-            when (effect) {
-                is DiagnosticsScreenEffect.CopyText -> onCopyDiagnosticsSummaryText(effect.text)
+        coroutineScope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    eventMutex.withLock {
+                        controller.handle(event)
+                        DiagnosticsRouteEventResult(
+                            state = controller.state,
+                            effects = controller.consumeEffects(),
+                        )
+                    }
+                }
+            result.effects.forEach { effect ->
+                when (effect) {
+                    is DiagnosticsScreenEffect.CopyText -> onCopyDiagnosticsSummaryText(effect.text)
+                }
             }
+            screenState = result.state
         }
-        screenState = controller.state
     }
 
     CellularProxyDiagnosticsScreen(
@@ -70,6 +99,11 @@ internal fun CellularProxyDiagnosticsRoute(
         onCopySummary = { dispatchEvent(DiagnosticsScreenEvent.CopySummary) },
     )
 }
+
+private data class DiagnosticsRouteEventResult(
+    val state: DiagnosticsScreenState,
+    val effects: List<DiagnosticsScreenEffect>,
+)
 
 @Composable
 internal fun CellularProxyDiagnosticsScreen(

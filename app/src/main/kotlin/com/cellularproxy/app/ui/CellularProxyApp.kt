@@ -22,9 +22,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -47,10 +51,13 @@ import com.cellularproxy.app.config.SensitiveConfigGenerator
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.config.SensitiveConfigRepository
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
+import com.cellularproxy.app.network.AndroidNetworkRouteMonitor
 import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionDispatcher
+import com.cellularproxy.app.service.LocalManagementApiStatusReader
+import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Dashboard
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
@@ -59,9 +66,12 @@ import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Rotation
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +84,13 @@ fun CellularProxyApp() {
     val sensitiveRepository = remember(context) { SensitiveConfigRepositoryFactory.create(context) }
     val sensitiveConfigGenerator = remember { SecureRandomSensitiveConfigGenerator() }
     val localManagementApiActionDispatcher = remember { LocalManagementApiActionDispatcher() }
+    val localManagementApiStatusReader = remember { LocalManagementApiStatusReader() }
+    val networkRouteMonitor = remember(context) { AndroidNetworkRouteMonitor.create(context) }
+    DisposableEffect(networkRouteMonitor) {
+        onDispose {
+            networkRouteMonitor.close()
+        }
+    }
     val dispatchForegroundServiceCommand: (String) -> Unit = { action ->
         context.startForegroundService(
             Intent(context, CellularProxyForegroundService::class.java).setAction(action),
@@ -81,6 +98,11 @@ fun CellularProxyApp() {
     }
     val loadSettingsConfig: () -> AppConfig = {
         runBlocking { plainConfigRepository.load() }
+    }
+    var proxyStatusState by remember {
+        mutableStateOf(
+            ProxyServiceStatus.stopped(configuredRoute = AppConfig.default().network.defaultRoutePolicy),
+        )
     }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
@@ -91,6 +113,28 @@ fun CellularProxyApp() {
             generator = sensitiveConfigGenerator,
         )
     }
+    val refreshProxyStatus: suspend () -> Unit = {
+        proxyStatusState =
+            withContext(Dispatchers.IO) {
+                val config = loadSettingsConfig()
+                proxyStatusFromLiveStatusOrConfigFallback(
+                    config = config,
+                    liveStatus = {
+                        localManagementApiStatusReader.load(
+                            config = config,
+                            sensitiveConfig = loadSensitiveConfig(),
+                        )
+                    },
+                )
+            }
+    }
+    LaunchedEffect(Unit) {
+        refreshProxyStatus()
+    }
+    val loadProxyStatus: () -> ProxyServiceStatus = {
+        proxyStatusState
+    }
+    val loadObservedNetworks: () -> List<NetworkDescriptor> = networkRouteMonitor::observedNetworks
     val loadLogsAuditRows: () -> List<LogsAuditScreenInputRow> = {
         logsAuditScreenRowsFromPersistedAuditRecords(
             managementRecords = CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll(),
@@ -109,13 +153,15 @@ fun CellularProxyApp() {
         )
     }
     val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
-        coroutineScope.launch(Dispatchers.IO) {
+        coroutineScope.launch {
             runCatching {
-                localManagementApiActionDispatcher.dispatch(
-                    action = action,
-                    config = loadSettingsConfig(),
-                    sensitiveConfig = loadSensitiveConfig(),
-                )
+                withContext(Dispatchers.IO) {
+                    localManagementApiActionDispatcher.dispatch(
+                        action = action,
+                        config = loadSettingsConfig(),
+                        sensitiveConfig = loadSensitiveConfig(),
+                    )
+                }
             }.onSuccess { response ->
                 if (!response.isSuccessful) {
                     Log.w(
@@ -126,6 +172,7 @@ fun CellularProxyApp() {
             }.onFailure { throwable ->
                 Log.w(CELLULAR_PROXY_APP_TAG, "Local management action $action failed", throwable)
             }
+            refreshProxyStatus()
         }
     }
 
@@ -170,6 +217,8 @@ fun CellularProxyApp() {
                             settingsSaveSensitiveConfig = sensitiveRepository::save,
                             logsAuditRowsProvider = loadLogsAuditRows,
                             logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
+                            proxyStatusProvider = loadProxyStatus,
+                            observedNetworksProvider = loadObservedNetworks,
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
@@ -195,6 +244,8 @@ fun CellularProxyApp() {
                         settingsSaveSensitiveConfig = sensitiveRepository::save,
                         logsAuditRowsProvider = loadLogsAuditRows,
                         logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
+                        proxyStatusProvider = loadProxyStatus,
+                        observedNetworksProvider = loadObservedNetworks,
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
@@ -237,6 +288,12 @@ internal fun cellularProxyNavigationChromeFor(availableWidthDp: Int) = if (avail
 } else {
     CellularProxyNavigationChrome.BottomBar
 }
+
+internal fun proxyStatusFromLiveStatusOrConfigFallback(
+    config: AppConfig,
+    liveStatus: () -> ProxyServiceStatus?,
+): ProxyServiceStatus = runCatching(liveStatus).getOrNull()
+    ?: ProxyServiceStatus.stopped(configuredRoute = config.network.defaultRoutePolicy)
 
 @Composable
 private fun CellularProxyNavigationBar(navController: NavHostController) {
@@ -307,6 +364,8 @@ private fun CellularProxyNavigationHost(
     settingsSaveSensitiveConfig: (SensitiveConfig) -> Unit,
     logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>,
     logsAuditRedactionSecretsProvider: () -> LogRedactionSecrets,
+    proxyStatusProvider: () -> ProxyServiceStatus,
+    observedNetworksProvider: () -> List<NetworkDescriptor>,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
@@ -319,6 +378,16 @@ private fun CellularProxyNavigationHost(
     ) {
         composable(Dashboard.route) {
             CellularProxyDashboardRoute(
+                statusProvider = {
+                    val config = settingsInitialConfigProvider()
+                    DashboardStatusModel.from(
+                        config = config,
+                        status = proxyStatusProvider(),
+                        recentLogs = dashboardLogSummariesFromLogsAuditRows(logsAuditRowsProvider()),
+                        redactionSecrets = logsAuditRedactionSecretsProvider(),
+                        managementApiTokenPresent = settingsLoadSensitiveConfig().managementApiToken.isNotBlank(),
+                    )
+                },
                 onStartProxyService = onStartProxyService,
                 onStopProxyService = onStopProxyService,
                 onOpenRiskDetails = { navController.navigate(LogsAudit.route) },
@@ -339,6 +408,12 @@ private fun CellularProxyNavigationHost(
         }
         composable(Cloudflare.route) {
             CellularProxyCloudflareRoute(
+                configProvider = settingsInitialConfigProvider,
+                tokenStatusProvider = {
+                    cloudflareTokenStatusFrom(settingsLoadSensitiveConfig().cloudflareTunnelToken)
+                },
+                tunnelStatusProvider = { proxyStatusProvider().cloudflare },
+                redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onStartTunnel = {
                     dispatchLocalManagementApiAction(LocalManagementApiAction.CloudflareStart)
                 },
@@ -356,6 +431,8 @@ private fun CellularProxyNavigationHost(
         }
         composable(Rotation.route) {
             CellularProxyRotationRoute(
+                configProvider = settingsInitialConfigProvider,
+                redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onCheckRoot = {
                     dispatchLocalManagementApiAction(LocalManagementApiAction.RootStatus)
                 },
@@ -373,6 +450,10 @@ private fun CellularProxyNavigationHost(
         }
         composable(Diagnostics.route) {
             CellularProxyDiagnosticsRoute(
+                configProvider = settingsInitialConfigProvider,
+                proxyStatusProvider = proxyStatusProvider,
+                observedNetworksProvider = observedNetworksProvider,
+                redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onCopyDiagnosticsSummaryText = onCopyText,
             )
         }

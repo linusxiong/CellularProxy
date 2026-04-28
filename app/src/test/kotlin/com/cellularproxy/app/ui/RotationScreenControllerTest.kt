@@ -143,6 +143,34 @@ class RotationScreenControllerTest {
         assertTrue(controller.consumeEffects().isEmpty())
     }
 
+    @Test
+    fun `controller refreshes diagnostics redaction secrets from provider`() {
+        var secrets = LogRedactionSecrets()
+        val controller =
+            RotationScreenController(
+                configProvider = { rootEnabledConfig() },
+                rotationStatusProvider = {
+                    RotationStatus(
+                        state = RotationState.Completed,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                        newPublicIp = "203.0.113.20",
+                        publicIpChanged = true,
+                    )
+                },
+                rootAvailabilityProvider = { RootAvailabilityStatus.Available },
+                secretsProvider = { secrets },
+            )
+
+        secrets = LogRedactionSecrets(proxyCredential = "203.0.113.20")
+        controller.handle(RotationScreenEvent.Refresh)
+        controller.handle(RotationScreenEvent.CopyDiagnostics)
+
+        val copyText = (controller.consumeEffects().single() as RotationScreenEffect.CopyText).text
+        assertFalse(copyText.contains("203.0.113.20"))
+        assertTrue(copyText.contains("[REDACTED]"))
+    }
+
     private fun rootEnabledConfig(): AppConfig {
         val defaultConfig = AppConfig.default()
         return defaultConfig.copy(

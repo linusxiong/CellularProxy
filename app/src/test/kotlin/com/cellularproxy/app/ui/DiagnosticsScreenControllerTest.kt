@@ -85,6 +85,37 @@ class DiagnosticsScreenControllerTest {
     }
 
     @Test
+    fun `controller copy summary uses latest redaction secrets provider`() {
+        var secrets = LogRedactionSecrets()
+        val controller =
+            DiagnosticsScreenController(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks =
+                            mapOf(
+                                DiagnosticCheckType.LocalManagementApi to
+                                    DiagnosticCheck {
+                                        DiagnosticCheckResult(
+                                            status = DiagnosticResultStatus.Failed,
+                                            details = "Proxy credential rotated-secret",
+                                        )
+                                    },
+                            ),
+                        nanoTime = { 0L },
+                    ),
+                secretsProvider = { secrets },
+            )
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.LocalManagementApi))
+        secrets = LogRedactionSecrets(proxyCredential = "rotated-secret")
+        controller.handle(DiagnosticsScreenEvent.CopySummary)
+
+        val copyText = (controller.consumeEffects().single() as DiagnosticsScreenEffect.CopyText).text
+        assertFalse(copyText.contains("rotated-secret"))
+        assertTrue(copyText.contains("Proxy credential [REDACTED]"))
+    }
+
+    @Test
     fun `controller empty suite reports explicit missing check fallback`() {
         val controller =
             DiagnosticsScreenController(

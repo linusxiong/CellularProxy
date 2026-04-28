@@ -6,7 +6,8 @@ import com.cellularproxy.shared.logging.LogRedactionSecrets
 
 internal class DiagnosticsScreenController(
     private val suiteController: DiagnosticsSuiteController,
-    private val secrets: LogRedactionSecrets,
+    secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val secretsProvider: () -> LogRedactionSecrets = { secrets },
 ) {
     private val pendingEffects = mutableListOf<DiagnosticsScreenEffect>()
     var state: DiagnosticsScreenState = buildState()
@@ -15,6 +16,7 @@ internal class DiagnosticsScreenController(
     fun handle(event: DiagnosticsScreenEvent) {
         when (event) {
             DiagnosticsScreenEvent.CopySummary -> {
+                state = buildState()
                 if (DiagnosticsScreenAction.CopySummary in state.availableActions) {
                     pendingEffects.add(DiagnosticsScreenEffect.CopyText(state.copyableSummary))
                 }
@@ -42,7 +44,7 @@ internal class DiagnosticsScreenController(
     }
 
     private fun buildState(): DiagnosticsScreenState = DiagnosticsScreenState.from(
-        model = suiteController.resultModel(secrets),
+        model = suiteController.resultModel(secretsProvider()),
     )
 }
 

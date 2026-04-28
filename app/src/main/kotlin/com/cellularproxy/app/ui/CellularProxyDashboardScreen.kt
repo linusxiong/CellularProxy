@@ -20,10 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.status.DashboardBoundRoute
+import com.cellularproxy.app.status.DashboardLogSeverity
+import com.cellularproxy.app.status.DashboardLogSummary
 import com.cellularproxy.app.status.DashboardRecentError
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
@@ -33,6 +36,12 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 
 @Composable
 internal fun CellularProxyDashboardRoute(
+    statusProvider: () -> DashboardStatusModel = {
+        DashboardStatusModel.from(
+            config = AppConfig.default(),
+            status = ProxyServiceStatus.stopped(),
+        )
+    },
     onStartProxyService: () -> Unit = {},
     onStopProxyService: () -> Unit = {},
     onOpenRiskDetails: () -> Unit = {},
@@ -42,18 +51,27 @@ internal fun CellularProxyDashboardRoute(
     onOpenDiagnostics: () -> Unit = {},
     onCopyProxyEndpointText: (String) -> Unit = {},
 ) {
+    val currentStatusProvider by rememberUpdatedState(statusProvider)
+    val currentOnStartProxyService by rememberUpdatedState(onStartProxyService)
+    val currentOnStopProxyService by rememberUpdatedState(onStopProxyService)
+    val currentOnOpenRiskDetails by rememberUpdatedState(onOpenRiskDetails)
+    val currentOnOpenCloudflare by rememberUpdatedState(onOpenCloudflare)
+    val currentOnOpenRotation by rememberUpdatedState(onOpenRotation)
+    val currentOnOpenLogs by rememberUpdatedState(onOpenLogs)
+    val currentOnOpenDiagnostics by rememberUpdatedState(onOpenDiagnostics)
     val controller =
         remember {
             DashboardScreenController(
+                statusProvider = { currentStatusProvider() },
                 actionHandler = { action ->
                     when (action) {
-                        DashboardScreenAction.StartProxy -> onStartProxyService()
-                        DashboardScreenAction.StopProxy -> onStopProxyService()
-                        DashboardScreenAction.OpenRiskDetails -> onOpenRiskDetails()
-                        DashboardScreenAction.OpenCloudflare -> onOpenCloudflare()
-                        DashboardScreenAction.OpenRotation -> onOpenRotation()
-                        DashboardScreenAction.OpenLogs -> onOpenLogs()
-                        DashboardScreenAction.OpenDiagnostics -> onOpenDiagnostics()
+                        DashboardScreenAction.StartProxy -> currentOnStartProxyService()
+                        DashboardScreenAction.StopProxy -> currentOnStopProxyService()
+                        DashboardScreenAction.OpenRiskDetails -> currentOnOpenRiskDetails()
+                        DashboardScreenAction.OpenCloudflare -> currentOnOpenCloudflare()
+                        DashboardScreenAction.OpenRotation -> currentOnOpenRotation()
+                        DashboardScreenAction.OpenLogs -> currentOnOpenLogs()
+                        DashboardScreenAction.OpenDiagnostics -> currentOnOpenDiagnostics()
                         else -> Unit
                     }
                 },
@@ -366,6 +384,24 @@ internal class DashboardScreenController(
     private fun buildState(): DashboardScreenState = DashboardScreenState
         .from(statusProvider())
         .withoutPendingLifecycleActions(pendingLifecycleActions)
+}
+
+internal fun dashboardLogSummariesFromLogsAuditRows(
+    rows: List<LogsAuditScreenInputRow>,
+): List<DashboardLogSummary> = rows.map { row ->
+    DashboardLogSummary(
+        id = row.id,
+        occurredAtEpochMillis = row.occurredAtEpochMillis,
+        severity = row.severity.toDashboardLogSeverity(),
+        title = row.title,
+        detail = row.detail,
+    )
+}
+
+private fun LogsAuditScreenSeverity.toDashboardLogSeverity(): DashboardLogSeverity = when (this) {
+    LogsAuditScreenSeverity.Info -> DashboardLogSeverity.Info
+    LogsAuditScreenSeverity.Warning -> DashboardLogSeverity.Warning
+    LogsAuditScreenSeverity.Failed -> DashboardLogSeverity.Failed
 }
 
 internal sealed interface DashboardScreenEvent {

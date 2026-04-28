@@ -24,6 +24,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.cloudflare.CloudflareTunnelToken
+import com.cellularproxy.cloudflare.CloudflareTunnelTokenParseResult
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
@@ -32,12 +34,30 @@ import com.cellularproxy.shared.logging.LogRedactor
 
 @Composable
 internal fun CellularProxyCloudflareRoute(
+    configProvider: () -> AppConfig = AppConfig::default,
+    tokenStatusProvider: () -> CloudflareTokenStatus = {
+        if (configProvider().cloudflare.tunnelTokenPresent) {
+            CloudflareTokenStatus.Present
+        } else {
+            CloudflareTokenStatus.Missing
+        }
+    },
+    tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
+    edgeSessionSummaryProvider: () -> String? = { null },
+    managementApiRoundTripProvider: () -> String? = { null },
+    redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onStartTunnel: () -> Unit = {},
     onStopTunnel: () -> Unit = {},
     onReconnectTunnel: () -> Unit = {},
     onTestManagementTunnel: () -> Unit = {},
     onCopyDiagnosticsText: (String) -> Unit = {},
 ) {
+    val currentConfigProvider by rememberUpdatedState(configProvider)
+    val currentTokenStatusProvider by rememberUpdatedState(tokenStatusProvider)
+    val currentTunnelStatusProvider by rememberUpdatedState(tunnelStatusProvider)
+    val currentEdgeSessionSummaryProvider by rememberUpdatedState(edgeSessionSummaryProvider)
+    val currentManagementApiRoundTripProvider by rememberUpdatedState(managementApiRoundTripProvider)
+    val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentOnStartTunnel by rememberUpdatedState(onStartTunnel)
     val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
     val currentOnReconnectTunnel by rememberUpdatedState(onReconnectTunnel)
@@ -45,6 +65,12 @@ internal fun CellularProxyCloudflareRoute(
     val controller =
         remember {
             CloudflareScreenController(
+                configProvider = { currentConfigProvider() },
+                tokenStatusProvider = { currentTokenStatusProvider() },
+                tunnelStatusProvider = { currentTunnelStatusProvider() },
+                edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() },
+                managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() },
+                secretsProvider = { currentRedactionSecretsProvider() },
                 actionHandler = { action ->
                     when (action) {
                         CloudflareScreenAction.StartTunnel -> currentOnStartTunnel()
@@ -276,6 +302,15 @@ internal enum class CloudflareTokenStatus(
     Invalid("Invalid"),
 }
 
+internal fun cloudflareTokenStatusFrom(rawToken: String?): CloudflareTokenStatus {
+    val token = rawToken?.trim().orEmpty()
+    return when {
+        token.isEmpty() -> CloudflareTokenStatus.Missing
+        CloudflareTunnelToken.parse(token) is CloudflareTunnelTokenParseResult.Valid -> CloudflareTokenStatus.Present
+        else -> CloudflareTokenStatus.Invalid
+    }
+}
+
 internal class CloudflareScreenController(
     private val configProvider: () -> AppConfig = { AppConfig.default() },
     private val tunnelStatusProvider: () -> CloudflareTunnelStatus = { CloudflareTunnelStatus.disabled() },
@@ -289,6 +324,7 @@ internal class CloudflareScreenController(
     private val edgeSessionSummaryProvider: () -> String? = { null },
     private val managementApiRoundTripProvider: () -> String? = { null },
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val actionHandler: (CloudflareScreenAction) -> Unit = {},
 ) {
     private val pendingOperations = mutableMapOf<CloudflareScreenAction, CloudflareTunnelStatus>()
@@ -336,7 +372,7 @@ internal class CloudflareScreenController(
                 tokenStatus = tokenStatusProvider(),
                 edgeSessionSummary = edgeSessionSummaryProvider(),
                 managementApiRoundTrip = managementApiRoundTripProvider(),
-                secrets = secrets,
+                secrets = secretsProvider(),
             )
         pendingOperations
             .filterValues { dispatchedStatus -> dispatchedStatus != currentTunnelStatus }

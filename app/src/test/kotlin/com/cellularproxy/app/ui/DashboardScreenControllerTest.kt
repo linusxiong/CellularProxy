@@ -1,5 +1,6 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.shared.config.AppConfig
@@ -127,5 +128,38 @@ class DashboardScreenControllerTest {
             controller.consumeEffects().single(),
         )
         assertTrue(controller.consumeEffects().isEmpty())
+    }
+
+    @Test
+    fun `dashboard log summaries preserve row data and severity for recent errors`() {
+        val summaries =
+            dashboardLogSummariesFromLogsAuditRows(
+                listOf(
+                    LogsAuditScreenInputRow(
+                        id = "failed-row",
+                        category = LogsAuditScreenCategory.ProxyServer,
+                        severity = LogsAuditScreenSeverity.Failed,
+                        occurredAtEpochMillis = 42L,
+                        title = "Proxy failed",
+                        detail = "bind error",
+                    ),
+                    LogsAuditScreenInputRow(
+                        id = "warning-row",
+                        category = LogsAuditScreenCategory.CloudflareTunnel,
+                        severity = LogsAuditScreenSeverity.Warning,
+                        occurredAtEpochMillis = 43L,
+                        title = "Cloudflare degraded",
+                        detail = "edge unavailable",
+                    ),
+                ),
+            )
+
+        assertEquals(
+            listOf(DashboardLogSeverity.Failed, DashboardLogSeverity.Warning),
+            summaries.map { it.severity },
+        )
+        assertEquals(listOf("failed-row", "warning-row"), summaries.map { it.id })
+        assertEquals(listOf("Proxy failed", "Cloudflare degraded"), summaries.map { it.title })
+        assertEquals(listOf("bind error", "edge unavailable"), summaries.map { it.detail })
     }
 }

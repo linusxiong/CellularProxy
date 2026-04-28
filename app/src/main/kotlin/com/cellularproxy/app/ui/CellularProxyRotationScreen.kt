@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,12 +34,16 @@ import com.cellularproxy.shared.rotation.RotationStatus
 
 @Composable
 internal fun CellularProxyRotationRoute(
+    configProvider: () -> AppConfig = AppConfig::default,
+    redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCheckRoot: () -> Unit = {},
     onProbeCurrentPublicIp: () -> Unit = {},
     onRotateMobileData: () -> Unit = {},
     onRotateAirplaneMode: () -> Unit = {},
     onCopyRotationDiagnosticsText: (String) -> Unit = {},
 ) {
+    val currentConfigProvider by rememberUpdatedState(configProvider)
+    val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentOnCheckRoot by rememberUpdatedState(onCheckRoot)
     val currentOnProbeCurrentPublicIp by rememberUpdatedState(onProbeCurrentPublicIp)
     val currentOnRotateMobileData by rememberUpdatedState(onRotateMobileData)
@@ -46,6 +51,8 @@ internal fun CellularProxyRotationRoute(
     val controller =
         remember {
             RotationScreenController(
+                configProvider = { currentConfigProvider() },
+                secretsProvider = { currentRedactionSecretsProvider() },
                 actionHandler = { action ->
                     when (action) {
                         RotationScreenAction.CheckRoot -> currentOnCheckRoot()
@@ -66,6 +73,9 @@ internal fun CellularProxyRotationRoute(
             }
         }
         screenState = controller.state
+    }
+    LaunchedEffect(Unit) {
+        dispatchEvent(RotationScreenEvent.Refresh)
     }
 
     CellularProxyRotationScreen(
@@ -300,6 +310,7 @@ internal class RotationScreenController(
     private val cooldownRemainingSecondsProvider: () -> Long? = { null },
     private val activeConnectionsProvider: () -> Long = { 0 },
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val actionHandler: (RotationScreenAction) -> Unit = {},
 ) {
     private var lastObservedRotationStatus: RotationStatus = rotationStatusProvider()
@@ -359,7 +370,7 @@ internal class RotationScreenController(
                 rootAvailability = rootAvailabilityProvider(),
                 cooldownRemainingSeconds = cooldownRemainingSecondsProvider(),
                 activeConnections = activeConnectionsProvider(),
-                secrets = secrets,
+                secrets = secretsProvider(),
             ).withoutPendingUnsafeActions(pendingUnsafeActions)
     }
 }

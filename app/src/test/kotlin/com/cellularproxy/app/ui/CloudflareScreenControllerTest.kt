@@ -117,6 +117,19 @@ class CloudflareScreenControllerTest {
         assertTrue(controller.consumeEffects().isEmpty())
     }
 
+    @Test
+    fun `cloudflare token status distinguishes missing invalid and valid stored tokens`() {
+        assertEquals(CloudflareTokenStatus.Missing, cloudflareTokenStatusFrom(null))
+        assertEquals(CloudflareTokenStatus.Missing, cloudflareTokenStatusFrom(""))
+        assertEquals(CloudflareTokenStatus.Invalid, cloudflareTokenStatusFrom("not-a-tunnel-token"))
+        assertEquals(
+            CloudflareTokenStatus.Present,
+            cloudflareTokenStatusFrom(
+                "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0=",
+            ),
+        )
+    }
+
     private fun enabledCloudflareConfig(tokenPresent: Boolean): AppConfig {
         val defaultConfig = AppConfig.default()
         return defaultConfig.copy(
