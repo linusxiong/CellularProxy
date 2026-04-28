@@ -331,7 +331,7 @@ internal data class DashboardScreenState(
         fun from(status: DashboardStatusModel): DashboardScreenState = DashboardScreenState(
             status = status,
             riskWarnings = status.warnings.map(DashboardWarning::toDashboardText),
-            riskItems = status.warnings.mapNotNull(DashboardWarning::toDashboardRiskItem),
+            riskItems = status.toDashboardRiskItems(),
             recentHighSeverityErrors = status.recentHighSeverityErrors.map(DashboardRecentError::toDashboardText),
             pendingOperation = "None",
             availableActions = status.availableActions(),
@@ -903,7 +903,34 @@ private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (t
             label = toDashboardText(),
             action = DashboardScreenAction.OpenRiskDetails,
         )
-    else -> null
+    DashboardWarning.StartupFailed ->
+        DashboardRiskItem(
+            label = toDashboardText(),
+            action = DashboardScreenAction.OpenDiagnostics,
+        )
+}
+
+private fun DashboardStatusModel.toDashboardRiskItems(): List<DashboardRiskItem> {
+    val startupWarnings =
+        setOf(
+            DashboardWarning.SelectedRouteUnavailable,
+            DashboardWarning.CloudflareTokenMissing,
+            DashboardWarning.ManagementApiTokenMissing,
+            DashboardWarning.PortAlreadyInUse,
+            DashboardWarning.InvalidListenAddress,
+            DashboardWarning.InvalidListenPort,
+            DashboardWarning.InvalidMaxConcurrentConnections,
+        )
+    val warningsForRiskItems =
+        if (
+            DashboardWarning.StartupFailed in warnings &&
+            warnings.any { it in startupWarnings }
+        ) {
+            warnings - DashboardWarning.StartupFailed
+        } else {
+            warnings
+        }
+    return warningsForRiskItems.mapNotNull(DashboardWarning::toDashboardRiskItem)
 }
 
 private fun DashboardRecentError.toDashboardText(): String = "$title: $detail"

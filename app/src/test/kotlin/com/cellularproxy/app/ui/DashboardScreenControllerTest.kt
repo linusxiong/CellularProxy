@@ -7,6 +7,7 @@ import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
+import com.cellularproxy.app.status.DashboardWarning
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RootConfig
@@ -568,6 +569,89 @@ class DashboardScreenControllerTest {
 
             assertEquals(listOf(expectedRiskItem), state.riskItems)
         }
+    }
+
+    @Test
+    fun `dashboard suppresses generic startup action when a specific startup risk action exists`() {
+        val cases =
+            listOf(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.UnavailableSelectedRoute,
+                        ),
+                ) to "Selected route is unavailable",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.MissingCloudflareTunnelToken,
+                        ),
+                ) to "Cloudflare tunnel token is missing",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.MissingManagementApiToken,
+                        ),
+                ) to "Management API token is missing",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+                ) to "Proxy port is already in use",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidListenAddress),
+                ) to "Proxy listen address is invalid",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidListenPort),
+                ) to "Proxy listen port is invalid",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.InvalidMaxConcurrentConnections,
+                        ),
+                ) to "Proxy connection limit is invalid",
+            )
+
+        cases.forEach { (status, expectedLabel) ->
+            val state = DashboardScreenState.from(status)
+
+            assertEquals(expectedLabel, state.riskItems.single().label)
+            assertFalse(
+                state.riskItems.any { it.label == "Proxy startup failed" },
+            )
+        }
+    }
+
+    @Test
+    fun `dashboard exposes generic startup failure risk as diagnostics action item`() {
+        val baseStatus =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+            )
+        val status =
+            baseStatus.copy(
+                warnings = setOf(DashboardWarning.StartupFailed),
+            )
+        val state =
+            DashboardScreenState.from(
+                status,
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Proxy startup failed",
+                    action = DashboardScreenAction.OpenDiagnostics,
+                ),
+            ),
+            state.riskItems,
+        )
     }
 
     @Test
