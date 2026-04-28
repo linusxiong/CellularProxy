@@ -27,8 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
+import com.cellularproxy.app.audit.PersistedForegroundServiceAuditRecord
 import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
 import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
+import com.cellularproxy.app.service.ForegroundServiceAuditOutcome
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
 import com.cellularproxy.shared.root.RootCommandAuditPhase
@@ -37,6 +39,7 @@ import com.cellularproxy.shared.root.RootCommandOutcome
 @Composable
 internal fun CellularProxyLogsAuditRoute(
     logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow> = { emptyList() },
+    redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCopyLogsAuditText: (String) -> Unit = {},
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit = {},
 ) {
@@ -44,6 +47,7 @@ internal fun CellularProxyLogsAuditRoute(
         remember {
             LogsAuditScreenController(
                 rows = logsAuditRowsProvider(),
+                secrets = redactionSecretsProvider(),
                 exportSupported = true,
                 exportGeneratedAtEpochMillis = System.currentTimeMillis(),
             )
@@ -228,6 +232,18 @@ internal data class LogsAuditScreenInputRow(
     init {
         require(id.isNotBlank()) { "Log row id must not be blank." }
         require(occurredAtEpochMillis >= 0) { "Log row timestamp must be non-negative." }
+    }
+}
+
+internal data class PersistedLogsAuditRecord(
+    val occurredAtEpochMillis: Long,
+    val category: LogsAuditScreenCategory,
+    val severity: LogsAuditScreenSeverity,
+    val title: String,
+    val detail: String,
+) {
+    init {
+        require(occurredAtEpochMillis >= 0) { "Log record timestamp must be non-negative." }
     }
 }
 
@@ -422,9 +438,13 @@ internal sealed interface LogsAuditScreenEffect {
 internal fun logsAuditScreenRowsFromPersistedAuditRecords(
     managementRecords: List<PersistedManagementApiAuditRecord>,
     rootRecords: List<PersistedRootCommandAuditRecord>,
+    foregroundServiceRecords: List<PersistedForegroundServiceAuditRecord> = emptyList(),
+    genericRecords: List<PersistedLogsAuditRecord> = emptyList(),
 ): List<LogsAuditScreenInputRow> = managementRecords
     .mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) } +
-    rootRecords.mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) }
+    rootRecords.mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) } +
+    foregroundServiceRecords.mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) } +
+    genericRecords.mapIndexed { index, record -> record.toLogsAuditScreenInputRow(index) }
 
 @Composable
 private fun LogsAuditSelectedRecord(
@@ -772,6 +792,31 @@ private fun RootCommandAuditPhase.titleSuffix(): String = when (this) {
     RootCommandAuditPhase.Started -> "started"
     RootCommandAuditPhase.Completed -> "completed"
 }
+
+private fun PersistedForegroundServiceAuditRecord.toLogsAuditScreenInputRow(index: Int): LogsAuditScreenInputRow = LogsAuditScreenInputRow(
+    id = "foreground-service-$index-$occurredAtEpochMillis-${event.name}-${outcome.name}",
+    category = LogsAuditScreenCategory.AppRuntime,
+    severity = foregroundServiceAuditSeverity(),
+    occurredAtEpochMillis = occurredAtEpochMillis,
+    title = "Foreground service ${event.name} ${outcome.name}",
+    detail = "command=${command.name} source=${source.name}",
+)
+
+private fun PersistedForegroundServiceAuditRecord.foregroundServiceAuditSeverity(): LogsAuditScreenSeverity = when (outcome) {
+    ForegroundServiceAuditOutcome.RuntimeFailed -> LogsAuditScreenSeverity.Failed
+    ForegroundServiceAuditOutcome.RuntimeStarted,
+    ForegroundServiceAuditOutcome.RuntimeStopped,
+    -> LogsAuditScreenSeverity.Info
+}
+
+private fun PersistedLogsAuditRecord.toLogsAuditScreenInputRow(index: Int): LogsAuditScreenInputRow = LogsAuditScreenInputRow(
+    id = "generic-log-$index-$occurredAtEpochMillis-${category.name}-${severity.name}",
+    category = category,
+    severity = severity,
+    occurredAtEpochMillis = occurredAtEpochMillis,
+    title = title,
+    detail = detail,
+)
 
 private fun LogsAuditScreenFilter.timeWindowText(): String = when {
     fromEpochMillis == null && toEpochMillis == null -> "All"

@@ -36,6 +36,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cellularproxy.app.audit.CellularProxyForegroundServiceAuditStore
 import com.cellularproxy.app.audit.CellularProxyManagementAuditStore
 import com.cellularproxy.app.audit.CellularProxyRootAuditStore
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
@@ -56,6 +57,7 @@ import com.cellularproxy.app.ui.CellularProxyNavigationDestination.LogsAudit
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Rotation
 import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -92,6 +94,16 @@ fun CellularProxyApp() {
         logsAuditScreenRowsFromPersistedAuditRecords(
             managementRecords = CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll(),
             rootRecords = CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll(),
+            foregroundServiceRecords =
+                CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(context).readAll(),
+        )
+    }
+    val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets = {
+        val sensitiveConfig = loadSensitiveConfig()
+        LogRedactionSecrets(
+            managementApiToken = sensitiveConfig.managementApiToken,
+            proxyCredential = sensitiveConfig.proxyCredential.canonicalBasicPayload(),
+            cloudflareTunnelToken = sensitiveConfig.cloudflareTunnelToken,
         )
     }
     val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
@@ -155,6 +167,7 @@ fun CellularProxyApp() {
                             settingsLoadSensitiveConfig = loadSensitiveConfig,
                             settingsSaveSensitiveConfig = sensitiveRepository::save,
                             logsAuditRowsProvider = loadLogsAuditRows,
+                            logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
@@ -179,6 +192,7 @@ fun CellularProxyApp() {
                         settingsLoadSensitiveConfig = loadSensitiveConfig,
                         settingsSaveSensitiveConfig = sensitiveRepository::save,
                         logsAuditRowsProvider = loadLogsAuditRows,
+                        logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
@@ -290,6 +304,7 @@ private fun CellularProxyNavigationHost(
     settingsLoadSensitiveConfig: () -> SensitiveConfig,
     settingsSaveSensitiveConfig: (SensitiveConfig) -> Unit,
     logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>,
+    logsAuditRedactionSecretsProvider: () -> LogRedactionSecrets,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
@@ -362,6 +377,7 @@ private fun CellularProxyNavigationHost(
         composable(LogsAudit.route) {
             CellularProxyLogsAuditRoute(
                 logsAuditRowsProvider = logsAuditRowsProvider,
+                redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onCopyLogsAuditText = onCopyText,
                 onExportLogsAuditBundle = onExportLogsAuditBundle,
             )

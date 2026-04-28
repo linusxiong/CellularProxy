@@ -1,8 +1,13 @@
 package com.cellularproxy.app.ui
 
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
+import com.cellularproxy.app.audit.PersistedForegroundServiceAuditRecord
 import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
 import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
+import com.cellularproxy.app.service.ForegroundServiceAuditEvent
+import com.cellularproxy.app.service.ForegroundServiceAuditOutcome
+import com.cellularproxy.app.service.ForegroundServiceCommand
+import com.cellularproxy.app.service.ForegroundServiceCommandSource
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
 import com.cellularproxy.shared.logging.LogRedactionSecrets
@@ -58,6 +63,16 @@ class LogsAuditScreenStateTest {
                             stderr = "failed",
                         ),
                     ),
+                foregroundServiceRecords =
+                    listOf(
+                        PersistedForegroundServiceAuditRecord(
+                            occurredAtEpochMillis = 140,
+                            event = ForegroundServiceAuditEvent.StartRequested,
+                            command = ForegroundServiceCommand.Start,
+                            source = ForegroundServiceCommandSource.App,
+                            outcome = ForegroundServiceAuditOutcome.RuntimeStarted,
+                        ),
+                    ),
             )
 
         assertEquals(
@@ -93,6 +108,14 @@ class LogsAuditScreenStateTest {
                     occurredAtEpochMillis = 130,
                     title = "Root command MobileDataEnable completed",
                     detail = "outcome=Failure exitCode=1 stdout=token=secret-token stderr=failed",
+                ),
+                LogsAuditScreenInputRow(
+                    id = "foreground-service-0-140-StartRequested-RuntimeStarted",
+                    category = LogsAuditScreenCategory.AppRuntime,
+                    severity = LogsAuditScreenSeverity.Info,
+                    occurredAtEpochMillis = 140,
+                    title = "Foreground service StartRequested RuntimeStarted",
+                    detail = "command=Start source=App",
                 ),
             ),
             rows,
@@ -131,6 +154,54 @@ class LogsAuditScreenStateTest {
 
         assertEquals(rows.map(LogsAuditScreenInputRow::id).distinct(), rows.map(LogsAuditScreenInputRow::id))
         assertEquals("management-api-1-100-CloudflareStart-Responded", controller.state.selectedRow?.id)
+    }
+
+    @Test
+    fun `persisted generic log records map to screen input rows`() {
+        val rows =
+            logsAuditScreenRowsFromPersistedAuditRecords(
+                managementRecords = emptyList(),
+                rootRecords = emptyList(),
+                genericRecords =
+                    listOf(
+                        PersistedLogsAuditRecord(
+                            occurredAtEpochMillis = 210,
+                            category = LogsAuditScreenCategory.ProxyServer,
+                            severity = LogsAuditScreenSeverity.Warning,
+                            title = "Connection limit near capacity",
+                            detail = "active=60 max=64",
+                        ),
+                        PersistedLogsAuditRecord(
+                            occurredAtEpochMillis = 220,
+                            category = LogsAuditScreenCategory.CloudflareTunnel,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            title = "Tunnel degraded",
+                            detail = "edge=iad error=token-secret",
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "generic-log-0-210-ProxyServer-Warning",
+                    category = LogsAuditScreenCategory.ProxyServer,
+                    severity = LogsAuditScreenSeverity.Warning,
+                    occurredAtEpochMillis = 210,
+                    title = "Connection limit near capacity",
+                    detail = "active=60 max=64",
+                ),
+                LogsAuditScreenInputRow(
+                    id = "generic-log-1-220-CloudflareTunnel-Failed",
+                    category = LogsAuditScreenCategory.CloudflareTunnel,
+                    severity = LogsAuditScreenSeverity.Failed,
+                    occurredAtEpochMillis = 220,
+                    title = "Tunnel degraded",
+                    detail = "edge=iad error=token-secret",
+                ),
+            ),
+            rows,
+        )
     }
 
     @Test
@@ -175,6 +246,47 @@ class LogsAuditScreenStateTest {
             controller.consumeEffects(),
         )
         assertTrue(controller.consumeEffects().isEmpty())
+    }
+
+    @Test
+    fun `state redacts all configured secrets from rows copy summary and export bundle`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "secret-row",
+                            category = LogsAuditScreenCategory.ManagementApi,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "Failed for management-secret",
+                            detail =
+                                "proxy=user:proxy-password " +
+                                    "cloudflare=tunnel-secret Authorization: Bearer management-secret",
+                        ),
+                    ),
+                secrets =
+                    LogRedactionSecrets(
+                        managementApiToken = "management-secret",
+                        proxyCredential = "user:proxy-password",
+                        cloudflareTunnelToken = "tunnel-secret",
+                    ),
+                exportSupported = true,
+                exportGeneratedAtEpochMillis = 300,
+            )
+
+        val combinedOutput =
+            listOf(
+                state.rows.single().title,
+                state.rows.single().detail,
+                state.copyableFilteredSummary,
+                state.exportBundle?.text.orEmpty(),
+            ).joinToString(separator = "\n")
+
+        assertFalse(combinedOutput.contains("management-secret"))
+        assertFalse(combinedOutput.contains("user:proxy-password"))
+        assertFalse(combinedOutput.contains("tunnel-secret"))
+        assertTrue(combinedOutput.contains("[REDACTED]"))
     }
 
     @Test

@@ -1587,8 +1587,20 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll()") &&
                 shellSource.contains("CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll()") &&
+                shellSource.contains("CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(context).readAll()") &&
                 shellSource.contains("logsAuditScreenRowsFromPersistedAuditRecords("),
-            "App shell must load persisted Management API and root command audit records for the Logs/Audit route.",
+            "App shell must load persisted Management API, root command, and foreground-service audit records for the Logs/Audit route.",
+        )
+        val serviceSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/service/CellularProxyForegroundService.kt")
+                .readText()
+        assertTrue(
+            serviceSource.contains("CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(this)") &&
+                serviceSource.contains("::record") &&
+                serviceSource.contains("recordAudit =") &&
+                serviceSource.contains("reportAuditFailure ="),
+            "Foreground service command audit records must be persisted through the app audit store.",
         )
         assertTrue(
             shellSource.contains("logsAuditRowsProvider = loadLogsAuditRows") &&
@@ -1596,6 +1608,17 @@ class ComposeAppShellContractTest {
                 logsAuditSource.contains("rows = logsAuditRowsProvider()") &&
                 logsAuditSource.contains("exportSupported = true"),
             "Logs/Audit route must build its controller from persisted audit rows with export enabled.",
+        )
+        assertTrue(
+            shellSource.contains("val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets") &&
+                shellSource.contains("managementApiToken = sensitiveConfig.managementApiToken") &&
+                shellSource.contains("proxyCredential = sensitiveConfig.proxyCredential.canonicalBasicPayload()") &&
+                shellSource.contains("cloudflareTunnelToken = sensitiveConfig.cloudflareTunnelToken") &&
+                shellSource.contains("logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets") &&
+                shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider") &&
+                logsAuditSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets") &&
+                logsAuditSource.contains("secrets = redactionSecretsProvider()"),
+            "Logs/Audit route must pass sensitive-config-derived redaction secrets into persisted audit row rendering.",
         )
         assertTrue(
             logsAuditSource.contains("LogsAuditScreenEvent.SelectRecord"),
