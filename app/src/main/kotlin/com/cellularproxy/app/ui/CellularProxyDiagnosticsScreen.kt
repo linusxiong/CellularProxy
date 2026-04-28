@@ -21,13 +21,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
-import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
+import com.cellularproxy.app.diagnostics.DiagnosticsSuiteControllerFactory
+import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
 
 @Composable
 internal fun CellularProxyDiagnosticsRoute(
@@ -36,7 +40,14 @@ internal fun CellularProxyDiagnosticsRoute(
     val controller =
         remember {
             DiagnosticsScreenController(
-                suiteController = DiagnosticsSuiteController(checks = emptyMap()),
+                suiteController =
+                    DiagnosticsSuiteControllerFactory.create(
+                        config = AppConfig::default,
+                        proxyStatus = { ProxyServiceStatus.stopped() },
+                        observedNetworks = { emptyList() },
+                        localManagementApiProbeResult = { LocalManagementApiProbeResult.Unavailable },
+                        cloudflareManagementApiProbeResult = { CloudflareManagementApiProbeResult.NotConfigured },
+                    ),
                 secrets = LogRedactionSecrets(),
             )
         }

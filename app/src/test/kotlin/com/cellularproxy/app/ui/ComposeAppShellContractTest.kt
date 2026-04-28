@@ -1228,6 +1228,14 @@ class ComposeAppShellContractTest {
             "Diagnostics route must use the tested screen controller boundary.",
         )
         assertTrue(
+            diagnosticsSource.contains("DiagnosticsSuiteControllerFactory.create("),
+            "Diagnostics route must use the provider-backed diagnostics suite factory by default.",
+        )
+        assertTrue(
+            !diagnosticsSource.contains("DiagnosticsSuiteController(checks = emptyMap())"),
+            "Diagnostics route must not hard-code an empty diagnostics suite that reports every check as missing.",
+        )
+        assertTrue(
             diagnosticsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
             "Diagnostics route must mirror controller state into Compose state for recomposition.",
         )
