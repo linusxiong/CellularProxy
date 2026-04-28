@@ -1409,6 +1409,39 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `logs audit screen exposes selected record feedback and clearing`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains("onClearSelection: () -> Unit = {}"),
+            "Logs/Audit screen must expose a selection-clearing callback for controller wiring.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditSelectedRecord("),
+            "Logs/Audit screen must render the currently selected record.",
+        )
+        assertTrue(
+            logsAuditSource.contains("Selected record"),
+            "Logs/Audit selected-record feedback must have an operator-facing label.",
+        )
+        assertTrue(
+            logsAuditSource.contains("state.selectedRow"),
+            "Logs/Audit selected-record feedback must derive from LogsAuditScreenState.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onClick = onClearSelection"),
+            "Logs/Audit selected-record feedback must provide a clear-selection control.",
+        )
+        assertTrue(
+            logsAuditSource.contains("Clear selection"),
+            "Logs/Audit selected-record feedback must expose a clear-selection action.",
+        )
+    }
+
+    @Test
     fun `logs audit copy and export callbacks dispatch redacted payloads`() {
         val logsAuditSource =
             repoRoot()

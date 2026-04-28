@@ -30,6 +30,7 @@ internal fun CellularProxyLogsAuditScreen(
     state: LogsAuditScreenState = LogsAuditScreenState.from(),
     actionsEnabled: Boolean = false,
     onSelectRecord: (String) -> Unit = {},
+    onClearSelection: () -> Unit = {},
     onUpdateFilter: (LogsAuditScreenFilter) -> Unit = {},
     onCopySelectedRecord: (String) -> Unit = {},
     onCopyFilteredSummary: (String) -> Unit = {},
@@ -50,6 +51,11 @@ internal fun CellularProxyLogsAuditScreen(
         Text(
             text = state.resultSummary,
             style = MaterialTheme.typography.titleMedium,
+        )
+        LogsAuditSelectedRecord(
+            selectedRow = state.selectedRow,
+            actionsEnabled = actionsEnabled,
+            onClearSelection = onClearSelection,
         )
         LogsAuditFilterSummary(state)
         LogsAuditCategoryFilter(
@@ -364,6 +370,35 @@ internal sealed interface LogsAuditScreenEffect {
     data class ExportBundle(
         val bundle: LogsAuditScreenExportBundle,
     ) : LogsAuditScreenEffect
+}
+
+@Composable
+private fun LogsAuditSelectedRecord(
+    selectedRow: LogsAuditScreenRow?,
+    actionsEnabled: Boolean,
+    onClearSelection: () -> Unit,
+) {
+    if (selectedRow == null) {
+        return
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Selected record",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        LogsAuditField("Selected", "${selectedRow.category.label} | ${selectedRow.title}")
+        OutlinedButton(
+            onClick = onClearSelection,
+            enabled = actionsEnabled,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Clear selection")
+        }
+    }
 }
 
 @Composable
