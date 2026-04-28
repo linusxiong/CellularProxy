@@ -532,6 +532,45 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `dashboard exposes invalid proxy configuration risks as settings action items`() {
+        val cases =
+            listOf(
+                ProxyStartupError.PortAlreadyInUse to
+                    DashboardRiskItem(
+                        label = "Proxy port is already in use",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+                ProxyStartupError.InvalidListenAddress to
+                    DashboardRiskItem(
+                        label = "Proxy listen address is invalid",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+                ProxyStartupError.InvalidListenPort to
+                    DashboardRiskItem(
+                        label = "Proxy listen port is invalid",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+                ProxyStartupError.InvalidMaxConcurrentConnections to
+                    DashboardRiskItem(
+                        label = "Proxy connection limit is invalid",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+            )
+
+        cases.forEach { (startupError, expectedRiskItem) ->
+            val state =
+                DashboardScreenState.from(
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.failed(startupError = startupError),
+                    ),
+                )
+
+            assertEquals(listOf(expectedRiskItem), state.riskItems)
+        }
+    }
+
+    @Test
     fun `dashboard log summaries preserve row data and severity for recent errors`() {
         val summaries =
             dashboardLogSummariesFromLogsAuditRows(
