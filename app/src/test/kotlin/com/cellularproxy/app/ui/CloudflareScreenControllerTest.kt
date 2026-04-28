@@ -449,7 +449,9 @@ class CloudflareScreenControllerTest {
             )
 
         assertEquals("edge-session-timeout", state.lastConnectionError)
+        assertEquals("Local proxy remains usable", state.localProxyImpact)
         assertTrue(state.copyableDiagnostics.contains("Last connection error: edge-session-timeout"))
+        assertTrue(state.copyableDiagnostics.contains("Local proxy impact: Local proxy remains usable"))
         assertFalse(state.copyableDiagnostics.contains("tunnel-secret"))
     }
 

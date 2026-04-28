@@ -239,6 +239,7 @@ internal fun CellularProxyCloudflareScreen(
 
         CloudflareSection("Health") {
             CloudflareField("Last connection error", state.lastConnectionError)
+            CloudflareField("Local proxy impact", state.localProxyImpact)
             CloudflareField("Edge sessions", state.edgeSessionSummary)
             CloudflareField("Management API round trip", state.managementApiRoundTrip)
             CloudflareField("Pending operation", state.pendingOperation)
@@ -262,6 +263,7 @@ internal data class CloudflareScreenState(
     val lifecycleState: String,
     val managementHostname: String,
     val lastConnectionError: String,
+    val localProxyImpact: String,
     val edgeSessionSummary: String,
     val managementApiRoundTrip: String,
     val pendingOperation: String,
@@ -290,6 +292,7 @@ internal data class CloudflareScreenState(
                     ?.let { LogRedactor.redact(it, secrets) }
                     ?: "Not configured"
             val lastConnectionError = tunnelStatus.lastConnectionErrorCategory(secrets)
+            val localProxyImpact = tunnelStatus.localProxyImpact()
             val redactedEdgeSessionSummary = edgeSessionSummary?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val redactedManagementApiRoundTrip = managementApiRoundTrip?.let { LogRedactor.redact(it, secrets) } ?: "Not run"
             val warnings =
@@ -306,6 +309,7 @@ internal data class CloudflareScreenState(
                 lifecycleState = tunnelStatus.state.name,
                 managementHostname = managementHostname,
                 lastConnectionError = lastConnectionError,
+                localProxyImpact = localProxyImpact,
                 edgeSessionSummary = redactedEdgeSessionSummary,
                 managementApiRoundTrip = redactedManagementApiRoundTrip,
                 pendingOperation = "None",
@@ -317,6 +321,7 @@ internal data class CloudflareScreenState(
                         "Tunnel lifecycle: ${tunnelStatus.state.name}",
                         "Management hostname: $managementHostname",
                         "Last connection error: $lastConnectionError",
+                        "Local proxy impact: $localProxyImpact",
                         "Edge sessions: $redactedEdgeSessionSummary",
                         "Management API round trip: $redactedManagementApiRoundTrip",
                         "Pending operation: None",
@@ -528,6 +533,7 @@ private fun CloudflareScreenState.withPendingOperation(
                 "Tunnel lifecycle: $lifecycleState",
                 "Management hostname: $managementHostname",
                 "Last connection error: $lastConnectionError",
+                "Local proxy impact: $localProxyImpact",
                 "Edge sessions: $edgeSessionSummary",
                 "Management API round trip: $managementApiRoundTrip",
                 "Pending operation: $pendingOperation",
@@ -795,6 +801,12 @@ private fun CloudflareTunnelStatus.lastConnectionErrorCategory(secrets: LogRedac
         state == CloudflareTunnelState.Failed && reason != null -> reason.safeCloudflareErrorCategory(secrets)
         else -> "None"
     }
+}
+
+private fun CloudflareTunnelStatus.localProxyImpact(): String = if (state == CloudflareTunnelState.Failed) {
+    "Local proxy remains usable"
+} else {
+    "No local proxy impact"
 }
 
 private fun String.safeCloudflareErrorCategory(secrets: LogRedactionSecrets): String {
