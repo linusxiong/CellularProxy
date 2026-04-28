@@ -5,6 +5,7 @@ import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -179,6 +180,24 @@ class CloudflareE2eValidationConfigTest {
         assertFalse(ready.managementHostname.orEmpty().contains("query-secret"))
         assertFalse(ready.managementHostname.orEmpty().contains("fragment-secret"))
         assertFalse(ready.managementHostname.orEmpty().contains("/private/path"))
+    }
+
+    @Test
+    fun `ready config constructor rejects unsanitized validator inputs`() {
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareE2eValidationConfig.Ready(
+                tunnelToken = "token",
+                managementApiToken = " management-secret ",
+                managementHostname = null,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareE2eValidationConfig.Ready(
+                tunnelToken = "token",
+                managementApiToken = null,
+                managementHostname = "https://operator:hostname-secret@management.example.test/private?token=query-secret",
+            )
+        }
     }
 
     @Test

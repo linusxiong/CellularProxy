@@ -18,6 +18,18 @@ sealed interface CloudflareE2eValidationConfig {
         val managementApiToken: String?,
         val managementHostname: String?,
     ) : CloudflareE2eValidationConfig {
+        init {
+            require(tunnelToken.trimmedOrNull() == tunnelToken) {
+                "tunnelToken must be normalized and non-blank"
+            }
+            require(managementApiToken == null || managementApiToken.trimmedOrNull() == managementApiToken) {
+                "managementApiToken must be normalized or null"
+            }
+            require(managementHostname == null || managementHostname.safeManagementHostnameOrNull() == managementHostname) {
+                "managementHostname must be sanitized or null"
+            }
+        }
+
         override val safeSummary: String =
             "Cloudflare e2e validation configured: " +
                 "tunnelToken=present, " +

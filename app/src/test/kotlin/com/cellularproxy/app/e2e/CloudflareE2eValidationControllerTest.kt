@@ -56,7 +56,7 @@ class CloudflareE2eValidationControllerTest {
             CloudflareE2eValidationConfig.Ready(
                 tunnelToken = "real-token-value",
                 managementApiToken = "management-secret",
-                managementHostname = "https://management.example.test/private?token=query-secret",
+                managementHostname = "https://management.example.test",
             )
 
         assertEquals(emptyList(), attemptedConfigs)
@@ -71,7 +71,6 @@ class CloudflareE2eValidationControllerTest {
         )
         assertFalse(evidence.safeSummary.contains("real-token-value"))
         assertFalse(evidence.safeSummary.contains("management-secret"))
-        assertFalse(evidence.safeSummary.contains("query-secret"))
     }
 
     @Test
