@@ -1475,6 +1475,51 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `logs audit screen exposes category and severity filter controls`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains("LogsAuditCategoryFilter("),
+            "Logs/Audit screen must render interactive category filter controls.",
+        )
+        assertTrue(
+            logsAuditSource.contains("LogsAuditSeverityFilter("),
+            "Logs/Audit screen must render interactive severity filter controls.",
+        )
+        assertTrue(
+            logsAuditSource.contains("FilterChip("),
+            "Logs/Audit category and severity filters should use selectable filter chips.",
+        )
+        assertTrue(
+            logsAuditSource.contains("Text(\"All categories\")"),
+            "Category filtering must include an all-categories reset control.",
+        )
+        assertTrue(
+            logsAuditSource.contains("Text(\"All severities\")"),
+            "Severity filtering must include an all-severities reset control.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter(state.filter.copy(category = category))"),
+            "Category filter controls must dispatch a LogsAuditScreenFilter update.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter(state.filter.copy(severity = severity))"),
+            "Severity filter controls must dispatch a LogsAuditScreenFilter update.",
+        )
+        assertTrue(
+            !logsAuditSource.contains("enabled = actionsEnabled,\n                label = { Text(\"All categories\") }"),
+            "Logs/Audit category filtering must not be gated by copy/export action enablement.",
+        )
+        assertTrue(
+            !logsAuditSource.contains("enabled = actionsEnabled,\n                label = { Text(\"All severities\") }"),
+            "Logs/Audit severity filtering must not be gated by copy/export action enablement.",
+        )
+    }
+
+    @Test
     fun `logs audit screen state redacts unsafe search display text`() {
         val state =
             LogsAuditScreenState.from(

@@ -5,6 +5,8 @@ package com.cellularproxy.app.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +52,14 @@ internal fun CellularProxyLogsAuditScreen(
             style = MaterialTheme.typography.titleMedium,
         )
         LogsAuditFilterSummary(state)
+        LogsAuditCategoryFilter(
+            state = state,
+            onUpdateFilter = onUpdateFilter,
+        )
+        LogsAuditSeverityFilter(
+            state = state,
+            onUpdateFilter = onUpdateFilter,
+        )
         LogsAuditSearchFilter(
             state = state,
             onUpdateFilter = onUpdateFilter,
@@ -362,6 +373,76 @@ private fun LogsAuditFilterSummary(state: LogsAuditScreenState) {
         LogsAuditField("Severity", filter.severity?.label ?: "All")
         LogsAuditField("Time window", filter.timeWindowText())
         LogsAuditField("Search", state.searchDisplayText.ifBlank { "None" })
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LogsAuditCategoryFilter(
+    state: LogsAuditScreenState,
+    onUpdateFilter: (LogsAuditScreenFilter) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Category",
+            style = MaterialTheme.typography.labelMedium,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.filter.category == null,
+                onClick = { onUpdateFilter(state.filter.copy(category = null)) },
+                label = { Text("All categories") },
+            )
+            LogsAuditScreenCategory.entries.forEach { category ->
+                FilterChip(
+                    selected = state.filter.category == category,
+                    onClick = { onUpdateFilter(state.filter.copy(category = category)) },
+                    label = { Text(category.label) },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LogsAuditSeverityFilter(
+    state: LogsAuditScreenState,
+    onUpdateFilter: (LogsAuditScreenFilter) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Severity",
+            style = MaterialTheme.typography.labelMedium,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.filter.severity == null,
+                onClick = { onUpdateFilter(state.filter.copy(severity = null)) },
+                label = { Text("All severities") },
+            )
+            LogsAuditScreenSeverity.entries.forEach { severity ->
+                FilterChip(
+                    selected = state.filter.severity == severity,
+                    onClick = { onUpdateFilter(state.filter.copy(severity = severity)) },
+                    label = { Text(severity.label) },
+                )
+            }
+        }
     }
 }
 
