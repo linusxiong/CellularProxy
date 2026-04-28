@@ -106,5 +106,6 @@ enum class CloudflareE2eErrorClass(
     Timeout("timeout"),
     Unavailable("unavailable"),
     InvalidConfiguration("invalid_configuration"),
+    InvalidTunnelToken("invalid_tunnel_token"),
     Unknown("unknown"),
 }

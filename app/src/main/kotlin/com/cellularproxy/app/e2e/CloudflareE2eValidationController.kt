@@ -10,7 +10,7 @@ class CloudflareE2eValidationController(
                 durationMillis = 0,
                 edgeSessionCategory = null,
                 httpStatusCode = null,
-                errorClass = CloudflareE2eErrorClass.InvalidConfiguration,
+                errorClass = config.validationErrorClass(),
             )
         }
 
@@ -30,6 +30,12 @@ class CloudflareE2eValidationController(
             },
         )
     }
+}
+
+private fun CloudflareE2eValidationConfig.validationErrorClass(): CloudflareE2eErrorClass = when (this) {
+    CloudflareE2eValidationConfig.Disabled -> CloudflareE2eErrorClass.InvalidConfiguration
+    CloudflareE2eValidationConfig.InvalidTunnelToken -> CloudflareE2eErrorClass.InvalidTunnelToken
+    is CloudflareE2eValidationConfig.Ready -> error("ready config does not have a validation error class")
 }
 
 sealed interface CloudflareE2eValidationAttemptResult {

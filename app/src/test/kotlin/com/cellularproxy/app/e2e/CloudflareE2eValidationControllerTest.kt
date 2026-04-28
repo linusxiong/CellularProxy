@@ -30,7 +30,11 @@ class CloudflareE2eValidationControllerTest {
                 "httpStatus=not recorded, errorClass=invalid_configuration",
             disabled.safeSummary,
         )
-        assertEquals(disabled.safeSummary, invalid.safeSummary)
+        assertEquals(
+            "Cloudflare e2e validation failed: durationMs=0, edgeSession=not recorded, " +
+                "httpStatus=not recorded, errorClass=invalid_tunnel_token",
+            invalid.safeSummary,
+        )
     }
 
     @Test
