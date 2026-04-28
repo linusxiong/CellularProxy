@@ -1,10 +1,13 @@
 package com.cellularproxy.app.audit
 
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class FileBackedLogsAuditLogTest {
     @Test
@@ -77,6 +80,43 @@ class FileBackedLogsAuditLogTest {
                 log.readAll(),
             )
             assertEquals(2, file.readLines().size)
+        }
+    }
+
+    @Test
+    fun `redacts structural secrets and configured secret values before persistence`() {
+        withLogFile { file ->
+            val log =
+                FileBackedLogsAuditLog(
+                    file = file,
+                    redactionSecretsProvider = {
+                        LogRedactionSecrets(
+                            managementApiToken = "management-secret",
+                            cloudflareTunnelToken = "cloudflare-secret",
+                        )
+                    },
+                )
+
+            log.record(
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 20L,
+                    category = LogsAuditRecordCategory.CloudflareTunnel,
+                    severity = LogsAuditRecordSeverity.Failed,
+                    title = "Tunnel failed for cloudflare-secret",
+                    detail =
+                        "Authorization: Bearer management-secret\n" +
+                            "path=/api/status?token=management-secret cloudflare=cloudflare-secret",
+                ),
+            )
+
+            val record = FileBackedLogsAuditLog(file = file).readAll().single()
+            val persistedText = "${record.title}\n${record.detail}\n${file.readText()}"
+
+            assertFalse(persistedText.contains("management-secret"))
+            assertFalse(persistedText.contains("cloudflare-secret"))
+            assertTrue(record.title.contains("[REDACTED]"))
+            assertTrue(record.detail.contains("Authorization: [REDACTED]"))
+            assertTrue(record.detail.contains("/api/status?[REDACTED]"))
         }
     }
 

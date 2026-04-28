@@ -198,17 +198,17 @@ fun CellularProxyApp() {
         proxyStatusState
     }
     val loadObservedNetworks: () -> List<NetworkDescriptor> = networkRouteMonitor::observedNetworks
+    val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets = {
+        logRedactionSecretsFromSensitiveConfigLoadResult(loadSensitiveConfigResult())
+    }
     val loadLogsAuditRows: () -> List<LogsAuditScreenInputRow> = {
         logsAuditScreenRowsFromPersistedAuditRecords(
             managementRecords = CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll(),
             rootRecords = CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll(),
             foregroundServiceRecords =
                 CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(context).readAll(),
-            genericRecords = CellularProxyLogsAuditStore.logsAuditLog(context).readAll(),
+            genericRecords = CellularProxyLogsAuditStore.logsAuditLog(context, loadLogsAuditRedactionSecrets).readAll(),
         )
-    }
-    val loadLogsAuditRedactionSecrets: () -> LogRedactionSecrets = {
-        logRedactionSecretsFromSensitiveConfigLoadResult(loadSensitiveConfigResult())
     }
     val localManagementApiProbeResultProvider = {
         val config = loadSettingsConfig()
@@ -426,7 +426,7 @@ fun CellularProxyApp() {
                                 shareLogsAuditExportBundle(context, exportBundle)
                             },
                             onRecordLogsAuditAction = { record ->
-                                CellularProxyLogsAuditStore.logsAuditLog(context).record(record)
+                                CellularProxyLogsAuditStore.logsAuditLog(context, loadLogsAuditRedactionSecrets).record(record)
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -504,7 +504,7 @@ fun CellularProxyApp() {
                             shareLogsAuditExportBundle(context, exportBundle)
                         },
                         onRecordLogsAuditAction = { record ->
-                            CellularProxyLogsAuditStore.logsAuditLog(context).record(record)
+                            CellularProxyLogsAuditStore.logsAuditLog(context, loadLogsAuditRedactionSecrets).record(record)
                         },
                         modifier =
                             Modifier

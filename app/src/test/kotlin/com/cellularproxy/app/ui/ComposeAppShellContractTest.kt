@@ -2316,9 +2316,11 @@ class ComposeAppShellContractTest {
             shellSource.contains("CellularProxyManagementAuditStore.managementApiAuditLog(context).readAll()") &&
                 shellSource.contains("CellularProxyRootAuditStore.rootCommandAuditLog(context).readAll()") &&
                 shellSource.contains("CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(context).readAll()") &&
-                shellSource.contains("CellularProxyLogsAuditStore.logsAuditLog(context).readAll()") &&
+                shellSource.contains(
+                    "CellularProxyLogsAuditStore.logsAuditLog(context, loadLogsAuditRedactionSecrets).readAll()",
+                ) &&
                 shellSource.contains("logsAuditScreenRowsFromPersistedAuditRecords("),
-            "App shell must load persisted Management API, root command, foreground-service, and generic log records for the Logs/Audit route.",
+            "App shell must load persisted Management API, root command, foreground-service, and redacted generic log records for the Logs/Audit route.",
         )
         val serviceSource =
             repoRoot()
@@ -2343,9 +2345,12 @@ class ComposeAppShellContractTest {
                 shellSource.contains("logRedactionSecretsFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
                 shellSource.contains("logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets") &&
                 shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider") &&
+                shellSource.contains(
+                    "CellularProxyLogsAuditStore.logsAuditLog(context, loadLogsAuditRedactionSecrets).record(record)",
+                ) &&
                 logsAuditSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets") &&
                 logsAuditSource.contains("secretsProvider = { currentRedactionSecretsProvider() }"),
-            "Logs/Audit route must pass sensitive-config-derived redaction secrets into persisted audit row rendering.",
+            "Logs/Audit route must pass sensitive-config-derived redaction secrets into persisted audit row rendering and recording.",
         )
         assertTrue(
             logsAuditSource.contains("LogsAuditScreenEvent.SelectRecord"),

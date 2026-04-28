@@ -1,6 +1,8 @@
 package com.cellularproxy.app.audit
 
 import android.content.Context
+import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.logging.LogRedactor
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -37,6 +39,7 @@ data class PersistedLogsAuditRecord(
 class FileBackedLogsAuditLog(
     private val file: File,
     private val maxRecords: Int = DEFAULT_MAX_RECORDS,
+    private val redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     private val replaceFile: (File, String) -> Unit = ::replaceFileAtomically,
 ) {
     private val lock = Any()
@@ -48,8 +51,9 @@ class FileBackedLogsAuditLog(
     fun record(record: PersistedLogsAuditRecord) {
         synchronized(lock) {
             file.parentFile?.mkdirs()
+            val safeRecord = record.redacted(redactionSecretsProvider())
             val retainedLines =
-                (readRecordsLocked().map(PersistedLogsAuditRecord::toLine) + record.toLine())
+                (readRecordsLocked().map(PersistedLogsAuditRecord::toLine) + safeRecord.toLine())
                     .takeLast(maxRecords)
             replaceFile(file, retainedLines.joinToString(separator = "\n", postfix = "\n"))
         }
@@ -75,8 +79,12 @@ class FileBackedLogsAuditLog(
 }
 
 object CellularProxyLogsAuditStore {
-    fun logsAuditLog(context: Context): FileBackedLogsAuditLog = FileBackedLogsAuditLog(
+    fun logsAuditLog(
+        context: Context,
+        redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
+    ): FileBackedLogsAuditLog = FileBackedLogsAuditLog(
         file = File(context.applicationContext.filesDir, "audit/logs.audit"),
+        redactionSecretsProvider = redactionSecretsProvider,
     )
 }
 
@@ -88,6 +96,11 @@ private fun PersistedLogsAuditRecord.toLine(): String = listOf(
     title.encodeLogField(),
     detail.encodeLogField(),
 ).joinToString(separator = "\t")
+
+private fun PersistedLogsAuditRecord.redacted(secrets: LogRedactionSecrets): PersistedLogsAuditRecord = copy(
+    title = LogRedactor.redact(title, secrets),
+    detail = LogRedactor.redact(detail, secrets),
+)
 
 private fun parseLineOrNull(line: String): PersistedLogsAuditRecord? = try {
     parseLine(line)
