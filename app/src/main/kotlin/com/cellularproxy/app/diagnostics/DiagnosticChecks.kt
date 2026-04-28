@@ -3,8 +3,8 @@ package com.cellularproxy.app.diagnostics
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.RouteTarget
-import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.network.RouteSelector
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
@@ -51,16 +51,15 @@ object DiagnosticChecks {
         observedNetworks: () -> List<NetworkDescriptor>,
     ): DiagnosticCheck = DiagnosticCheck {
         val target = routeTarget()
-        val availableNetworks = observedNetworks().filter(NetworkDescriptor::isAvailable)
-        val matchingNetworks = availableNetworks.filter { it.category == target.networkCategory }
+        val candidateNetworks = RouteSelector.candidatesFor(target, observedNetworks())
 
         when {
-            target == RouteTarget.Automatic && availableNetworks.isNotEmpty() ->
+            target == RouteTarget.Automatic && candidateNetworks.isNotEmpty() ->
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Passed,
                     details =
-                        "Automatic route can use ${availableNetworks.size} available network".pluralize(
-                            availableNetworks.size,
+                        "Automatic route can use ${candidateNetworks.size} available network".pluralize(
+                            candidateNetworks.size,
                         ),
                 )
             target == RouteTarget.Automatic ->
@@ -69,12 +68,12 @@ object DiagnosticChecks {
                     errorCategory = "route-unavailable",
                     details = "No available networks",
                 )
-            matchingNetworks.isNotEmpty() ->
+            candidateNetworks.isNotEmpty() ->
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Passed,
                     details =
-                        "${target.label} route can use ${matchingNetworks.size} available network".pluralize(
-                            matchingNetworks.size,
+                        "${target.label} route can use ${candidateNetworks.size} available network".pluralize(
+                            candidateNetworks.size,
                         ),
                 )
             else ->
@@ -268,15 +267,6 @@ private fun ProxyStartupError?.toProxyBindFailureResult(): DiagnosticCheckResult
         details = "Proxy startup blocked before bind: $this",
     )
 }
-
-private val RouteTarget.networkCategory: NetworkCategory?
-    get() =
-        when (this) {
-            RouteTarget.WiFi -> NetworkCategory.WiFi
-            RouteTarget.Cellular -> NetworkCategory.Cellular
-            RouteTarget.Vpn -> NetworkCategory.Vpn
-            RouteTarget.Automatic -> null
-        }
 
 private val RouteTarget.label: String
     get() =

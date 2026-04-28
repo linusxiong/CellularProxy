@@ -8,8 +8,11 @@ import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import java.nio.file.Path
+import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DiagnosticChecksTest {
     @Test
@@ -88,6 +91,19 @@ class DiagnosticChecksTest {
                     routeTarget = { RouteTarget.Cellular },
                     observedNetworks = { networks },
                 ).run(),
+        )
+    }
+
+    @Test
+    fun `selected route check delegates candidate selection to shared route selector`() {
+        val source =
+            Path
+                .of("src/main/kotlin/com/cellularproxy/app/diagnostics/DiagnosticChecks.kt")
+                .readText()
+
+        assertTrue(
+            source.contains("RouteSelector.candidatesFor"),
+            "Selected-route diagnostics must use the shared route selection policy instead of duplicating filtering.",
         )
     }
 
