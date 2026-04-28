@@ -104,7 +104,10 @@ data class DashboardStatusModel(
             if (config.root.operationsEnabled && status.rootAvailability == RootAvailabilityStatus.Unavailable) {
                 add(DashboardWarning.RootUnavailable)
             }
-            if (status.startupError == ProxyStartupError.UnavailableSelectedRoute) {
+            if (
+                status.startupError == ProxyStartupError.UnavailableSelectedRoute ||
+                status.boundRoute?.isAvailable == false
+            ) {
                 add(DashboardWarning.SelectedRouteUnavailable)
             }
             if (

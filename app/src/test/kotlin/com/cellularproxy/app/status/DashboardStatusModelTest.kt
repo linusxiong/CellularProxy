@@ -265,6 +265,31 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model warns when running bound route becomes unavailable`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "0.0.0.0",
+                        listenPort = 8080,
+                        configuredRoute = RouteTarget.Cellular,
+                        boundRoute =
+                            NetworkDescriptor(
+                                id = "cell-1",
+                                category = NetworkCategory.Cellular,
+                                displayName = "Carrier LTE",
+                                isAvailable = false,
+                            ),
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.SelectedRouteUnavailable), model.warnings)
+    }
+
+    @Test
     fun `model warns specifically when Cloudflare is enabled but tunnel token is missing at startup`() {
         val model =
             DashboardStatusModel.from(

@@ -263,6 +263,33 @@ class NotificationStatusModelTest {
     }
 
     @Test
+    fun `notification warns when running bound route becomes unavailable`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "0.0.0.0",
+                        listenPort = 8080,
+                        configuredRoute = RouteTarget.Cellular,
+                        boundRoute =
+                            NetworkDescriptor(
+                                id = "cell-1",
+                                category = NetworkCategory.Cellular,
+                                displayName = "Carrier LTE",
+                                isAvailable = false,
+                            ),
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.SelectedRouteUnavailable), model.warnings)
+        assertEquals("Selected route is unavailable", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
     fun `notification warns specifically when Cloudflare is enabled but tunnel token is missing at startup`() {
         val model =
             NotificationStatusModel.from(
