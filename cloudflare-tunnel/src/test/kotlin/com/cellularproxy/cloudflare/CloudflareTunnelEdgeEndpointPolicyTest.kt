@@ -3,6 +3,7 @@ package com.cellularproxy.cloudflare
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class CloudflareTunnelEdgeEndpointPolicyTest {
     @Test
@@ -45,6 +46,33 @@ class CloudflareTunnelEdgeEndpointPolicyTest {
             ),
             endpoints,
         )
+    }
+
+    @Test
+    fun `rejects malformed explicit endpoints before dialing`() {
+        val malformedEndpoints =
+            listOf(
+                "https://edge.example.com",
+                "edge.example.com:7844",
+                " edge.example.com",
+                "edge.example.com ",
+                "edge example.com",
+                "edgé.example.com",
+                "-edge.example.com",
+                "edge-.example.com",
+                ".edge.example.com",
+                "edge..example.com",
+                "edge.example.com/path",
+            )
+
+        malformedEndpoints.forEach { endpoint ->
+            assertTrue(
+                CloudflareTunnelEdgeEndpointPolicy
+                    .resolve(credentials(endpoint = endpoint))
+                    .isEmpty(),
+                "Endpoint $endpoint should be rejected",
+            )
+        }
     }
 
     @Test

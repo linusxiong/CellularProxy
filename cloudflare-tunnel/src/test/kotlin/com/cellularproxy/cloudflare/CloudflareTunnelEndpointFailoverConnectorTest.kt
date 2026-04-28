@@ -90,11 +90,31 @@ class CloudflareTunnelEndpointFailoverConnectorTest {
         assertEquals(CloudflareTunnelEdgeEndpoint("region2.v2.argotunnel.com", 7844), connectedSocket.socketEndpoints.single())
     }
 
-    private fun credentials(): CloudflareTunnelCredentials = CloudflareTunnelCredentials(
+    @Test
+    fun `does not dial when explicit endpoint is invalid`() {
+        var dialAttempts = 0
+        val connector =
+            CloudflareTunnelEndpointFailoverConnector(
+                dialer =
+                    CloudflareTunnelEndpointDialer { _, _ ->
+                        dialAttempts += 1
+                        CloudflareTunnelEdgeConnectionResult.Connected(TrackableEdgeConnection())
+                    },
+            )
+
+        val result = assertIs<CloudflareTunnelEdgeConnectionResult.Failed>(connector.connect(credentials(endpoint = "https://edge.example.com")))
+
+        assertEquals(CloudflareTunnelEdgeConnectionFailure.EdgeUnavailable, result.failure)
+        assertEquals(0, dialAttempts)
+    }
+
+    private fun credentials(
+        endpoint: String? = null,
+    ): CloudflareTunnelCredentials = CloudflareTunnelCredentials(
         accountTag = "account-tag",
         tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
         tunnelSecret = ByteArray(32) { index -> index.toByte() },
-        endpoint = null,
+        endpoint = endpoint,
     )
 
     private class TrackableEdgeConnection : CloudflareTunnelEdgeConnection {
