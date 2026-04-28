@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
@@ -11,10 +14,75 @@ import java.util.Base64
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class ProxySettingsFormControllerTest {
+    @Test
+    fun `screen controller emits metadata only audit effects for settings save attempts`() {
+        val savedConfigs = mutableListOf<AppConfig>()
+        val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = savedConfigs::add,
+                        loadSensitiveConfig = {
+                            SensitiveConfig(
+                                proxyCredential = ProxyCredential(username = "old-user", password = "old-pass"),
+                                managementApiToken = "old-management-token",
+                            )
+                        },
+                        saveSensitiveConfig = savedSensitiveConfigs::add,
+                    ),
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 1234L },
+            )
+
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(managementApiToken = "new-management-token"),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(cloudflareEnabled = true),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        val auditRecords =
+            controller
+                .consumeEffects()
+                .filterIsInstance<ProxySettingsScreenEffect.RecordAuditAction>()
+                .map(ProxySettingsScreenEffect.RecordAuditAction::record)
+        assertEquals(
+            listOf(
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 1234L,
+                    category = LogsAuditRecordCategory.Audit,
+                    severity = LogsAuditRecordSeverity.Info,
+                    title = "Settings save_settings",
+                    detail = "action=save_settings result=saved warningCount=0",
+                ),
+                PersistedLogsAuditRecord(
+                    occurredAtEpochMillis = 1234L,
+                    category = LogsAuditRecordCategory.Audit,
+                    severity = LogsAuditRecordSeverity.Warning,
+                    title = "Settings save_settings",
+                    detail = "action=save_settings result=invalid validationErrorCount=1",
+                ),
+            ),
+            auditRecords,
+        )
+        assertFalse(auditRecords.joinToString(separator = "\n").contains("new-management-token"))
+        assertFalse(auditRecords.joinToString(separator = "\n").contains("old-management-token"))
+    }
+
     @Test
     fun `screen controller edits saves discards and emits one-shot save effects`() {
         val savedConfigs = mutableListOf<AppConfig>()

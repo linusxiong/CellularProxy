@@ -842,6 +842,7 @@ internal fun CellularProxyNavigationHost(
                 loadSensitiveConfig = settingsLoadSensitiveConfig,
                 loadSensitiveConfigResult = settingsLoadSensitiveConfigResult,
                 saveSensitiveConfig = settingsSaveSensitiveConfig,
+                onRecordSettingsAuditAction = onRecordLogsAuditAction,
             )
         }
         composable(Cloudflare.route) {

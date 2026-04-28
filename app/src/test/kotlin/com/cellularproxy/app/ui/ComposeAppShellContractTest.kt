@@ -871,6 +871,15 @@ class ComposeAppShellContractTest {
             "Settings route must consume one-shot controller effects after dispatch.",
         )
         assertTrue(
+            settingsSource.contains("ProxySettingsScreenEffect.RecordAuditAction") &&
+                settingsSource.contains("currentOnRecordSettingsAuditAction(effect.record)"),
+            "Settings route must consume settings audit effects from the controller.",
+        )
+        assertTrue(
+            shellSource.contains("onRecordSettingsAuditAction = onRecordLogsAuditAction"),
+            "Settings route must persist settings save audit effects through the app Logs/Audit store.",
+        )
+        assertTrue(
             settingsSource.contains("KeyboardType.Password"),
             "Secret settings fields must use password keyboard semantics, not only visual masking.",
         )

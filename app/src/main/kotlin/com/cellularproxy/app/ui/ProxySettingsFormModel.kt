@@ -1,5 +1,8 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.cloudflare.CloudflareTunnelToken
@@ -441,6 +444,8 @@ class ProxySettingsFormController(
 class ProxySettingsScreenController(
     initialConfigProvider: () -> AppConfig,
     private val formController: ProxySettingsFormController,
+    private val auditActionsEnabled: Boolean = false,
+    private val auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     private val pendingEffects = mutableListOf<ProxySettingsScreenEffect>()
     var state: ProxySettingsScreenState =
@@ -506,6 +511,7 @@ class ProxySettingsScreenController(
                         persistedForm = state.persistedForm,
                         extraValidationErrors = result.validationErrors(),
                     )
+                recordAuditSaveInvalid(result)?.let(pendingEffects::add)
                 pendingEffects.add(ProxySettingsScreenEffect.SaveInvalid(result))
             }
             is ProxySettingsSaveResult.Saved -> {
@@ -519,9 +525,42 @@ class ProxySettingsScreenController(
                         form = nextForm,
                         persistedForm = nextForm,
                     )
+                recordAuditSaveSucceeded(result)?.let(pendingEffects::add)
                 pendingEffects.add(ProxySettingsScreenEffect.SaveSucceeded(result))
             }
         }
+    }
+
+    private fun recordAuditSaveSucceeded(
+        result: ProxySettingsSaveResult.Saved,
+    ): ProxySettingsScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
+        ProxySettingsScreenEffect.RecordAuditAction(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
+                category = LogsAuditRecordCategory.Audit,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Settings save_settings",
+                detail = "action=save_settings result=saved warningCount=${result.warnings.size}",
+            ),
+        )
+    } else {
+        null
+    }
+
+    private fun recordAuditSaveInvalid(
+        result: ProxySettingsSaveResult.Invalid,
+    ): ProxySettingsScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
+        ProxySettingsScreenEffect.RecordAuditAction(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
+                category = LogsAuditRecordCategory.Audit,
+                severity = LogsAuditRecordSeverity.Warning,
+                title = "Settings save_settings",
+                detail = "action=save_settings result=invalid validationErrorCount=${result.validationErrors().size}",
+            ),
+        )
+    } else {
+        null
     }
 }
 
@@ -574,6 +613,10 @@ sealed interface ProxySettingsScreenEffect {
 
     data class SaveInvalid(
         val result: ProxySettingsSaveResult.Invalid,
+    ) : ProxySettingsScreenEffect
+
+    data class RecordAuditAction(
+        val record: PersistedLogsAuditRecord,
     ) : ProxySettingsScreenEffect
 }
 

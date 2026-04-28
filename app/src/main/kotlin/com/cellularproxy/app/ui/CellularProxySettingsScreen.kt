@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
@@ -41,12 +42,14 @@ internal fun CellularProxySettingsRoute(
     loadSensitiveConfig: (() -> SensitiveConfig)? = null,
     loadSensitiveConfigResult: (() -> SensitiveConfigLoadResult)? = null,
     saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
+    onRecordSettingsAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
 ) {
     val currentInitialConfigProvider by rememberUpdatedState(initialConfigProvider)
     val currentSaveConfig by rememberUpdatedState(saveConfig)
     val currentLoadSensitiveConfig by rememberUpdatedState(loadSensitiveConfig)
     val currentLoadSensitiveConfigResult by rememberUpdatedState(loadSensitiveConfigResult)
     val currentSaveSensitiveConfig by rememberUpdatedState(saveSensitiveConfig)
+    val currentOnRecordSettingsAuditAction by rememberUpdatedState(onRecordSettingsAuditAction)
     val observedConfig = initialConfigProvider()
     val controller =
         remember {
@@ -60,12 +63,20 @@ internal fun CellularProxySettingsRoute(
                         loadSensitiveConfigResultProvider = { currentLoadSensitiveConfigResult },
                         saveSensitiveConfigProvider = { currentSaveSensitiveConfig },
                     ),
+                auditActionsEnabled = true,
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
     val dispatchEvent: (ProxySettingsScreenEvent) -> Unit = { event ->
         controller.handle(event)
-        controller.consumeEffects()
+        controller.consumeEffects().forEach { effect ->
+            when (effect) {
+                is ProxySettingsScreenEffect.RecordAuditAction -> currentOnRecordSettingsAuditAction(effect.record)
+                is ProxySettingsScreenEffect.SaveInvalid,
+                is ProxySettingsScreenEffect.SaveSucceeded,
+                -> Unit
+            }
+        }
         screenState = controller.state
     }
     LaunchedEffect(observedConfig) {
