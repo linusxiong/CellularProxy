@@ -98,7 +98,9 @@ class DiagnosticChecksTest {
                 status = DiagnosticResultStatus.Passed,
                 details = "Public IP 203.0.113.10",
             ),
-            DiagnosticChecks.publicIp(publicIp = { "203.0.113.10" }).run(),
+            DiagnosticChecks
+                .publicIp(probeResult = { PublicIpDiagnosticsProbeResult.Observed("203.0.113.10") })
+                .run(),
         )
 
         assertEquals(
@@ -107,7 +109,9 @@ class DiagnosticChecksTest {
                 errorCategory = "public-ip-unavailable",
                 details = "Public IP probe returned no address",
             ),
-            DiagnosticChecks.publicIp(publicIp = { null }).run(),
+            DiagnosticChecks
+                .publicIp(probeResult = { PublicIpDiagnosticsProbeResult.Unavailable })
+                .run(),
         )
     }
 

@@ -57,6 +57,7 @@ import com.cellularproxy.app.config.SensitiveConfigRepository
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.app.network.AndroidNetworkRouteMonitor
 import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
@@ -214,6 +215,16 @@ fun CellularProxyApp() {
         localManagementApiProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult()) { sensitiveConfig ->
             localManagementApiActionDispatcher.dispatch(
                 action = LocalManagementApiAction.RootStatus,
+                config = config,
+                sensitiveConfig = sensitiveConfig,
+            )
+        }
+    }
+    val publicIpDiagnosticsProbeResultProvider = {
+        val config = loadSettingsConfig()
+        publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult()) { sensitiveConfig ->
+            localManagementApiActionDispatcher.dispatch(
+                action = LocalManagementApiAction.PublicIp,
                 config = config,
                 sensitiveConfig = sensitiveConfig,
             )
@@ -393,6 +404,7 @@ fun CellularProxyApp() {
                             cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
                             cloudflareManagementRoundTripVersionProvider = { cloudflareManagementRoundTripVersion },
                             latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
+                            publicIpProbeResultProvider = publicIpDiagnosticsProbeResultProvider,
                             localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                             cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                             onRefreshProxyStatus = {
@@ -470,6 +482,7 @@ fun CellularProxyApp() {
                         cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
                         cloudflareManagementRoundTripVersionProvider = { cloudflareManagementRoundTripVersion },
                         latestCloudflareManagementApiCheck = cloudflareManagementApiCheckState,
+                        publicIpProbeResultProvider = publicIpDiagnosticsProbeResultProvider,
                         localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                         cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                         onRefreshProxyStatus = {
@@ -785,6 +798,7 @@ internal fun CellularProxyNavigationHost(
     cloudflareManagementRoundTripProvider: () -> String?,
     cloudflareManagementRoundTripVersionProvider: () -> Long = { 0L },
     latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
+    publicIpProbeResultProvider: () -> PublicIpDiagnosticsProbeResult = { PublicIpDiagnosticsProbeResult.Unavailable },
     localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult,
     cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult,
     onRefreshProxyStatus: () -> Unit,
@@ -904,6 +918,7 @@ internal fun CellularProxyNavigationHost(
                 proxyStatusProvider = proxyStatusProvider,
                 observedNetworksProvider = observedNetworksProvider,
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
+                publicIpProbeResultProvider = publicIpProbeResultProvider,
                 localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
                 cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                 onCopyDiagnosticsSummaryText = onCopyText,

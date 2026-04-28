@@ -1885,6 +1885,7 @@ class ComposeAppShellContractTest {
                 diagnosticsSource.contains("proxyStatusProvider: () -> ProxyServiceStatus") &&
                 diagnosticsSource.contains("observedNetworksProvider: () -> List<NetworkDescriptor>") &&
                 diagnosticsSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets") &&
+                diagnosticsSource.contains("publicIpProbeResultProvider: () -> PublicIpDiagnosticsProbeResult") &&
                 diagnosticsSource.contains("localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult") &&
                 diagnosticsSource.contains(
                     "cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult",
@@ -1895,6 +1896,7 @@ class ComposeAppShellContractTest {
             diagnosticsSource.contains("config = { currentConfigProvider() }") &&
                 diagnosticsSource.contains("proxyStatus = { currentProxyStatusProvider() }") &&
                 diagnosticsSource.contains("observedNetworks = { currentObservedNetworksProvider() }") &&
+                diagnosticsSource.contains("publicIpProbeResult = { currentPublicIpProbeResultProvider() }") &&
                 diagnosticsSource.contains(
                     "localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() }",
                 ) &&
@@ -1909,6 +1911,7 @@ class ComposeAppShellContractTest {
                 shellSource.contains("proxyStatusProvider = proxyStatusProvider") &&
                 shellSource.contains("observedNetworksProvider = observedNetworksProvider") &&
                 shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider") &&
+                shellSource.contains("publicIpProbeResultProvider = publicIpProbeResultProvider") &&
                 shellSource.contains("localManagementApiProbeResultProvider = localManagementApiProbeResultProvider") &&
                 shellSource.contains(
                     "cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider",
@@ -1917,6 +1920,8 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("localManagementApiProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
+                shellSource.contains("publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
+                shellSource.contains("action = LocalManagementApiAction.PublicIp") &&
                 shellSource.contains("cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(") &&
                 shellSource.contains("result = sensitiveConfigResult"),
             "Diagnostics management probes must use safe sensitive-config load results before dispatching runtime probes.",

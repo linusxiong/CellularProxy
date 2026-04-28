@@ -84,19 +84,19 @@ object DiagnosticChecks {
         }
     }
 
-    fun publicIp(publicIp: () -> String?): DiagnosticCheck = DiagnosticCheck {
-        val address = publicIp()?.trim()
-        if (address.isNullOrEmpty()) {
-            DiagnosticCheckResult(
-                status = DiagnosticResultStatus.Failed,
-                errorCategory = "public-ip-unavailable",
-                details = "Public IP probe returned no address",
-            )
-        } else {
-            DiagnosticCheckResult(
-                status = DiagnosticResultStatus.Passed,
-                details = "Public IP $address",
-            )
+    fun publicIp(probeResult: () -> PublicIpDiagnosticsProbeResult): DiagnosticCheck = DiagnosticCheck {
+        when (val result = probeResult()) {
+            is PublicIpDiagnosticsProbeResult.Observed ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Passed,
+                    details = "Public IP ${result.address}",
+                )
+            PublicIpDiagnosticsProbeResult.Unavailable ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "public-ip-unavailable",
+                    details = "Public IP probe returned no address",
+                )
         }
     }
 
@@ -230,6 +230,18 @@ enum class LocalManagementApiProbeResult {
     Unavailable,
     Unauthorized,
     Error,
+}
+
+sealed interface PublicIpDiagnosticsProbeResult {
+    data object Unavailable : PublicIpDiagnosticsProbeResult
+
+    data class Observed(
+        val address: String,
+    ) : PublicIpDiagnosticsProbeResult {
+        init {
+            require(address.isNotBlank()) { "Observed public IP address must not be blank" }
+        }
+    }
 }
 
 enum class CloudflareManagementApiProbeResult {

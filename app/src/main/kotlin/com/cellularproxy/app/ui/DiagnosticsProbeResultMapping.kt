@@ -4,8 +4,15 @@ import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.shared.config.AppConfig
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 internal fun localManagementApiProbeResultFrom(
     request: () -> LocalManagementApiActionResponse,
@@ -26,6 +33,34 @@ internal fun localManagementApiProbeResultFromSensitiveConfigLoadResult(
     SensitiveConfigLoadResult.MissingRequiredSecrets,
     is SensitiveConfigLoadResult.Invalid,
     -> LocalManagementApiProbeResult.Unavailable
+}
+
+internal fun publicIpDiagnosticsProbeResultFrom(
+    request: () -> LocalManagementApiActionResponse,
+): PublicIpDiagnosticsProbeResult = runCatching {
+    val response = request()
+    if (!response.isSuccessful) {
+        return@runCatching PublicIpDiagnosticsProbeResult.Unavailable
+    }
+    Json
+        .parseToJsonElement(response.body)
+        .jsonObject
+        .nullableStringValue("publicIp")
+        ?.let(PublicIpDiagnosticsProbeResult::Observed)
+        ?: PublicIpDiagnosticsProbeResult.Unavailable
+}.getOrDefault(PublicIpDiagnosticsProbeResult.Unavailable)
+
+internal fun publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(
+    result: SensitiveConfigLoadResult,
+    request: (SensitiveConfig) -> LocalManagementApiActionResponse,
+): PublicIpDiagnosticsProbeResult = when (result) {
+    is SensitiveConfigLoadResult.Loaded ->
+        publicIpDiagnosticsProbeResultFrom {
+            request(result.config)
+        }
+    SensitiveConfigLoadResult.MissingRequiredSecrets,
+    is SensitiveConfigLoadResult.Invalid,
+    -> PublicIpDiagnosticsProbeResult.Unavailable
 }
 
 internal fun cloudflareManagementApiProbeResultFrom(
@@ -82,6 +117,13 @@ private fun Int.toCloudflareManagementApiProbeResult(): CloudflareManagementApiP
     HTTP_UNAVAILABLE_STATUS -> CloudflareManagementApiProbeResult.Unavailable
     else -> CloudflareManagementApiProbeResult.Error
 }
+
+private fun JsonObject.nullableStringValue(name: String): String? = nullableElementValue(name)
+    ?.jsonPrimitive
+    ?.content
+
+private fun JsonObject.nullableElementValue(name: String): JsonElement? = get(name)
+    ?.takeUnless { element -> element is JsonNull }
 
 private val HTTP_SUCCESS_STATUSES = 200..299
 private const val HTTP_UNAUTHORIZED_STATUS = 401

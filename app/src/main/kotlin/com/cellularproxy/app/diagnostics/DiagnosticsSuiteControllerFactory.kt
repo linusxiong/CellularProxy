@@ -9,6 +9,7 @@ object DiagnosticsSuiteControllerFactory {
         config: () -> AppConfig,
         proxyStatus: () -> ProxyServiceStatus,
         observedNetworks: () -> List<NetworkDescriptor>,
+        publicIpProbeResult: () -> PublicIpDiagnosticsProbeResult,
         localManagementApiProbeResult: () -> LocalManagementApiProbeResult,
         cloudflareManagementApiProbeResult: () -> CloudflareManagementApiProbeResult,
         nanoTime: () -> Long = System::nanoTime,
@@ -26,7 +27,7 @@ object DiagnosticsSuiteControllerFactory {
                         observedNetworks = observedNetworks,
                     ),
                 DiagnosticCheckType.PublicIp to
-                    DiagnosticChecks.publicIp(publicIp = { proxyStatus().publicIp }),
+                    DiagnosticChecks.publicIp(probeResult = publicIpProbeResult),
                 DiagnosticCheckType.ProxyBind to
                     DiagnosticChecks.proxyBind(status = proxyStatus),
                 DiagnosticCheckType.LocalManagementApi to

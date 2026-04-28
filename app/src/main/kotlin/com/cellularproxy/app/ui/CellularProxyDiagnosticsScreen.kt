@@ -32,6 +32,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.app.diagnostics.DiagnosticsSuiteControllerFactory
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
@@ -49,6 +50,7 @@ internal fun CellularProxyDiagnosticsRoute(
     proxyStatusProvider: () -> ProxyServiceStatus = { ProxyServiceStatus.stopped() },
     observedNetworksProvider: () -> List<NetworkDescriptor> = { emptyList() },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
+    publicIpProbeResultProvider: () -> PublicIpDiagnosticsProbeResult = { PublicIpDiagnosticsProbeResult.Unavailable },
     localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult = { LocalManagementApiProbeResult.Unavailable },
     cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult = {
         CloudflareManagementApiProbeResult.NotConfigured
@@ -60,6 +62,7 @@ internal fun CellularProxyDiagnosticsRoute(
     val currentProxyStatusProvider by rememberUpdatedState(proxyStatusProvider)
     val currentObservedNetworksProvider by rememberUpdatedState(observedNetworksProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
+    val currentPublicIpProbeResultProvider by rememberUpdatedState(publicIpProbeResultProvider)
     val currentLocalManagementApiProbeResultProvider by rememberUpdatedState(localManagementApiProbeResultProvider)
     val currentCloudflareManagementApiProbeResultProvider by rememberUpdatedState(cloudflareManagementApiProbeResultProvider)
     val observedConfig = configProvider()
@@ -76,6 +79,7 @@ internal fun CellularProxyDiagnosticsRoute(
                         config = { currentConfigProvider() },
                         proxyStatus = { currentProxyStatusProvider() },
                         observedNetworks = { currentObservedNetworksProvider() },
+                        publicIpProbeResult = { currentPublicIpProbeResultProvider() },
                         localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() },
                         cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
                     ),

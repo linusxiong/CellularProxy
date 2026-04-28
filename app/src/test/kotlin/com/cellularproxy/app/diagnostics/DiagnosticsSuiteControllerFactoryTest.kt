@@ -42,6 +42,7 @@ class DiagnosticsSuiteControllerFactoryTest {
                 },
                 proxyStatus = { status },
                 observedNetworks = { listOf(wifi) },
+                publicIpProbeResult = { PublicIpDiagnosticsProbeResult.Observed("203.0.113.9") },
                 localManagementApiProbeResult = { LocalManagementApiProbeResult.Authenticated },
                 cloudflareManagementApiProbeResult = { CloudflareManagementApiProbeResult.Authenticated },
                 nanoTime = { 0L },
@@ -59,5 +60,6 @@ class DiagnosticsSuiteControllerFactoryTest {
         assertEquals(DiagnosticResultStatus.Passed, results.getValue(DiagnosticCheckType.LocalManagementApi).status)
         assertEquals(DiagnosticResultStatus.Passed, results.getValue(DiagnosticCheckType.CloudflareTunnel).status)
         assertEquals(DiagnosticResultStatus.Passed, results.getValue(DiagnosticCheckType.CloudflareManagementApi).status)
+        assertEquals("Public IP 203.0.113.9", results.getValue(DiagnosticCheckType.PublicIp).details)
     }
 }

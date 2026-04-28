@@ -14,6 +14,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
@@ -458,6 +459,61 @@ class DiagnosticsScreenControllerTest {
                 result = SensitiveConfigLoadResult.Loaded(validSensitiveConfig()),
             ) { _ ->
                 LocalManagementApiActionResponse(statusCode = 200)
+            },
+        )
+    }
+
+    @Test
+    fun `public ip diagnostics probe maps authenticated ip responses safely`() {
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Observed("203.0.113.44"),
+            publicIpDiagnosticsProbeResultFrom {
+                LocalManagementApiActionResponse(
+                    statusCode = 200,
+                    body = """{"publicIp":"203.0.113.44"}""",
+                )
+            },
+        )
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFrom {
+                LocalManagementApiActionResponse(
+                    statusCode = 200,
+                    body = """{"publicIp":null}""",
+                )
+            },
+        )
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFrom {
+                LocalManagementApiActionResponse(statusCode = 503)
+            },
+        )
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFrom { error("request failed") },
+        )
+    }
+
+    @Test
+    fun `public ip diagnostics probe safely maps invalid sensitive config load results`() {
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(
+                SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            ) { _ ->
+                error("invalid sensitive storage must not dispatch public IP probe")
+            },
+        )
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Observed("203.0.113.45"),
+            publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(
+                SensitiveConfigLoadResult.Loaded(validSensitiveConfig()),
+            ) { _ ->
+                LocalManagementApiActionResponse(
+                    statusCode = 200,
+                    body = """{"publicIp":"203.0.113.45"}""",
+                )
             },
         )
     }
