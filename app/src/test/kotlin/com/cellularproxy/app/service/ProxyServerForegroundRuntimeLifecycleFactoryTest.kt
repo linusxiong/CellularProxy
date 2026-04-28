@@ -110,6 +110,81 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
     }
 
     @Test
+    fun `created lifecycle publishes running notification status after runtime starts`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val publishedStatuses = mutableListOf<NotificationRuntimeStatus>()
+        val config = loopbackAppConfig()
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = config,
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                onRuntimeStatusAvailable = publishedStatuses::add,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            val publishedStatus = publishedStatuses.single()
+            assertEquals(config.proxy.listenHost, publishedStatus.config.proxy.listenHost)
+            assertEquals(com.cellularproxy.shared.proxy.ProxyServiceState.Running, publishedStatus.status.state)
+            assertEquals("Home Wi-Fi", publishedStatus.status.boundRoute?.displayName)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `notification status callback failure does not abort started runtime`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                connectionHandler = connectionHandler(),
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                onRuntimeStatusAvailable = { throw IllegalStateException("notification unavailable") },
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            assertTrue(lifecycle.hasRunningRuntime)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun `created lifecycle uses current observed networks during startup preflight`() {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()

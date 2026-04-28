@@ -21,7 +21,10 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 class CellularProxyForegroundService : Service() {
     private val runtimeCompositionOwner =
         ForegroundServiceRuntimeCompositionOwner {
-            CellularProxyRuntimeCompositionInstaller.install(this)
+            CellularProxyRuntimeCompositionInstaller.install(
+                context = this,
+                onRuntimeStatusAvailable = ::updateForegroundNotification,
+            )
         }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -83,6 +86,19 @@ class CellularProxyForegroundService : Service() {
         } else {
             startForeground(descriptor.notificationId, notification)
         }
+    }
+
+    private fun updateForegroundNotification(runtimeStatus: NotificationRuntimeStatus) {
+        val descriptor =
+            ForegroundServiceNotificationDescriptor.from(
+                NotificationStatusModel.from(
+                    config = runtimeStatus.config,
+                    status = runtimeStatus.status,
+                ),
+            )
+        createNotificationChannel(descriptor)
+        getSystemService(NotificationManager::class.java)
+            .notify(descriptor.notificationId, buildNotification(descriptor))
     }
 
     private fun stopForegroundAndSelf(startId: Int) {

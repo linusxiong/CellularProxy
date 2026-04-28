@@ -72,6 +72,7 @@ object CellularProxyRuntimeCompositionInstaller {
     fun install(
         context: Context,
         runtimeRotationRequestHandlerFactory: ((RunningProxyServerRuntime) -> RuntimeRotationRequestHandler?)? = null,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): CellularProxyRuntimeCompositionInstallation {
         val appContext = context.applicationContext
         val plainRepository = CellularProxyPlainConfigStore.repository(appContext)
@@ -112,6 +113,7 @@ object CellularProxyRuntimeCompositionInstaller {
                 nonFatalManagementAuditRecorder(
                     recordManagementAudit = managementAuditLog::record,
                 ),
+            onRuntimeStatusAvailable = onRuntimeStatusAvailable,
         )
     }
 
@@ -146,6 +148,7 @@ object CellularProxyRuntimeCompositionInstaller {
         recordManagementAudit: (com.cellularproxy.app.audit.ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): CellularProxyRuntimeCompositionInstallation = install(
         bootstrapResult = bootstrapResult,
         observedNetworks = observedNetworks,
@@ -170,6 +173,7 @@ object CellularProxyRuntimeCompositionInstaller {
         recordMetricEvent = recordMetricEvent,
         recordManagementAudit = recordManagementAudit,
         bindListener = bindListener,
+        onRuntimeStatusAvailable = onRuntimeStatusAvailable,
     )
 
     private fun install(
@@ -203,6 +207,7 @@ object CellularProxyRuntimeCompositionInstaller {
         recordManagementAudit: (com.cellularproxy.app.audit.ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): CellularProxyRuntimeCompositionInstallation {
         val installResult =
             try {
@@ -245,6 +250,7 @@ object CellularProxyRuntimeCompositionInstaller {
                     recordMetricEvent = recordMetricEvent,
                     recordManagementAudit = recordManagementAudit,
                     bindListener = bindListener,
+                    onRuntimeStatusAvailable = onRuntimeStatusAvailable,
                 )
             } catch (throwable: Throwable) {
                 RuntimeCompositionCleanup(

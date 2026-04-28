@@ -56,6 +56,7 @@ object ProxyServerForegroundRuntimeInstaller {
         recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): ProxyServerForegroundRuntimeInstallResult = when (bootstrapResult) {
         is AppConfigBootstrapResult.InvalidSensitiveConfig ->
             ProxyServerForegroundRuntimeInstallResult.InvalidSensitiveConfig(bootstrapResult.reason)
@@ -89,6 +90,7 @@ object ProxyServerForegroundRuntimeInstaller {
                     recordMetricEvent = recordMetricEvent,
                     recordManagementAudit = recordManagementAudit,
                     bindListener = bindListener,
+                    onRuntimeStatusAvailable = onRuntimeStatusAvailable,
                 )
             ProxyServerForegroundRuntimeInstallResult.Installed(
                 registration = ForegroundProxyRuntimeLifecycleInstaller.install(lifecycle),
