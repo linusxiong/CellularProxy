@@ -354,6 +354,70 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `controller copy diagnostics emits metadata only audit effect when enabled`() {
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
+                tokenStatusProvider = { CloudflareTokenStatus.Present },
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 321L },
+            )
+
+        controller.handle(CloudflareScreenEvent.CopyDiagnostics)
+
+        val effects = controller.consumeEffects()
+        assertEquals(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = 321L,
+                category = LogsAuditRecordCategory.CloudflareTunnel,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Cloudflare copy_diagnostics",
+                detail = "action=copy_diagnostics lifecycle=Connected",
+            ),
+            effects.filterIsInstance<CloudflareScreenEffect.RecordAuditAction>().single().record,
+        )
+        assertTrue(effects.any { effect -> effect is CloudflareScreenEffect.CopyText })
+        assertFalse(effects.joinToString(separator = "\n").contains("tunnel-secret"))
+    }
+
+    @Test
+    fun `controller lifecycle audit records request time tunnel state before handler mutates it`() {
+        var tunnelStatus = CloudflareTunnelStatus.stopped()
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { tunnelStatus },
+                tokenStatusProvider = { CloudflareTokenStatus.Present },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 654L },
+                actionHandler = { action ->
+                    if (action == CloudflareScreenAction.StartTunnel) {
+                        tunnelStatus = CloudflareTunnelStatus.starting()
+                    }
+                },
+            )
+
+        controller.handle(CloudflareScreenEvent.StartTunnel)
+
+        assertEquals(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = 654L,
+                category = LogsAuditRecordCategory.CloudflareTunnel,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Cloudflare start_tunnel",
+                detail = "action=start_tunnel lifecycle=Stopped",
+            ),
+            controller
+                .consumeEffects()
+                .filterIsInstance<CloudflareScreenEffect.RecordAuditAction>()
+                .single()
+                .record,
+        )
+    }
+
+    @Test
     fun `failed tunnel exposes sanitized last connection error category`() {
         val state =
             CloudflareScreenState.from(

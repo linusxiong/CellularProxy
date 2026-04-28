@@ -416,6 +416,7 @@ internal class CloudflareScreenController(
             CloudflareScreenEvent.CopyDiagnostics -> {
                 state = buildState()
                 if (CloudflareScreenAction.CopyDiagnostics in state.availableActions) {
+                    recordAuditAction(CloudflareScreenAction.CopyDiagnostics, state.lifecycleState)?.let(pendingEffects::add)
                     pendingEffects.add(CloudflareScreenEffect.CopyText(state.copyableDiagnostics))
                 }
             }
@@ -437,14 +438,15 @@ internal class CloudflareScreenController(
 
     private fun dispatchAction(action: CloudflareScreenAction) {
         if (action in state.availableActions) {
+            val auditLifecycleState = tunnelStatusProvider().state.name
             pendingOperations[action] =
                 PendingCloudflareOperation(
                     tunnelStatus = tunnelStatusProvider(),
                     managementApiRoundTrip = managementApiRoundTripProvider(),
                     managementApiRoundTripVersion = managementApiRoundTripVersionProvider(),
                 )
+            recordAuditAction(action, auditLifecycleState)?.let(pendingEffects::add)
             actionHandler(action)
-            recordAuditAction(action)?.let(pendingEffects::add)
             state = buildState()
         }
     }
@@ -489,14 +491,17 @@ internal class CloudflareScreenController(
         "In progress: ${action.label}"
     } ?: "None"
 
-    private fun recordAuditAction(action: CloudflareScreenAction): CloudflareScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
+    private fun recordAuditAction(
+        action: CloudflareScreenAction,
+        lifecycleState: String,
+    ): CloudflareScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
         CloudflareScreenEffect.RecordAuditAction(
             PersistedLogsAuditRecord(
                 occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
                 category = LogsAuditRecordCategory.CloudflareTunnel,
                 severity = LogsAuditRecordSeverity.Info,
                 title = "Cloudflare ${action.auditName}",
-                detail = "action=${action.auditName} lifecycle=${tunnelStatusProvider().state.name}",
+                detail = "action=${action.auditName} lifecycle=$lifecycleState",
             ),
         )
     } else {
