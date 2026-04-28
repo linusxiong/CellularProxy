@@ -1051,9 +1051,10 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             rotationSource.contains("val observedRotationStatus = rotationStatusProvider()") &&
-                rotationSource.contains("LaunchedEffect(observedRotationStatus)") &&
+                rotationSource.contains("val observedCurrentPublicIp = currentPublicIpProvider()") &&
+                rotationSource.contains("LaunchedEffect(observedRotationStatus, observedCurrentPublicIp)") &&
                 rotationSource.contains("controller.handle(RotationScreenEvent.Refresh)"),
-            "Rotation route must refresh remembered controller state when observed rotation status changes.",
+            "Rotation route must refresh remembered controller state when observed rotation status or current public IP changes.",
         )
         assertTrue(
             rotationSource.contains("RotationScreenEvent.RotateMobileData"),
@@ -1221,6 +1222,75 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `public ip action response parser extracts observed public ip`() {
+        assertEquals(
+            PublicIpProbeActionResult.Observed("203.0.113.44"),
+            publicIpFromManagementApiActionResponse(
+                action = LocalManagementApiAction.PublicIp,
+                response =
+                    LocalManagementApiActionResponse(
+                        statusCode = 200,
+                        body = """{"publicIp":"203.0.113.44"}""",
+                    ),
+            ),
+        )
+        assertEquals(
+            PublicIpProbeActionResult.Unavailable,
+            publicIpFromManagementApiActionResponse(
+                action = LocalManagementApiAction.PublicIp,
+                response =
+                    LocalManagementApiActionResponse(
+                        statusCode = 200,
+                        body = """{"publicIp":null}""",
+                    ),
+            ),
+        )
+        assertEquals(
+            PublicIpProbeActionResult.NotPublicIpAction,
+            publicIpFromManagementApiActionResponse(
+                action = LocalManagementApiAction.RootStatus,
+                response =
+                    LocalManagementApiActionResponse(
+                        statusCode = 200,
+                        body = """{"publicIp":"203.0.113.44"}""",
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun `current public ip display prefers latest status after refresh and explicit null probe clears cache`() {
+        assertEquals(
+            "198.51.100.10",
+            currentPublicIpForRotationScreen(
+                probedPublicIp = PublicIpProbeActionResult.NotPublicIpAction,
+                statusPublicIp = "198.51.100.10",
+            ),
+        )
+        assertEquals(
+            "203.0.113.44",
+            currentPublicIpForRotationScreen(
+                probedPublicIp = PublicIpProbeActionResult.Observed("203.0.113.44"),
+                statusPublicIp = "198.51.100.10",
+            ),
+        )
+        assertEquals(
+            "198.51.100.99",
+            currentPublicIpForRotationScreen(
+                probedPublicIp = PublicIpProbeActionResult.NotPublicIpAction,
+                statusPublicIp = "198.51.100.99",
+            ),
+        )
+        assertEquals(
+            null,
+            currentPublicIpForRotationScreen(
+                probedPublicIp = PublicIpProbeActionResult.Unavailable,
+                statusPublicIp = "198.51.100.99",
+            ),
+        )
+    }
+
+    @Test
     fun `rotation screen state derives redacted copyable diagnostics`() {
         val state =
             RotationScreenState.from(
@@ -1253,6 +1323,7 @@ class ComposeAppShellContractTest {
                 "Root operations: Enabled",
                 "Cooldown status: Ready",
                 "Last rotation result: Completed: MobileData",
+                "Current public IP: Unavailable",
                 "Old public IP: https://before.example.test/ip?[REDACTED]",
                 "New public IP: Authorization: [REDACTED]",
                 "Current phase: Completed",

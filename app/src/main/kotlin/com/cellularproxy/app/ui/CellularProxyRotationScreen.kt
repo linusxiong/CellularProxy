@@ -36,6 +36,7 @@ import com.cellularproxy.shared.rotation.RotationStatus
 internal fun CellularProxyRotationRoute(
     configProvider: () -> AppConfig = AppConfig::default,
     rotationStatusProvider: () -> RotationStatus = { RotationStatus.idle() },
+    currentPublicIpProvider: () -> String? = { null },
     rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
     activeConnectionsProvider: () -> Long = { 0 },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
@@ -47,6 +48,7 @@ internal fun CellularProxyRotationRoute(
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentRotationStatusProvider by rememberUpdatedState(rotationStatusProvider)
+    val currentCurrentPublicIpProvider by rememberUpdatedState(currentPublicIpProvider)
     val currentRootAvailabilityProvider by rememberUpdatedState(rootAvailabilityProvider)
     val currentActiveConnectionsProvider by rememberUpdatedState(activeConnectionsProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
@@ -55,11 +57,13 @@ internal fun CellularProxyRotationRoute(
     val currentOnRotateMobileData by rememberUpdatedState(onRotateMobileData)
     val currentOnRotateAirplaneMode by rememberUpdatedState(onRotateAirplaneMode)
     val observedRotationStatus = rotationStatusProvider()
+    val observedCurrentPublicIp = currentPublicIpProvider()
     val controller =
         remember {
             RotationScreenController(
                 configProvider = { currentConfigProvider() },
                 rotationStatusProvider = { currentRotationStatusProvider() },
+                currentPublicIpProvider = { currentCurrentPublicIpProvider() },
                 rootAvailabilityProvider = { currentRootAvailabilityProvider() },
                 activeConnectionsProvider = { currentActiveConnectionsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
@@ -87,7 +91,7 @@ internal fun CellularProxyRotationRoute(
     LaunchedEffect(Unit) {
         dispatchEvent(RotationScreenEvent.Refresh)
     }
-    LaunchedEffect(observedRotationStatus) {
+    LaunchedEffect(observedRotationStatus, observedCurrentPublicIp) {
         controller.handle(RotationScreenEvent.Refresh)
         screenState = controller.state
     }
@@ -212,6 +216,7 @@ internal fun CellularProxyRotationScreen(
         }
 
         RotationSection("Public IP") {
+            RotationField("Current public IP", state.currentPublicIp)
             RotationField("Old public IP", state.oldPublicIp)
             RotationField("New public IP", state.newPublicIp)
         }
@@ -223,6 +228,7 @@ internal data class RotationScreenState(
     val rootOperations: String,
     val cooldownStatus: String,
     val lastRotationResult: String,
+    val currentPublicIp: String,
     val oldPublicIp: String,
     val newPublicIp: String,
     val currentPhase: String,
@@ -236,6 +242,7 @@ internal data class RotationScreenState(
             config: AppConfig,
             rotationStatus: RotationStatus,
             rootAvailability: RootAvailabilityStatus,
+            currentPublicIp: String? = null,
             cooldownRemainingSeconds: Long? = null,
             activeConnections: Long = 0,
             secrets: LogRedactionSecrets = LogRedactionSecrets(),
@@ -244,6 +251,7 @@ internal data class RotationScreenState(
             val rootOperations = if (config.root.operationsEnabled) "Enabled" else "Disabled"
             val cooldownStatus = cooldownRemainingSeconds.toCooldownText()
             val lastRotationResult = rotationStatus.toRotationResultText()
+            val currentPublicIp = currentPublicIp?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val oldPublicIp = rotationStatus.oldPublicIp?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val newPublicIp = rotationStatus.newPublicIp?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val currentPhase = rotationStatus.state.name
@@ -254,6 +262,7 @@ internal data class RotationScreenState(
                 rootOperations = rootOperations,
                 cooldownStatus = cooldownStatus,
                 lastRotationResult = lastRotationResult,
+                currentPublicIp = currentPublicIp,
                 oldPublicIp = oldPublicIp,
                 newPublicIp = newPublicIp,
                 currentPhase = currentPhase,
@@ -265,6 +274,7 @@ internal data class RotationScreenState(
                         "Root operations: $rootOperations",
                         "Cooldown status: $cooldownStatus",
                         "Last rotation result: $lastRotationResult",
+                        "Current public IP: $currentPublicIp",
                         "Old public IP: $oldPublicIp",
                         "New public IP: $newPublicIp",
                         "Current phase: $currentPhase",
@@ -320,6 +330,7 @@ internal fun rotationActionCanDispatch(
 internal class RotationScreenController(
     private val configProvider: () -> AppConfig = { AppConfig.default() },
     private val rotationStatusProvider: () -> RotationStatus = { RotationStatus.idle() },
+    private val currentPublicIpProvider: () -> String? = { null },
     private val rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
     private val cooldownRemainingSecondsProvider: () -> Long? = { null },
     private val activeConnectionsProvider: () -> Long = { 0 },
@@ -382,6 +393,7 @@ internal class RotationScreenController(
                 config = configProvider(),
                 rotationStatus = rotationStatus,
                 rootAvailability = rootAvailabilityProvider(),
+                currentPublicIp = currentPublicIpProvider(),
                 cooldownRemainingSeconds = cooldownRemainingSecondsProvider(),
                 activeConnections = activeConnectionsProvider(),
                 secrets = secretsProvider(),

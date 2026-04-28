@@ -171,6 +171,30 @@ class RotationScreenControllerTest {
         assertTrue(copyText.contains("[REDACTED]"))
     }
 
+    @Test
+    fun `controller displays current public ip from provider and redacts it in diagnostics copy`() {
+        var publicIp: String? = "203.0.113.44"
+        val controller =
+            RotationScreenController(
+                configProvider = { rootEnabledConfig() },
+                rotationStatusProvider = { RotationStatus.idle() },
+                rootAvailabilityProvider = { RootAvailabilityStatus.Available },
+                currentPublicIpProvider = { publicIp },
+                secretsProvider = { LogRedactionSecrets(proxyCredential = "198.51.100.55") },
+            )
+
+        assertEquals("203.0.113.44", controller.state.currentPublicIp)
+
+        publicIp = "198.51.100.55"
+        controller.handle(RotationScreenEvent.Refresh)
+        controller.handle(RotationScreenEvent.CopyDiagnostics)
+
+        val copyText = (controller.consumeEffects().single() as RotationScreenEffect.CopyText).text
+        assertEquals("[REDACTED]", controller.state.currentPublicIp)
+        assertTrue(copyText.contains("Current public IP: [REDACTED]"))
+        assertFalse(copyText.contains("198.51.100.55"))
+    }
+
     private fun rootEnabledConfig(): AppConfig {
         val defaultConfig = AppConfig.default()
         return defaultConfig.copy(

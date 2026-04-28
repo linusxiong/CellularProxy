@@ -124,6 +124,9 @@ fun CellularProxyApp() {
         mutableStateOf(DashboardCloudflareManagementApiCheck.NotRun)
     }
     var rotationStatusState by remember { mutableStateOf(RotationStatus.idle()) }
+    var currentPublicIpState by remember {
+        mutableStateOf<PublicIpProbeActionResult>(PublicIpProbeActionResult.NotPublicIpAction)
+    }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
     }
@@ -217,6 +220,14 @@ fun CellularProxyApp() {
                     response = response,
                 )?.let { status ->
                     rotationStatusState = status
+                }
+                val publicIpProbeResult =
+                    publicIpFromManagementApiActionResponse(
+                        action = action,
+                        response = response,
+                    )
+                if (publicIpProbeResult != PublicIpProbeActionResult.NotPublicIpAction) {
+                    currentPublicIpState = publicIpProbeResult
                 }
                 cloudflareManagementRoundTripSummary(
                     action = action,
@@ -314,6 +325,12 @@ fun CellularProxyApp() {
                             },
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             rotationStatusProvider = { rotationStatusState },
+                            currentPublicIpProvider = {
+                                currentPublicIpForRotationScreen(
+                                    probedPublicIp = currentPublicIpState,
+                                    statusPublicIp = proxyStatusState.publicIp,
+                                )
+                            },
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
                             },
@@ -349,6 +366,12 @@ fun CellularProxyApp() {
                         },
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         rotationStatusProvider = { rotationStatusState },
+                        currentPublicIpProvider = {
+                            currentPublicIpForRotationScreen(
+                                probedPublicIp = currentPublicIpState,
+                                statusPublicIp = proxyStatusState.publicIp,
+                            )
+                        },
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
                         },
@@ -443,6 +466,42 @@ internal fun rotationStatusFromManagementApiActionResponse(
             .objectValue("rotation")
             .toRotationStatus()
     }.getOrNull()
+}
+
+internal fun publicIpFromManagementApiActionResponse(
+    action: LocalManagementApiAction,
+    response: LocalManagementApiActionResponse,
+): PublicIpProbeActionResult {
+    if (action != LocalManagementApiAction.PublicIp || !response.isSuccessful) {
+        return PublicIpProbeActionResult.NotPublicIpAction
+    }
+    return runCatching {
+        val publicIp =
+            Json
+                .parseToJsonElement(response.body)
+                .jsonObject
+                .nullableStringValue("publicIp")
+        publicIp?.let(PublicIpProbeActionResult::Observed) ?: PublicIpProbeActionResult.Unavailable
+    }.getOrDefault(PublicIpProbeActionResult.Unavailable)
+}
+
+internal fun currentPublicIpForRotationScreen(
+    probedPublicIp: PublicIpProbeActionResult,
+    statusPublicIp: String?,
+): String? = when (probedPublicIp) {
+    PublicIpProbeActionResult.NotPublicIpAction -> statusPublicIp
+    is PublicIpProbeActionResult.Observed -> probedPublicIp.value
+    PublicIpProbeActionResult.Unavailable -> null
+}
+
+internal sealed interface PublicIpProbeActionResult {
+    data object NotPublicIpAction : PublicIpProbeActionResult
+
+    data object Unavailable : PublicIpProbeActionResult
+
+    data class Observed(
+        val value: String,
+    ) : PublicIpProbeActionResult
 }
 
 private fun JsonObject.toRotationStatus(): RotationStatus = RotationStatus(
@@ -589,6 +648,7 @@ private fun CellularProxyNavigationHost(
     onRefreshProxyStatus: () -> Unit,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     rotationStatusProvider: () -> RotationStatus,
+    currentPublicIpProvider: () -> String?,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
     modifier: Modifier = Modifier,
@@ -658,6 +718,7 @@ private fun CellularProxyNavigationHost(
             CellularProxyRotationRoute(
                 configProvider = settingsInitialConfigProvider,
                 rotationStatusProvider = { rotationStatusProvider() },
+                currentPublicIpProvider = { currentPublicIpProvider() },
                 rootAvailabilityProvider = { proxyStatusProvider().rootAvailability },
                 activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections },
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
