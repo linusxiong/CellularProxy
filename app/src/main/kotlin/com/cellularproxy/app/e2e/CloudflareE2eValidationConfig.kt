@@ -117,7 +117,7 @@ object CloudflareE2eValidationConfigKeys {
 
 private fun Map<String, String?>.localValueFor(key: String): String? {
     val aliasValue = CloudflareE2eValidationConfigKeys.localAliasFor(key)?.let(this::get)
-    return listOfNotNull(this[key], aliasValue).firstOrNull { it.trimmedOrNull() != null }
+    return listOfNotNull(aliasValue, this[key]).firstOrNull { it.trimmedOrNull() != null }
 }
 
 private fun String?.trimmedOrNull(): String? = this

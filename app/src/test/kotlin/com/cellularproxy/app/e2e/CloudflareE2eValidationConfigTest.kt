@@ -418,6 +418,27 @@ class CloudflareE2eValidationConfigTest {
     }
 
     @Test
+    fun `local e2e aliases override populated canonical values`() {
+        val ready =
+            assertIs<CloudflareE2eValidationConfig.Ready>(
+                CloudflareE2eValidationConfig.fromLocalValues(
+                    mapOf(
+                        CloudflareE2eValidationConfigKeys.tunnelToken to "not-a-real-tunnel-token",
+                        CloudflareE2eValidationConfigKeys.localTunnelToken to "  $validTunnelToken  ",
+                        CloudflareE2eValidationConfigKeys.managementApiToken to "canonical-management-secret",
+                        CloudflareE2eValidationConfigKeys.localManagementApiToken to "  local-management-secret  ",
+                        CloudflareE2eValidationConfigKeys.managementHostname to "canonical.example.test",
+                        CloudflareE2eValidationConfigKeys.localManagementHostname to "  local.example.test  ",
+                    ),
+                ),
+            )
+
+        assertEquals(validTunnelToken, ready.tunnelToken)
+        assertEquals("local-management-secret", ready.managementApiToken)
+        assertEquals("local.example.test", ready.managementHostname)
+    }
+
+    @Test
     fun `instrumentation argument loader accepts forwarded Cloudflare e2e arguments`() {
         val ready =
             assertIs<CloudflareE2eValidationConfig.Ready>(
