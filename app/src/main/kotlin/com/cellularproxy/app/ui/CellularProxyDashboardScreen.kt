@@ -838,6 +838,11 @@ private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (t
             label = toDashboardText(),
             action = DashboardScreenAction.OpenDiagnostics,
         )
+    DashboardWarning.RootUnavailable ->
+        DashboardRiskItem(
+            label = toDashboardText(),
+            action = DashboardScreenAction.OpenRotation,
+        )
     else -> null
 }
 

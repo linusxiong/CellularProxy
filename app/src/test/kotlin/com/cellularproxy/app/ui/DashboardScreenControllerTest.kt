@@ -7,9 +7,11 @@ import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -323,6 +325,33 @@ class DashboardScreenControllerTest {
                 DashboardRiskItem(
                     label = "Selected route is unavailable",
                     action = DashboardScreenAction.OpenDiagnostics,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes unavailable root risk as rotation action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        AppConfig.default().copy(
+                            root = RootConfig(operationsEnabled = true),
+                        ),
+                    status =
+                        ProxyServiceStatus.stopped(
+                            rootAvailability = RootAvailabilityStatus.Unavailable,
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Root access is unavailable",
+                    action = DashboardScreenAction.OpenRotation,
                 ),
             ),
             state.riskItems,
