@@ -248,6 +248,114 @@ internal fun dashboardActionCanDispatch(
     availableActions: List<DashboardScreenAction>,
 ): Boolean = actionsEnabled && action in availableActions
 
+internal class DashboardScreenController(
+    private val statusProvider: () -> DashboardStatusModel = {
+        DashboardStatusModel.from(
+            config = AppConfig.default(),
+            status = ProxyServiceStatus.stopped(),
+        )
+    },
+    private val actionHandler: (DashboardScreenAction) -> Unit = {},
+) {
+    private var lastObservedServiceState: DashboardServiceState = statusProvider().serviceState
+    private val pendingLifecycleActions = mutableSetOf<DashboardScreenAction>()
+    private val pendingEffects = mutableListOf<DashboardScreenEffect>()
+    var state: DashboardScreenState = buildState()
+        private set
+
+    fun handle(event: DashboardScreenEvent) {
+        refreshPendingActions()
+        when (event) {
+            DashboardScreenEvent.StartProxy -> dispatchAction(DashboardScreenAction.StartProxy)
+            DashboardScreenEvent.StopProxy -> dispatchAction(DashboardScreenAction.StopProxy)
+            DashboardScreenEvent.RefreshStatus -> dispatchAction(DashboardScreenAction.RefreshStatus)
+            DashboardScreenEvent.OpenRiskDetails -> dispatchAction(DashboardScreenAction.OpenRiskDetails)
+            DashboardScreenEvent.OpenCloudflare -> dispatchAction(DashboardScreenAction.OpenCloudflare)
+            DashboardScreenEvent.OpenRotation -> dispatchAction(DashboardScreenAction.OpenRotation)
+            DashboardScreenEvent.OpenLogs -> dispatchAction(DashboardScreenAction.OpenLogs)
+            DashboardScreenEvent.OpenDiagnostics -> dispatchAction(DashboardScreenAction.OpenDiagnostics)
+            DashboardScreenEvent.Refresh -> state = buildState()
+            DashboardScreenEvent.CopyProxyEndpoint -> {
+                if (DashboardScreenAction.CopyProxyEndpoint in state.availableActions) {
+                    pendingEffects.add(DashboardScreenEffect.CopyText(state.status.listenEndpoint))
+                }
+            }
+        }
+    }
+
+    fun consumeEffects(): List<DashboardScreenEffect> {
+        val effects = pendingEffects.toList()
+        pendingEffects.clear()
+        return effects
+    }
+
+    private fun dispatchAction(action: DashboardScreenAction) {
+        if (action !in state.availableActions) {
+            return
+        }
+        if (action.isLifecycleAction) {
+            pendingLifecycleActions.add(action)
+        }
+        actionHandler(action)
+        refreshPendingActions()
+    }
+
+    private fun refreshPendingActions() {
+        val currentServiceState = statusProvider().serviceState
+        if (currentServiceState != lastObservedServiceState) {
+            pendingLifecycleActions.clear()
+            lastObservedServiceState = currentServiceState
+        }
+        state = buildState()
+    }
+
+    private fun buildState(): DashboardScreenState = DashboardScreenState
+        .from(statusProvider())
+        .withoutPendingLifecycleActions(pendingLifecycleActions)
+}
+
+internal sealed interface DashboardScreenEvent {
+    data object StartProxy : DashboardScreenEvent
+
+    data object StopProxy : DashboardScreenEvent
+
+    data object RefreshStatus : DashboardScreenEvent
+
+    data object CopyProxyEndpoint : DashboardScreenEvent
+
+    data object OpenRiskDetails : DashboardScreenEvent
+
+    data object OpenCloudflare : DashboardScreenEvent
+
+    data object OpenRotation : DashboardScreenEvent
+
+    data object OpenLogs : DashboardScreenEvent
+
+    data object OpenDiagnostics : DashboardScreenEvent
+
+    data object Refresh : DashboardScreenEvent
+}
+
+internal sealed interface DashboardScreenEffect {
+    data class CopyText(
+        val text: String,
+    ) : DashboardScreenEffect
+}
+
+private val DashboardScreenAction.isLifecycleAction: Boolean
+    get() = this == DashboardScreenAction.StartProxy || this == DashboardScreenAction.StopProxy
+
+private fun DashboardScreenState.withoutPendingLifecycleActions(
+    pendingLifecycleActions: Set<DashboardScreenAction>,
+): DashboardScreenState = copy(
+    availableActions =
+        if (pendingLifecycleActions.isNotEmpty()) {
+            availableActions.filterNot(DashboardScreenAction::isLifecycleAction)
+        } else {
+            availableActions
+        },
+)
+
 @Composable
 private fun DashboardActionRow(
     actionsEnabled: Boolean,
