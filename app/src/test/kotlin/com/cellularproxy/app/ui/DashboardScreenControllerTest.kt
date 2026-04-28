@@ -304,6 +304,10 @@ class DashboardScreenControllerTest {
                     label = "Cloudflare tunnel token is invalid",
                     action = DashboardScreenAction.OpenCloudflare,
                 ),
+                DashboardRiskItem(
+                    label = "Sensitive configuration is invalid",
+                    action = DashboardScreenAction.OpenRiskDetails,
+                ),
             ),
             state.riskItems,
         )
@@ -379,6 +383,28 @@ class DashboardScreenControllerTest {
                 DashboardRiskItem(
                     label = "Cloudflare management API check is failing",
                     action = DashboardScreenAction.OpenCloudflare,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes invalid sensitive configuration risk as risk details action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    invalidSensitiveConfigReason = SensitiveConfigInvalidReason.UndecryptableSecret,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Sensitive configuration is invalid",
+                    action = DashboardScreenAction.OpenRiskDetails,
                 ),
             ),
             state.riskItems,
