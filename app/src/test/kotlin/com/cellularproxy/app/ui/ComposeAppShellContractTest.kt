@@ -1520,6 +1520,48 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `logs audit screen exposes time window filter controls`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains(
+                "        LogsAuditTimeWindowFilter(\n" +
+                    "            state = state,\n" +
+                    "            onUpdateFilter = onUpdateFilter,\n" +
+                    "        )",
+            ),
+            "Logs/Audit screen must render editable time-window filter controls.",
+        )
+        assertTrue(
+            logsAuditSource.contains("label = { Text(\"From timestamp\") }"),
+            "Logs/Audit screen must expose a lower-bound timestamp field.",
+        )
+        assertTrue(
+            logsAuditSource.contains("label = { Text(\"To timestamp\") }"),
+            "Logs/Audit screen must expose an upper-bound timestamp field.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter(state.filter.copy(fromEpochMillis = fromEpochMillis))"),
+            "From timestamp edits must dispatch a LogsAuditScreenFilter update.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter(state.filter.copy(toEpochMillis = toEpochMillis))"),
+            "To timestamp edits must dispatch a LogsAuditScreenFilter update.",
+        )
+        assertTrue(
+            logsAuditSource.contains("onUpdateFilter(state.filter.copy(fromEpochMillis = null, toEpochMillis = null))"),
+            "Time-window filtering must include an all-time reset control.",
+        )
+        assertTrue(
+            !logsAuditSource.contains("enabled = actionsEnabled,\n        label = { Text(\"From timestamp\") }"),
+            "Logs/Audit time-window filtering must not be gated by copy/export action enablement.",
+        )
+    }
+
+    @Test
     fun `logs audit screen state redacts unsafe search display text`() {
         val state =
             LogsAuditScreenState.from(

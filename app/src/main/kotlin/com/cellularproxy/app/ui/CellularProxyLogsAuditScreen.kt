@@ -60,6 +60,10 @@ internal fun CellularProxyLogsAuditScreen(
             state = state,
             onUpdateFilter = onUpdateFilter,
         )
+        LogsAuditTimeWindowFilter(
+            state = state,
+            onUpdateFilter = onUpdateFilter,
+        )
         LogsAuditSearchFilter(
             state = state,
             onUpdateFilter = onUpdateFilter,
@@ -447,6 +451,73 @@ private fun LogsAuditSeverityFilter(
 }
 
 @Composable
+private fun LogsAuditTimeWindowFilter(
+    state: LogsAuditScreenState,
+    onUpdateFilter: (LogsAuditScreenFilter) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Time window",
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value =
+                    state.filter.fromEpochMillis
+                        ?.toString()
+                        .orEmpty(),
+                onValueChange = { from ->
+                    val fromEpochMillis = parseEpochMillisFilterInput(from)
+                    val hasValidFromInput = from.isBlank() || fromEpochMillis != null
+                    val hasValidFromWindow =
+                        fromEpochMillis == null ||
+                            state.filter.toEpochMillis == null ||
+                            fromEpochMillis <= state.filter.toEpochMillis
+                    if (hasValidFromInput && hasValidFromWindow) {
+                        onUpdateFilter(state.filter.copy(fromEpochMillis = fromEpochMillis))
+                    }
+                },
+                label = { Text("From timestamp") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value =
+                    state.filter.toEpochMillis
+                        ?.toString()
+                        .orEmpty(),
+                onValueChange = { to ->
+                    val toEpochMillis = parseEpochMillisFilterInput(to)
+                    val hasValidToInput = to.isBlank() || toEpochMillis != null
+                    val hasValidToWindow =
+                        toEpochMillis == null ||
+                            state.filter.fromEpochMillis == null ||
+                            state.filter.fromEpochMillis <= toEpochMillis
+                    if (hasValidToInput && hasValidToWindow) {
+                        onUpdateFilter(state.filter.copy(toEpochMillis = toEpochMillis))
+                    }
+                },
+                label = { Text("To timestamp") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        OutlinedButton(
+            onClick = { onUpdateFilter(state.filter.copy(fromEpochMillis = null, toEpochMillis = null)) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("All time")
+        }
+    }
+}
+
+@Composable
 private fun LogsAuditSearchFilter(
     state: LogsAuditScreenState,
     onUpdateFilter: (LogsAuditScreenFilter) -> Unit,
@@ -562,4 +633,10 @@ private fun LogsAuditScreenFilter.timeWindowText(): String = when {
     fromEpochMillis != null && toEpochMillis != null -> "$fromEpochMillis to $toEpochMillis"
     fromEpochMillis != null -> "From $fromEpochMillis"
     else -> "Until $toEpochMillis"
+}
+
+private fun parseEpochMillisFilterInput(input: String): Long? = if (input.isBlank()) {
+    null
+} else {
+    input.trim().toLongOrNull()?.takeIf { epochMillis -> epochMillis >= 0 }
 }
