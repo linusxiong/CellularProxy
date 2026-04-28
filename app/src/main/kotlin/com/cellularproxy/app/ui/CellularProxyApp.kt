@@ -51,6 +51,8 @@ import com.cellularproxy.app.config.SensitiveConfigGenerator
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.config.SensitiveConfigRepository
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
+import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.app.network.AndroidNetworkRouteMonitor
 import com.cellularproxy.app.service.CellularProxyForegroundService
 import com.cellularproxy.app.service.ForegroundServiceActions
@@ -154,6 +156,29 @@ fun CellularProxyApp() {
             cloudflareTunnelToken = sensitiveConfig.cloudflareTunnelToken,
         )
     }
+    val localManagementApiProbeResultProvider = {
+        localManagementApiProbeResultFrom {
+            localManagementApiActionDispatcher.dispatch(
+                action = LocalManagementApiAction.RootStatus,
+                config = loadSettingsConfig(),
+                sensitiveConfig = loadSensitiveConfig(),
+            )
+        }
+    }
+    val cloudflareManagementApiProbeResultProvider = {
+        val config = loadSettingsConfig()
+        val sensitiveConfig = loadSensitiveConfig()
+        cloudflareManagementApiProbeResultFrom(
+            config = config,
+            tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
+        ) {
+            localManagementApiActionDispatcher.dispatch(
+                action = LocalManagementApiAction.CloudflareManagementStatus,
+                config = config,
+                sensitiveConfig = sensitiveConfig,
+            )
+        }
+    }
     val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
         coroutineScope.launch {
             runCatching {
@@ -231,6 +256,8 @@ fun CellularProxyApp() {
                             proxyStatusProvider = loadProxyStatus,
                             observedNetworksProvider = loadObservedNetworks,
                             cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
+                            localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
+                            cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                             onRefreshProxyStatus = {
                                 coroutineScope.launch { refreshProxyStatus() }
                             },
@@ -262,6 +289,8 @@ fun CellularProxyApp() {
                         proxyStatusProvider = loadProxyStatus,
                         observedNetworksProvider = loadObservedNetworks,
                         cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState },
+                        localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
+                        cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                         onRefreshProxyStatus = {
                             coroutineScope.launch { refreshProxyStatus() }
                         },
@@ -399,6 +428,8 @@ private fun CellularProxyNavigationHost(
     proxyStatusProvider: () -> ProxyServiceStatus,
     observedNetworksProvider: () -> List<NetworkDescriptor>,
     cloudflareManagementRoundTripProvider: () -> String?,
+    localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult,
+    cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult,
     onRefreshProxyStatus: () -> Unit,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
@@ -492,6 +523,8 @@ private fun CellularProxyNavigationHost(
                 proxyStatusProvider = proxyStatusProvider,
                 observedNetworksProvider = observedNetworksProvider,
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
+                localManagementApiProbeResultProvider = localManagementApiProbeResultProvider,
+                cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider,
                 onCopyDiagnosticsSummaryText = onCopyText,
             )
         }

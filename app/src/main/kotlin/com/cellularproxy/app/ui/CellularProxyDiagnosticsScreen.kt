@@ -47,12 +47,18 @@ internal fun CellularProxyDiagnosticsRoute(
     proxyStatusProvider: () -> ProxyServiceStatus = { ProxyServiceStatus.stopped() },
     observedNetworksProvider: () -> List<NetworkDescriptor> = { emptyList() },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
+    localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult = { LocalManagementApiProbeResult.Unavailable },
+    cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult = {
+        CloudflareManagementApiProbeResult.NotConfigured
+    },
     onCopyDiagnosticsSummaryText: (String) -> Unit = {},
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentProxyStatusProvider by rememberUpdatedState(proxyStatusProvider)
     val currentObservedNetworksProvider by rememberUpdatedState(observedNetworksProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
+    val currentLocalManagementApiProbeResultProvider by rememberUpdatedState(localManagementApiProbeResultProvider)
+    val currentCloudflareManagementApiProbeResultProvider by rememberUpdatedState(cloudflareManagementApiProbeResultProvider)
     val coroutineScope = rememberCoroutineScope()
     val eventMutex = remember { Mutex() }
     val controller =
@@ -63,8 +69,8 @@ internal fun CellularProxyDiagnosticsRoute(
                         config = { currentConfigProvider() },
                         proxyStatus = { currentProxyStatusProvider() },
                         observedNetworks = { currentObservedNetworksProvider() },
-                        localManagementApiProbeResult = { LocalManagementApiProbeResult.Unavailable },
-                        cloudflareManagementApiProbeResult = { CloudflareManagementApiProbeResult.NotConfigured },
+                        localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() },
+                        cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
                     ),
                 secretsProvider = { currentRedactionSecretsProvider() },
             )

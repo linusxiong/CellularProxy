@@ -1,10 +1,15 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheck
 import com.cellularproxy.app.diagnostics.DiagnosticCheckResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
+import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.service.LocalManagementApiActionResponse
+import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -130,4 +135,95 @@ class DiagnosticsScreenControllerTest {
         assertEquals("missing-check", rootItem.errorCategory)
         assertTrue(rootItem.details.contains("No diagnostic check registered"))
     }
+
+    @Test
+    fun `local management diagnostics probe maps authenticated unauthorized unavailable and error responses`() {
+        assertEquals(
+            LocalManagementApiProbeResult.Authenticated,
+            localManagementApiProbeResultFrom { LocalManagementApiActionResponse(statusCode = 200) },
+        )
+        assertEquals(
+            LocalManagementApiProbeResult.Unauthorized,
+            localManagementApiProbeResultFrom { LocalManagementApiActionResponse(statusCode = 401) },
+        )
+        assertEquals(
+            LocalManagementApiProbeResult.Unavailable,
+            localManagementApiProbeResultFrom { LocalManagementApiActionResponse(statusCode = 503) },
+        )
+        assertEquals(
+            LocalManagementApiProbeResult.Error,
+            localManagementApiProbeResultFrom { LocalManagementApiActionResponse(statusCode = 409) },
+        )
+        assertEquals(
+            LocalManagementApiProbeResult.Unavailable,
+            localManagementApiProbeResultFrom { error("connection refused") },
+        )
+    }
+
+    @Test
+    fun `cloudflare management diagnostics probe maps configuration and HTTP outcomes`() {
+        assertEquals(
+            CloudflareManagementApiProbeResult.NotConfigured,
+            cloudflareManagementApiProbeResultFrom(
+                config =
+                    AppConfig
+                        .default()
+                        .copy(cloudflare = CloudflareConfig(enabled = false)),
+                tunnelTokenPresent = true,
+                request = { LocalManagementApiActionResponse(statusCode = 200) },
+            ),
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.NotConfigured,
+            cloudflareManagementApiProbeResultFrom(
+                config =
+                    AppConfig
+                        .default()
+                        .copy(cloudflare = CloudflareConfig(enabled = true, tunnelTokenPresent = true)),
+                tunnelTokenPresent = false,
+                request = { LocalManagementApiActionResponse(statusCode = 200) },
+            ),
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.Authenticated,
+            cloudflareManagementApiProbeResultFrom(
+                config = configuredCloudflare(tunnelTokenPresent = false),
+                tunnelTokenPresent = true,
+                request = { LocalManagementApiActionResponse(statusCode = 204) },
+            ),
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.Unauthorized,
+            cloudflareManagementApiProbeResultFrom(
+                config = configuredCloudflare(),
+                tunnelTokenPresent = true,
+                request = { LocalManagementApiActionResponse(statusCode = 401) },
+            ),
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.Unavailable,
+            cloudflareManagementApiProbeResultFrom(
+                config = configuredCloudflare(),
+                tunnelTokenPresent = true,
+                request = { LocalManagementApiActionResponse(statusCode = 503) },
+            ),
+        )
+        assertEquals(
+            CloudflareManagementApiProbeResult.Error,
+            cloudflareManagementApiProbeResultFrom(
+                config = configuredCloudflare(),
+                tunnelTokenPresent = true,
+                request = { error("tls failed") },
+            ),
+        )
+    }
 }
+
+private fun configuredCloudflare(tunnelTokenPresent: Boolean = true): AppConfig = AppConfig.default().copy(
+    cloudflare =
+        CloudflareConfig(
+            enabled = true,
+            tunnelTokenPresent = tunnelTokenPresent,
+            managementHostnameLabel = "management.example.test",
+        ),
+)

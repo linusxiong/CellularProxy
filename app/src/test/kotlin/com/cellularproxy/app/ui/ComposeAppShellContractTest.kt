@@ -1411,13 +1411,23 @@ class ComposeAppShellContractTest {
             diagnosticsSource.contains("configProvider: () -> AppConfig") &&
                 diagnosticsSource.contains("proxyStatusProvider: () -> ProxyServiceStatus") &&
                 diagnosticsSource.contains("observedNetworksProvider: () -> List<NetworkDescriptor>") &&
-                diagnosticsSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets"),
-            "Diagnostics route must accept app-shell providers for config, live proxy status, observed networks, and redaction secrets.",
+                diagnosticsSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets") &&
+                diagnosticsSource.contains("localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult") &&
+                diagnosticsSource.contains(
+                    "cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult",
+                ),
+            "Diagnostics route must accept app-shell providers for config, live proxy status, observed networks, redaction secrets, and runtime probe results.",
         )
         assertTrue(
             diagnosticsSource.contains("config = { currentConfigProvider() }") &&
                 diagnosticsSource.contains("proxyStatus = { currentProxyStatusProvider() }") &&
                 diagnosticsSource.contains("observedNetworks = { currentObservedNetworksProvider() }") &&
+                diagnosticsSource.contains(
+                    "localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() }",
+                ) &&
+                diagnosticsSource.contains(
+                    "cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() }",
+                ) &&
                 diagnosticsSource.contains("secretsProvider = { currentRedactionSecretsProvider() }"),
             "Diagnostics controller construction must use the latest injected providers instead of static defaults.",
         )
@@ -1425,8 +1435,12 @@ class ComposeAppShellContractTest {
             shellSource.contains("configProvider = settingsInitialConfigProvider") &&
                 shellSource.contains("proxyStatusProvider = proxyStatusProvider") &&
                 shellSource.contains("observedNetworksProvider = observedNetworksProvider") &&
-                shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider"),
-            "App shell must wire Diagnostics to the same persisted config, live status, and redaction providers as other screens.",
+                shellSource.contains("redactionSecretsProvider = logsAuditRedactionSecretsProvider") &&
+                shellSource.contains("localManagementApiProbeResultProvider = localManagementApiProbeResultProvider") &&
+                shellSource.contains(
+                    "cloudflareManagementApiProbeResultProvider = cloudflareManagementApiProbeResultProvider",
+                ),
+            "App shell must wire Diagnostics to persisted config, live status, redaction, and runtime probe providers.",
         )
         assertTrue(
             !diagnosticsSource.contains("DiagnosticsSuiteController(checks = emptyMap())"),
