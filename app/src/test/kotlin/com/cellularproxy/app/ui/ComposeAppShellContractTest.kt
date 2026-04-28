@@ -1,5 +1,7 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
@@ -414,6 +416,27 @@ class ComposeAppShellContractTest {
             state.recentHighSeverityErrors,
         )
         assertTrue(DashboardWarning.BroadUnauthenticatedProxy in state.status.warnings)
+    }
+
+    @Test
+    fun `app shell projects invalid sensitive config into dashboard warning inputs`() {
+        val projection =
+            sensitiveConfigDashboardInputs(
+                SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            )
+
+        assertFalse(projection.managementApiTokenPresent)
+        assertEquals(SensitiveConfigInvalidReason.UndecryptableSecret, projection.invalidSensitiveConfigReason)
+        assertTrue(
+            DashboardWarning.SensitiveConfigurationInvalid in
+                DashboardStatusModel
+                    .from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                        managementApiTokenPresent = projection.managementApiTokenPresent,
+                        invalidSensitiveConfigReason = projection.invalidSensitiveConfigReason,
+                    ).warnings,
+        )
     }
 
     @Test

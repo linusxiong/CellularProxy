@@ -49,6 +49,7 @@ import com.cellularproxy.app.config.CellularProxyPlainConfigStore
 import com.cellularproxy.app.config.SecureRandomSensitiveConfigGenerator
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigGenerator
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.config.SensitiveConfigRepository
 import com.cellularproxy.app.config.SensitiveConfigRepositoryFactory
@@ -140,6 +141,9 @@ fun CellularProxyApp() {
         }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
+    }
+    val loadSensitiveConfigResult: () -> SensitiveConfigLoadResult = {
+        sensitiveRepository.load()
     }
     val loadSensitiveConfig: () -> SensitiveConfig = {
         loadOrCreateSensitiveConfig(
@@ -324,6 +328,7 @@ fun CellularProxyApp() {
                             settingsInitialConfigProvider = loadSettingsConfig,
                             settingsSaveConfig = saveSettingsConfig,
                             settingsLoadSensitiveConfig = loadSensitiveConfig,
+                            settingsLoadSensitiveConfigResult = loadSensitiveConfigResult,
                             settingsSaveSensitiveConfig = sensitiveRepository::save,
                             logsAuditRowsProvider = loadLogsAuditRows,
                             logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
@@ -366,6 +371,7 @@ fun CellularProxyApp() {
                         settingsInitialConfigProvider = loadSettingsConfig,
                         settingsSaveConfig = saveSettingsConfig,
                         settingsLoadSensitiveConfig = loadSensitiveConfig,
+                        settingsLoadSensitiveConfigResult = loadSensitiveConfigResult,
                         settingsSaveSensitiveConfig = sensitiveRepository::save,
                         logsAuditRowsProvider = loadLogsAuditRows,
                         logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
@@ -651,6 +657,9 @@ internal fun CellularProxyNavigationHost(
     settingsInitialConfigProvider: () -> AppConfig,
     settingsSaveConfig: (AppConfig) -> Unit,
     settingsLoadSensitiveConfig: () -> SensitiveConfig,
+    settingsLoadSensitiveConfigResult: () -> SensitiveConfigLoadResult = {
+        SensitiveConfigLoadResult.Loaded(settingsLoadSensitiveConfig())
+    },
     settingsSaveSensitiveConfig: (SensitiveConfig) -> Unit,
     logsAuditRowsProvider: () -> List<LogsAuditScreenInputRow>,
     logsAuditRedactionSecretsProvider: () -> LogRedactionSecrets,
@@ -679,13 +688,16 @@ internal fun CellularProxyNavigationHost(
                 statusProvider = {
                     val config = settingsInitialConfigProvider()
                     val status = proxyStatusProvider()
+                    val sensitiveConfigResult = settingsLoadSensitiveConfigResult()
+                    val sensitiveConfigDashboardInputs = sensitiveConfigDashboardInputs(sensitiveConfigResult)
                     DashboardStatusModel.from(
                         config = config,
                         status = status,
                         recentLogs = dashboardLogSummariesFromLogsAuditRows(logsAuditRowsProvider()),
-                        redactionSecrets = logsAuditRedactionSecretsProvider(),
+                        redactionSecrets = sensitiveConfigResult.toLogRedactionSecrets(),
                         latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
-                        managementApiTokenPresent = settingsLoadSensitiveConfig().managementApiToken.isNotBlank(),
+                        managementApiTokenPresent = sensitiveConfigDashboardInputs.managementApiTokenPresent,
+                        invalidSensitiveConfigReason = sensitiveConfigDashboardInputs.invalidSensitiveConfigReason,
                         recentTraffic = recentTrafficProvider(),
                     )
                 },
@@ -787,6 +799,43 @@ private fun loadOrCreateSensitiveConfig(
             .generateDefaultSensitiveConfig()
             .also(repository::save)
     is SensitiveConfigLoadResult.Invalid -> error("Sensitive config is invalid: ${result.reason}")
+}
+
+internal data class SensitiveConfigDashboardInputs(
+    val managementApiTokenPresent: Boolean,
+    val invalidSensitiveConfigReason: SensitiveConfigInvalidReason?,
+)
+
+internal fun sensitiveConfigDashboardInputs(
+    result: SensitiveConfigLoadResult,
+): SensitiveConfigDashboardInputs = when (result) {
+    is SensitiveConfigLoadResult.Loaded ->
+        SensitiveConfigDashboardInputs(
+            managementApiTokenPresent = result.config.managementApiToken.isNotBlank(),
+            invalidSensitiveConfigReason = null,
+        )
+    SensitiveConfigLoadResult.MissingRequiredSecrets ->
+        SensitiveConfigDashboardInputs(
+            managementApiTokenPresent = false,
+            invalidSensitiveConfigReason = null,
+        )
+    is SensitiveConfigLoadResult.Invalid ->
+        SensitiveConfigDashboardInputs(
+            managementApiTokenPresent = false,
+            invalidSensitiveConfigReason = result.reason,
+        )
+}
+
+private fun SensitiveConfigLoadResult.toLogRedactionSecrets(): LogRedactionSecrets = when (this) {
+    is SensitiveConfigLoadResult.Loaded ->
+        LogRedactionSecrets(
+            managementApiToken = config.managementApiToken,
+            proxyCredential = config.proxyCredential.canonicalBasicPayload(),
+            cloudflareTunnelToken = config.cloudflareTunnelToken,
+        )
+    SensitiveConfigLoadResult.MissingRequiredSecrets,
+    is SensitiveConfigLoadResult.Invalid,
+    -> LogRedactionSecrets()
 }
 
 @Composable
