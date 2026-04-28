@@ -3,9 +3,11 @@ package com.cellularproxy.app.ui
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.proxy.ProxyServiceState
@@ -352,6 +354,31 @@ class DashboardScreenControllerTest {
                 DashboardRiskItem(
                     label = "Root access is unavailable",
                     action = DashboardScreenAction.OpenRotation,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes failing Cloudflare management API check risk as Cloudflare action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.stopped(
+                            cloudflare = CloudflareTunnelStatus.connected(),
+                        ),
+                    latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Cloudflare management API check is failing",
+                    action = DashboardScreenAction.OpenCloudflare,
                 ),
             ),
             state.riskItems,
