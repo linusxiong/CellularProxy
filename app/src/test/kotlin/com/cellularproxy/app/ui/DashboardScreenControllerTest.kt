@@ -235,6 +235,35 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `dashboard exposes Cloudflare missing token risk as action item`() {
+        val defaultConfig = AppConfig.default()
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        defaultConfig.copy(
+                            cloudflare =
+                                defaultConfig.cloudflare.copy(
+                                    enabled = true,
+                                    tunnelTokenPresent = false,
+                                ),
+                        ),
+                    status = ProxyServiceStatus.stopped(),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Cloudflare tunnel token is missing",
+                    action = DashboardScreenAction.OpenCloudflare,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
     fun `dashboard log summaries preserve row data and severity for recent errors`() {
         val summaries =
             dashboardLogSummariesFromLogsAuditRows(

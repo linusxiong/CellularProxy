@@ -281,13 +281,28 @@ internal fun CellularProxyDashboardScreen(
         }
 
         DashboardSection("Risk states") {
-            if (screenState.riskWarnings.isEmpty()) {
+            if (screenState.riskWarnings.isEmpty() && screenState.riskItems.isEmpty()) {
                 Text(
                     text = "None",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                screenState.riskWarnings.forEach { warning ->
+                screenState.riskItems.forEach { riskItem ->
+                    OutlinedButton(
+                        onClick = { requestAction(riskItem.action) },
+                        enabled =
+                            dashboardActionCanDispatch(
+                                action = riskItem.action,
+                                actionsEnabled = actionsEnabled,
+                                availableActions = screenState.availableActions,
+                            ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(riskItem.label)
+                    }
+                }
+                val actionableRiskLabels = screenState.riskItems.map(DashboardRiskItem::label).toSet()
+                screenState.riskWarnings.filterNot(actionableRiskLabels::contains).forEach { warning ->
                     Text(
                         text = warning,
                         style = MaterialTheme.typography.bodyMedium,
@@ -301,6 +316,7 @@ internal fun CellularProxyDashboardScreen(
 internal data class DashboardScreenState(
     val status: DashboardStatusModel,
     val riskWarnings: List<String>,
+    val riskItems: List<DashboardRiskItem>,
     val recentHighSeverityErrors: List<String>,
     val pendingOperation: String = "None",
     val availableActions: List<DashboardScreenAction>,
@@ -309,12 +325,18 @@ internal data class DashboardScreenState(
         fun from(status: DashboardStatusModel): DashboardScreenState = DashboardScreenState(
             status = status,
             riskWarnings = status.warnings.map(DashboardWarning::toDashboardText),
+            riskItems = status.warnings.mapNotNull(DashboardWarning::toDashboardRiskItem),
             recentHighSeverityErrors = status.recentHighSeverityErrors.map(DashboardRecentError::toDashboardText),
             pendingOperation = "None",
             availableActions = status.availableActions(),
         )
     }
 }
+
+internal data class DashboardRiskItem(
+    val label: String,
+    val action: DashboardScreenAction,
+)
 
 internal enum class DashboardScreenAction(
     val confirmationTitle: String? = null,
@@ -799,6 +821,15 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.StartupFailed -> "Proxy startup failed"
     DashboardWarning.RotationCooldownActive -> "Rotation blocked by cooldown"
     DashboardWarning.RotationInProgress -> "Rotation already in progress"
+}
+
+private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (this) {
+    DashboardWarning.CloudflareTokenMissing ->
+        DashboardRiskItem(
+            label = toDashboardText(),
+            action = DashboardScreenAction.OpenCloudflare,
+        )
+    else -> null
 }
 
 private fun DashboardRecentError.toDashboardText(): String = "$title: $detail"
