@@ -367,6 +367,63 @@ class CellularProxyRuntimeCompositionInstallerTest {
         assertEquals(1, closedConnections)
     }
 
+    @Test
+    fun `production cloudflare runtime close releases active edge session`() {
+        var closedConnections = 0
+        val runtime =
+            createProductionCloudflareTunnelRuntime(
+                plainConfig =
+                    readyBootstrap().plainConfig.copy(
+                        cloudflare = AppConfig.default().cloudflare.copy(enabled = true),
+                    ),
+                sensitiveConfig =
+                    readyBootstrap().sensitiveConfig.copy(
+                        cloudflareTunnelToken = validCloudflareTunnelToken(),
+                    ),
+                edgeConnector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Connected(
+                            connection = { closedConnections += 1 },
+                        )
+                    },
+            )
+
+        runtime.start()
+        runtime.close()
+        runtime.close()
+
+        assertEquals(null, runtime.edgeSessionSummary())
+        assertEquals(1, closedConnections)
+    }
+
+    @Test
+    fun `installation close releases owned cloudflare runtime cleanup`() {
+        val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val cloudflareCleanup = CompositionRecordingCloseable()
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+                cloudflareRuntimeCleanup = cloudflareCleanup,
+            )
+
+        installation.close()
+
+        assertTrue(cloudflareCleanup.closed)
+        assertTerminates(executors.workerExecutor)
+        assertTerminates(executors.queuedClientTimeoutExecutor)
+        assertTerminates(executors.acceptLoopExecutor)
+    }
+
     private fun readyBootstrap(): AppConfigBootstrapResult.Ready = AppConfigBootstrapResult.Ready(
         plainConfig =
             AppConfig.default().copy(
@@ -411,6 +468,15 @@ private class RecordingRouteMonitor(
         private set
 
     fun observedNetworks(): List<NetworkDescriptor> = networks
+
+    override fun close() {
+        closed = true
+    }
+}
+
+private class CompositionRecordingCloseable : Closeable {
+    var closed: Boolean = false
+        private set
 
     override fun close() {
         closed = true

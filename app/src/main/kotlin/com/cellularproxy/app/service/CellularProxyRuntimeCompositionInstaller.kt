@@ -126,6 +126,7 @@ object CellularProxyRuntimeCompositionInstaller {
             cloudflareStart = productionCloudflareRuntime?.start ?: ::ignoredCloudflareTransition,
             cloudflareStop = productionCloudflareRuntime?.stop ?: ::ignoredCloudflareTransition,
             cloudflareReconnect = productionCloudflareRuntime?.reconnect ?: ::ignoredCloudflareTransition,
+            cloudflareRuntimeCleanup = productionCloudflareRuntime,
             rootOperationsEnabled = rootOperationsEnabled,
             rootCommandProcessExecutor = rootCommandProcessExecutor,
             recordRootAudit = recordRootAudit,
@@ -156,6 +157,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
+        cloudflareRuntimeCleanup: Closeable? = null,
         rotateMobileData: () -> RotationTransitionResult = {
             unavailableRotationExecutionTransition(RotationOperation.MobileData)
         },
@@ -189,6 +191,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStart = cloudflareStart,
         cloudflareStop = cloudflareStop,
         cloudflareReconnect = cloudflareReconnect,
+        cloudflareRuntimeCleanup = cloudflareRuntimeCleanup,
         rotateMobileData = rotateMobileData,
         rotateAirplaneMode = rotateAirplaneMode,
         rootOperationsEnabled = rootOperationsEnabled,
@@ -217,6 +220,7 @@ object CellularProxyRuntimeCompositionInstaller {
         cloudflareStart: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareStop: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
+        cloudflareRuntimeCleanup: Closeable? = null,
         rotateMobileData: () -> RotationTransitionResult = {
             unavailableRotationExecutionTransition(RotationOperation.MobileData)
         },
@@ -288,6 +292,7 @@ object CellularProxyRuntimeCompositionInstaller {
                     installResult = null,
                     routeMonitor = routeMonitor,
                     executorResources = executorResources,
+                    cloudflareRuntimeCleanup = cloudflareRuntimeCleanup,
                 ).close()
                 throw throwable
             }
@@ -296,6 +301,7 @@ object CellularProxyRuntimeCompositionInstaller {
                 installResult = installResult,
                 routeMonitor = routeMonitor,
                 executorResources = executorResources,
+                cloudflareRuntimeCleanup = cloudflareRuntimeCleanup,
             )
         if (installResult is ProxyServerForegroundRuntimeInstallResult.InvalidSensitiveConfig) {
             cleanup.close()
@@ -314,7 +320,15 @@ internal class ProductionCloudflareTunnelRuntime(
     val start: () -> CloudflareTunnelTransitionResult,
     val stop: () -> CloudflareTunnelTransitionResult,
     val reconnect: () -> CloudflareTunnelTransitionResult,
-)
+) : Closeable {
+    private val closed = AtomicBoolean(false)
+
+    override fun close() {
+        if (closed.compareAndSet(false, true)) {
+            stop()
+        }
+    }
+}
 
 internal fun createProductionCloudflareTunnelRuntime(
     plainConfig: AppConfig,
@@ -490,6 +504,7 @@ private class RuntimeCompositionCleanup(
     private val installResult: ProxyServerForegroundRuntimeInstallResult?,
     private val routeMonitor: Closeable,
     private val executorResources: RuntimeCompositionExecutorResources,
+    private val cloudflareRuntimeCleanup: Closeable? = null,
 ) : Closeable {
     private val closed = AtomicBoolean(false)
 
@@ -515,6 +530,7 @@ private class RuntimeCompositionCleanup(
         if (installResult is ProxyServerForegroundRuntimeInstallResult.Installed) {
             closeOwned(installResult.registration::close)
         }
+        cloudflareRuntimeCleanup?.let { closeOwned(it::close) }
         closeOwned(routeMonitor::close)
         closeOwned(executorResources::close)
 
