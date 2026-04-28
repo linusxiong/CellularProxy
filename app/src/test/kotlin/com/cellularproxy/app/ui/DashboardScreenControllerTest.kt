@@ -1,5 +1,7 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
@@ -197,6 +199,39 @@ class DashboardScreenControllerTest {
             controller.consumeEffects().single(),
         )
         assertTrue(controller.consumeEffects().isEmpty())
+    }
+
+    @Test
+    fun `controller emits metadata-only audit records for dispatched operational actions`() {
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                    )
+                },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 123L },
+            )
+
+        controller.handle(DashboardScreenEvent.StartProxy)
+        controller.handle(DashboardScreenEvent.RefreshStatus)
+        controller.handle(DashboardScreenEvent.CopyProxyEndpoint)
+        controller.handle(DashboardScreenEvent.OpenLogs)
+
+        val auditRecords =
+            controller
+                .consumeEffects()
+                .filterIsInstance<DashboardScreenEffect.RecordAuditAction>()
+                .map(DashboardScreenEffect.RecordAuditAction::record)
+
+        assertEquals(2, auditRecords.size)
+        assertEquals(listOf("Dashboard start_proxy", "Dashboard refresh_status"), auditRecords.map { it.title })
+        assertEquals(listOf("action=start_proxy serviceState=Stopped", "action=refresh_status serviceState=Stopped"), auditRecords.map { it.detail })
+        assertEquals(listOf(123L, 123L), auditRecords.map { it.occurredAtEpochMillis })
+        assertTrue(auditRecords.all { it.category == LogsAuditRecordCategory.AppRuntime })
+        assertTrue(auditRecords.all { it.severity == LogsAuditRecordSeverity.Info })
     }
 
     @Test

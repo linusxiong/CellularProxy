@@ -832,6 +832,7 @@ internal fun CellularProxyNavigationHost(
                 onOpenLogs = { navController.navigate(LogsAudit.route) },
                 onOpenDiagnostics = { navController.navigate(Diagnostics.route) },
                 onCopyProxyEndpointText = onCopyText,
+                onRecordDashboardAuditAction = onRecordLogsAuditAction,
             )
         }
         composable(Settings.route) {

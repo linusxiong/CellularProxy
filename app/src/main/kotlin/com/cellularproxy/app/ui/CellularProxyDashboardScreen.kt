@@ -25,6 +25,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.status.DashboardBoundRoute
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardLogSummary
@@ -54,6 +57,8 @@ internal fun CellularProxyDashboardRoute(
     onOpenLogs: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
     onCopyProxyEndpointText: (String) -> Unit = {},
+    onRecordDashboardAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
+    auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     val currentStatusProvider by rememberUpdatedState(statusProvider)
     val currentOnStartProxyService by rememberUpdatedState(onStartProxyService)
@@ -70,6 +75,8 @@ internal fun CellularProxyDashboardRoute(
         remember {
             DashboardScreenController(
                 statusProvider = { currentStatusProvider() },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
                 actionHandler = { action ->
                     when (action) {
                         DashboardScreenAction.StartProxy -> currentOnStartProxyService()
@@ -92,6 +99,7 @@ internal fun CellularProxyDashboardRoute(
         controller.consumeEffects().forEach { effect ->
             when (effect) {
                 is DashboardScreenEffect.CopyText -> onCopyProxyEndpointText(effect.text)
+                is DashboardScreenEffect.RecordAuditAction -> onRecordDashboardAuditAction(effect.record)
             }
         }
         screenState = controller.state
@@ -354,6 +362,8 @@ internal class DashboardScreenController(
             status = ProxyServiceStatus.stopped(),
         )
     },
+    private val auditActionsEnabled: Boolean = false,
+    private val auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
     private val actionHandler: (DashboardScreenAction) -> Unit = {},
 ) {
     private var lastObservedServiceState: DashboardServiceState = statusProvider().serviceState
@@ -396,6 +406,7 @@ internal class DashboardScreenController(
         if (action.isLifecycleAction) {
             pendingLifecycleActions.add(action)
         }
+        recordAuditAction(action)?.let(pendingEffects::add)
         actionHandler(action)
         refreshPendingActions()
     }
@@ -412,6 +423,23 @@ internal class DashboardScreenController(
     private fun buildState(): DashboardScreenState = DashboardScreenState
         .from(statusProvider())
         .withoutPendingLifecycleActions(pendingLifecycleActions)
+
+    private fun recordAuditAction(action: DashboardScreenAction): DashboardScreenEffect.RecordAuditAction? = if (
+        auditActionsEnabled &&
+        action.isAuditedOperationalAction
+    ) {
+        DashboardScreenEffect.RecordAuditAction(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
+                category = LogsAuditRecordCategory.AppRuntime,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Dashboard ${action.auditName}",
+                detail = "action=${action.auditName} serviceState=${statusProvider().serviceState.name}",
+            ),
+        )
+    } else {
+        null
+    }
 }
 
 internal fun dashboardLogSummariesFromLogsAuditRows(
@@ -460,6 +488,10 @@ internal sealed interface DashboardScreenEffect {
     data class CopyText(
         val text: String,
     ) : DashboardScreenEffect
+
+    data class RecordAuditAction(
+        val record: PersistedLogsAuditRecord,
+    ) : DashboardScreenEffect
 }
 
 private val DashboardScreenAction.isLifecycleAction: Boolean
@@ -467,6 +499,26 @@ private val DashboardScreenAction.isLifecycleAction: Boolean
         this == DashboardScreenAction.StartProxy ||
             this == DashboardScreenAction.StopProxy ||
             this == DashboardScreenAction.RestartProxy
+
+private val DashboardScreenAction.isAuditedOperationalAction: Boolean
+    get() =
+        isLifecycleAction ||
+            this == DashboardScreenAction.RefreshStatus
+
+private val DashboardScreenAction.auditName: String
+    get() =
+        when (this) {
+            DashboardScreenAction.StartProxy -> "start_proxy"
+            DashboardScreenAction.StopProxy -> "stop_proxy"
+            DashboardScreenAction.RestartProxy -> "restart_proxy"
+            DashboardScreenAction.RefreshStatus -> "refresh_status"
+            DashboardScreenAction.CopyProxyEndpoint -> "copy_proxy_endpoint"
+            DashboardScreenAction.OpenRiskDetails -> "open_risk_details"
+            DashboardScreenAction.OpenCloudflare -> "open_cloudflare"
+            DashboardScreenAction.OpenRotation -> "open_rotation"
+            DashboardScreenAction.OpenLogs -> "open_logs"
+            DashboardScreenAction.OpenDiagnostics -> "open_diagnostics"
+        }
 
 private fun DashboardScreenState.withoutPendingLifecycleActions(
     pendingLifecycleActions: Set<DashboardScreenAction>,
