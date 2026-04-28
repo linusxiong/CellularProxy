@@ -50,6 +50,7 @@ internal fun CellularProxyRotationRoute(
     onRotateAirplaneMode: () -> Unit = {},
     onCopyRotationDiagnosticsText: (String) -> Unit = {},
     onRecordRotationAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
+    auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentRotationStatusProvider by rememberUpdatedState(rotationStatusProvider)
@@ -62,6 +63,7 @@ internal fun CellularProxyRotationRoute(
     val currentOnProbeCurrentPublicIp by rememberUpdatedState(onProbeCurrentPublicIp)
     val currentOnRotateMobileData by rememberUpdatedState(onRotateMobileData)
     val currentOnRotateAirplaneMode by rememberUpdatedState(onRotateAirplaneMode)
+    val currentAuditOccurredAtEpochMillisProvider by rememberUpdatedState(auditOccurredAtEpochMillisProvider)
     val observedConfig = configProvider()
     val observedRotationStatus = rotationStatusProvider()
     val observedCurrentPublicIp = currentPublicIpProvider()
@@ -80,6 +82,7 @@ internal fun CellularProxyRotationRoute(
                 activeConnectionsProvider = { currentActiveConnectionsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
                 auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
                 actionHandler = { action ->
                     when (action) {
                         RotationScreenAction.CheckRoot -> currentOnCheckRoot()
