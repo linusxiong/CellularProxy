@@ -72,10 +72,21 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,6 +123,7 @@ fun CellularProxyApp() {
     var cloudflareManagementApiCheckState by remember {
         mutableStateOf(DashboardCloudflareManagementApiCheck.NotRun)
     }
+    var rotationStatusState by remember { mutableStateOf(RotationStatus.idle()) }
     val saveSettingsConfig: (AppConfig) -> Unit = { config ->
         runBlocking { plainConfigRepository.save(config) }
     }
@@ -197,6 +209,12 @@ fun CellularProxyApp() {
                     )
                 }
             }.onSuccess { response ->
+                rotationStatusFromManagementApiActionResponse(
+                    action = action,
+                    response = response,
+                )?.let { status ->
+                    rotationStatusState = status
+                }
                 cloudflareManagementRoundTripSummary(
                     action = action,
                     response = response,
@@ -292,6 +310,7 @@ fun CellularProxyApp() {
                                 coroutineScope.launch { refreshProxyStatus() }
                             },
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
+                            rotationStatusProvider = { rotationStatusState },
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
                             },
@@ -326,6 +345,7 @@ fun CellularProxyApp() {
                             coroutineScope.launch { refreshProxyStatus() }
                         },
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
+                        rotationStatusProvider = { rotationStatusState },
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
                         },
@@ -406,6 +426,88 @@ internal fun dashboardCloudflareManagementApiCheckFrom(
     request = request,
 ).toDashboardCloudflareManagementApiCheck()
 
+internal fun rotationStatusFromManagementApiActionResponse(
+    action: LocalManagementApiAction,
+    response: LocalManagementApiActionResponse,
+): RotationStatus? {
+    if (action != LocalManagementApiAction.RotateMobileData && action != LocalManagementApiAction.RotateAirplaneMode) {
+        return null
+    }
+    return runCatching {
+        Json
+            .parseToJsonElement(response.body)
+            .jsonObject
+            .objectValue("rotation")
+            .toRotationStatus()
+    }.getOrNull()
+}
+
+private fun JsonObject.toRotationStatus(): RotationStatus = RotationStatus(
+    state = stringValue("state").toRotationState(),
+    operation = nullableStringValue("operation")?.toRotationOperation(),
+    oldPublicIp = nullableStringValue("oldPublicIp"),
+    newPublicIp = nullableStringValue("newPublicIp"),
+    publicIpChanged = nullableBooleanValue("publicIpChanged"),
+    failureReason = nullableStringValue("failureReason")?.toRotationFailureReason(),
+)
+
+private fun String.toRotationState(): RotationState = when (this) {
+    "idle" -> RotationState.Idle
+    "checking_cooldown" -> RotationState.CheckingCooldown
+    "checking_root" -> RotationState.CheckingRoot
+    "probing_old_public_ip" -> RotationState.ProbingOldPublicIp
+    "pausing_new_requests" -> RotationState.PausingNewRequests
+    "draining_connections" -> RotationState.DrainingConnections
+    "running_disable_command" -> RotationState.RunningDisableCommand
+    "waiting_for_toggle_delay" -> RotationState.WaitingForToggleDelay
+    "running_enable_command" -> RotationState.RunningEnableCommand
+    "waiting_for_network_return" -> RotationState.WaitingForNetworkReturn
+    "probing_new_public_ip" -> RotationState.ProbingNewPublicIp
+    "resuming_proxy_requests" -> RotationState.ResumingProxyRequests
+    "completed" -> RotationState.Completed
+    "failed" -> RotationState.Failed
+    else -> error("Unknown rotation state: $this")
+}
+
+private fun String.toRotationOperation(): RotationOperation = when (this) {
+    "mobile_data" -> RotationOperation.MobileData
+    "airplane_mode" -> RotationOperation.AirplaneMode
+    else -> error("Unknown rotation operation: $this")
+}
+
+private fun String.toRotationFailureReason(): RotationFailureReason = when (this) {
+    "cooldown_active" -> RotationFailureReason.CooldownActive
+    "root_unavailable" -> RotationFailureReason.RootUnavailable
+    "old_public_ip_probe_failed" -> RotationFailureReason.OldPublicIpProbeFailed
+    "root_command_failed" -> RotationFailureReason.RootCommandFailed
+    "root_command_timed_out" -> RotationFailureReason.RootCommandTimedOut
+    "network_return_timed_out" -> RotationFailureReason.NetworkReturnTimedOut
+    "new_public_ip_probe_failed" -> RotationFailureReason.NewPublicIpProbeFailed
+    "strict_ip_change_required" -> RotationFailureReason.StrictIpChangeRequired
+    "root_operations_disabled" -> RotationFailureReason.RootOperationsDisabled
+    "execution_unavailable" -> RotationFailureReason.ExecutionUnavailable
+    else -> error("Unknown rotation failure reason: $this")
+}
+
+private fun JsonObject.objectValue(name: String): JsonObject = requireNotNull(nullableElementValue(name)?.jsonObject)
+
+private fun JsonObject.stringValue(name: String): String = requireNotNull(nullableStringValue(name))
+
+private fun JsonObject.nullableStringValue(name: String): String? = nullableElementValue(name)
+    ?.takeUnless(JsonElement::isJsonNull)
+    ?.jsonPrimitive
+    ?.content
+
+private fun JsonObject.nullableBooleanValue(name: String): Boolean? = nullableElementValue(name)
+    ?.takeUnless(JsonElement::isJsonNull)
+    ?.jsonPrimitive
+    ?.booleanOrNull
+
+private fun JsonObject.nullableElementValue(name: String): JsonElement? = this[name]
+
+private val JsonElement.isJsonNull: Boolean
+    get() = this is JsonNull
+
 @Composable
 private fun CellularProxyNavigationBar(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -483,6 +585,7 @@ private fun CellularProxyNavigationHost(
     cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult,
     onRefreshProxyStatus: () -> Unit,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
+    rotationStatusProvider: () -> RotationStatus,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
     modifier: Modifier = Modifier,
@@ -551,6 +654,7 @@ private fun CellularProxyNavigationHost(
         composable(Rotation.route) {
             CellularProxyRotationRoute(
                 configProvider = settingsInitialConfigProvider,
+                rotationStatusProvider = { rotationStatusProvider() },
                 rootAvailabilityProvider = { proxyStatusProvider().rootAvailability },
                 activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections },
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,

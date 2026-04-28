@@ -62,6 +62,7 @@ data class LocalManagementApiActionRequest(
 
 data class LocalManagementApiActionResponse(
     val statusCode: Int,
+    val body: String = "",
 ) {
     val isSuccessful: Boolean
         get() = statusCode in 200..299
@@ -92,7 +93,19 @@ private fun sendHttpRequest(request: LocalManagementApiActionRequest): LocalMana
         connection.readTimeout = LOCAL_MANAGEMENT_API_ACTION_TIMEOUT_MILLIS
         connection.setRequestProperty("Authorization", "Bearer ${request.bearerToken}")
         connection.doOutput = false
-        LocalManagementApiActionResponse(statusCode = connection.responseCode)
+        LocalManagementApiActionResponse(
+            statusCode = connection.responseCode,
+            body =
+                runCatching {
+                    val stream =
+                        if (connection.responseCode in 200..299) {
+                            connection.inputStream
+                        } else {
+                            connection.errorStream ?: connection.inputStream
+                        }
+                    stream.bufferedReader().use { reader -> reader.readText() }
+                }.getOrDefault(""),
+        )
     } finally {
         connection.disconnect()
     }

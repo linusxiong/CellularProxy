@@ -5,6 +5,8 @@ import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticRunRecord
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
+import com.cellularproxy.app.service.LocalManagementApiAction
+import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardLogSummary
 import com.cellularproxy.app.status.DashboardStatusModel
@@ -1017,11 +1019,13 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             rotationSource.contains("rootAvailabilityProvider: () -> RootAvailabilityStatus") &&
-                rotationSource.contains("activeConnectionsProvider: () -> Long"),
-            "Rotation route must accept injectable live root availability and active connection providers.",
+                rotationSource.contains("activeConnectionsProvider: () -> Long") &&
+                rotationSource.contains("rotationStatusProvider: () -> RotationStatus"),
+            "Rotation route must accept injectable live rotation, root availability, and active connection providers.",
         )
         assertTrue(
             rotationSource.contains("configProvider = { currentConfigProvider() }") &&
+                rotationSource.contains("rotationStatusProvider = { currentRotationStatusProvider() }") &&
                 rotationSource.contains("secretsProvider = { currentRedactionSecretsProvider() }") &&
                 rotationSource.contains("rootAvailabilityProvider = { currentRootAvailabilityProvider() }") &&
                 rotationSource.contains("activeConnectionsProvider = { currentActiveConnectionsProvider() }"),
@@ -1036,6 +1040,12 @@ class ComposeAppShellContractTest {
             rotationSource.contains("LaunchedEffect(Unit)") &&
                 rotationSource.contains("dispatchEvent(RotationScreenEvent.Refresh)"),
             "Rotation route must refresh provider-backed state when it enters composition.",
+        )
+        assertTrue(
+            rotationSource.contains("val observedRotationStatus = rotationStatusProvider()") &&
+                rotationSource.contains("LaunchedEffect(observedRotationStatus)") &&
+                rotationSource.contains("controller.handle(RotationScreenEvent.Refresh)"),
+            "Rotation route must refresh remembered controller state when observed rotation status changes.",
         )
         assertTrue(
             rotationSource.contains("RotationScreenEvent.RotateMobileData"),
@@ -1056,8 +1066,9 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("rootAvailabilityProvider = { proxyStatusProvider().rootAvailability }") &&
-                shellSource.contains("activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections }"),
-            "Rotation app-shell route must derive live root availability and active connection state from the shared proxy status provider.",
+                shellSource.contains("activeConnectionsProvider = { proxyStatusProvider().metrics.activeConnections }") &&
+                shellSource.contains("rotationStatusProvider = { rotationStatusProvider() }"),
+            "Rotation app-shell route must derive live rotation, root availability, and active connection state from shared providers.",
         )
         assertTrue(
             rotationSource.contains("onCheckRoot: () -> Unit = {}"),
@@ -1170,6 +1181,35 @@ class ComposeAppShellContractTest {
         assertEquals("Failed: RootUnavailable", failedState.lastRotationResult)
         assertEquals("Unavailable", failedState.oldPublicIp)
         assertEquals("Unavailable", failedState.newPublicIp)
+    }
+
+    @Test
+    fun `rotation action response parser extracts accepted rotation status`() {
+        val status =
+            rotationStatusFromManagementApiActionResponse(
+                action = LocalManagementApiAction.RotateMobileData,
+                response =
+                    LocalManagementApiActionResponse(
+                        statusCode = 202,
+                        body =
+                            "{" +
+                                """"accepted":true,""" +
+                                """"disposition":"accepted",""" +
+                                """"rotation":{"state":"completed","operation":"mobile_data","oldPublicIp":"198.51.100.10","newPublicIp":"203.0.113.20","publicIpChanged":true,"failureReason":null}""" +
+                                "}",
+                    ),
+            )
+
+        assertEquals(
+            RotationStatus(
+                state = RotationState.Completed,
+                operation = RotationOperation.MobileData,
+                oldPublicIp = "198.51.100.10",
+                newPublicIp = "203.0.113.20",
+                publicIpChanged = true,
+            ),
+            status,
+        )
     }
 
     @Test

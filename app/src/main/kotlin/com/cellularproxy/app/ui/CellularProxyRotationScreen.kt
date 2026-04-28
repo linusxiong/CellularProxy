@@ -35,6 +35,7 @@ import com.cellularproxy.shared.rotation.RotationStatus
 @Composable
 internal fun CellularProxyRotationRoute(
     configProvider: () -> AppConfig = AppConfig::default,
+    rotationStatusProvider: () -> RotationStatus = { RotationStatus.idle() },
     rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
     activeConnectionsProvider: () -> Long = { 0 },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
@@ -45,6 +46,7 @@ internal fun CellularProxyRotationRoute(
     onCopyRotationDiagnosticsText: (String) -> Unit = {},
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
+    val currentRotationStatusProvider by rememberUpdatedState(rotationStatusProvider)
     val currentRootAvailabilityProvider by rememberUpdatedState(rootAvailabilityProvider)
     val currentActiveConnectionsProvider by rememberUpdatedState(activeConnectionsProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
@@ -52,10 +54,12 @@ internal fun CellularProxyRotationRoute(
     val currentOnProbeCurrentPublicIp by rememberUpdatedState(onProbeCurrentPublicIp)
     val currentOnRotateMobileData by rememberUpdatedState(onRotateMobileData)
     val currentOnRotateAirplaneMode by rememberUpdatedState(onRotateAirplaneMode)
+    val observedRotationStatus = rotationStatusProvider()
     val controller =
         remember {
             RotationScreenController(
                 configProvider = { currentConfigProvider() },
+                rotationStatusProvider = { currentRotationStatusProvider() },
                 rootAvailabilityProvider = { currentRootAvailabilityProvider() },
                 activeConnectionsProvider = { currentActiveConnectionsProvider() },
                 secretsProvider = { currentRedactionSecretsProvider() },
@@ -82,6 +86,10 @@ internal fun CellularProxyRotationRoute(
     }
     LaunchedEffect(Unit) {
         dispatchEvent(RotationScreenEvent.Refresh)
+    }
+    LaunchedEffect(observedRotationStatus) {
+        controller.handle(RotationScreenEvent.Refresh)
+        screenState = controller.state
     }
 
     CellularProxyRotationScreen(
