@@ -244,6 +244,108 @@ internal fun rotationActionCanDispatch(
     availableActions: List<RotationScreenAction>,
 ): Boolean = actionsEnabled && action in availableActions
 
+internal class RotationScreenController(
+    private val configProvider: () -> AppConfig = { AppConfig.default() },
+    private val rotationStatusProvider: () -> RotationStatus = { RotationStatus.idle() },
+    private val rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
+    private val cooldownRemainingSecondsProvider: () -> Long? = { null },
+    private val activeConnectionsProvider: () -> Long = { 0 },
+    private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
+    private val actionHandler: (RotationScreenAction) -> Unit = {},
+) {
+    private var lastObservedRotationStatus: RotationStatus = rotationStatusProvider()
+    private val pendingUnsafeActions = mutableSetOf<RotationScreenAction>()
+    private val pendingEffects = mutableListOf<RotationScreenEffect>()
+    var state: RotationScreenState = buildState()
+        private set
+
+    fun handle(event: RotationScreenEvent) {
+        refreshPendingActions()
+        when (event) {
+            RotationScreenEvent.CopyDiagnostics -> {
+                if (RotationScreenAction.CopyDiagnostics in state.availableActions) {
+                    pendingEffects.add(RotationScreenEffect.CopyText(state.copyableDiagnostics))
+                }
+            }
+            RotationScreenEvent.CheckRoot -> dispatchAction(RotationScreenAction.CheckRoot)
+            RotationScreenEvent.ProbeCurrentPublicIp -> dispatchAction(RotationScreenAction.ProbeCurrentPublicIp)
+            RotationScreenEvent.RotateMobileData -> dispatchAction(RotationScreenAction.RotateMobileData)
+            RotationScreenEvent.RotateAirplaneMode -> dispatchAction(RotationScreenAction.RotateAirplaneMode)
+            RotationScreenEvent.Refresh -> state = buildState()
+        }
+    }
+
+    fun consumeEffects(): List<RotationScreenEffect> {
+        val effects = pendingEffects.toList()
+        pendingEffects.clear()
+        return effects
+    }
+
+    private fun dispatchAction(action: RotationScreenAction) {
+        if (action !in state.availableActions) {
+            return
+        }
+        if (action.requiresConfirmation) {
+            pendingUnsafeActions.add(action)
+        }
+        actionHandler(action)
+        state = buildState()
+    }
+
+    private fun refreshPendingActions() {
+        val currentStatus = rotationStatusProvider()
+        if (currentStatus != lastObservedRotationStatus) {
+            pendingUnsafeActions.clear()
+            lastObservedRotationStatus = currentStatus
+        }
+        state = buildState()
+    }
+
+    private fun buildState(): RotationScreenState {
+        val rotationStatus = rotationStatusProvider()
+        return RotationScreenState
+            .from(
+                config = configProvider(),
+                rotationStatus = rotationStatus,
+                rootAvailability = rootAvailabilityProvider(),
+                cooldownRemainingSeconds = cooldownRemainingSecondsProvider(),
+                activeConnections = activeConnectionsProvider(),
+                secrets = secrets,
+            ).withoutPendingUnsafeActions(pendingUnsafeActions)
+    }
+}
+
+internal sealed interface RotationScreenEvent {
+    data object CheckRoot : RotationScreenEvent
+
+    data object ProbeCurrentPublicIp : RotationScreenEvent
+
+    data object RotateMobileData : RotationScreenEvent
+
+    data object RotateAirplaneMode : RotationScreenEvent
+
+    data object CopyDiagnostics : RotationScreenEvent
+
+    data object Refresh : RotationScreenEvent
+}
+
+internal sealed interface RotationScreenEffect {
+    data class CopyText(
+        val text: String,
+    ) : RotationScreenEffect
+}
+
+private fun RotationScreenState.withoutPendingUnsafeActions(
+    pendingUnsafeActions: Set<RotationScreenAction>,
+): RotationScreenState = copy(
+    availableActions =
+        if (pendingUnsafeActions.any(RotationScreenAction::requiresConfirmation)) {
+            availableActions.filterNot(RotationScreenAction::requiresConfirmation)
+        } else {
+            availableActions
+        },
+)
+
 @Composable
 private fun RotationActionRow(
     actionsEnabled: Boolean,
