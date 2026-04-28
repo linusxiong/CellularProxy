@@ -20,9 +20,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,11 +48,15 @@ internal fun CellularProxyLogsAuditRoute(
     onCopyLogsAuditText: (String) -> Unit = {},
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit = {},
 ) {
+    val currentRowsProvider by rememberUpdatedState(logsAuditRowsProvider)
+    val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
+    val observedRows = logsAuditRowsProvider()
+    val observedRedactionSecrets = redactionSecretsProvider()
     val controller =
         remember {
             LogsAuditScreenController(
-                rowsProvider = logsAuditRowsProvider,
-                secretsProvider = redactionSecretsProvider,
+                rowsProvider = { currentRowsProvider() },
+                secretsProvider = { currentRedactionSecretsProvider() },
                 exportSupported = true,
                 exportGeneratedAtEpochMillis = System.currentTimeMillis(),
             )
@@ -64,6 +70,10 @@ internal fun CellularProxyLogsAuditRoute(
                 is LogsAuditScreenEffect.ExportBundle -> onExportLogsAuditBundle(effect.bundle)
             }
         }
+        screenState = controller.state
+    }
+    LaunchedEffect(observedRows, observedRedactionSecrets) {
+        controller.handle(LogsAuditScreenEvent.Refresh)
         screenState = controller.state
     }
 
@@ -352,6 +362,12 @@ internal class LogsAuditScreenController(
 
     fun handle(event: LogsAuditScreenEvent) {
         when (event) {
+            LogsAuditScreenEvent.Refresh -> {
+                state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
+                if (state.selectedRow == null) {
+                    state = buildState(filter = state.filter)
+                }
+            }
             LogsAuditScreenEvent.CopyFilteredSummary -> {
                 state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
                 if (LogsAuditScreenAction.CopyFilteredSummary in state.availableActions) {
@@ -406,6 +422,8 @@ internal class LogsAuditScreenController(
 }
 
 internal sealed interface LogsAuditScreenEvent {
+    data object Refresh : LogsAuditScreenEvent
+
     data class SelectRecord(
         val rowId: String,
     ) : LogsAuditScreenEvent

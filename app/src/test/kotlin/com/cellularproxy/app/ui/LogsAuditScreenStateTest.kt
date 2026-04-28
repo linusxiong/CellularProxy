@@ -478,6 +478,52 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `controller refresh rebuilds rows and redaction secrets without emitting effects`() {
+        var rows =
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "initial",
+                    category = LogsAuditScreenCategory.AppRuntime,
+                    severity = LogsAuditScreenSeverity.Info,
+                    occurredAtEpochMillis = 100,
+                    title = "Runtime started",
+                    detail = "No issue",
+                ),
+            )
+        var secrets = LogRedactionSecrets()
+        val controller =
+            LogsAuditScreenController(
+                rowsProvider = { rows },
+                secretsProvider = { secrets },
+            )
+
+        rows =
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "new-secret",
+                    category = LogsAuditScreenCategory.CloudflareTunnel,
+                    severity = LogsAuditScreenSeverity.Failed,
+                    occurredAtEpochMillis = 200,
+                    title = "Tunnel failed for new-token",
+                    detail = "Authorization: Bearer new-token",
+                ),
+            )
+        secrets = LogRedactionSecrets(cloudflareTunnelToken = "new-token")
+        controller.handle(LogsAuditScreenEvent.Refresh)
+
+        assertEquals(listOf("new-secret"), controller.state.rows.map(LogsAuditScreenRow::id))
+        assertEquals(
+            "Tunnel failed for [REDACTED]",
+            controller
+                .state
+                .rows
+                .single()
+                .title,
+        )
+        assertTrue(controller.consumeEffects().isEmpty())
+    }
+
+    @Test
     fun `selected record copy payload is derived from redacted selected row`() {
         val state =
             LogsAuditScreenState.from(
