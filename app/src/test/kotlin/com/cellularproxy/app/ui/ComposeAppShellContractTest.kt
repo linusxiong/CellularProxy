@@ -458,6 +458,10 @@ class ComposeAppShellContractTest {
             "Dashboard risk-details action must navigate to a concrete detail surface instead of doing nothing.",
         )
         assertTrue(
+            shellSource.contains("onOpenSettings = { navController.navigate(Settings.route) }"),
+            "Dashboard settings action must navigate to the Settings screen.",
+        )
+        assertTrue(
             shellSource.contains("onOpenCloudflare = { navController.navigate(Cloudflare.route) }"),
             "Dashboard cloudflare action must navigate to the Cloudflare screen.",
         )
@@ -653,6 +657,7 @@ class ComposeAppShellContractTest {
                 DashboardScreenAction.RefreshStatus,
                 DashboardScreenAction.CopyProxyEndpoint,
                 DashboardScreenAction.OpenRiskDetails,
+                DashboardScreenAction.OpenSettings,
                 DashboardScreenAction.OpenCloudflare,
                 DashboardScreenAction.OpenRotation,
                 DashboardScreenAction.OpenLogs,
@@ -667,6 +672,7 @@ class ComposeAppShellContractTest {
                 DashboardScreenAction.RefreshStatus,
                 DashboardScreenAction.CopyProxyEndpoint,
                 DashboardScreenAction.OpenRiskDetails,
+                DashboardScreenAction.OpenSettings,
                 DashboardScreenAction.OpenCloudflare,
                 DashboardScreenAction.OpenRotation,
                 DashboardScreenAction.OpenLogs,
@@ -684,6 +690,7 @@ class ComposeAppShellContractTest {
         assertFalse(DashboardScreenAction.RefreshStatus.requiresConfirmation)
         assertFalse(DashboardScreenAction.CopyProxyEndpoint.requiresConfirmation)
         assertFalse(DashboardScreenAction.OpenRiskDetails.requiresConfirmation)
+        assertFalse(DashboardScreenAction.OpenSettings.requiresConfirmation)
         assertFalse(DashboardScreenAction.OpenCloudflare.requiresConfirmation)
         assertFalse(DashboardScreenAction.OpenRotation.requiresConfirmation)
         assertFalse(DashboardScreenAction.OpenLogs.requiresConfirmation)

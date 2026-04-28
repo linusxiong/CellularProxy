@@ -827,6 +827,7 @@ internal fun CellularProxyNavigationHost(
                 onRestartProxyService = onRestartProxyService,
                 onRefreshStatus = onRefreshProxyStatus,
                 onOpenRiskDetails = { navController.navigate(LogsAudit.route) },
+                onOpenSettings = { navController.navigate(Settings.route) },
                 onOpenCloudflare = { navController.navigate(Cloudflare.route) },
                 onOpenRotation = { navController.navigate(Rotation.route) },
                 onOpenLogs = { navController.navigate(LogsAudit.route) },

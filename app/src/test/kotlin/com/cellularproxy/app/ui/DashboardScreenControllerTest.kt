@@ -280,6 +280,34 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `dashboard exposes broad unauthenticated proxy risk as settings action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        AppConfig.default().copy(
+                            proxy =
+                                AppConfig.default().proxy.copy(
+                                    authEnabled = false,
+                                    listenHost = "0.0.0.0",
+                                ),
+                        ),
+                    status = ProxyServiceStatus.stopped(),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Broad unauthenticated proxy listener",
+                    action = DashboardScreenAction.OpenSettings,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
     fun `dashboard exposes Cloudflare invalid token risk as action item`() {
         val defaultConfig = AppConfig.default()
         val state =

@@ -52,6 +52,7 @@ internal fun CellularProxyDashboardRoute(
     onRestartProxyService: () -> Unit = {},
     onRefreshStatus: () -> Unit = {},
     onOpenRiskDetails: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onOpenCloudflare: () -> Unit = {},
     onOpenRotation: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
@@ -66,6 +67,7 @@ internal fun CellularProxyDashboardRoute(
     val currentOnRestartProxyService by rememberUpdatedState(onRestartProxyService)
     val currentOnRefreshStatus by rememberUpdatedState(onRefreshStatus)
     val currentOnOpenRiskDetails by rememberUpdatedState(onOpenRiskDetails)
+    val currentOnOpenSettings by rememberUpdatedState(onOpenSettings)
     val currentOnOpenCloudflare by rememberUpdatedState(onOpenCloudflare)
     val currentOnOpenRotation by rememberUpdatedState(onOpenRotation)
     val currentOnOpenLogs by rememberUpdatedState(onOpenLogs)
@@ -84,6 +86,7 @@ internal fun CellularProxyDashboardRoute(
                         DashboardScreenAction.RestartProxy -> currentOnRestartProxyService()
                         DashboardScreenAction.RefreshStatus -> currentOnRefreshStatus()
                         DashboardScreenAction.OpenRiskDetails -> currentOnOpenRiskDetails()
+                        DashboardScreenAction.OpenSettings -> currentOnOpenSettings()
                         DashboardScreenAction.OpenCloudflare -> currentOnOpenCloudflare()
                         DashboardScreenAction.OpenRotation -> currentOnOpenRotation()
                         DashboardScreenAction.OpenLogs -> currentOnOpenLogs()
@@ -118,6 +121,7 @@ internal fun CellularProxyDashboardRoute(
         onRefreshStatus = { dispatchEvent(DashboardScreenEvent.RefreshStatus) },
         onCopyProxyEndpoint = { dispatchEvent(DashboardScreenEvent.CopyProxyEndpoint) },
         onOpenRiskDetails = { dispatchEvent(DashboardScreenEvent.OpenRiskDetails) },
+        onOpenSettings = { dispatchEvent(DashboardScreenEvent.OpenSettings) },
         onOpenCloudflare = { dispatchEvent(DashboardScreenEvent.OpenCloudflare) },
         onOpenRotation = { dispatchEvent(DashboardScreenEvent.OpenRotation) },
         onOpenLogs = { dispatchEvent(DashboardScreenEvent.OpenLogs) },
@@ -141,6 +145,7 @@ internal fun CellularProxyDashboardScreen(
     onRefreshStatus: () -> Unit = {},
     onCopyProxyEndpoint: () -> Unit = {},
     onOpenRiskDetails: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onOpenCloudflare: () -> Unit = {},
     onOpenRotation: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
@@ -158,6 +163,7 @@ internal fun CellularProxyDashboardScreen(
             DashboardScreenAction.RefreshStatus -> onRefreshStatus()
             DashboardScreenAction.CopyProxyEndpoint -> onCopyProxyEndpoint()
             DashboardScreenAction.OpenRiskDetails -> onOpenRiskDetails()
+            DashboardScreenAction.OpenSettings -> onOpenSettings()
             DashboardScreenAction.OpenCloudflare -> onOpenCloudflare()
             DashboardScreenAction.OpenRotation -> onOpenRotation()
             DashboardScreenAction.OpenLogs -> onOpenLogs()
@@ -351,6 +357,7 @@ internal enum class DashboardScreenAction(
     RefreshStatus,
     CopyProxyEndpoint,
     OpenRiskDetails,
+    OpenSettings,
     OpenCloudflare,
     OpenRotation,
     OpenLogs,
@@ -402,6 +409,7 @@ internal class DashboardScreenController(
             DashboardScreenEvent.RestartProxy -> dispatchAction(DashboardScreenAction.RestartProxy)
             DashboardScreenEvent.RefreshStatus -> dispatchAction(DashboardScreenAction.RefreshStatus)
             DashboardScreenEvent.OpenRiskDetails -> dispatchAction(DashboardScreenAction.OpenRiskDetails)
+            DashboardScreenEvent.OpenSettings -> dispatchAction(DashboardScreenAction.OpenSettings)
             DashboardScreenEvent.OpenCloudflare -> dispatchAction(DashboardScreenAction.OpenCloudflare)
             DashboardScreenEvent.OpenRotation -> dispatchAction(DashboardScreenAction.OpenRotation)
             DashboardScreenEvent.OpenLogs -> dispatchAction(DashboardScreenAction.OpenLogs)
@@ -496,6 +504,8 @@ internal sealed interface DashboardScreenEvent {
 
     data object OpenRiskDetails : DashboardScreenEvent
 
+    data object OpenSettings : DashboardScreenEvent
+
     data object OpenCloudflare : DashboardScreenEvent
 
     data object OpenRotation : DashboardScreenEvent
@@ -538,6 +548,7 @@ private val DashboardScreenAction.auditName: String
             DashboardScreenAction.RefreshStatus -> "refresh_status"
             DashboardScreenAction.CopyProxyEndpoint -> "copy_proxy_endpoint"
             DashboardScreenAction.OpenRiskDetails -> "open_risk_details"
+            DashboardScreenAction.OpenSettings -> "open_settings"
             DashboardScreenAction.OpenCloudflare -> "open_cloudflare"
             DashboardScreenAction.OpenRotation -> "open_rotation"
             DashboardScreenAction.OpenLogs -> "open_logs"
@@ -572,6 +583,7 @@ private val DashboardScreenAction.operationLabel: String
             DashboardScreenAction.RefreshStatus -> "Refresh status"
             DashboardScreenAction.CopyProxyEndpoint -> "Copy proxy endpoint"
             DashboardScreenAction.OpenRiskDetails -> "Open risk details"
+            DashboardScreenAction.OpenSettings -> "Open settings"
             DashboardScreenAction.OpenCloudflare -> "Open Cloudflare"
             DashboardScreenAction.OpenRotation -> "Open rotation"
             DashboardScreenAction.OpenLogs -> "Open logs"
@@ -671,6 +683,20 @@ private fun DashboardActionRow(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Open risk details")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.OpenSettings)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.OpenSettings,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open settings")
         }
         OutlinedButton(
             onClick = {
@@ -826,6 +852,11 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
 }
 
 private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (this) {
+    DashboardWarning.BroadUnauthenticatedProxy ->
+        DashboardRiskItem(
+            label = toDashboardText(),
+            action = DashboardScreenAction.OpenSettings,
+        )
     DashboardWarning.CloudflareTokenMissing,
     DashboardWarning.CloudflareTokenInvalid,
     DashboardWarning.CloudflareManagementApiCheckFailing,
@@ -872,6 +903,7 @@ private fun DashboardStatusModel.availableActions(): List<DashboardScreenAction>
     add(DashboardScreenAction.RefreshStatus)
     add(DashboardScreenAction.CopyProxyEndpoint)
     add(DashboardScreenAction.OpenRiskDetails)
+    add(DashboardScreenAction.OpenSettings)
     add(DashboardScreenAction.OpenCloudflare)
     add(DashboardScreenAction.OpenRotation)
     add(DashboardScreenAction.OpenLogs)
