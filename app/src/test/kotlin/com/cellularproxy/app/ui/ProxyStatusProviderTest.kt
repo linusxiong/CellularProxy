@@ -93,6 +93,33 @@ class ProxyStatusProviderTest {
             "Management API actions must refresh cached proxy status after dispatch so provider-backed screens do not stay on the first snapshot.",
         )
     }
+
+    @Test
+    fun `dashboard refresh status action refreshes cached live proxy status`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+        val dashboardSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDashboardScreen.kt")
+                .readText()
+
+        assertTrue(
+            dashboardSource.contains("onRefreshStatus: () -> Unit = {}"),
+            "Dashboard route must expose an explicit refresh callback for its visible Refresh status action.",
+        )
+        assertTrue(
+            dashboardSource.contains("DashboardScreenAction.RefreshStatus -> currentOnRefreshStatus()"),
+            "Dashboard RefreshStatus must invoke the injected refresh callback instead of falling through to a no-op.",
+        )
+        assertTrue(
+            shellSource.contains("onRefreshStatus = onRefreshProxyStatus") &&
+                Regex("""onRefreshProxyStatus = \{\s+coroutineScope\.launch \{ refreshProxyStatus\(\) }\s+},""")
+                    .containsMatchIn(shellSource),
+            "The launched Dashboard Refresh status action must refresh the cached live Management API status.",
+        )
+    }
 }
 
 private fun config(): AppConfig = AppConfig(

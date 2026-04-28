@@ -44,6 +44,7 @@ internal fun CellularProxyDashboardRoute(
     },
     onStartProxyService: () -> Unit = {},
     onStopProxyService: () -> Unit = {},
+    onRefreshStatus: () -> Unit = {},
     onOpenRiskDetails: () -> Unit = {},
     onOpenCloudflare: () -> Unit = {},
     onOpenRotation: () -> Unit = {},
@@ -54,6 +55,7 @@ internal fun CellularProxyDashboardRoute(
     val currentStatusProvider by rememberUpdatedState(statusProvider)
     val currentOnStartProxyService by rememberUpdatedState(onStartProxyService)
     val currentOnStopProxyService by rememberUpdatedState(onStopProxyService)
+    val currentOnRefreshStatus by rememberUpdatedState(onRefreshStatus)
     val currentOnOpenRiskDetails by rememberUpdatedState(onOpenRiskDetails)
     val currentOnOpenCloudflare by rememberUpdatedState(onOpenCloudflare)
     val currentOnOpenRotation by rememberUpdatedState(onOpenRotation)
@@ -67,6 +69,7 @@ internal fun CellularProxyDashboardRoute(
                     when (action) {
                         DashboardScreenAction.StartProxy -> currentOnStartProxyService()
                         DashboardScreenAction.StopProxy -> currentOnStopProxyService()
+                        DashboardScreenAction.RefreshStatus -> currentOnRefreshStatus()
                         DashboardScreenAction.OpenRiskDetails -> currentOnOpenRiskDetails()
                         DashboardScreenAction.OpenCloudflare -> currentOnOpenCloudflare()
                         DashboardScreenAction.OpenRotation -> currentOnOpenRotation()

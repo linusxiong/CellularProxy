@@ -219,6 +219,9 @@ fun CellularProxyApp() {
                             logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                             proxyStatusProvider = loadProxyStatus,
                             observedNetworksProvider = loadObservedNetworks,
+                            onRefreshProxyStatus = {
+                                coroutineScope.launch { refreshProxyStatus() }
+                            },
                             dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                             onCopyText = { endpointText ->
                                 clipboard.setText(AnnotatedString(endpointText))
@@ -246,6 +249,9 @@ fun CellularProxyApp() {
                         logsAuditRedactionSecretsProvider = loadLogsAuditRedactionSecrets,
                         proxyStatusProvider = loadProxyStatus,
                         observedNetworksProvider = loadObservedNetworks,
+                        onRefreshProxyStatus = {
+                            coroutineScope.launch { refreshProxyStatus() }
+                        },
                         dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
                         onCopyText = { endpointText ->
                             clipboard.setText(AnnotatedString(endpointText))
@@ -366,6 +372,7 @@ private fun CellularProxyNavigationHost(
     logsAuditRedactionSecretsProvider: () -> LogRedactionSecrets,
     proxyStatusProvider: () -> ProxyServiceStatus,
     observedNetworksProvider: () -> List<NetworkDescriptor>,
+    onRefreshProxyStatus: () -> Unit,
     dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
@@ -390,6 +397,7 @@ private fun CellularProxyNavigationHost(
                 },
                 onStartProxyService = onStartProxyService,
                 onStopProxyService = onStopProxyService,
+                onRefreshStatus = onRefreshProxyStatus,
                 onOpenRiskDetails = { navController.navigate(LogsAudit.route) },
                 onOpenCloudflare = { navController.navigate(Cloudflare.route) },
                 onOpenRotation = { navController.navigate(Rotation.route) },
