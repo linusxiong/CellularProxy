@@ -2,6 +2,7 @@ package com.cellularproxy.app.e2e
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class CloudflareE2eValidationControllerTest {
@@ -128,5 +129,23 @@ class CloudflareE2eValidationControllerTest {
         assertFalse(evidence.safeSummary.contains("management-secret"))
         assertFalse(evidence.safeSummary.contains("Authorization"))
         assertFalse(evidence.safeSummary.contains("real-token-value"))
+    }
+
+    @Test
+    fun `validation attempt results reject invalid http status values`() {
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareE2eValidationAttemptResult.Success(
+                edgeSessionCategory = CloudflareE2eEdgeSessionCategory.Connected,
+                httpStatusCode = 99,
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareE2eValidationAttemptResult.Failure(
+                edgeSessionCategory = CloudflareE2eEdgeSessionCategory.EdgeUnavailable,
+                httpStatusCode = 600,
+                errorClass = CloudflareE2eErrorClass.Unavailable,
+            )
+        }
     }
 }

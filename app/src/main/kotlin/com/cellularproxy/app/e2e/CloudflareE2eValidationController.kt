@@ -39,13 +39,27 @@ sealed interface CloudflareE2eValidationAttemptResult {
     data class Success(
         override val edgeSessionCategory: CloudflareE2eEdgeSessionCategory?,
         override val httpStatusCode: Int?,
-    ) : CloudflareE2eValidationAttemptResult
+    ) : CloudflareE2eValidationAttemptResult {
+        init {
+            requireValidHttpStatus(httpStatusCode)
+        }
+    }
 
     data class Failure(
         override val edgeSessionCategory: CloudflareE2eEdgeSessionCategory?,
         override val httpStatusCode: Int?,
         val errorClass: CloudflareE2eErrorClass,
-    ) : CloudflareE2eValidationAttemptResult
+    ) : CloudflareE2eValidationAttemptResult {
+        init {
+            requireValidHttpStatus(httpStatusCode)
+        }
+    }
+}
+
+private fun requireValidHttpStatus(httpStatusCode: Int?) {
+    require(httpStatusCode == null || httpStatusCode in 100..599) {
+        "httpStatusCode must be a valid HTTP status code"
+    }
 }
 
 private fun CloudflareE2eValidationAttemptResult.toEvidence(durationMillis: Long): CloudflareE2eValidationEvidence = when (this) {
