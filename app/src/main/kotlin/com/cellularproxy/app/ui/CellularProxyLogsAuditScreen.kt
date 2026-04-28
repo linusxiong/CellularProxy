@@ -59,6 +59,7 @@ internal fun CellularProxyLogsAuditRoute(
                 secretsProvider = { currentRedactionSecretsProvider() },
                 exportSupported = true,
                 exportGeneratedAtEpochMillisProvider = System::currentTimeMillis,
+                maxRows = LOGS_AUDIT_VISIBLE_ROW_LIMIT,
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
@@ -88,6 +89,8 @@ internal fun CellularProxyLogsAuditRoute(
         onExportRedactedBundle = { dispatchEvent(LogsAuditScreenEvent.ExportRedactedBundle) },
     )
 }
+
+private const val LOGS_AUDIT_VISIBLE_ROW_LIMIT = 200
 
 @Composable
 internal fun CellularProxyLogsAuditScreen(

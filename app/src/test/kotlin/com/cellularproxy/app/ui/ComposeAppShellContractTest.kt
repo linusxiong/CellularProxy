@@ -2578,6 +2578,23 @@ class ComposeAppShellContractTest {
         )
     }
 
+    @Test
+    fun `logs audit route applies a bounded recent row limit`() {
+        val logsAuditSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyLogsAuditScreen.kt")
+                .readText()
+
+        assertTrue(
+            logsAuditSource.contains("LOGS_AUDIT_VISIBLE_ROW_LIMIT"),
+            "Logs/Audit route must define a visible-row limit for recent records.",
+        )
+        assertTrue(
+            logsAuditSource.contains("maxRows = LOGS_AUDIT_VISIBLE_ROW_LIMIT"),
+            "Logs/Audit route must pass the visible-row limit into the controller.",
+        )
+    }
+
     private fun repoRoot() = Path(requireNotNull(System.getProperty("user.dir"))).let { workingDirectory ->
         if (workingDirectory.resolve("settings.gradle.kts").toFile().exists()) {
             workingDirectory
