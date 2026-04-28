@@ -586,7 +586,7 @@ private val JsonElement.isJsonNull: Boolean
     get() = this is JsonNull
 
 @Composable
-private fun CellularProxyNavigationBar(navController: NavHostController) {
+internal fun CellularProxyNavigationBar(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
@@ -615,7 +615,7 @@ private fun CellularProxyNavigationBar(navController: NavHostController) {
 }
 
 @Composable
-private fun CellularProxyNavigationRail(navController: NavHostController) {
+internal fun CellularProxyNavigationRail(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
@@ -644,7 +644,7 @@ private fun CellularProxyNavigationRail(navController: NavHostController) {
 }
 
 @Composable
-private fun CellularProxyNavigationHost(
+internal fun CellularProxyNavigationHost(
     navController: NavHostController,
     onStartProxyService: () -> Unit,
     onStopProxyService: () -> Unit,
