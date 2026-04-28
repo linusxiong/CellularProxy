@@ -860,6 +860,8 @@ private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (t
     DashboardWarning.CloudflareTokenMissing,
     DashboardWarning.CloudflareTokenInvalid,
     DashboardWarning.CloudflareManagementApiCheckFailing,
+    DashboardWarning.CloudflareFailed,
+    DashboardWarning.CloudflareDegraded,
     ->
         DashboardRiskItem(
             label = toDashboardText(),

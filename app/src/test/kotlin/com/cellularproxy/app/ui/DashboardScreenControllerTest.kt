@@ -418,6 +418,38 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `dashboard exposes failed and degraded Cloudflare tunnel risks as Cloudflare action items`() {
+        val cases =
+            listOf(
+                CloudflareTunnelStatus.failed("edge connection failed") to
+                    DashboardRiskItem(
+                        label = "Cloudflare tunnel failed",
+                        action = DashboardScreenAction.OpenCloudflare,
+                    ),
+                CloudflareTunnelStatus.degraded() to
+                    DashboardRiskItem(
+                        label = "Cloudflare tunnel is degraded",
+                        action = DashboardScreenAction.OpenCloudflare,
+                    ),
+            )
+
+        cases.forEach { (cloudflareStatus, expectedRiskItem) ->
+            val state =
+                DashboardScreenState.from(
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status =
+                            ProxyServiceStatus.stopped(
+                                cloudflare = cloudflareStatus,
+                            ),
+                    ),
+                )
+
+            assertEquals(listOf(expectedRiskItem), state.riskItems)
+        }
+    }
+
+    @Test
     fun `dashboard exposes invalid sensitive configuration risk as risk details action item`() {
         val state =
             DashboardScreenState.from(
