@@ -4,6 +4,8 @@ import com.cellularproxy.app.audit.ManagementApiAuditRecord
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.network.BoundNetworkSocketConnector
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
@@ -43,6 +45,7 @@ object ProxyServerForegroundRuntimeInstaller {
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
@@ -79,6 +82,7 @@ object ProxyServerForegroundRuntimeInstaller {
                     cloudflareReconnect = cloudflareReconnect,
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
+                    serviceRestart = serviceRestart,
                     rootOperationsEnabled = rootOperationsEnabled,
                     rootAvailability = rootAvailability,
                     runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
@@ -105,6 +109,10 @@ object ProxyServerForegroundRuntimeInstaller {
 private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
     disposition = CloudflareTunnelTransitionDisposition.Ignored,
     status = CloudflareTunnelStatus.disabled(),
+)
+
+private fun unavailableServiceRestart(): ManagementApiServiceRestartResult = ManagementApiServiceRestartResult.rejected(
+    ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
 )
 
 private const val INSTALLER_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L

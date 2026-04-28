@@ -9,6 +9,8 @@ import com.cellularproxy.network.RouteBoundSocketProvider
 import com.cellularproxy.proxy.management.ManagementApiHandler
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.proxy.management.ManagementApiStateHandler
 import com.cellularproxy.proxy.management.ManagementApiStreamAuditEvent
 import com.cellularproxy.proxy.management.ManagementApiStreamAuditOutcome
@@ -94,6 +96,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
         rootAvailability: () -> RootAvailabilityStatus,
         runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
@@ -125,6 +128,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareReconnect = cloudflareReconnect,
         rotateMobileData = rotateMobileData,
         rotateAirplaneMode = rotateAirplaneMode,
+        serviceRestart = serviceRestart,
         rootOperationsEnabled = rootOperationsEnabled,
         rootAvailability = rootAvailability,
         runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
@@ -153,6 +157,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
         rootAvailability: () -> RootAvailabilityStatus,
         runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
@@ -185,6 +190,16 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             var runtimeRotationRequestHandler: RuntimeRotationRequestHandler? = null
             try {
                 runtimeRotationRequestHandler = runtimeRotationRequestHandlerFactory(runtime)
+                var currentRotationStatus = RotationStatus.idle()
+                val publishNotificationStatus = {
+                    onRuntimeStatusAvailable.bestEffortPublish(
+                        NotificationRuntimeStatus(
+                            config = plainConfig,
+                            status = runtime.status,
+                            rotationStatus = currentRotationStatus,
+                        ),
+                    )
+                }
                 val rotateMobileDataRequest =
                     runtimeRotationRequestHandler?.let { it::rotateMobileData } ?: rotateMobileData
                 val rotateAirplaneModeRequest =
@@ -199,6 +214,20 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                         rootOperationsEnabled = rootOperationsEnabled,
                         operation = RotationOperation.AirplaneMode,
                     )
+                val publishableRotateMobileData = {
+                    rotateMobileDataIfRootEnabled()
+                        .also { result ->
+                            currentRotationStatus = result.status
+                            publishNotificationStatus()
+                        }
+                }
+                val publishableRotateAirplaneMode = {
+                    rotateAirplaneModeIfRootEnabled()
+                        .also { result ->
+                            currentRotationStatus = result.status
+                            publishNotificationStatus()
+                        }
+                }
                 val stateHandler =
                     ManagementApiStateHandler(
                         callbacks =
@@ -213,8 +242,10 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                                 cloudflareReconnect = cloudflareReconnect,
                                 rootOperationsEnabled = rootOperationsEnabled,
                                 rootAvailability = rootAvailability,
-                                rotateMobileData = rotateMobileDataIfRootEnabled,
-                                rotateAirplaneMode = rotateAirplaneModeIfRootEnabled,
+                                rotateMobileData = publishableRotateMobileData,
+                                rotateAirplaneMode = publishableRotateAirplaneMode,
+                                serviceRestart = serviceRestart,
+                                rotationStatus = { currentRotationStatus },
                             ),
                         secrets = sensitiveConfig.logRedactionSecrets(),
                     )
@@ -425,6 +456,10 @@ private fun rootOperationsDisabledRotationTransition(operation: RotationOperatio
             operation = operation,
             failureReason = RotationFailureReason.RootOperationsDisabled,
         ),
+)
+
+private fun unavailableServiceRestart(): ManagementApiServiceRestartResult = ManagementApiServiceRestartResult.rejected(
+    ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
 )
 
 private class CloseableManagementApiHandler(

@@ -14,6 +14,10 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -215,6 +219,56 @@ class DashboardStatusModelTest {
     }
 
     @Test
+    fun `model exposes Cloudflare management api check independently from tunnel availability`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.connected(),
+                    ),
+                latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+            )
+
+        assertEquals(DashboardCloudflareManagementApiCheck.Failed, model.cloudflareManagementApiCheck)
+        assertTrue(model.cloudflare.remoteManagementAvailable)
+    }
+
+    @Test
+    fun `model exposes local management api status independently from Cloudflare remote management`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8181,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = null,
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                        cloudflare = CloudflareTunnelStatus.stopped(),
+                    ),
+                managementApiTokenPresent = true,
+            )
+
+        assertEquals(DashboardManagementApiStatus.Available, model.managementApiStatus)
+        assertFalse(model.cloudflare.remoteManagementAvailable)
+    }
+
+    @Test
+    fun `model exposes local management api missing token status`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                managementApiTokenPresent = false,
+            )
+
+        assertEquals(DashboardManagementApiStatus.MissingToken, model.managementApiStatus)
+    }
+
+    @Test
     fun `model warns specifically when proxy port is already in use at startup`() {
         val model =
             DashboardStatusModel.from(
@@ -402,6 +456,90 @@ class DashboardStatusModelTest {
             )
 
         assertEquals(setOf(DashboardWarning.SensitiveConfigurationInvalid), model.warnings)
+    }
+
+    @Test
+    fun `model warns specifically when enabled Cloudflare has an invalid tunnel token`() {
+        val model =
+            DashboardStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = true,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+            )
+
+        assertEquals(
+            setOf(
+                DashboardWarning.CloudflareTokenInvalid,
+                DashboardWarning.SensitiveConfigurationInvalid,
+            ),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns when rotation is blocked by cooldown`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationCooldownRemainingSeconds = 12,
+            )
+
+        assertEquals(setOf(DashboardWarning.RotationCooldownActive), model.warnings)
+    }
+
+    @Test
+    fun `model warns when last rotation action was rejected by cooldown`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.MobileData,
+                        failureReason = RotationFailureReason.CooldownActive,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.RotationCooldownActive), model.warnings)
+    }
+
+    @Test
+    fun `model warns when rotation is already active`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.RotationInProgress), model.warnings)
+    }
+
+    @Test
+    fun `model ignores inactive rotation cooldown values`() {
+        listOf(null, 0L, -1L).forEach { cooldownRemainingSeconds ->
+            val model =
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    rotationCooldownRemainingSeconds = cooldownRemainingSeconds,
+                )
+
+            assertEquals(emptySet(), model.warnings, "cooldownRemainingSeconds=$cooldownRemainingSeconds")
+        }
     }
 
     @Test

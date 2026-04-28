@@ -61,6 +61,42 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `controller dispatches service restart only while proxy is running`() {
+        val actions = mutableListOf<DashboardScreenAction>()
+        var proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(DashboardScreenEvent.RestartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.RestartProxy), actions)
+        assertFalse(DashboardScreenAction.RestartProxy in controller.state.availableActions)
+
+        proxyStatus = ProxyServiceStatus.stopped()
+        controller.handle(DashboardScreenEvent.Refresh)
+        controller.handle(DashboardScreenEvent.RestartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.RestartProxy), actions)
+        assertFalse(DashboardScreenAction.RestartProxy in controller.state.availableActions)
+    }
+
+    @Test
     fun `controller suppresses duplicate service lifecycle actions until provider state changes`() {
         val actions = mutableListOf<DashboardScreenAction>()
         var proxyStatus = ProxyServiceStatus.stopped()
@@ -99,6 +135,39 @@ class DashboardScreenControllerTest {
             ),
             actions,
         )
+    }
+
+    @Test
+    fun `controller exposes pending service lifecycle action until provider state changes`() {
+        var proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+            )
+
+        assertEquals("None", controller.state.pendingOperation)
+
+        controller.handle(DashboardScreenEvent.RestartProxy)
+
+        assertEquals("In progress: Restart proxy service", controller.state.pendingOperation)
+
+        proxyStatus = ProxyServiceStatus(ProxyServiceState.Starting)
+        controller.handle(DashboardScreenEvent.Refresh)
+
+        assertEquals("None", controller.state.pendingOperation)
     }
 
     @Test

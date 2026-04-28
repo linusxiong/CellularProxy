@@ -19,6 +19,7 @@ import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.root.RootCommandAuditPhase
 import com.cellularproxy.shared.root.RootCommandAuditRecord
 import com.cellularproxy.shared.root.RootCommandCategory
+import com.cellularproxy.shared.root.RootCommandOutcome
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
@@ -27,6 +28,7 @@ import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -330,6 +332,74 @@ class CellularProxyRuntimeCompositionInstallerTest {
     }
 
     @Test
+    fun `default production service restart action schedules root restart command after accepting response`() {
+        val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val auditRecords = mutableListOf<RootCommandAuditRecord>()
+        val restartAuditCompleted = CountDownLatch(1)
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+                rootOperationsEnabled = { true },
+                rootCommandProcessExecutor = { _, _ ->
+                    com.cellularproxy.root.RootCommandProcessResult.Completed(
+                        exitCode = 0,
+                        stdout = "restarted",
+                        stderr = "",
+                    )
+                },
+                recordRootAudit = { auditRecord ->
+                    auditRecords += auditRecord
+                    if (auditRecord.phase == RootCommandAuditPhase.Completed) {
+                        restartAuditCompleted.countDown()
+                    }
+                },
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
+
+        try {
+            val installed =
+                assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(
+                    installation.installResult,
+                )
+            ForegroundProxyRuntimeLifecycleRegistry.foregroundProxyRuntimeLifecycle.startProxyRuntime()
+
+            val response = installed.managementHandlerReference.handle(ManagementApiOperation.ServiceRestart)
+
+            assertEquals(202, response.statusCode)
+            assertEquals("""{"accepted":true,"restart":{"packageName":"com.cellularproxy","failureReason":null}}""", response.body)
+            assertEquals(emptyList(), auditRecords)
+            response.notifyResponseSent()
+            assertTrue(restartAuditCompleted.await(1, TimeUnit.SECONDS))
+            assertEquals(
+                listOf(RootCommandAuditPhase.Started, RootCommandAuditPhase.Completed),
+                auditRecords.map { it.phase },
+            )
+            assertEquals(
+                listOf(RootCommandCategory.ServiceRestart, RootCommandCategory.ServiceRestart),
+                auditRecords.map { it.category },
+            )
+            assertEquals(RootCommandOutcome.Success, auditRecords.last().outcome)
+        } finally {
+            installation.close()
+            assertTerminates(executors.workerExecutor)
+            assertTerminates(executors.queuedClientTimeoutExecutor)
+            assertTerminates(executors.acceptLoopExecutor)
+        }
+    }
+
+    @Test
     fun `production cloudflare runtime shares control plane and edge session registry`() {
         var closedConnections = 0
         val runtime =
@@ -365,6 +435,43 @@ class CellularProxyRuntimeCompositionInstallerTest {
         assertEquals(CloudflareTunnelState.Stopped, runtime.status().state)
         assertEquals(null, runtime.edgeSessionSummary())
         assertEquals(1, closedConnections)
+    }
+
+    @Test
+    fun `production cloudflare runtime reconnect replaces connected edge session`() {
+        val closedConnections = mutableListOf<String>()
+        var connectionIndex = 0
+        val runtime =
+            createProductionCloudflareTunnelRuntime(
+                plainConfig =
+                    readyBootstrap().plainConfig.copy(
+                        cloudflare = AppConfig.default().cloudflare.copy(enabled = true),
+                    ),
+                sensitiveConfig =
+                    readyBootstrap().sensitiveConfig.copy(
+                        cloudflareTunnelToken = validCloudflareTunnelToken(),
+                    ),
+                edgeConnector =
+                    CloudflareTunnelEdgeConnector {
+                        connectionIndex += 1
+                        val connectionId = "connection-$connectionIndex"
+                        CloudflareTunnelEdgeConnectionResult.Connected(
+                            connection = { closedConnections += connectionId },
+                        )
+                    },
+            )
+
+        val start = runtime.start()
+        val reconnect = runtime.reconnect()
+        val stop = runtime.stop()
+
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, start.disposition)
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, reconnect.disposition)
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, stop.disposition)
+        assertEquals(
+            listOf("connection-1", "connection-2"),
+            closedConnections,
+        )
     }
 
     @Test

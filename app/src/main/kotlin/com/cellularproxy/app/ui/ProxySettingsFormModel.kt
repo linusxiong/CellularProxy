@@ -29,6 +29,7 @@ data class ProxySettingsFormState(
     val cloudflareEnabled: Boolean = false,
     val cloudflareTunnelToken: String = "",
     val cloudflareHostnameLabel: String = "",
+    val cloudflareTunnelTokenPresent: Boolean = false,
 ) {
     fun toAppConfig(base: AppConfig): ProxySettingsFormResult = toSettings(
         base = base,
@@ -190,6 +191,7 @@ data class ProxySettingsFormState(
             rootOperationsEnabled = config.root.operationsEnabled,
             cloudflareEnabled = config.cloudflare.enabled,
             cloudflareHostnameLabel = config.cloudflare.managementHostnameLabel.orEmpty(),
+            cloudflareTunnelTokenPresent = config.cloudflare.tunnelTokenPresent,
         )
     }
 }
@@ -199,6 +201,8 @@ data class ProxySettingsScreenState(
     val persistedForm: ProxySettingsFormState,
     val validationErrors: Set<ProxySettingsValidationError>,
     val availableActions: List<ProxySettingsScreenAction>,
+    val cloudflareTokenStatus: ProxySettingsCloudflareTokenStatus,
+    val warnings: Set<ProxySettingsFormWarning>,
 ) {
     companion object {
         fun from(
@@ -220,9 +224,20 @@ data class ProxySettingsScreenState(
                             add(ProxySettingsScreenAction.DiscardChanges)
                         }
                     },
+                cloudflareTokenStatus = form.cloudflareTokenStatus(),
+                warnings = form.warnings(),
             )
         }
     }
+}
+
+enum class ProxySettingsCloudflareTokenStatus(
+    val label: String,
+) {
+    Missing("Missing"),
+    Present("Present"),
+    Edited("Edited"),
+    Invalid("Invalid"),
 }
 
 enum class ProxySettingsScreenAction {
@@ -260,6 +275,35 @@ sealed interface ProxySettingsFormResult {
 
 enum class ProxySettingsFormWarning {
     BroadUnauthenticatedProxy,
+    CloudflareEnabledMissingTunnelToken,
+    CloudflareEnabledInvalidTunnelToken,
+}
+
+private fun ProxySettingsFormState.warnings(): Set<ProxySettingsFormWarning> = buildSet {
+    if (
+        ProxyConfig(
+            listenHost = listenHost.trim(),
+            listenPort =
+                listenPort
+                    .trim()
+                    .toStrictPortOrNull()
+                    ?: INVALID_PORT_SENTINEL,
+            authEnabled = authEnabled,
+            maxConcurrentConnections =
+                maxConcurrentConnections
+                    .trim()
+                    .toStrictPositiveIntOrNull()
+                    ?: INVALID_POSITIVE_INT_SENTINEL,
+        ).hasHighSecurityRisk
+    ) {
+        add(ProxySettingsFormWarning.BroadUnauthenticatedProxy)
+    }
+    if (cloudflareEnabled && !cloudflareTunnelTokenPresent && cloudflareTunnelToken.isEmpty()) {
+        add(ProxySettingsFormWarning.CloudflareEnabledMissingTunnelToken)
+    }
+    if (cloudflareEnabled && cloudflareTunnelToken.isNotEmpty() && cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()) {
+        add(ProxySettingsFormWarning.CloudflareEnabledInvalidTunnelToken)
+    }
 }
 
 private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
@@ -268,6 +312,14 @@ private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
     cloudflareEnabled = editedForm.cloudflareEnabled,
     cloudflareHostnameLabel = editedForm.cloudflareHostnameLabel,
 )
+
+private fun ProxySettingsFormState.cloudflareTokenStatus(): ProxySettingsCloudflareTokenStatus = when {
+    cloudflareTunnelToken.isNotEmpty() && cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit() ->
+        ProxySettingsCloudflareTokenStatus.Invalid
+    cloudflareTunnelToken.isNotEmpty() -> ProxySettingsCloudflareTokenStatus.Edited
+    cloudflareTunnelTokenPresent -> ProxySettingsCloudflareTokenStatus.Present
+    else -> ProxySettingsCloudflareTokenStatus.Missing
+}
 
 private fun ProxySettingsFormState.requiresSensitiveConfig(base: AppConfig): Boolean = proxyUsername.isNotEmpty() ||
     proxyPassword.isNotEmpty() ||
@@ -458,6 +510,30 @@ class ProxySettingsScreenController(
 }
 
 private fun ProxySettingsSaveResult.Invalid.validationErrors(): Set<ProxySettingsValidationError> = buildSet {
+    errors.forEach { error ->
+        when (error) {
+            ConfigValidationError.InvalidListenHost -> add(ProxySettingsValidationError.InvalidListenHost)
+            ConfigValidationError.InvalidListenPort -> add(ProxySettingsValidationError.InvalidListenPort)
+            ConfigValidationError.InvalidMaxConcurrentConnections ->
+                add(ProxySettingsValidationError.InvalidMaxConcurrentConnections)
+            ConfigValidationError.MissingCloudflareTunnelToken -> add(ProxySettingsValidationError.InvalidCloudflareTunnelToken)
+        }
+    }
+    if (invalidProxyCredential) {
+        add(ProxySettingsValidationError.InvalidProxyCredential)
+    }
+    if (invalidManagementApiToken) {
+        add(ProxySettingsValidationError.InvalidManagementApiToken)
+    }
+    if (invalidCloudflareTunnelToken) {
+        add(ProxySettingsValidationError.InvalidCloudflareTunnelToken)
+    }
+    if (invalidMaxConcurrentConnections) {
+        add(ProxySettingsValidationError.InvalidMaxConcurrentConnections)
+    }
+    if (invalidRotationTiming) {
+        add(ProxySettingsValidationError.InvalidRotationTiming)
+    }
     if (invalidSensitiveConfiguration) {
         add(ProxySettingsValidationError.InvalidSensitiveConfiguration)
     }

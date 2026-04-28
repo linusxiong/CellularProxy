@@ -16,6 +16,7 @@ enum class ManagementApiOperation {
     RotateMobileData,
     RotateAirplaneMode,
     ServiceStop,
+    ServiceRestart,
 }
 
 sealed interface ManagementApiRouteDecision {
@@ -104,5 +105,10 @@ private val ENDPOINTS =
             ManagementApiEndpoint(
                 method = HttpMethod.Post,
                 operation = ManagementApiOperation.ServiceStop,
+            ),
+        "/api/service/restart" to
+            ManagementApiEndpoint(
+                method = HttpMethod.Post,
+                operation = ManagementApiOperation.ServiceRestart,
             ),
     )

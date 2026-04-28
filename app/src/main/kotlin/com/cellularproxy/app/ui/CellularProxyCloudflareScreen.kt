@@ -33,6 +33,7 @@ import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
+import java.net.URI
 
 @Composable
 internal fun CellularProxyCloudflareRoute(
@@ -235,6 +236,16 @@ internal fun CellularProxyCloudflareScreen(
             CloudflareField("Management API round trip", state.managementApiRoundTrip)
             CloudflareField("Pending operation", state.pendingOperation)
         }
+
+        CloudflareSection("Warnings") {
+            if (state.warnings.isEmpty()) {
+                CloudflareField("Current warnings", "None")
+            } else {
+                state.warnings.forEach { warning ->
+                    CloudflareField("Current warning", warning.label)
+                }
+            }
+        }
     }
 }
 
@@ -247,6 +258,7 @@ internal data class CloudflareScreenState(
     val edgeSessionSummary: String,
     val managementApiRoundTrip: String,
     val pendingOperation: String,
+    val warnings: Set<CloudflareScreenWarning>,
     val copyableDiagnostics: String,
     val availableActions: List<CloudflareScreenAction>,
 ) {
@@ -267,11 +279,20 @@ internal data class CloudflareScreenState(
             val tunnelEnabled = if (config.cloudflare.enabled) "Enabled" else "Disabled"
             val managementHostname =
                 config.cloudflare.managementHostnameLabel
+                    ?.safeCloudflareManagementHostnameLabel()
                     ?.let { LogRedactor.redact(it, secrets) }
                     ?: "Not configured"
-            val lastConnectionError = tunnelStatus.failureReason?.let { LogRedactor.redact(it, secrets) } ?: "None"
+            val lastConnectionError = tunnelStatus.lastConnectionErrorCategory(secrets)
             val redactedEdgeSessionSummary = edgeSessionSummary?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val redactedManagementApiRoundTrip = managementApiRoundTrip?.let { LogRedactor.redact(it, secrets) } ?: "Not run"
+            val warnings =
+                cloudflareScreenWarnings(
+                    config = config,
+                    tokenStatus = tokenStatus,
+                    tunnelStatus = tunnelStatus,
+                    managementApiRoundTrip = managementApiRoundTrip,
+                )
+            val warningsText = warnings.toWarningsText()
             return CloudflareScreenState(
                 tunnelEnabled = tunnelEnabled,
                 tokenStatus = tokenStatus.label,
@@ -281,6 +302,7 @@ internal data class CloudflareScreenState(
                 edgeSessionSummary = redactedEdgeSessionSummary,
                 managementApiRoundTrip = redactedManagementApiRoundTrip,
                 pendingOperation = "None",
+                warnings = warnings,
                 copyableDiagnostics =
                     listOf(
                         "Tunnel enabled: $tunnelEnabled",
@@ -291,6 +313,7 @@ internal data class CloudflareScreenState(
                         "Edge sessions: $redactedEdgeSessionSummary",
                         "Management API round trip: $redactedManagementApiRoundTrip",
                         "Pending operation: None",
+                        "Warnings: $warningsText",
                     ).joinToString(separator = "\n"),
                 availableActions =
                     cloudflareScreenActions(
@@ -301,6 +324,16 @@ internal data class CloudflareScreenState(
             )
         }
     }
+}
+
+internal enum class CloudflareScreenWarning(
+    val label: String,
+) {
+    TunnelTokenMissing("Cloudflare tunnel token missing"),
+    TunnelTokenInvalid("Cloudflare tunnel token invalid"),
+    TunnelDegraded("Cloudflare tunnel degraded"),
+    ManagementApiRoundTripFailing("Management API round trip failing"),
+    OperationInProgress("Cloudflare operation in progress"),
 }
 
 internal enum class CloudflareScreenAction(
@@ -331,9 +364,10 @@ internal enum class CloudflareTokenStatus(
 }
 
 internal fun cloudflareTokenStatusFrom(rawToken: String?): CloudflareTokenStatus {
-    val token = rawToken?.trim().orEmpty()
+    val token = rawToken.orEmpty()
     return when {
         token.isEmpty() -> CloudflareTokenStatus.Missing
+        token != token.trim() -> CloudflareTokenStatus.Invalid
         CloudflareTunnelToken.parse(token) is CloudflareTunnelTokenParseResult.Valid -> CloudflareTokenStatus.Present
         else -> CloudflareTokenStatus.Invalid
     }
@@ -433,7 +467,9 @@ internal class CloudflareScreenController(
             pendingOperation = pendingOperationLabel(),
             availableActions =
                 currentState.availableActions.filterNot { action ->
-                    action in pendingOperations.keys
+                    action in pendingOperations.keys ||
+                        pendingOperations.keys.any(CloudflareScreenAction::isTunnelLifecycleAction) &&
+                        action.isTunnelLifecycleAction()
                 },
         )
     }
@@ -446,21 +482,31 @@ internal class CloudflareScreenController(
 private fun CloudflareScreenState.withPendingOperation(
     pendingOperation: String,
     availableActions: List<CloudflareScreenAction>,
-): CloudflareScreenState = copy(
-    pendingOperation = pendingOperation,
-    copyableDiagnostics =
-        listOf(
-            "Tunnel enabled: $tunnelEnabled",
-            "Tunnel token: $tokenStatus",
-            "Tunnel lifecycle: $lifecycleState",
-            "Management hostname: $managementHostname",
-            "Last connection error: $lastConnectionError",
-            "Edge sessions: $edgeSessionSummary",
-            "Management API round trip: $managementApiRoundTrip",
-            "Pending operation: $pendingOperation",
-        ).joinToString(separator = "\n"),
-    availableActions = availableActions,
-)
+): CloudflareScreenState {
+    val currentWarnings =
+        if (pendingOperation == "None") {
+            warnings
+        } else {
+            warnings + CloudflareScreenWarning.OperationInProgress
+        }
+    return copy(
+        pendingOperation = pendingOperation,
+        warnings = currentWarnings,
+        copyableDiagnostics =
+            listOf(
+                "Tunnel enabled: $tunnelEnabled",
+                "Tunnel token: $tokenStatus",
+                "Tunnel lifecycle: $lifecycleState",
+                "Management hostname: $managementHostname",
+                "Last connection error: $lastConnectionError",
+                "Edge sessions: $edgeSessionSummary",
+                "Management API round trip: $managementApiRoundTrip",
+                "Pending operation: $pendingOperation",
+                "Warnings: ${currentWarnings.toWarningsText()}",
+            ).joinToString(separator = "\n"),
+        availableActions = availableActions,
+    )
+}
 
 private data class PendingCloudflareOperation(
     val tunnelStatus: CloudflareTunnelStatus,
@@ -525,6 +571,16 @@ private val CloudflareScreenAction.label: String
             CloudflareScreenAction.TestManagementTunnel -> "Test management tunnel"
             CloudflareScreenAction.CopyDiagnostics -> "Copy diagnostics"
         }
+
+private fun CloudflareScreenAction.isTunnelLifecycleAction(): Boolean = when (this) {
+    CloudflareScreenAction.StartTunnel,
+    CloudflareScreenAction.StopTunnel,
+    CloudflareScreenAction.ReconnectTunnel,
+    -> true
+    CloudflareScreenAction.TestManagementTunnel,
+    CloudflareScreenAction.CopyDiagnostics,
+    -> false
+}
 
 @Composable
 private fun CloudflareActionRow(
@@ -634,13 +690,124 @@ private fun cloudflareScreenActions(
             CloudflareTunnelState.Degraded,
             -> actions += CloudflareScreenAction.StopTunnel
         }
-        if (tunnelStatus.state == CloudflareTunnelState.Degraded) {
+        if (
+            tunnelStatus.state == CloudflareTunnelState.Connected ||
+            tunnelStatus.state == CloudflareTunnelState.Degraded
+        ) {
             actions += CloudflareScreenAction.ReconnectTunnel
         }
-        if (tunnelStatus.state == CloudflareTunnelState.Connected) {
+        if (
+            tunnelStatus.state == CloudflareTunnelState.Connected &&
+            config.cloudflare.managementHostnameLabel.isConfiguredManagementHostname()
+        ) {
             actions += CloudflareScreenAction.TestManagementTunnel
         }
     }
     actions += CloudflareScreenAction.CopyDiagnostics
     return actions
+}
+
+private fun String?.isConfiguredManagementHostname(): Boolean = this?.trim()?.isNotEmpty() == true
+
+private fun String.safeCloudflareManagementHostnameLabel(): String {
+    val value = lineSequence().firstOrNull().orEmpty()
+    if ("://" !in value) {
+        return value.safeSchemeLessCloudflareHostnameLabel()
+    }
+    return runCatching {
+        val uri = URI(value)
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host
+        if (scheme == null || host == null) {
+            value.safeUrlLikeCloudflareHostnameLabel()
+        } else {
+            URI(scheme, null, host, uri.port, null, null, null).toString()
+        }
+    }.getOrElse { value.safeUrlLikeCloudflareHostnameLabel() }
+}
+
+private fun String.safeSchemeLessCloudflareHostnameLabel(): String = substringBefore('/')
+    .substringBefore('\\')
+    .substringBefore('?')
+    .substringBefore('#')
+    .substringAfterLast('@')
+
+private fun String.safeUrlLikeCloudflareHostnameLabel(): String {
+    val scheme = substringBefore("://").lowercase()
+    val authority =
+        substringAfter("://")
+            .substringBefore('/')
+            .substringBefore('\\')
+            .substringBefore('?')
+            .substringBefore('#')
+            .substringAfterLast('@')
+    return if (scheme.isBlank()) {
+        authority
+    } else if (authority.isBlank()) {
+        "$scheme://"
+    } else {
+        "$scheme://$authority"
+    }
+}
+
+private fun cloudflareScreenWarnings(
+    config: AppConfig,
+    tokenStatus: CloudflareTokenStatus,
+    tunnelStatus: CloudflareTunnelStatus,
+    managementApiRoundTrip: String?,
+): Set<CloudflareScreenWarning> = buildSet {
+    if (config.cloudflare.enabled && tokenStatus == CloudflareTokenStatus.Missing) {
+        add(CloudflareScreenWarning.TunnelTokenMissing)
+    }
+    if (config.cloudflare.enabled && tokenStatus == CloudflareTokenStatus.Invalid) {
+        add(CloudflareScreenWarning.TunnelTokenInvalid)
+    }
+    if (tunnelStatus.state == CloudflareTunnelState.Degraded) {
+        add(CloudflareScreenWarning.TunnelDegraded)
+    }
+    if (
+        tunnelStatus.state == CloudflareTunnelState.Connected &&
+        managementApiRoundTrip.isFailingManagementApiRoundTrip()
+    ) {
+        add(CloudflareScreenWarning.ManagementApiRoundTripFailing)
+    }
+}
+
+private fun CloudflareTunnelStatus.lastConnectionErrorCategory(secrets: LogRedactionSecrets): String {
+    val reason = failureReason
+    return when {
+        state == CloudflareTunnelState.Failed && reason != null -> reason.safeCloudflareErrorCategory(secrets)
+        else -> "None"
+    }
+}
+
+private fun String.safeCloudflareErrorCategory(secrets: LogRedactionSecrets): String {
+    val redactedCategory =
+        LogRedactor
+            .redact(lineSequence().firstOrNull().orEmpty(), secrets)
+            .substringBefore(':')
+            .trim()
+    return redactedCategory
+        .takeIf { category -> category.isNotBlank() && "[REDACTED]" !in category }
+        ?: "Cloudflare tunnel failed"
+}
+
+private fun String?.isFailingManagementApiRoundTrip(): Boolean {
+    val summary = this?.trim() ?: return false
+    if (summary.startsWith("HTTP ")) {
+        val statusCode =
+            summary
+                .removePrefix("HTTP ")
+                .takeWhile(Char::isDigit)
+                .toIntOrNull()
+                ?: return false
+        return statusCode !in 200..299
+    }
+    return summary.isNotEmpty()
+}
+
+private fun Set<CloudflareScreenWarning>.toWarningsText(): String = if (isEmpty()) {
+    "None"
+} else {
+    joinToString(separator = " | ") { warning -> warning.label }
 }

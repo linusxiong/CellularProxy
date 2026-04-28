@@ -118,6 +118,55 @@ class RotationScreenControllerTest {
     }
 
     @Test
+    fun `controller suppresses duplicate check root and public ip probe actions until provider state changes`() {
+        val actions = mutableListOf<RotationScreenAction>()
+        var rootAvailability = RootAvailabilityStatus.Unknown
+        var currentPublicIp: String? = null
+        val controller =
+            RotationScreenController(
+                configProvider = { rootEnabledConfig() },
+                rotationStatusProvider = { RotationStatus.idle() },
+                rootAvailabilityProvider = { rootAvailability },
+                currentPublicIpProvider = { currentPublicIp },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(RotationScreenEvent.CheckRoot)
+        controller.handle(RotationScreenEvent.CheckRoot)
+        controller.handle(RotationScreenEvent.ProbeCurrentPublicIp)
+        controller.handle(RotationScreenEvent.ProbeCurrentPublicIp)
+
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+            ),
+            actions,
+        )
+        assertFalse(RotationScreenAction.CheckRoot in controller.state.availableActions)
+        assertFalse(RotationScreenAction.ProbeCurrentPublicIp in controller.state.availableActions)
+        assertEquals("In progress: Check root", controller.state.pendingOperation)
+        assertEquals(setOf(RotationScreenWarning.OperationInProgress), controller.state.warnings)
+
+        rootAvailability = RootAvailabilityStatus.Available
+        controller.handle(RotationScreenEvent.Refresh)
+        controller.handle(RotationScreenEvent.CheckRoot)
+        currentPublicIp = "203.0.113.44"
+        controller.handle(RotationScreenEvent.Refresh)
+        controller.handle(RotationScreenEvent.ProbeCurrentPublicIp)
+
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun `controller exposes pending unsafe rotation action as visible state until resolved`() {
         var rotationStatus = RotationStatus.idle()
         val controller =
@@ -130,6 +179,8 @@ class RotationScreenControllerTest {
         controller.handle(RotationScreenEvent.RotateAirplaneMode)
 
         assertEquals("In progress: Rotate airplane mode", controller.state.pendingOperation)
+        assertEquals(setOf(RotationScreenWarning.OperationInProgress), controller.state.warnings)
+        assertTrue(controller.state.copyableDiagnostics.contains("Warnings: Rotation operation in progress"))
 
         rotationStatus =
             RotationStatus(
@@ -139,6 +190,7 @@ class RotationScreenControllerTest {
         controller.handle(RotationScreenEvent.Refresh)
 
         assertEquals("In progress: Rotate airplane mode", controller.state.pendingOperation)
+        assertEquals(setOf(RotationScreenWarning.RotationInProgress), controller.state.warnings)
 
         rotationStatus =
             RotationStatus(
@@ -227,6 +279,95 @@ class RotationScreenControllerTest {
         assertEquals("[REDACTED]", controller.state.currentPublicIp)
         assertTrue(copyText.contains("Current public IP: [REDACTED]"))
         assertFalse(copyText.contains("198.51.100.55"))
+    }
+
+    @Test
+    fun `active cooldown exposes visible rotation warning and copy diagnostics entry`() {
+        val state =
+            RotationScreenState.from(
+                config = rootEnabledConfig(),
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Available,
+                cooldownRemainingSeconds = 45,
+            )
+
+        assertEquals(setOf(RotationScreenWarning.RotationCooldownActive), state.warnings)
+        assertTrue(state.copyableDiagnostics.contains("Warnings: Rotation blocked by cooldown"))
+    }
+
+    @Test
+    fun `active rotation exposes visible in-progress warning and copy diagnostics entry`() {
+        val state =
+            RotationScreenState.from(
+                config = rootEnabledConfig(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+                rootAvailability = RootAvailabilityStatus.Available,
+            )
+
+        assertEquals(setOf(RotationScreenWarning.RotationInProgress), state.warnings)
+        assertTrue(state.copyableDiagnostics.contains("Warnings: Rotation already in progress"))
+    }
+
+    @Test
+    fun `enabled root operations with unavailable root exposes visible warning and copy diagnostics entry`() {
+        val state =
+            RotationScreenState.from(
+                config = rootEnabledConfig(),
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Unavailable,
+            )
+
+        assertEquals(setOf(RotationScreenWarning.RootUnavailable), state.warnings)
+        assertTrue(state.copyableDiagnostics.contains("Warnings: Root access unavailable"))
+    }
+
+    @Test
+    fun `disabled root operations do not expose root unavailable warning`() {
+        val state =
+            RotationScreenState.from(
+                config = AppConfig.default(),
+                rotationStatus = RotationStatus.idle(),
+                rootAvailability = RootAvailabilityStatus.Unavailable,
+            )
+
+        assertEquals(emptySet(), state.warnings)
+        assertTrue(state.copyableDiagnostics.contains("Warnings: None"))
+    }
+
+    @Test
+    fun `inactive cooldown does not expose rotation warning`() {
+        listOf(null, 0L, -1L).forEach { cooldownRemainingSeconds ->
+            val state =
+                RotationScreenState.from(
+                    config = rootEnabledConfig(),
+                    rotationStatus = RotationStatus.idle(),
+                    rootAvailability = RootAvailabilityStatus.Available,
+                    cooldownRemainingSeconds = cooldownRemainingSeconds,
+                )
+
+            assertEquals(emptySet(), state.warnings)
+            assertTrue(state.copyableDiagnostics.contains("Warnings: None"))
+        }
+    }
+
+    @Test
+    fun `controller copy diagnostics preserves active cooldown warning`() {
+        val controller =
+            RotationScreenController(
+                configProvider = { rootEnabledConfig() },
+                rotationStatusProvider = { RotationStatus.idle() },
+                rootAvailabilityProvider = { RootAvailabilityStatus.Available },
+                cooldownRemainingSecondsProvider = { 45 },
+            )
+
+        controller.handle(RotationScreenEvent.CopyDiagnostics)
+
+        val copyText = (controller.consumeEffects().single() as RotationScreenEffect.CopyText).text
+        assertTrue(copyText.contains("Warnings: Rotation blocked by cooldown"))
     }
 
     private fun rootEnabledConfig(): AppConfig {

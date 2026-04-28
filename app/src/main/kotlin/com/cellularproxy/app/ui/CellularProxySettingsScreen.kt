@@ -73,8 +73,7 @@ internal fun CellularProxySettingsRoute(
     }
 
     CellularProxySettingsScreen(
-        form = screenState.form,
-        persistedForm = screenState.persistedForm,
+        state = screenState,
         saveEnabled = true,
         onFormChange = { updatedForm -> dispatchEvent(ProxySettingsScreenEvent.UpdateForm(updatedForm)) },
         onSaveSettings = { dispatchEvent(ProxySettingsScreenEvent.SaveChanges) },
@@ -86,16 +85,17 @@ internal fun CellularProxySettingsRoute(
 internal fun CellularProxySettingsScreen(
     form: ProxySettingsFormState = ProxySettingsFormState.from(AppConfig.default()),
     persistedForm: ProxySettingsFormState = form,
+    state: ProxySettingsScreenState =
+        ProxySettingsScreenState.from(
+            form = form,
+            persistedForm = persistedForm,
+        ),
     saveEnabled: Boolean = false,
     onFormChange: (ProxySettingsFormState) -> Unit = {},
     onSaveSettings: () -> Unit = {},
     onDiscardChanges: () -> Unit = {},
 ) {
-    val state =
-        ProxySettingsScreenState.from(
-            form = form,
-            persistedForm = persistedForm,
-        )
+    val currentForm = state.form
 
     Column(
         modifier =
@@ -113,60 +113,60 @@ internal fun CellularProxySettingsScreen(
         SettingsSection("Proxy") {
             SettingsTextField(
                 label = "Listen host",
-                value = form.listenHost,
-                onValueChange = { value -> onFormChange(form.copy(listenHost = value)) },
+                value = currentForm.listenHost,
+                onValueChange = { value -> onFormChange(currentForm.copy(listenHost = value)) },
             )
             SettingsTextField(
                 label = "Listen port",
-                value = form.listenPort,
+                value = currentForm.listenPort,
                 keyboardType = KeyboardType.Number,
-                onValueChange = { value -> onFormChange(form.copy(listenPort = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(listenPort = value)) },
             )
             SettingsSwitchRow(
                 label = "Proxy authentication",
-                checked = form.authEnabled,
-                onCheckedChange = { checked -> onFormChange(form.copy(authEnabled = checked)) },
+                checked = currentForm.authEnabled,
+                onCheckedChange = { checked -> onFormChange(currentForm.copy(authEnabled = checked)) },
             )
             SettingsTextField(
                 label = "Max concurrent connections",
-                value = form.maxConcurrentConnections,
+                value = currentForm.maxConcurrentConnections,
                 keyboardType = KeyboardType.Number,
-                onValueChange = { value -> onFormChange(form.copy(maxConcurrentConnections = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(maxConcurrentConnections = value)) },
             )
             SettingsRouteSelector(
-                selectedRoute = form.route,
-                onRouteChange = { route -> onFormChange(form.copy(route = route)) },
+                selectedRoute = currentForm.route,
+                onRouteChange = { route -> onFormChange(currentForm.copy(route = route)) },
             )
         }
 
         SettingsSection("Rotation And Root") {
             SettingsSwitchRow(
                 label = "Strict IP change",
-                checked = form.strictIpChangeRequired,
-                onCheckedChange = { checked -> onFormChange(form.copy(strictIpChangeRequired = checked)) },
+                checked = currentForm.strictIpChangeRequired,
+                onCheckedChange = { checked -> onFormChange(currentForm.copy(strictIpChangeRequired = checked)) },
             )
             SettingsTextField(
                 label = "Mobile data off delay",
-                value = form.mobileDataOffDelaySeconds,
+                value = currentForm.mobileDataOffDelaySeconds,
                 keyboardType = KeyboardType.Number,
-                onValueChange = { value -> onFormChange(form.copy(mobileDataOffDelaySeconds = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(mobileDataOffDelaySeconds = value)) },
             )
             SettingsTextField(
                 label = "Network return timeout",
-                value = form.networkReturnTimeoutSeconds,
+                value = currentForm.networkReturnTimeoutSeconds,
                 keyboardType = KeyboardType.Number,
-                onValueChange = { value -> onFormChange(form.copy(networkReturnTimeoutSeconds = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(networkReturnTimeoutSeconds = value)) },
             )
             SettingsTextField(
                 label = "Rotation cooldown",
-                value = form.cooldownSeconds,
+                value = currentForm.cooldownSeconds,
                 keyboardType = KeyboardType.Number,
-                onValueChange = { value -> onFormChange(form.copy(cooldownSeconds = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(cooldownSeconds = value)) },
             )
             SettingsSwitchRow(
                 label = "Root operations",
-                checked = form.rootOperationsEnabled,
-                onCheckedChange = { checked -> onFormChange(form.copy(rootOperationsEnabled = checked)) },
+                checked = currentForm.rootOperationsEnabled,
+                onCheckedChange = { checked -> onFormChange(currentForm.copy(rootOperationsEnabled = checked)) },
             )
         }
 
@@ -177,44 +177,50 @@ internal fun CellularProxySettingsScreen(
             )
             SettingsTextField(
                 label = "Proxy username",
-                value = form.proxyUsername,
-                onValueChange = { value -> onFormChange(form.copy(proxyUsername = value)) },
+                value = currentForm.proxyUsername,
+                onValueChange = { value -> onFormChange(currentForm.copy(proxyUsername = value)) },
             )
             SettingsTextField(
                 label = "Proxy password",
-                value = form.proxyPassword,
+                value = currentForm.proxyPassword,
                 keyboardType = KeyboardType.Password,
                 visualTransformation = PasswordVisualTransformation(),
-                onValueChange = { value -> onFormChange(form.copy(proxyPassword = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(proxyPassword = value)) },
             )
             SettingsTextField(
                 label = "Management API token",
-                value = form.managementApiToken,
+                value = currentForm.managementApiToken,
                 keyboardType = KeyboardType.Password,
                 visualTransformation = PasswordVisualTransformation(),
-                onValueChange = { value -> onFormChange(form.copy(managementApiToken = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(managementApiToken = value)) },
             )
         }
 
         SettingsSection("Cloudflare") {
             SettingsSwitchRow(
                 label = "Cloudflare enabled",
-                checked = form.cloudflareEnabled,
-                onCheckedChange = { checked -> onFormChange(form.copy(cloudflareEnabled = checked)) },
+                checked = currentForm.cloudflareEnabled,
+                onCheckedChange = { checked -> onFormChange(currentForm.copy(cloudflareEnabled = checked)) },
+            )
+            Text(
+                text = "Tunnel token status: ${state.cloudflareTokenStatus.label}",
+                style = MaterialTheme.typography.bodyMedium,
             )
             SettingsTextField(
                 label = "Cloudflare tunnel token",
-                value = form.cloudflareTunnelToken,
+                value = currentForm.cloudflareTunnelToken,
                 keyboardType = KeyboardType.Password,
                 visualTransformation = PasswordVisualTransformation(),
-                onValueChange = { value -> onFormChange(form.copy(cloudflareTunnelToken = value)) },
+                onValueChange = { value -> onFormChange(currentForm.copy(cloudflareTunnelToken = value)) },
             )
             SettingsTextField(
                 label = "Cloudflare hostname",
-                value = form.cloudflareHostnameLabel,
-                onValueChange = { value -> onFormChange(form.copy(cloudflareHostnameLabel = value)) },
+                value = currentForm.cloudflareHostnameLabel,
+                onValueChange = { value -> onFormChange(currentForm.copy(cloudflareHostnameLabel = value)) },
             )
         }
+
+        SettingsWarnings(state.warnings)
 
         SettingsValidationErrors(state.validationErrors)
 
@@ -232,6 +238,24 @@ internal fun CellularProxySettingsScreen(
         ) {
             Text("Discard changes")
         }
+    }
+}
+
+@Composable
+private fun SettingsWarnings(warnings: Set<ProxySettingsFormWarning>) {
+    if (warnings.isEmpty()) {
+        return
+    }
+
+    SettingsSection("Settings warnings") {
+        warnings
+            .map(ProxySettingsFormWarning::displayText)
+            .forEach { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
     }
 }
 
@@ -281,6 +305,14 @@ private fun ProxySettingsValidationError.displayText(): String = when (this) {
     ProxySettingsValidationError.InvalidManagementApiToken -> "Management API token cannot be blank or padded with spaces."
     ProxySettingsValidationError.InvalidCloudflareTunnelToken -> "Cloudflare tunnel token is missing or invalid."
     ProxySettingsValidationError.InvalidSensitiveConfiguration -> "Sensitive configuration is invalid. Discard or update the affected secrets before saving."
+}
+
+private fun ProxySettingsFormWarning.displayText(): String = when (this) {
+    ProxySettingsFormWarning.BroadUnauthenticatedProxy -> "Broad unauthenticated proxy listener risk."
+    ProxySettingsFormWarning.CloudflareEnabledMissingTunnelToken ->
+        "Cloudflare is enabled but the tunnel token is missing."
+    ProxySettingsFormWarning.CloudflareEnabledInvalidTunnelToken ->
+        "Cloudflare is enabled but the tunnel token is invalid."
 }
 
 @Composable

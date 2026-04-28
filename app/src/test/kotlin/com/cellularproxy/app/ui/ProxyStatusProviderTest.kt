@@ -199,6 +199,62 @@ class ProxyStatusProviderTest {
     }
 
     @Test
+    fun `foreground service dashboard start action refreshes cached live proxy status after dispatch`() {
+        val events = mutableListOf<String>()
+
+        dispatchForegroundServiceCommandThenRefresh(
+            action = "START_PROXY",
+            dispatchForegroundServiceCommand = { action -> events += "dispatch:$action" },
+            refreshProxyStatus = { events += "refresh" },
+        )
+
+        assertEquals(listOf("dispatch:START_PROXY", "refresh"), events)
+
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            shellSource.contains("dispatchForegroundServiceCommandThenRefresh(") &&
+                shellSource.contains("DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS") &&
+                shellSource.contains("delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)") &&
+                shellSource.contains("ForegroundServiceActions.START_PROXY"),
+            "Dashboard start service action must dispatch the command and refresh cached live status after service delivery has time to complete.",
+        )
+    }
+
+    @Test
+    fun `dashboard service stop schedules delayed cached live status refresh after management api response`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            Regex(
+                """onStopProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceStop[\s\S]*?afterResponse = \{[\s\S]*?coroutineScope\.launch \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""",
+            ).findAll(shellSource).count() == 2,
+            "Both Dashboard service stop handlers must schedule a delayed live-status refresh after the Management API stop response.",
+        )
+    }
+
+    @Test
+    fun `dashboard service restart schedules delayed cached live status refresh after management api response`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            Regex(
+                """onRestartProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceRestart[\s\S]*?afterResponse = \{[\s\S]*?coroutineScope\.launch \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""",
+            ).findAll(shellSource).count() == 2,
+            "Both Dashboard service restart handlers must schedule a delayed live-status refresh because the root restart runs after the Management API response is sent.",
+        )
+    }
+
+    @Test
     fun `cloudflare management tunnel test result is cached for Cloudflare screen state`() {
         assertEquals(
             "HTTP 200",

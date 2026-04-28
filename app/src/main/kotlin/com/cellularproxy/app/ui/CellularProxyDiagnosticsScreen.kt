@@ -208,11 +208,19 @@ internal data class DiagnosticsScreenState(
         fun from(model: DiagnosticsResultModel): DiagnosticsScreenState {
             val completedCount = model.results.count { it.status.isCompleted }
             val anyRunning = model.results.any { it.status == DiagnosticResultStatus.Running }
+            val completedBulkSafeTypes =
+                model
+                    .results
+                    .filter { it.type in bulkSafeDiagnosticCheckTypes && it.status.isCompleted }
+                    .map(DiagnosticResultItem::type)
+                    .toSet()
+            val allBulkSafeChecksCompleted = completedBulkSafeTypes.containsAll(bulkSafeDiagnosticCheckTypes)
             val overallStatus =
                 when {
                     model.results.any { it.status == DiagnosticResultStatus.Failed } -> DiagnosticResultStatus.Failed.label
                     model.results.any { it.status == DiagnosticResultStatus.Warning } -> DiagnosticResultStatus.Warning.label
                     model.results.any { it.status == DiagnosticResultStatus.Running } -> DiagnosticResultStatus.Running.label
+                    allBulkSafeChecksCompleted -> DiagnosticResultStatus.Passed.label
                     completedCount == model.results.size -> DiagnosticResultStatus.Passed.label
                     else -> DiagnosticResultStatus.NotRun.label
                 }
@@ -249,7 +257,7 @@ internal data class DiagnosticsScreenItem(
         val metadata =
             listOfNotNull(
                 duration
-                    .takeIf { it != "Not run" }
+                    .takeIf { it != "Not run" && it != "In progress" }
                     ?.removeSuffix(" ms")
                     ?.let { "in ${it}ms" },
                 errorCategory.takeIf { it != "None" }?.let { "($it)" },
@@ -286,7 +294,7 @@ private fun DiagnosticsActionRow(
             enabled = actionsEnabled && DiagnosticsScreenAction.RunAllChecks in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Run all checks")
+            Text("Run non-Cloudflare checks")
         }
         OutlinedButton(
             onClick = onCopySummary,
@@ -363,7 +371,11 @@ private fun DiagnosticResultItem.toScreenItem(): DiagnosticsScreenItem = Diagnos
     type = type,
     label = label,
     status = status.label,
-    duration = durationMillis?.let { "$it ms" } ?: "Not run",
+    duration =
+        when (status) {
+            DiagnosticResultStatus.Running -> "In progress"
+            else -> durationMillis?.let { "$it ms" } ?: "Not run"
+        },
     errorCategory = errorCategory?.let(LogRedactor::redact) ?: "None",
     details = details?.let(LogRedactor::redact) ?: "None",
     availableActions =
@@ -397,10 +409,17 @@ private fun DiagnosticsScreenItem.statusFromLabel(): DiagnosticResultStatus = Di
     .single { status -> status.label == this.status }
 
 private fun DiagnosticsScreenEvent.runningTypes(): Set<DiagnosticCheckType> = when (this) {
-    DiagnosticsScreenEvent.RunAllChecks -> DiagnosticCheckType.entries.toSet()
+    DiagnosticsScreenEvent.RunAllChecks -> bulkSafeDiagnosticCheckTypes
     is DiagnosticsScreenEvent.RunCheck -> setOf(type)
     is DiagnosticsScreenEvent.CopyCheck,
     DiagnosticsScreenEvent.CopySummary,
     DiagnosticsScreenEvent.Refresh,
     -> emptySet()
 }
+
+internal val bulkSafeDiagnosticCheckTypes: Set<DiagnosticCheckType> =
+    DiagnosticCheckType.entries
+        .filterNot { type ->
+            type == DiagnosticCheckType.CloudflareTunnel ||
+                type == DiagnosticCheckType.CloudflareManagementApi
+        }.toSet()

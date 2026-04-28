@@ -8,6 +8,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticCheck
 import com.cellularproxy.app.diagnostics.DiagnosticCheckResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
+import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
@@ -22,7 +23,8 @@ import kotlin.test.assertTrue
 
 class DiagnosticsScreenControllerTest {
     @Test
-    fun `controller runs selected and all diagnostics into screen state`() {
+    fun `controller runs selected and bulk-safe diagnostics into screen state`() {
+        val runCounts = DiagnosticCheckType.entries.associateWith { 0 }.toMutableMap()
         val controller =
             DiagnosticsScreenController(
                 suiteController =
@@ -30,6 +32,7 @@ class DiagnosticsScreenControllerTest {
                         checks =
                             DiagnosticCheckType.entries.associateWith { type ->
                                 DiagnosticCheck {
+                                    runCounts[type] = runCounts.getValue(type) + 1
                                     DiagnosticCheckResult(
                                         status = DiagnosticResultStatus.Passed,
                                         details = "${type.label} ok",
@@ -55,8 +58,55 @@ class DiagnosticsScreenControllerTest {
 
         controller.handle(DiagnosticsScreenEvent.RunAllChecks)
 
+        assertEquals("5 of 7 checks complete", controller.state.completionSummary)
+        assertEquals(DiagnosticResultStatus.Passed.label, controller.state.overallStatus)
+        assertEquals(0, runCounts.getValue(DiagnosticCheckType.CloudflareTunnel))
+        assertEquals(0, runCounts.getValue(DiagnosticCheckType.CloudflareManagementApi))
+        assertEquals(
+            DiagnosticResultStatus.NotRun.label,
+            controller
+                .state
+                .items
+                .single { it.type == DiagnosticCheckType.CloudflareTunnel }
+                .status,
+        )
+        assertEquals(
+            DiagnosticResultStatus.NotRun.label,
+            controller
+                .state
+                .items
+                .single { it.type == DiagnosticCheckType.CloudflareManagementApi }
+                .status,
+        )
+        assertTrue(
+            controller
+                .state
+                .items
+                .filterNot { item -> item.type in explicitCloudflareDiagnosticCheckTypes }
+                .all { item -> item.status == DiagnosticResultStatus.Passed.label },
+        )
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.CloudflareTunnel))
+        assertEquals(1, runCounts.getValue(DiagnosticCheckType.CloudflareTunnel))
+
+        controller.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.CloudflareManagementApi))
+
+        assertEquals(1, runCounts.getValue(DiagnosticCheckType.CloudflareManagementApi))
         assertEquals("7 of 7 checks complete", controller.state.completionSummary)
-        assertTrue(controller.state.items.all { it.status == DiagnosticResultStatus.Passed.label })
+    }
+
+    @Test
+    fun `screen state labels running diagnostic duration as in progress`() {
+        val state =
+            DiagnosticsScreenState.from(
+                DiagnosticsResultModel.running(DiagnosticCheckType.PublicIp),
+            )
+
+        val item = state.items.single { it.type == DiagnosticCheckType.PublicIp }
+        assertEquals(DiagnosticResultStatus.Running.label, item.status)
+        assertEquals("In progress", item.duration)
+        assertTrue(item.summaryLine().contains("Public IP: running"))
+        assertFalse(item.summaryLine().contains("Not run"))
     }
 
     @Test
@@ -356,6 +406,9 @@ class DiagnosticsScreenControllerTest {
         )
     }
 }
+
+private val explicitCloudflareDiagnosticCheckTypes =
+    setOf(DiagnosticCheckType.CloudflareTunnel, DiagnosticCheckType.CloudflareManagementApi)
 
 private fun configuredCloudflare(tunnelTokenPresent: Boolean = true): AppConfig = AppConfig.default().copy(
     cloudflare =

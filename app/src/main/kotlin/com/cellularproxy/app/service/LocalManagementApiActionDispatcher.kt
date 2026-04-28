@@ -37,6 +37,8 @@ enum class LocalManagementApiAction(
         path = "/api/status",
         target = LocalManagementApiActionTarget.CloudflareManagementHostname,
     ),
+    ServiceStop(path = "/api/service/stop"),
+    ServiceRestart(path = "/api/service/restart"),
     RotateMobileData(path = "/api/rotate/mobile-data"),
     RotateAirplaneMode(path = "/api/rotate/airplane-mode"),
     ;

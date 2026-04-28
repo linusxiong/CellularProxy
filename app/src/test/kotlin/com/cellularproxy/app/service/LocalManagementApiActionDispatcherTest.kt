@@ -129,6 +129,70 @@ class LocalManagementApiActionDispatcherTest {
     }
 
     @Test
+    fun `service restart maps to authenticated local management endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.ServiceRestart,
+            config =
+                AppConfig.default().copy(
+                    proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 8181),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8181/api/service/restart",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `service stop maps to authenticated local management endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.ServiceStop,
+            config =
+                AppConfig.default().copy(
+                    proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 8181),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8181/api/service/stop",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
     fun `response treats only 2xx management action statuses as successful`() {
         assertEquals(true, LocalManagementApiActionResponse(statusCode = 202).isSuccessful)
         assertEquals(false, LocalManagementApiActionResponse(statusCode = 409).isSuccessful)

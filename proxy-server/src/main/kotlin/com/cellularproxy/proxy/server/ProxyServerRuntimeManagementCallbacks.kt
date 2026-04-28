@@ -1,6 +1,8 @@
 package com.cellularproxy.proxy.server
 
 import com.cellularproxy.proxy.management.ManagementApiCallbacks
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
@@ -80,6 +82,7 @@ object ProxyServerRuntimeManagementCallbacks {
         cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rotationStatus: () -> RotationStatus = { RotationStatus.idle() },
         rotationCooldownRemainingMillis: () -> Long? = { null },
         cloudflareEdgeSessionSummary: () -> String? = { null },
@@ -121,6 +124,7 @@ object ProxyServerRuntimeManagementCallbacks {
         rotationCooldownRemainingMillis = rotationCooldownRemainingMillis,
         cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
         serviceStop = { runtime.requestStop() },
+        serviceRestart = serviceRestart.guardRootOperations(rootOperationsEnabled),
     )
 }
 
@@ -184,3 +188,19 @@ private fun (() -> RotationTransitionResult).guardRootOperations(
         rootOperationsDisabledRotationTransition(operation)
     }
 }
+
+private fun (() -> ManagementApiServiceRestartResult).guardRootOperations(
+    rootOperationsEnabled: () -> Boolean,
+): () -> ManagementApiServiceRestartResult = {
+    if (rootOperationsEnabled()) {
+        this()
+    } else {
+        ManagementApiServiceRestartResult.rejected(
+            ManagementApiServiceRestartFailureReason.RootOperationsDisabled,
+        )
+    }
+}
+
+private fun unavailableServiceRestart(): ManagementApiServiceRestartResult = ManagementApiServiceRestartResult.rejected(
+    ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
+)

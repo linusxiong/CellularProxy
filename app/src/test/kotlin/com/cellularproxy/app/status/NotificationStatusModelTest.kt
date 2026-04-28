@@ -13,6 +13,10 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -372,6 +376,87 @@ class NotificationStatusModelTest {
 
         assertEquals(setOf(NotificationWarning.SensitiveConfigurationInvalid), model.warnings)
         assertEquals("Sensitive configuration is invalid", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns specifically when Cloudflare tunnel token is invalid`() {
+        val model =
+            NotificationStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = true,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+            )
+
+        assertEquals(
+            setOf(
+                NotificationWarning.CloudflareTokenInvalid,
+                NotificationWarning.SensitiveConfigurationInvalid,
+            ),
+            model.warnings,
+        )
+        assertEquals(
+            "Cloudflare tunnel token is invalid | Sensitive configuration is invalid",
+            model.warningText,
+        )
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when rotation is blocked by cooldown`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationCooldownRemainingSeconds = 12,
+            )
+
+        assertEquals(setOf(NotificationWarning.RotationCooldownActive), model.warnings)
+        assertEquals("Rotation is blocked by cooldown", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when last rotation action was rejected by cooldown`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.MobileData,
+                        failureReason = RotationFailureReason.CooldownActive,
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.RotationCooldownActive), model.warnings)
+        assertEquals("Rotation is blocked by cooldown", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when rotation is already active`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.RotationInProgress), model.warnings)
+        assertEquals("Rotation already in progress", model.warningText)
         assertEquals(NotificationPriority.Warning, model.priority)
     }
 }

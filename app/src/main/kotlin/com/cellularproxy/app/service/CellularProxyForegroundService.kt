@@ -94,6 +94,8 @@ class CellularProxyForegroundService : Service() {
                 NotificationStatusModel.from(
                     config = runtimeStatus.config,
                     status = runtimeStatus.status,
+                    rotationStatus = runtimeStatus.rotationStatus,
+                    rotationCooldownRemainingSeconds = runtimeStatus.rotationCooldownRemainingSeconds,
                 ),
             )
         createNotificationChannel(descriptor)

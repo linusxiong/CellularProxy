@@ -97,7 +97,7 @@ class CloudflareScreenControllerTest {
         var managementRoundTrip: String? = null
         val controller =
             CloudflareScreenController(
-                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                configProvider = { enabledCloudflareConfig(tokenPresent = true, managementHostname = "management.example.test") },
                 tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
                 managementApiRoundTripProvider = { managementRoundTrip },
                 actionHandler = { action -> actions += action },
@@ -129,7 +129,7 @@ class CloudflareScreenControllerTest {
         var managementRoundTripVersion = 1L
         val controller =
             CloudflareScreenController(
-                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                configProvider = { enabledCloudflareConfig(tokenPresent = true, managementHostname = "management.example.test") },
                 tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
                 managementApiRoundTripProvider = { managementRoundTrip },
                 managementApiRoundTripVersionProvider = { managementRoundTripVersion },
@@ -157,11 +157,120 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `connected tunnel requires management hostname before exposing management tunnel test action`() {
+        val missingHostnameState =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus = CloudflareTunnelStatus.connected(),
+                tokenStatus = CloudflareTokenStatus.Present,
+            )
+        val configuredHostnameState =
+            CloudflareScreenState.from(
+                config =
+                    enabledCloudflareConfig(tokenPresent = true).copy(
+                        cloudflare =
+                            enabledCloudflareConfig(tokenPresent = true).cloudflare.copy(
+                                managementHostnameLabel = "management.example.test",
+                            ),
+                    ),
+                tunnelStatus = CloudflareTunnelStatus.connected(),
+                tokenStatus = CloudflareTokenStatus.Present,
+            )
+
+        assertFalse(CloudflareScreenAction.TestManagementTunnel in missingHostnameState.availableActions)
+        assertTrue(CloudflareScreenAction.CopyDiagnostics in missingHostnameState.availableActions)
+        assertTrue(CloudflareScreenAction.TestManagementTunnel in configuredHostnameState.availableActions)
+    }
+
+    @Test
+    fun `management hostname display and diagnostics strip unsafe url details`() {
+        val state =
+            CloudflareScreenState.from(
+                config =
+                    enabledCloudflareConfig(
+                        tokenPresent = true,
+                        managementHostname =
+                            "https://operator:hostname-secret@management.example.test/private?token=query-secret#fragment-secret",
+                    ),
+                tunnelStatus = CloudflareTunnelStatus.connected(),
+                tokenStatus = CloudflareTokenStatus.Present,
+            )
+
+        assertEquals("https://management.example.test", state.managementHostname)
+        assertTrue(state.copyableDiagnostics.contains("Management hostname: https://management.example.test"))
+        assertFalse(state.copyableDiagnostics.contains("operator"))
+        assertFalse(state.copyableDiagnostics.contains("hostname-secret"))
+        assertFalse(state.copyableDiagnostics.contains("query-secret"))
+        assertFalse(state.copyableDiagnostics.contains("fragment-secret"))
+        assertFalse(state.copyableDiagnostics.contains("/private"))
+    }
+
+    @Test
+    fun `connected tunnel exposes reconnect action with duplicate protection`() {
+        val actions = mutableListOf<CloudflareScreenAction>()
+        var tunnelStatus = CloudflareTunnelStatus.connected()
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { tunnelStatus },
+                actionHandler = { action -> actions += action },
+            )
+
+        assertTrue(CloudflareScreenAction.ReconnectTunnel in controller.state.availableActions)
+
+        controller.handle(CloudflareScreenEvent.ReconnectTunnel)
+        controller.handle(CloudflareScreenEvent.ReconnectTunnel)
+
+        assertEquals(listOf(CloudflareScreenAction.ReconnectTunnel), actions)
+        assertFalse(CloudflareScreenAction.ReconnectTunnel in controller.state.availableActions)
+
+        tunnelStatus = CloudflareTunnelStatus.starting()
+        controller.handle(CloudflareScreenEvent.Refresh)
+        tunnelStatus = CloudflareTunnelStatus.degraded()
+        controller.handle(CloudflareScreenEvent.Refresh)
+        controller.handle(CloudflareScreenEvent.ReconnectTunnel)
+
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.ReconnectTunnel,
+                CloudflareScreenAction.ReconnectTunnel,
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun `pending tunnel lifecycle operation suppresses other lifecycle actions until resolved`() {
+        val actions = mutableListOf<CloudflareScreenAction>()
+        var tunnelStatus = CloudflareTunnelStatus.connected()
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { tunnelStatus },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(CloudflareScreenEvent.ReconnectTunnel)
+
+        assertFalse(CloudflareScreenAction.StopTunnel in controller.state.availableActions)
+        assertTrue(CloudflareScreenAction.CopyDiagnostics in controller.state.availableActions)
+
+        controller.handle(CloudflareScreenEvent.StopTunnel)
+
+        assertEquals(listOf(CloudflareScreenAction.ReconnectTunnel), actions)
+
+        tunnelStatus = CloudflareTunnelStatus.degraded()
+        controller.handle(CloudflareScreenEvent.Refresh)
+
+        assertTrue(CloudflareScreenAction.StopTunnel in controller.state.availableActions)
+    }
+
+    @Test
     fun `controller exposes pending management tunnel test as visible state until resolved`() {
         var managementRoundTripVersion = 1L
         val controller =
             CloudflareScreenController(
-                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                configProvider = { enabledCloudflareConfig(tokenPresent = true, managementHostname = "management.example.test") },
                 tunnelStatusProvider = { CloudflareTunnelStatus.connected() },
                 managementApiRoundTripProvider = { "HTTP 200" },
                 managementApiRoundTripVersionProvider = { managementRoundTripVersion },
@@ -170,11 +279,14 @@ class CloudflareScreenControllerTest {
         controller.handle(CloudflareScreenEvent.TestManagementTunnel)
 
         assertEquals("In progress: Test management tunnel", controller.state.pendingOperation)
+        assertEquals(setOf(CloudflareScreenWarning.OperationInProgress), controller.state.warnings)
+        assertTrue(controller.state.copyableDiagnostics.contains("Warnings: Cloudflare operation in progress"))
 
         managementRoundTripVersion = 2L
         controller.handle(CloudflareScreenEvent.Refresh)
 
         assertEquals("None", controller.state.pendingOperation)
+        assertEquals(emptySet(), controller.state.warnings)
     }
 
     @Test
@@ -208,6 +320,24 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `failed tunnel exposes sanitized last connection error category`() {
+        val state =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus =
+                    CloudflareTunnelStatus.failed(
+                        "edge-session-timeout: Authorization Bearer tunnel-secret",
+                    ),
+                tokenStatus = CloudflareTokenStatus.Present,
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
+            )
+
+        assertEquals("edge-session-timeout", state.lastConnectionError)
+        assertTrue(state.copyableDiagnostics.contains("Last connection error: edge-session-timeout"))
+        assertFalse(state.copyableDiagnostics.contains("tunnel-secret"))
+    }
+
+    @Test
     fun `controller refreshes redaction secrets before copying diagnostics`() {
         var secrets = LogRedactionSecrets()
         val controller =
@@ -237,15 +367,104 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `connected tunnel with failing management round trip exposes visible warning`() {
+        val failingState =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus = CloudflareTunnelStatus.connected(),
+                tokenStatus = CloudflareTokenStatus.Present,
+                managementApiRoundTrip = "HTTP 503",
+            )
+        val passingState =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus = CloudflareTunnelStatus.connected(),
+                tokenStatus = CloudflareTokenStatus.Present,
+                managementApiRoundTrip = "HTTP 200",
+            )
+
+        assertEquals(
+            setOf(CloudflareScreenWarning.ManagementApiRoundTripFailing),
+            failingState.warnings,
+        )
+        assertTrue(failingState.copyableDiagnostics.contains("Warnings: Management API round trip failing"))
+        assertTrue(passingState.warnings.isEmpty())
+    }
+
+    @Test
+    fun `enabled cloudflare with missing tunnel token exposes visible warning`() {
+        val missingState =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = false),
+                tunnelStatus = CloudflareTunnelStatus.stopped(),
+                tokenStatus = CloudflareTokenStatus.Missing,
+            )
+        val disabledState =
+            CloudflareScreenState.from(
+                config = AppConfig.default(),
+                tunnelStatus = CloudflareTunnelStatus.disabled(),
+                tokenStatus = CloudflareTokenStatus.Missing,
+            )
+
+        assertEquals(
+            setOf(CloudflareScreenWarning.TunnelTokenMissing),
+            missingState.warnings,
+        )
+        assertTrue(missingState.copyableDiagnostics.contains("Warnings: Cloudflare tunnel token missing"))
+        assertTrue(disabledState.warnings.isEmpty())
+    }
+
+    @Test
+    fun `enabled cloudflare with invalid tunnel token exposes visible warning`() {
+        val invalidState =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus = CloudflareTunnelStatus.stopped(),
+                tokenStatus = CloudflareTokenStatus.Invalid,
+            )
+        val disabledState =
+            CloudflareScreenState.from(
+                config = AppConfig.default(),
+                tunnelStatus = CloudflareTunnelStatus.disabled(),
+                tokenStatus = CloudflareTokenStatus.Invalid,
+            )
+
+        assertEquals(
+            setOf(CloudflareScreenWarning.TunnelTokenInvalid),
+            invalidState.warnings,
+        )
+        assertTrue(invalidState.copyableDiagnostics.contains("Warnings: Cloudflare tunnel token invalid"))
+        assertTrue(disabledState.warnings.isEmpty())
+    }
+
+    @Test
+    fun `degraded cloudflare tunnel exposes visible warning and copy diagnostics entry`() {
+        val state =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus = CloudflareTunnelStatus.degraded(),
+                tokenStatus = CloudflareTokenStatus.Present,
+            )
+
+        assertEquals(
+            setOf(CloudflareScreenWarning.TunnelDegraded),
+            state.warnings,
+        )
+        assertTrue(state.copyableDiagnostics.contains("Warnings: Cloudflare tunnel degraded"))
+    }
+
+    @Test
     fun `cloudflare token status distinguishes missing invalid and valid stored tokens`() {
+        val validTunnelToken =
+            "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="
+
         assertEquals(CloudflareTokenStatus.Missing, cloudflareTokenStatusFrom(null))
         assertEquals(CloudflareTokenStatus.Missing, cloudflareTokenStatusFrom(""))
         assertEquals(CloudflareTokenStatus.Invalid, cloudflareTokenStatusFrom("not-a-tunnel-token"))
+        assertEquals(CloudflareTokenStatus.Invalid, cloudflareTokenStatusFrom("  $validTunnelToken  "))
         assertEquals(
             CloudflareTokenStatus.Present,
-            cloudflareTokenStatusFrom(
-                "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0=",
-            ),
+            cloudflareTokenStatusFrom(validTunnelToken),
         )
     }
 
@@ -278,13 +497,17 @@ class CloudflareScreenControllerTest {
         )
     }
 
-    private fun enabledCloudflareConfig(tokenPresent: Boolean): AppConfig {
+    private fun enabledCloudflareConfig(
+        tokenPresent: Boolean,
+        managementHostname: String? = null,
+    ): AppConfig {
         val defaultConfig = AppConfig.default()
         return defaultConfig.copy(
             cloudflare =
                 defaultConfig.cloudflare.copy(
                     enabled = true,
                     tunnelTokenPresent = tokenPresent,
+                    managementHostnameLabel = managementHostname,
                 ),
         )
     }

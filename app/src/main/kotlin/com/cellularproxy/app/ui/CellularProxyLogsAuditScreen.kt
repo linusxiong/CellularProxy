@@ -47,6 +47,7 @@ internal fun CellularProxyLogsAuditRoute(
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCopyLogsAuditText: (String) -> Unit = {},
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit = {},
+    onRecordLogsAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
 ) {
     val currentRowsProvider by rememberUpdatedState(logsAuditRowsProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
@@ -59,7 +60,10 @@ internal fun CellularProxyLogsAuditRoute(
                 secretsProvider = { currentRedactionSecretsProvider() },
                 exportSupported = true,
                 exportGeneratedAtEpochMillisProvider = System::currentTimeMillis,
+                auditOccurredAtEpochMillisProvider = System::currentTimeMillis,
+                auditActionsEnabled = true,
                 maxRows = LOGS_AUDIT_VISIBLE_ROW_LIMIT,
+                loadInitialState = false,
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
@@ -69,11 +73,15 @@ internal fun CellularProxyLogsAuditRoute(
             when (effect) {
                 is LogsAuditScreenEffect.CopyText -> onCopyLogsAuditText(effect.text)
                 is LogsAuditScreenEffect.ExportBundle -> onExportLogsAuditBundle(effect.bundle)
+                is LogsAuditScreenEffect.RecordAuditAction -> onRecordLogsAuditAction(effect.record)
             }
         }
         screenState = controller.state
     }
-    LaunchedEffect(observedRows, observedRedactionSecrets) {
+    LaunchedEffect(
+        observedRows,
+        observedRedactionSecrets,
+    ) {
         controller.handle(LogsAuditScreenEvent.Refresh)
         screenState = controller.state
     }
@@ -175,8 +183,14 @@ internal class LogsAuditScreenState private constructor(
     val copyableSelectedRecord: String?,
     val copyableFilteredSummary: String,
     val exportBundle: LogsAuditScreenExportBundle?,
+    private val appliedRowLimit: Int?,
 ) {
-    val resultSummary: String = "${rows.size} of $totalRowCount records"
+    val resultSummary: String =
+        if (appliedRowLimit == null) {
+            "${rows.size} of $totalRowCount records"
+        } else {
+            "${rows.size} of $totalRowCount records (limited to recent $appliedRowLimit)"
+        }
     val availableActions: List<LogsAuditScreenAction> =
         buildList {
             if (selectedRow != null) {
@@ -202,12 +216,15 @@ internal class LogsAuditScreenState private constructor(
         ): LogsAuditScreenState {
             require(exportGeneratedAtEpochMillis >= 0) { "Export timestamp must be non-negative." }
             require(maxRows == null || maxRows > 0) { "Maximum row count must be positive." }
-            val filteredRows =
+            val redactedSearch = LogRedactor.redact(filter.search, secrets)
+            val matchingFilter = filter.copy(search = redactedSearch)
+            val sortedRows =
                 rows
                     .map { row -> row.toScreenRow(secrets) }
-                    .filter { row -> filter.matches(row) }
+                    .filter { row -> matchingFilter.matches(row) }
                     .sortedByDescending(LogsAuditScreenRow::occurredAtEpochMillis)
-                    .let { sortedRows -> maxRows?.let(sortedRows::take) ?: sortedRows }
+            val appliedRowLimit = maxRows?.takeIf { limit -> sortedRows.size > limit }
+            val filteredRows = appliedRowLimit?.let(sortedRows::take) ?: sortedRows
             val copyableFilteredSummary =
                 filteredRows.joinToString(
                     separator = "\n\n",
@@ -217,12 +234,13 @@ internal class LogsAuditScreenState private constructor(
             return LogsAuditScreenState(
                 rows = filteredRows,
                 selectedRow = selectedRow,
-                filter = filter,
+                filter = matchingFilter,
                 totalRowCount = rows.size,
                 exportSupported = exportSupported,
-                searchDisplayText = LogRedactor.redact(filter.search, secrets),
+                searchDisplayText = redactedSearch,
                 copyableSelectedRecord = selectedRow?.copyText,
                 copyableFilteredSummary = copyableFilteredSummary,
+                appliedRowLimit = appliedRowLimit,
                 exportBundle =
                     if (exportSupported && filteredRows.isNotEmpty()) {
                         LogsAuditScreenExportBundle.from(
@@ -358,28 +376,52 @@ internal class LogsAuditScreenController(
     private val exportSupported: Boolean = false,
     private val exportGeneratedAtEpochMillis: Long = 0,
     private val exportGeneratedAtEpochMillisProvider: () -> Long = { exportGeneratedAtEpochMillis },
+    private val auditOccurredAtEpochMillisProvider: () -> Long = { exportGeneratedAtEpochMillisProvider() },
+    private val auditActionsEnabled: Boolean = false,
     private val maxRows: Int? = null,
+    loadInitialState: Boolean = true,
 ) {
     private val pendingEffects = mutableListOf<LogsAuditScreenEffect>()
-    var state: LogsAuditScreenState = buildState()
+    var state: LogsAuditScreenState =
+        if (loadInitialState) {
+            buildState()
+        } else {
+            LogsAuditScreenState.from(
+                exportSupported = exportSupported,
+                exportGeneratedAtEpochMillis = exportGeneratedAtEpochMillis,
+                maxRows = maxRows,
+            )
+        }
         private set
 
     fun handle(event: LogsAuditScreenEvent) {
         when (event) {
             LogsAuditScreenEvent.Refresh -> {
-                state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
-                if (state.selectedRow == null) {
+                val selectedRowId = state.selectedRow?.id
+                state = buildState(filter = state.filter, selectedRowId = selectedRowId)
+                if (selectedRowId != null && state.selectedRow == null) {
                     state = buildState(filter = state.filter)
                 }
             }
             LogsAuditScreenEvent.CopyFilteredSummary -> {
                 state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
                 if (LogsAuditScreenAction.CopyFilteredSummary in state.availableActions) {
+                    recordAuditAction("copy_filtered_summary", "rowCount=${state.rows.size}")
+                        ?.let(pendingEffects::add)
                     pendingEffects.add(LogsAuditScreenEffect.CopyText(state.copyableFilteredSummary))
                 }
             }
             LogsAuditScreenEvent.CopySelectedRecord -> {
                 state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
+                val selectedRow = state.selectedRow
+                if (selectedRow != null) {
+                    recordAuditAction(
+                        titleAction = "copy_selected_record",
+                        detail =
+                            "rowCount=${state.rows.size} " +
+                                "selectedCategory=${selectedRow.category.name}",
+                    )?.let(pendingEffects::add)
+                }
                 state.copyableSelectedRecord?.let { copyText ->
                     pendingEffects.add(LogsAuditScreenEffect.CopyText(copyText))
                 }
@@ -387,6 +429,10 @@ internal class LogsAuditScreenController(
             LogsAuditScreenEvent.ExportRedactedBundle -> {
                 state = buildState(filter = state.filter, selectedRowId = state.selectedRow?.id)
                 state.exportBundle?.let { bundle ->
+                    recordAuditAction(
+                        titleAction = "export_redacted_bundle",
+                        detail = "rowCount=${bundle.rowCount} fileName=${bundle.fileName}",
+                    )?.let(pendingEffects::add)
                     pendingEffects.add(LogsAuditScreenEffect.ExportBundle(bundle))
                 }
             }
@@ -397,8 +443,9 @@ internal class LogsAuditScreenController(
                 state = buildState(filter = state.filter)
             }
             is LogsAuditScreenEvent.UpdateFilter -> {
-                state = buildState(filter = event.filter, selectedRowId = state.selectedRow?.id)
-                if (state.selectedRow == null) {
+                val selectedRowId = state.selectedRow?.id
+                state = buildState(filter = event.filter, selectedRowId = selectedRowId)
+                if (selectedRowId != null && state.selectedRow == null) {
                     state = buildState(filter = event.filter)
                 }
             }
@@ -423,6 +470,23 @@ internal class LogsAuditScreenController(
         exportGeneratedAtEpochMillis = exportGeneratedAtEpochMillisProvider(),
         maxRows = maxRows,
     )
+
+    private fun recordAuditAction(
+        titleAction: String,
+        detail: String,
+    ): LogsAuditScreenEffect.RecordAuditAction? = if (auditActionsEnabled) {
+        LogsAuditScreenEffect.RecordAuditAction(
+            PersistedLogsAuditRecord(
+                occurredAtEpochMillis = auditOccurredAtEpochMillisProvider(),
+                category = LogsAuditRecordCategory.Audit,
+                severity = LogsAuditRecordSeverity.Info,
+                title = "Logs/Audit $titleAction",
+                detail = "action=$titleAction $detail",
+            ),
+        )
+    } else {
+        null
+    }
 }
 
 internal sealed interface LogsAuditScreenEvent {
@@ -452,6 +516,10 @@ internal sealed interface LogsAuditScreenEffect {
 
     data class ExportBundle(
         val bundle: LogsAuditScreenExportBundle,
+    ) : LogsAuditScreenEffect
+
+    data class RecordAuditAction(
+        val record: PersistedLogsAuditRecord,
     ) : LogsAuditScreenEffect
 }
 

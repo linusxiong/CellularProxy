@@ -99,6 +99,46 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `compose smoke tests use an android test only host activity`() {
+        val smokeTestSource =
+            repoRoot()
+                .resolve("app/src/androidTest/kotlin/com/cellularproxy/app/ui/CellularProxyAppNavigationSmokeTest.kt")
+                .readText()
+        val hostActivitySource =
+            repoRoot()
+                .resolve("app/src/androidTest/kotlin/com/cellularproxy/app/ui/CellularProxyComposeTestActivity.kt")
+                .readText()
+        val androidTestManifest =
+            repoRoot()
+                .resolve("app/src/androidTest/AndroidManifest.xml")
+                .readText()
+
+        assertTrue(
+            smokeTestSource.contains("createAndroidComposeRule<CellularProxyComposeTestActivity>()"),
+            "Compose smoke tests must launch a stable androidTest-only ComponentActivity host.",
+        )
+        assertFalse(
+            smokeTestSource.contains("createComposeRule()"),
+            "Compose smoke tests must not rely on the generic compose rule for app navigation lifecycle coverage.",
+        )
+        assertTrue(
+            hostActivitySource.contains("class CellularProxyComposeTestActivity : ComponentActivity()"),
+            "The Compose test host must be a minimal ComponentActivity in androidTest sources.",
+        )
+        assertTrue(
+            androidTestManifest.contains("com.cellularproxy.app.ui.CellularProxyComposeTestActivity"),
+            "The Compose test host must be declared only in the androidTest manifest.",
+        )
+        assertFalse(
+            repoRoot()
+                .resolve("app/src/main/AndroidManifest.xml")
+                .readText()
+                .contains("CellularProxyComposeTestActivity"),
+            "The Compose test host must not be included in the production manifest.",
+        )
+    }
+
+    @Test
     fun `app shell declares and routes all top level operator destinations`() {
         val destinations =
             CellularProxyNavigationDestination.entries
@@ -297,6 +337,12 @@ class ComposeAppShellContractTest {
             "Dashboard must keep cumulative traffic counters under a total-traffic label.",
         )
         assertTrue(
+            dashboardSource.contains(
+                "DashboardField(\"Cloudflare management API\", cloudflareManagementApiCheckSummary(status))",
+            ),
+            "Dashboard must render the explicit Cloudflare management API check separately from tunnel availability.",
+        )
+        assertTrue(
             shellSource.contains("DashboardRecentTrafficSampler(") &&
                 shellSource.contains("nowElapsedMillis = SystemClock::elapsedRealtime"),
             "App shell must create a live recent-traffic sampler instead of leaving recent traffic permanently unavailable.",
@@ -350,6 +396,10 @@ class ComposeAppShellContractTest {
             "Dashboard route must send stop actions through the dashboard controller.",
         )
         assertTrue(
+            dashboardSource.contains("DashboardScreenEvent.RestartProxy"),
+            "Dashboard route must send restart actions through the dashboard controller.",
+        )
+        assertTrue(
             dashboardSource.contains("DashboardScreenEvent.CopyProxyEndpoint"),
             "Dashboard route must send copy endpoint actions through the dashboard controller.",
         )
@@ -374,12 +424,30 @@ class ComposeAppShellContractTest {
             "Dashboard start actions must use the existing foreground service start command.",
         )
         assertTrue(
-            shellSource.contains("ForegroundServiceActions.STOP_PROXY"),
-            "Dashboard stop actions must use the existing foreground service stop command.",
+            Regex("""onStopProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceStop[\s\S]*?afterResponse = \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""")
+                .findAll(shellSource)
+                .count() == 2,
+            "Both Dashboard stop handlers must use the authenticated local Management API service stop action and schedule delayed live-status refresh after its response.",
+        )
+        assertTrue(
+            Regex("""onRestartProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceRestart[\s\S]*?afterResponse = \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""")
+                .findAll(shellSource)
+                .count() == 2,
+            "Both Dashboard restart handlers must use the local Management API service restart action and schedule delayed live-status refresh after its response.",
+        )
+        assertTrue(
+            shellSource.contains("afterResponse.invoke()"),
+            "Local Management API post-action refresh callbacks must run after the Management API request coroutine receives a response or failure.",
+        )
+        assertTrue(
+            shellSource.contains("if (afterResponse != null)") &&
+                shellSource.contains("afterResponse.invoke()") &&
+                Regex("""} else \{\s+refreshProxyStatus\(\)\s+}""").containsMatchIn(shellSource),
+            "Local Management API actions with a post-response callback must let the callback own refresh timing instead of also performing an immediate status refresh.",
         )
         assertTrue(
             shellSource.contains("context.startForegroundService("),
-            "Dashboard start/stop actions must dispatch to the Android foreground service.",
+            "Dashboard start actions must dispatch to the Android foreground service.",
         )
         assertTrue(
             shellSource.contains("Intent(context, CellularProxyForegroundService::class.java).setAction(action)"),
@@ -388,6 +456,22 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("onOpenRiskDetails = { navController.navigate(LogsAudit.route) }"),
             "Dashboard risk-details action must navigate to a concrete detail surface instead of doing nothing.",
+        )
+        assertTrue(
+            shellSource.contains("onOpenCloudflare = { navController.navigate(Cloudflare.route) }"),
+            "Dashboard cloudflare action must navigate to the Cloudflare screen.",
+        )
+        assertTrue(
+            shellSource.contains("onOpenRotation = { navController.navigate(Rotation.route) }"),
+            "Dashboard rotation action must navigate to the Rotation screen.",
+        )
+        assertTrue(
+            shellSource.contains("onOpenLogs = { navController.navigate(LogsAudit.route) }"),
+            "Dashboard logs action must navigate to the Logs/Audit screen.",
+        )
+        assertTrue(
+            shellSource.contains("onOpenDiagnostics = { navController.navigate(Diagnostics.route) }"),
+            "Dashboard diagnostics action must navigate to the Diagnostics screen.",
         )
     }
 
@@ -448,6 +532,30 @@ class ComposeAppShellContractTest {
                         invalidSensitiveConfigReason = projection.invalidSensitiveConfigReason,
                     ).warnings,
         )
+    }
+
+    @Test
+    fun `app shell does not project unrelated invalid sensitive config as missing management api token`() {
+        listOf(SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken).forEach { invalidReason ->
+            val projection =
+                sensitiveConfigDashboardInputs(
+                    SensitiveConfigLoadResult.Invalid(invalidReason),
+                )
+            val warnings =
+                DashboardStatusModel
+                    .from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                        managementApiTokenPresent = projection.managementApiTokenPresent,
+                        invalidSensitiveConfigReason = projection.invalidSensitiveConfigReason,
+                    ).warnings
+
+            assertTrue(DashboardWarning.SensitiveConfigurationInvalid in warnings)
+            assertFalse(
+                DashboardWarning.ManagementApiTokenMissing in warnings,
+                "Invalid sensitive config reason $invalidReason must not be displayed as a missing Management API token.",
+            )
+        }
     }
 
     @Test
@@ -555,6 +663,7 @@ class ComposeAppShellContractTest {
         assertEquals(
             listOf(
                 DashboardScreenAction.StopProxy,
+                DashboardScreenAction.RestartProxy,
                 DashboardScreenAction.RefreshStatus,
                 DashboardScreenAction.CopyProxyEndpoint,
                 DashboardScreenAction.OpenRiskDetails,
@@ -571,6 +680,7 @@ class ComposeAppShellContractTest {
     fun `dashboard high impact service actions are marked for confirmation`() {
         assertFalse(DashboardScreenAction.StartProxy.requiresConfirmation)
         assertTrue(DashboardScreenAction.StopProxy.requiresConfirmation)
+        assertTrue(DashboardScreenAction.RestartProxy.requiresConfirmation)
         assertFalse(DashboardScreenAction.RefreshStatus.requiresConfirmation)
         assertFalse(DashboardScreenAction.CopyProxyEndpoint.requiresConfirmation)
         assertFalse(DashboardScreenAction.OpenRiskDetails.requiresConfirmation)
@@ -582,6 +692,10 @@ class ComposeAppShellContractTest {
         assertEquals(
             "Confirm proxy service stop",
             DashboardScreenAction.StopProxy.confirmationTitle,
+        )
+        assertEquals(
+            "Confirm proxy service restart",
+            DashboardScreenAction.RestartProxy.confirmationTitle,
         )
     }
 
@@ -599,6 +713,10 @@ class ComposeAppShellContractTest {
         assertEquals(
             DashboardActionDispatchMode.ConfirmFirst,
             dashboardActionDispatchMode(DashboardScreenAction.StopProxy),
+        )
+        assertEquals(
+            DashboardActionDispatchMode.ConfirmFirst,
+            dashboardActionDispatchMode(DashboardScreenAction.RestartProxy),
         )
         assertEquals(
             DashboardActionDispatchMode.Immediate,
@@ -689,6 +807,9 @@ class ComposeAppShellContractTest {
             "Management API token",
             "Cloudflare enabled",
             "Cloudflare tunnel token",
+            "Tunnel token status",
+            "Settings warnings",
+            "Cloudflare is enabled but the tunnel token is missing.",
             "Cloudflare hostname",
             "Leave secret fields blank to keep current values.",
             "Save settings",
@@ -756,6 +877,14 @@ class ComposeAppShellContractTest {
         assertTrue(
             settingsSource.contains("ProxySettingsScreenState.from"),
             "Settings screen must derive Save/Discard availability from the tested settings screen state.",
+        )
+        assertTrue(
+            settingsSource.contains("SettingsWarnings(state.warnings)"),
+            "Settings screen must render warnings from the tested settings screen state.",
+        )
+        assertTrue(
+            settingsSource.contains("state = screenState"),
+            "Settings route must render the controller's full screen state, including save-time validation errors.",
         )
         assertTrue(
             settingsSource.contains("ProxySettingsScreenAction.SaveChanges in state.availableActions"),
@@ -940,6 +1069,8 @@ class ComposeAppShellContractTest {
             "Edge sessions",
             "Management API round trip",
             "Pending operation",
+            "Warnings",
+            "Current warning",
             "Start tunnel",
             "Stop tunnel",
             "Reconnect tunnel",
@@ -958,7 +1089,7 @@ class ComposeAppShellContractTest {
     }
 
     @Test
-    fun `cloudflare screen state redacts unsafe connection error details`() {
+    fun `cloudflare screen state exposes connection error category without unsafe details`() {
         val state =
             CloudflareScreenState.from(
                 config = AppConfig.default(),
@@ -968,6 +1099,11 @@ class ComposeAppShellContractTest {
                     ),
             )
 
+        assertEquals(
+            "Cloudflare tunnel failed",
+            state.lastConnectionError,
+            "Cloudflare failure display must expose a coarse category instead of raw failure detail.",
+        )
         assertFalse(
             state.lastConnectionError.contains("Bearer tunnel-secret"),
             "Cloudflare failure details must not expose authorization header values.",
@@ -976,10 +1112,7 @@ class ComposeAppShellContractTest {
             state.lastConnectionError.contains("token=tunnel-secret"),
             "Cloudflare failure details must not expose URL query secrets.",
         )
-        assertTrue(
-            state.lastConnectionError.contains("[REDACTED]"),
-            "Cloudflare failure details should preserve useful context with sensitive values redacted.",
-        )
+        assertFalse(state.lastConnectionError.contains("[REDACTED]"))
     }
 
     @Test
@@ -1007,6 +1140,7 @@ class ComposeAppShellContractTest {
                     defaultConfig.cloudflare.copy(
                         enabled = true,
                         tunnelTokenPresent = true,
+                        managementHostnameLabel = "management.example.test",
                     ),
             )
         val stoppedActions = cloudflareActions(enabledConfig, CloudflareTunnelStatus.stopped())
@@ -1041,6 +1175,7 @@ class ComposeAppShellContractTest {
         assertEquals(
             listOf(
                 CloudflareScreenAction.StopTunnel,
+                CloudflareScreenAction.ReconnectTunnel,
                 CloudflareScreenAction.TestManagementTunnel,
                 CloudflareScreenAction.CopyDiagnostics,
             ),
@@ -1167,10 +1302,11 @@ class ComposeAppShellContractTest {
                 "Tunnel token: Present",
                 "Tunnel lifecycle: Failed",
                 "Management hostname: https://proxy.example.test/manage?[REDACTED]",
-                "Last connection error: Authorization: [REDACTED]\nhttps://example.test/api/status?[REDACTED]",
+                "Last connection error: Cloudflare tunnel failed",
                 "Edge sessions: 2 sessions",
                 "Management API round trip: HTTP 503 for token=[REDACTED]",
                 "Pending operation: None",
+                "Warnings: None",
             ).joinToString(separator = "\n")
 
         assertEquals(
@@ -1530,6 +1666,7 @@ class ComposeAppShellContractTest {
                 "Pause/drain status: Not active",
                 "Pending operation: None",
                 "Strict IP change: Not required",
+                "Warnings: None",
             ).joinToString(separator = "\n"),
             state.copyableDiagnostics,
             "Rotation diagnostics copy text must be derived from redacted screen fields.",
@@ -1816,7 +1953,7 @@ class ComposeAppShellContractTest {
 
         listOf(
             "Diagnostics",
-            "Run all checks",
+            "Run non-Cloudflare checks",
             "Copy summary",
             "Duration",
             "Error category",
@@ -2032,7 +2169,7 @@ class ComposeAppShellContractTest {
         val idleState = DiagnosticsScreenState.from(DiagnosticsResultModel.empty())
 
         val runningRootState = idleState.withRunningChecks(setOf(DiagnosticCheckType.RootAvailability))
-        val runningAllState = idleState.withRunningChecks(DiagnosticCheckType.entries.toSet())
+        val runningAllState = idleState.withRunningChecks(bulkSafeDiagnosticCheckTypes)
 
         assertEquals(
             DiagnosticResultStatus.Running.label,
@@ -2042,8 +2179,18 @@ class ComposeAppShellContractTest {
         )
         assertFalse(DiagnosticsScreenAction.RunAllChecks in runningRootState.availableActions)
         assertTrue(
-            runningAllState.items.all { item -> item.status == DiagnosticResultStatus.Running.label },
-            "Run-all must immediately show every check as running while synchronous diagnostics execute.",
+            runningAllState
+                .items
+                .filter { item -> item.type in bulkSafeDiagnosticCheckTypes }
+                .all { item -> item.status == DiagnosticResultStatus.Running.label },
+            "Run-all must immediately show every bulk-safe check as running while synchronous diagnostics execute.",
+        )
+        assertEquals(
+            DiagnosticResultStatus.NotRun.label,
+            runningAllState.items
+                .single { item -> item.type == DiagnosticCheckType.CloudflareManagementApi }
+                .status,
+            "Run-all must leave the explicit Cloudflare management API check idle.",
         )
         assertTrue(
             diagnosticsSource.contains("screenState = screenState.withRunningChecks(event.runningTypes())"),
@@ -2569,7 +2716,7 @@ class ComposeAppShellContractTest {
                 maxRows = 1,
             )
 
-        assertEquals("1 of 3 records", state.resultSummary)
+        assertEquals("1 of 3 records (limited to recent 1)", state.resultSummary)
         assertEquals(listOf("new-failed"), state.rows.map(LogsAuditScreenRow::id))
         assertTrue(state.copyableFilteredSummary.contains("New failure"))
         assertFalse(

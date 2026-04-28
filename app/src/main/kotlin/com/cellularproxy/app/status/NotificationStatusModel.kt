@@ -4,6 +4,7 @@ import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.rotation.RotationStatus
 
 data class NotificationStatusModel(
     val serviceState: NotificationServiceState,
@@ -24,6 +25,8 @@ data class NotificationStatusModel(
                 DashboardCloudflareManagementApiCheck.NotRun,
             managementApiTokenPresent: Boolean = true,
             invalidSensitiveConfigReason: SensitiveConfigInvalidReason? = null,
+            rotationStatus: RotationStatus = RotationStatus.idle(),
+            rotationCooldownRemainingSeconds: Long? = null,
         ): NotificationStatusModel {
             val dashboard =
                 DashboardStatusModel.from(
@@ -32,6 +35,8 @@ data class NotificationStatusModel(
                     latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
                     managementApiTokenPresent = managementApiTokenPresent,
                     invalidSensitiveConfigReason = invalidSensitiveConfigReason,
+                    rotationStatus = rotationStatus,
+                    rotationCooldownRemainingSeconds = rotationCooldownRemainingSeconds,
                 )
             val serviceState = status.state.toNotificationServiceState()
             val warnings = dashboard.warnings.toNotificationWarnings()
@@ -95,12 +100,15 @@ enum class NotificationWarning(
     RootUnavailable("Root access is unavailable"),
     SelectedRouteUnavailable("Selected route is unavailable"),
     CloudflareTokenMissing("Cloudflare tunnel token is missing"),
+    CloudflareTokenInvalid("Cloudflare tunnel token is invalid"),
     ManagementApiTokenMissing("Management API token is missing"),
     SensitiveConfigurationInvalid("Sensitive configuration is invalid"),
     PortAlreadyInUse("Proxy port is already in use"),
     InvalidListenAddress("Proxy listen address is invalid"),
     InvalidListenPort("Proxy listen port is invalid"),
     InvalidMaxConcurrentConnections("Proxy connection limit is invalid"),
+    RotationCooldownActive("Rotation is blocked by cooldown"),
+    RotationInProgress("Rotation already in progress"),
 }
 
 private fun ProxyServiceState.toNotificationServiceState(): NotificationServiceState = when (this) {
@@ -153,6 +161,7 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.RootUnavailable -> NotificationWarning.RootUnavailable
         DashboardWarning.SelectedRouteUnavailable -> NotificationWarning.SelectedRouteUnavailable
         DashboardWarning.CloudflareTokenMissing -> NotificationWarning.CloudflareTokenMissing
+        DashboardWarning.CloudflareTokenInvalid -> NotificationWarning.CloudflareTokenInvalid
         DashboardWarning.ManagementApiTokenMissing -> NotificationWarning.ManagementApiTokenMissing
         DashboardWarning.SensitiveConfigurationInvalid -> NotificationWarning.SensitiveConfigurationInvalid
         DashboardWarning.PortAlreadyInUse -> NotificationWarning.PortAlreadyInUse
@@ -160,6 +169,8 @@ private fun Set<DashboardWarning>.toNotificationWarnings(): Set<NotificationWarn
         DashboardWarning.InvalidListenPort -> NotificationWarning.InvalidListenPort
         DashboardWarning.InvalidMaxConcurrentConnections -> NotificationWarning.InvalidMaxConcurrentConnections
         DashboardWarning.StartupFailed -> NotificationWarning.StartupFailed
+        DashboardWarning.RotationCooldownActive -> NotificationWarning.RotationCooldownActive
+        DashboardWarning.RotationInProgress -> NotificationWarning.RotationInProgress
     }
 }
 
@@ -174,12 +185,15 @@ private fun Set<NotificationWarning>.toWarningText(): String? {
         NotificationWarning.RootUnavailable,
         NotificationWarning.SelectedRouteUnavailable,
         NotificationWarning.CloudflareTokenMissing,
+        NotificationWarning.CloudflareTokenInvalid,
         NotificationWarning.ManagementApiTokenMissing,
         NotificationWarning.SensitiveConfigurationInvalid,
         NotificationWarning.PortAlreadyInUse,
         NotificationWarning.InvalidListenAddress,
         NotificationWarning.InvalidListenPort,
         NotificationWarning.InvalidMaxConcurrentConnections,
+        NotificationWarning.RotationCooldownActive,
+        NotificationWarning.RotationInProgress,
     ).filter { it in this }
         .joinToString(" | ") { it.message }
 }

@@ -13,6 +13,7 @@ import com.cellularproxy.proxy.forwarding.OutboundHttpOriginOpenFailure
 import com.cellularproxy.proxy.forwarding.OutboundHttpOriginOpenResult
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.proxy.management.ManagementApiStreamExchangeDisposition
 import com.cellularproxy.proxy.server.BoundProxyServerSocket
 import com.cellularproxy.proxy.server.ProxyBoundClientConnectionHandler
@@ -29,6 +30,9 @@ import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
@@ -138,6 +142,162 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
             assertEquals(config.proxy.listenHost, publishedStatus.config.proxy.listenHost)
             assertEquals(com.cellularproxy.shared.proxy.ProxyServiceState.Running, publishedStatus.status.state)
             assertEquals("Home Wi-Fi", publishedStatus.status.boundRoute?.displayName)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `created lifecycle publishes notification status after runtime rotation action`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        val publishedStatuses = mutableListOf<NotificationRuntimeStatus>()
+        val rotationStatus =
+            RotationStatus(
+                state = RotationState.Failed,
+                operation = RotationOperation.MobileData,
+                failureReason = RotationFailureReason.CooldownActive,
+            )
+        val runtimeRotationHandler =
+            RecordingRuntimeRotationRequestHandler(
+                mobileDataResult =
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Rejected,
+                        rotationStatus,
+                    ),
+            )
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rootAvailability = { RootAvailabilityStatus.Available },
+                rootOperationsEnabled = { true },
+                runtimeRotationRequestHandlerFactory = { runtimeRotationHandler },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                onRuntimeStatusAvailable = publishedStatuses::add,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
+
+        try {
+            lifecycle.startProxyRuntime()
+            managementReference.handle(ManagementApiOperation.RotateMobileData)
+
+            assertEquals(rotationStatus, publishedStatuses.last().rotationStatus)
+        } finally {
+            lifecycle.close()
+            acceptLoopExecutor.shutdownNow()
+            workerExecutor.shutdownNow()
+            queuedClientTimeoutExecutor.shutdownNow()
+            assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `created lifecycle exposes service restart through runtime management handler`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        val managementReference = RuntimeManagementApiHandlerReference()
+        val serviceRestartResult = ManagementApiServiceRestartResult.accepted(packageName = "com.cellularproxy")
+        var serviceRestartCalls = 0
+        val lifecycle =
+            ProxyServerForegroundRuntimeLifecycleFactory.create(
+                plainConfig = loopbackAppConfig(),
+                sensitiveConfig = sensitiveConfig,
+                observedNetworks = { listOf(wifiRoute()) },
+                socketProvider = RecordingUnavailableBoundSocketProvider,
+                managementHandlerReference = managementReference,
+                publicIp = { null },
+                cloudflareStatus = { CloudflareTunnelStatus.disabled() },
+                cloudflareStart = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                cloudflareStop = {
+                    CloudflareTunnelTransitionResult(
+                        CloudflareTunnelTransitionDisposition.Ignored,
+                        CloudflareTunnelStatus.disabled(),
+                    )
+                },
+                rotateMobileData = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                rotateAirplaneMode = {
+                    RotationTransitionResult(
+                        RotationTransitionDisposition.Ignored,
+                        RotationStatus.idle(),
+                    )
+                },
+                serviceRestart = {
+                    serviceRestartCalls += 1
+                    serviceRestartResult
+                },
+                rootAvailability = { RootAvailabilityStatus.Available },
+                rootOperationsEnabled = { true },
+                workerExecutor = workerExecutor,
+                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                acceptLoopExecutor = acceptLoopExecutor,
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
+
+        try {
+            lifecycle.startProxyRuntime()
+
+            val response = managementReference.handle(ManagementApiOperation.ServiceRestart)
+
+            assertEquals(202, response.statusCode)
+            assertEquals("""{"accepted":true,"restart":{"packageName":"com.cellularproxy","failureReason":null}}""", response.body)
+            assertEquals(1, serviceRestartCalls)
         } finally {
             lifecycle.close()
             acceptLoopExecutor.shutdownNow()
@@ -1640,7 +1800,18 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         ): BoundSocketConnectResult = BoundSocketConnectResult.Failed(BoundSocketConnectFailure.SelectedRouteUnavailable)
     }
 
-    private class RecordingRuntimeRotationRequestHandler : RuntimeRotationRequestHandler {
+    private class RecordingRuntimeRotationRequestHandler(
+        private val mobileDataResult: RotationTransitionResult =
+            RotationTransitionResult(
+                RotationTransitionDisposition.Accepted,
+                RotationStatus.completedMobileData(),
+            ),
+        private val airplaneModeResult: RotationTransitionResult =
+            RotationTransitionResult(
+                RotationTransitionDisposition.Accepted,
+                RotationStatus.completedAirplaneMode(),
+            ),
+    ) : RuntimeRotationRequestHandler {
         var mobileDataRotationCalls = 0
             private set
         var airplaneModeRotationCalls = 0
@@ -1650,18 +1821,12 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
 
         override fun rotateMobileData(): RotationTransitionResult {
             mobileDataRotationCalls += 1
-            return RotationTransitionResult(
-                RotationTransitionDisposition.Accepted,
-                RotationStatus.completedMobileData(),
-            )
+            return mobileDataResult
         }
 
         override fun rotateAirplaneMode(): RotationTransitionResult {
             airplaneModeRotationCalls += 1
-            return RotationTransitionResult(
-                RotationTransitionDisposition.Accepted,
-                RotationStatus.completedAirplaneMode(),
-            )
+            return airplaneModeResult
         }
 
         override fun close() {

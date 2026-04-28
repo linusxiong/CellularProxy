@@ -23,7 +23,7 @@ internal class DiagnosticsScreenController(
             }
             DiagnosticsScreenEvent.RunAllChecks -> {
                 if (DiagnosticsScreenAction.RunAllChecks in state.availableActions) {
-                    DiagnosticCheckType.entries.forEach(suiteController::run)
+                    bulkSafeDiagnosticCheckTypes.forEach(suiteController::run)
                     state = buildState()
                 }
             }

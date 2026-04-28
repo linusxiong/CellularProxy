@@ -46,6 +46,7 @@ import com.cellularproxy.app.audit.CellularProxyForegroundServiceAuditStore
 import com.cellularproxy.app.audit.CellularProxyLogsAuditStore
 import com.cellularproxy.app.audit.CellularProxyManagementAuditStore
 import com.cellularproxy.app.audit.CellularProxyRootAuditStore
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.CellularProxyPlainConfigStore
 import com.cellularproxy.app.config.SecureRandomSensitiveConfigGenerator
 import com.cellularproxy.app.config.SensitiveConfig
@@ -82,6 +83,7 @@ import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -234,7 +236,11 @@ fun CellularProxyApp() {
         cloudflareManagementApiCheckState = result.toDashboardCloudflareManagementApiCheck()
         result
     }
-    val dispatchLocalManagementApiAction: (LocalManagementApiAction) -> Unit = { action ->
+
+    fun dispatchLocalManagementApiAction(
+        action: LocalManagementApiAction,
+        afterResponse: (() -> Unit)? = null,
+    ) {
         coroutineScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -299,8 +305,15 @@ fun CellularProxyApp() {
                 }
                 Log.w(CELLULAR_PROXY_APP_TAG, "Local management action $action failed", throwable)
             }
-            refreshProxyStatus()
+            if (afterResponse != null) {
+                afterResponse.invoke()
+            } else {
+                refreshProxyStatus()
+            }
         }
+    }
+    val dispatchLocalManagementApiActionHandler: (LocalManagementApiAction) -> Unit = { action ->
+        dispatchLocalManagementApiAction(action)
     }
 
     MaterialTheme {
@@ -333,10 +346,38 @@ fun CellularProxyApp() {
                         CellularProxyNavigationHost(
                             navController = navController,
                             onStartProxyService = {
-                                dispatchForegroundServiceCommand(ForegroundServiceActions.START_PROXY)
+                                dispatchForegroundServiceCommandThenRefresh(
+                                    action = ForegroundServiceActions.START_PROXY,
+                                    dispatchForegroundServiceCommand = dispatchForegroundServiceCommand,
+                                    refreshProxyStatus = {
+                                        coroutineScope.launch {
+                                            delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)
+                                            refreshProxyStatus()
+                                        }
+                                    },
+                                )
                             },
                             onStopProxyService = {
-                                dispatchForegroundServiceCommand(ForegroundServiceActions.STOP_PROXY)
+                                dispatchLocalManagementApiAction(
+                                    LocalManagementApiAction.ServiceStop,
+                                    afterResponse = {
+                                        coroutineScope.launch {
+                                            delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)
+                                            refreshProxyStatus()
+                                        }
+                                    },
+                                )
+                            },
+                            onRestartProxyService = {
+                                dispatchLocalManagementApiAction(
+                                    LocalManagementApiAction.ServiceRestart,
+                                    afterResponse = {
+                                        coroutineScope.launch {
+                                            delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)
+                                            refreshProxyStatus()
+                                        }
+                                    },
+                                )
                             },
                             settingsInitialConfigProvider = loadSettingsConfig,
                             settingsSaveConfig = saveSettingsConfig,
@@ -357,7 +398,7 @@ fun CellularProxyApp() {
                             onRefreshProxyStatus = {
                                 coroutineScope.launch { refreshProxyStatus() }
                             },
-                            dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
+                            dispatchLocalManagementApiAction = dispatchLocalManagementApiActionHandler,
                             rotationStatusProvider = { rotationStatusState },
                             rotationCooldownRemainingSecondsProvider = { rotationCooldownRemainingSecondsState },
                             currentPublicIpProvider = {
@@ -372,6 +413,9 @@ fun CellularProxyApp() {
                             onExportLogsAuditBundle = { exportBundle ->
                                 shareLogsAuditExportBundle(context, exportBundle)
                             },
+                            onRecordLogsAuditAction = { record ->
+                                CellularProxyLogsAuditStore.logsAuditLog(context).record(record)
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -379,10 +423,38 @@ fun CellularProxyApp() {
                     CellularProxyNavigationHost(
                         navController = navController,
                         onStartProxyService = {
-                            dispatchForegroundServiceCommand(ForegroundServiceActions.START_PROXY)
+                            dispatchForegroundServiceCommandThenRefresh(
+                                action = ForegroundServiceActions.START_PROXY,
+                                dispatchForegroundServiceCommand = dispatchForegroundServiceCommand,
+                                refreshProxyStatus = {
+                                    coroutineScope.launch {
+                                        delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)
+                                        refreshProxyStatus()
+                                    }
+                                },
+                            )
                         },
                         onStopProxyService = {
-                            dispatchForegroundServiceCommand(ForegroundServiceActions.STOP_PROXY)
+                            dispatchLocalManagementApiAction(
+                                LocalManagementApiAction.ServiceStop,
+                                afterResponse = {
+                                    coroutineScope.launch {
+                                        delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)
+                                        refreshProxyStatus()
+                                    }
+                                },
+                            )
+                        },
+                        onRestartProxyService = {
+                            dispatchLocalManagementApiAction(
+                                LocalManagementApiAction.ServiceRestart,
+                                afterResponse = {
+                                    coroutineScope.launch {
+                                        delay(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS)
+                                        refreshProxyStatus()
+                                    }
+                                },
+                            )
                         },
                         settingsInitialConfigProvider = loadSettingsConfig,
                         settingsSaveConfig = saveSettingsConfig,
@@ -403,7 +475,7 @@ fun CellularProxyApp() {
                         onRefreshProxyStatus = {
                             coroutineScope.launch { refreshProxyStatus() }
                         },
-                        dispatchLocalManagementApiAction = dispatchLocalManagementApiAction,
+                        dispatchLocalManagementApiAction = dispatchLocalManagementApiActionHandler,
                         rotationStatusProvider = { rotationStatusState },
                         rotationCooldownRemainingSecondsProvider = { rotationCooldownRemainingSecondsState },
                         currentPublicIpProvider = {
@@ -418,6 +490,9 @@ fun CellularProxyApp() {
                         onExportLogsAuditBundle = { exportBundle ->
                             shareLogsAuditExportBundle(context, exportBundle)
                         },
+                        onRecordLogsAuditAction = { record ->
+                            CellularProxyLogsAuditStore.logsAuditLog(context).record(record)
+                        },
                         modifier =
                             Modifier
                                 .fillMaxSize()
@@ -430,6 +505,7 @@ fun CellularProxyApp() {
 }
 
 private const val CELLULAR_PROXY_APP_TAG = "CellularProxyApp"
+private const val DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS = 500L
 
 private fun shareLogsAuditExportBundle(
     context: Context,
@@ -441,6 +517,15 @@ private fun shareLogsAuditExportBundle(
             .putExtra(Intent.EXTRA_SUBJECT, bundle.fileName)
             .putExtra(Intent.EXTRA_TEXT, bundle.text)
     context.startActivity(Intent.createChooser(sendIntent, "Export Logs/Audit bundle"))
+}
+
+internal fun dispatchForegroundServiceCommandThenRefresh(
+    action: String,
+    dispatchForegroundServiceCommand: (String) -> Unit,
+    refreshProxyStatus: () -> Unit,
+) {
+    dispatchForegroundServiceCommand(action)
+    refreshProxyStatus()
 }
 
 internal enum class CellularProxyNavigationChrome {
@@ -683,6 +768,7 @@ internal fun CellularProxyNavigationHost(
     navController: NavHostController,
     onStartProxyService: () -> Unit,
     onStopProxyService: () -> Unit,
+    onRestartProxyService: () -> Unit,
     settingsInitialConfigProvider: () -> AppConfig,
     settingsSaveConfig: (AppConfig) -> Unit,
     settingsLoadSensitiveConfig: () -> SensitiveConfig,
@@ -708,6 +794,7 @@ internal fun CellularProxyNavigationHost(
     currentPublicIpProvider: () -> String?,
     onCopyText: (String) -> Unit,
     onExportLogsAuditBundle: (LogsAuditScreenExportBundle) -> Unit,
+    onRecordLogsAuditAction: (PersistedLogsAuditRecord) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -731,10 +818,13 @@ internal fun CellularProxyNavigationHost(
                         managementApiTokenPresent = sensitiveConfigDashboardInputs.managementApiTokenPresent,
                         invalidSensitiveConfigReason = sensitiveConfigDashboardInputs.invalidSensitiveConfigReason,
                         recentTraffic = recentTrafficProvider(),
+                        rotationStatus = rotationStatusProvider(),
+                        rotationCooldownRemainingSeconds = rotationCooldownRemainingSecondsProvider(),
                     )
                 },
                 onStartProxyService = onStartProxyService,
                 onStopProxyService = onStopProxyService,
+                onRestartProxyService = onRestartProxyService,
                 onRefreshStatus = onRefreshProxyStatus,
                 onOpenRiskDetails = { navController.navigate(LogsAudit.route) },
                 onOpenCloudflare = { navController.navigate(Cloudflare.route) },
@@ -820,6 +910,7 @@ internal fun CellularProxyNavigationHost(
                 redactionSecretsProvider = logsAuditRedactionSecretsProvider,
                 onCopyLogsAuditText = onCopyText,
                 onExportLogsAuditBundle = onExportLogsAuditBundle,
+                onRecordLogsAuditAction = onRecordLogsAuditAction,
             )
         }
     }
@@ -871,9 +962,19 @@ internal fun sensitiveConfigDashboardInputs(
         )
     is SensitiveConfigLoadResult.Invalid ->
         SensitiveConfigDashboardInputs(
-            managementApiTokenPresent = false,
+            managementApiTokenPresent = result.reason.managementApiTokenPresentForDashboard(),
             invalidSensitiveConfigReason = result.reason,
         )
+}
+
+private fun SensitiveConfigInvalidReason.managementApiTokenPresentForDashboard(): Boolean = when (this) {
+    SensitiveConfigInvalidReason.InvalidManagementApiToken,
+    SensitiveConfigInvalidReason.PartiallyMissingRequiredSecrets,
+    SensitiveConfigInvalidReason.UndecryptableSecret,
+    SensitiveConfigInvalidReason.InvalidProxyCredential,
+    -> false
+    SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+    -> true
 }
 
 internal fun logRedactionSecretsFromSensitiveConfigLoadResult(

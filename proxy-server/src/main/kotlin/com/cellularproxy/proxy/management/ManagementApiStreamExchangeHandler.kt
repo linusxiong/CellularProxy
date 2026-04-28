@@ -145,6 +145,7 @@ class ManagementApiStreamExchangeHandler(
 
         clientOutput.write(bytes)
         clientOutput.flush()
+        response.notifyResponseSent()
 
         return result
     }
@@ -184,6 +185,8 @@ internal fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull(
             ManagementApiOperation.RotateAirplaneMode
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/service/stop" ->
             ManagementApiOperation.ServiceStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/service/restart" ->
+            ManagementApiOperation.ServiceRestart
         else -> null
     }
 }

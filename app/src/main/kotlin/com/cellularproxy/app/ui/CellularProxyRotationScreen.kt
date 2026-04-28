@@ -232,6 +232,16 @@ internal fun CellularProxyRotationScreen(
             RotationField("Pending operation", state.pendingOperation)
         }
 
+        RotationSection("Warnings") {
+            if (state.warnings.isEmpty()) {
+                RotationField("Current warnings", "None")
+            } else {
+                state.warnings.forEach { warning ->
+                    RotationField("Current warning", warning.label)
+                }
+            }
+        }
+
         RotationSection("Public IP") {
             RotationField("Current public IP", state.currentPublicIp)
             RotationField("Old public IP", state.oldPublicIp)
@@ -252,6 +262,7 @@ internal data class RotationScreenState(
     val pauseDrainStatus: String,
     val pendingOperation: String,
     val strictIpChange: String,
+    val warnings: Set<RotationScreenWarning>,
     val copyableDiagnostics: String,
     val availableActions: List<RotationScreenAction>,
 ) {
@@ -276,6 +287,14 @@ internal data class RotationScreenState(
             val pauseDrainStatus = rotationStatus.toPauseDrainText(activeConnections)
             val pendingOperation = "None"
             val strictIpChange = if (config.rotation.strictIpChangeRequired) "Required" else "Not required"
+            val warnings =
+                rotationScreenWarnings(
+                    config = config,
+                    rotationStatus = rotationStatus,
+                    rootAvailability = rootAvailability,
+                    cooldownRemainingSeconds = cooldownRemainingSeconds,
+                )
+            val warningsText = warnings.toWarningsText()
             return RotationScreenState(
                 rootAvailability = rootAvailabilityText,
                 rootOperations = rootOperations,
@@ -288,6 +307,7 @@ internal data class RotationScreenState(
                 pauseDrainStatus = pauseDrainStatus,
                 pendingOperation = pendingOperation,
                 strictIpChange = strictIpChange,
+                warnings = warnings,
                 copyableDiagnostics =
                     listOf(
                         "Root availability: $rootAvailabilityText",
@@ -301,6 +321,7 @@ internal data class RotationScreenState(
                         "Pause/drain status: $pauseDrainStatus",
                         "Pending operation: $pendingOperation",
                         "Strict IP change: $strictIpChange",
+                        "Warnings: $warningsText",
                     ).joinToString(separator = "\n"),
                 availableActions =
                     rotationScreenActions(
@@ -312,6 +333,15 @@ internal data class RotationScreenState(
             )
         }
     }
+}
+
+internal enum class RotationScreenWarning(
+    val label: String,
+) {
+    RootUnavailable("Root access unavailable"),
+    RotationCooldownActive("Rotation blocked by cooldown"),
+    RotationInProgress("Rotation already in progress"),
+    OperationInProgress("Rotation operation in progress"),
 }
 
 internal enum class RotationScreenAction(
@@ -360,7 +390,9 @@ internal class RotationScreenController(
     private val actionHandler: (RotationScreenAction) -> Unit = {},
 ) {
     private var lastObservedRotationStatus: RotationStatus = rotationStatusProvider()
-    private val pendingUnsafeActions = mutableSetOf<RotationScreenAction>()
+    private var lastObservedRootAvailability: RootAvailabilityStatus = rootAvailabilityProvider()
+    private var lastObservedCurrentPublicIp: String? = currentPublicIpProvider()
+    private val pendingActions = mutableSetOf<RotationScreenAction>()
     private val pendingEffects = mutableListOf<RotationScreenEffect>()
     var state: RotationScreenState = buildState()
         private set
@@ -391,8 +423,8 @@ internal class RotationScreenController(
         if (action !in state.availableActions) {
             return
         }
-        if (action.requiresConfirmation) {
-            pendingUnsafeActions.add(action)
+        if (action.tracksPendingOperation) {
+            pendingActions.add(action)
         }
         actionHandler(action)
         state = buildState()
@@ -400,10 +432,20 @@ internal class RotationScreenController(
 
     private fun refreshPendingActions() {
         val currentStatus = rotationStatusProvider()
+        val currentRootAvailability = rootAvailabilityProvider()
+        val currentPublicIp = currentPublicIpProvider()
         if (currentStatus != lastObservedRotationStatus && !currentStatus.isActive) {
-            pendingUnsafeActions.clear()
+            pendingActions.removeAll(rotationScreenRotationActions)
+        }
+        if (currentRootAvailability != lastObservedRootAvailability) {
+            pendingActions.remove(RotationScreenAction.CheckRoot)
+        }
+        if (currentPublicIp != lastObservedCurrentPublicIp) {
+            pendingActions.remove(RotationScreenAction.ProbeCurrentPublicIp)
         }
         lastObservedRotationStatus = currentStatus
+        lastObservedRootAvailability = currentRootAvailability
+        lastObservedCurrentPublicIp = currentPublicIp
         state = buildState()
     }
 
@@ -418,7 +460,7 @@ internal class RotationScreenController(
                 cooldownRemainingSeconds = cooldownRemainingSecondsProvider(),
                 activeConnections = activeConnectionsProvider(),
                 secrets = secretsProvider(),
-            ).withoutPendingUnsafeActions(pendingUnsafeActions)
+            ).withoutPendingActions(pendingActions)
     }
 }
 
@@ -442,27 +484,55 @@ internal sealed interface RotationScreenEffect {
     ) : RotationScreenEffect
 }
 
-private fun RotationScreenState.withoutPendingUnsafeActions(
-    pendingUnsafeActions: Set<RotationScreenAction>,
+private fun RotationScreenState.withoutPendingActions(
+    pendingActions: Set<RotationScreenAction>,
 ): RotationScreenState {
-    val pendingOperation = pendingUnsafeActions.pendingOperationLabel()
+    val pendingOperation = pendingActions.pendingOperationLabel()
+    val warnings =
+        if (
+            pendingActions.isNotEmpty() &&
+            RotationScreenWarning.RotationInProgress !in warnings
+        ) {
+            warnings + RotationScreenWarning.OperationInProgress
+        } else {
+            warnings
+        }
     return copy(
         pendingOperation = pendingOperation,
-        copyableDiagnostics = copyableDiagnosticsWithPendingOperation(pendingOperation),
-        availableActions =
-            if (pendingUnsafeActions.any(RotationScreenAction::requiresConfirmation)) {
-                availableActions.filterNot(RotationScreenAction::requiresConfirmation)
-            } else {
-                availableActions
-            },
+        warnings = warnings,
+        copyableDiagnostics =
+            copyableDiagnosticsWithPendingOperation(
+                pendingOperation = pendingOperation,
+                warnings = warnings,
+            ),
+        availableActions = availableActions.filterNot(pendingActions.suppressedActionFilter()::contains),
     )
 }
+
+private fun Set<RotationScreenAction>.suppressedActionFilter(): Set<RotationScreenAction> {
+    if (none(rotationScreenRotationActions::contains)) {
+        return this
+    }
+    return this + rotationScreenRotationActions
+}
+
+private val RotationScreenAction.tracksPendingOperation: Boolean
+    get() = this != RotationScreenAction.CopyDiagnostics
+
+private val rotationScreenRotationActions: Set<RotationScreenAction> =
+    setOf(
+        RotationScreenAction.RotateMobileData,
+        RotationScreenAction.RotateAirplaneMode,
+    )
 
 private fun Set<RotationScreenAction>.pendingOperationLabel(): String = firstOrNull()?.let { action ->
     "In progress: ${action.toButtonLabel()}"
 } ?: "None"
 
-private fun RotationScreenState.copyableDiagnosticsWithPendingOperation(pendingOperation: String): String = listOf(
+private fun RotationScreenState.copyableDiagnosticsWithPendingOperation(
+    pendingOperation: String,
+    warnings: Set<RotationScreenWarning>,
+): String = listOf(
     "Root availability: $rootAvailability",
     "Root operations: $rootOperations",
     "Cooldown status: $cooldownStatus",
@@ -474,7 +544,31 @@ private fun RotationScreenState.copyableDiagnosticsWithPendingOperation(pendingO
     "Pause/drain status: $pauseDrainStatus",
     "Pending operation: $pendingOperation",
     "Strict IP change: $strictIpChange",
+    "Warnings: ${warnings.toWarningsText()}",
 ).joinToString(separator = "\n")
+
+private fun rotationScreenWarnings(
+    config: AppConfig,
+    rotationStatus: RotationStatus,
+    rootAvailability: RootAvailabilityStatus,
+    cooldownRemainingSeconds: Long?,
+): Set<RotationScreenWarning> = buildSet {
+    if (config.root.operationsEnabled && rootAvailability == RootAvailabilityStatus.Unavailable) {
+        add(RotationScreenWarning.RootUnavailable)
+    }
+    if (cooldownRemainingSeconds != null && cooldownRemainingSeconds > 0) {
+        add(RotationScreenWarning.RotationCooldownActive)
+    }
+    if (rotationStatus.isActive) {
+        add(RotationScreenWarning.RotationInProgress)
+    }
+}
+
+private fun Set<RotationScreenWarning>.toWarningsText(): String = if (isEmpty()) {
+    "None"
+} else {
+    joinToString(separator = " | ") { warning -> warning.label }
+}
 
 private fun RotationScreenAction.toButtonLabel(): String = when (this) {
     RotationScreenAction.CheckRoot -> "Check root"

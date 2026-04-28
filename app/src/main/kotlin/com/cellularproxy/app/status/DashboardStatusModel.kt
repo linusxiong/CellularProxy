@@ -13,6 +13,8 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationStatus
 
 data class DashboardStatusModel(
     val serviceState: DashboardServiceState,
@@ -26,7 +28,9 @@ data class DashboardStatusModel(
     val bytesReceived: Long,
     val bytesSent: Long,
     val recentTraffic: DashboardTrafficSummary? = null,
+    val managementApiStatus: DashboardManagementApiStatus,
     val cloudflare: DashboardCloudflareStatus,
+    val cloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
     val root: DashboardRootState,
     val startupError: ProxyStartupError?,
     val warnings: Set<DashboardWarning>,
@@ -43,6 +47,8 @@ data class DashboardStatusModel(
             managementApiTokenPresent: Boolean = true,
             invalidSensitiveConfigReason: SensitiveConfigInvalidReason? = null,
             recentTraffic: DashboardTrafficSummary? = null,
+            rotationStatus: RotationStatus = RotationStatus.idle(),
+            rotationCooldownRemainingSeconds: Long? = null,
         ): DashboardStatusModel {
             val cloudflare = status.cloudflare.toDashboardCloudflareStatus()
             return DashboardStatusModel(
@@ -57,7 +63,13 @@ data class DashboardStatusModel(
                 bytesReceived = status.metrics.bytesReceived,
                 bytesSent = status.metrics.bytesSent,
                 recentTraffic = recentTraffic,
+                managementApiStatus =
+                    managementApiStatus(
+                        status = status,
+                        managementApiTokenPresent = managementApiTokenPresent,
+                    ),
                 cloudflare = cloudflare,
+                cloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
                 root = rootState(config, status),
                 startupError = status.startupError,
                 warnings =
@@ -68,6 +80,8 @@ data class DashboardStatusModel(
                         latestCloudflareManagementApiCheck = latestCloudflareManagementApiCheck,
                         managementApiTokenPresent = managementApiTokenPresent,
                         invalidSensitiveConfigReason = invalidSensitiveConfigReason,
+                        rotationStatus = rotationStatus,
+                        rotationCooldownRemainingSeconds = rotationCooldownRemainingSeconds,
                     ),
                 recentHighSeverityErrors = recentLogs.toDashboardRecentErrors(redactionSecrets),
             )
@@ -89,6 +103,8 @@ data class DashboardStatusModel(
             latestCloudflareManagementApiCheck: DashboardCloudflareManagementApiCheck,
             managementApiTokenPresent: Boolean,
             invalidSensitiveConfigReason: SensitiveConfigInvalidReason?,
+            rotationStatus: RotationStatus,
+            rotationCooldownRemainingSeconds: Long?,
         ): Set<DashboardWarning> = buildSet {
             if (config.proxy.hasHighSecurityRisk || status.hasHighSecurityRisk) {
                 add(DashboardWarning.BroadUnauthenticatedProxy)
@@ -121,6 +137,12 @@ data class DashboardStatusModel(
             ) {
                 add(DashboardWarning.CloudflareTokenMissing)
             }
+            if (
+                config.cloudflare.enabled &&
+                invalidSensitiveConfigReason == SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken
+            ) {
+                add(DashboardWarning.CloudflareTokenInvalid)
+            }
             if (!managementApiTokenPresent || status.startupError == ProxyStartupError.MissingManagementApiToken) {
                 add(DashboardWarning.ManagementApiTokenMissing)
             }
@@ -139,6 +161,16 @@ data class DashboardStatusModel(
             }
             if (status.startupError != null) {
                 add(DashboardWarning.StartupFailed)
+            }
+            if (
+                rotationCooldownRemainingSeconds != null &&
+                rotationCooldownRemainingSeconds > 0 ||
+                rotationStatus.failureReason == RotationFailureReason.CooldownActive
+            ) {
+                add(DashboardWarning.RotationCooldownActive)
+            }
+            if (rotationStatus.isActive) {
+                add(DashboardWarning.RotationInProgress)
             }
         }
 
@@ -202,6 +234,12 @@ enum class DashboardRootState {
     Unavailable,
 }
 
+enum class DashboardManagementApiStatus {
+    Available,
+    Unavailable,
+    MissingToken,
+}
+
 enum class DashboardWarning {
     BroadUnauthenticatedProxy,
     CloudflareFailed,
@@ -210,6 +248,7 @@ enum class DashboardWarning {
     RootUnavailable,
     SelectedRouteUnavailable,
     CloudflareTokenMissing,
+    CloudflareTokenInvalid,
     ManagementApiTokenMissing,
     SensitiveConfigurationInvalid,
     PortAlreadyInUse,
@@ -217,6 +256,8 @@ enum class DashboardWarning {
     InvalidListenPort,
     InvalidMaxConcurrentConnections,
     StartupFailed,
+    RotationCooldownActive,
+    RotationInProgress,
 }
 
 enum class DashboardCloudflareManagementApiCheck {
@@ -374,6 +415,16 @@ private fun RootAvailabilityStatus.toDashboardRootState(): DashboardRootState = 
     RootAvailabilityStatus.Unknown -> DashboardRootState.Unknown
     RootAvailabilityStatus.Available -> DashboardRootState.Available
     RootAvailabilityStatus.Unavailable -> DashboardRootState.Unavailable
+}
+
+private fun managementApiStatus(
+    status: ProxyServiceStatus,
+    managementApiTokenPresent: Boolean,
+): DashboardManagementApiStatus = when {
+    !managementApiTokenPresent || status.startupError == ProxyStartupError.MissingManagementApiToken ->
+        DashboardManagementApiStatus.MissingToken
+    status.state == ProxyServiceState.Running -> DashboardManagementApiStatus.Available
+    else -> DashboardManagementApiStatus.Unavailable
 }
 
 private fun List<DashboardLogSummary>.toDashboardRecentErrors(

@@ -28,6 +28,8 @@ import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.PublicIpProbeEndpoint
 import com.cellularproxy.network.RouteBoundPublicIpProbe
 import com.cellularproxy.network.RouteBoundSocketProvider
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyRotationPauseActions
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
@@ -40,6 +42,7 @@ import com.cellularproxy.root.RootAvailabilityChecker
 import com.cellularproxy.root.RootCommandExecutor
 import com.cellularproxy.root.RootCommandProcessExecutor
 import com.cellularproxy.root.RotationRootCommandController
+import com.cellularproxy.root.ServiceRestartRootController
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelControlPlane
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
@@ -61,6 +64,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.Closeable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.atomic.AtomicBoolean
@@ -129,6 +133,7 @@ object CellularProxyRuntimeCompositionInstaller {
             cloudflareRuntimeCleanup = productionCloudflareRuntime,
             rootOperationsEnabled = rootOperationsEnabled,
             rootCommandProcessExecutor = rootCommandProcessExecutor,
+            serviceRestartPackageName = appContext.packageName,
             recordRootAudit = recordRootAudit,
             runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
             rootAvailability =
@@ -168,6 +173,7 @@ object CellularProxyRuntimeCompositionInstaller {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
         rootCommandProcessExecutor: RootCommandProcessExecutor = BlockingRootCommandProcessExecutor(),
+        serviceRestartPackageName: String = DEFAULT_SERVICE_RESTART_PACKAGE_NAME,
         recordRootAudit: (RootCommandAuditRecord) -> Unit = {},
         rootAvailability: () -> RootAvailabilityStatus = ::unknownRootAvailability,
         runtimeRotationRequestHandlerFactory: ((RunningProxyServerRuntime) -> RuntimeRotationRequestHandler?)? = null,
@@ -196,6 +202,7 @@ object CellularProxyRuntimeCompositionInstaller {
         rotateAirplaneMode = rotateAirplaneMode,
         rootOperationsEnabled = rootOperationsEnabled,
         rootCommandProcessExecutor = rootCommandProcessExecutor,
+        serviceRestartPackageName = serviceRestartPackageName,
         recordRootAudit = recordRootAudit,
         rootAvailability = rootAvailability,
         runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
@@ -231,6 +238,7 @@ object CellularProxyRuntimeCompositionInstaller {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
         rootCommandProcessExecutor: RootCommandProcessExecutor = BlockingRootCommandProcessExecutor(),
+        serviceRestartPackageName: String = DEFAULT_SERVICE_RESTART_PACKAGE_NAME,
         recordRootAudit: (RootCommandAuditRecord) -> Unit = {},
         rootAvailability: () -> RootAvailabilityStatus,
         runtimeRotationRequestHandlerFactory: ((RunningProxyServerRuntime) -> RuntimeRotationRequestHandler?)? = null,
@@ -257,6 +265,20 @@ object CellularProxyRuntimeCompositionInstaller {
                     cloudflareReconnect = cloudflareReconnect,
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
+                    serviceRestart =
+                        when (bootstrapResult) {
+                            is AppConfigBootstrapResult.Ready ->
+                                createProductionServiceRestartScheduler(
+                                    packageName = serviceRestartPackageName,
+                                    sensitiveConfig = bootstrapResult.sensitiveConfig,
+                                    rootCommandProcessExecutor = rootCommandProcessExecutor,
+                                    recordRootAudit = recordRootAudit,
+                                    executor = executorResources.serviceRestartExecutor,
+                                )
+                            is AppConfigBootstrapResult.InvalidSensitiveConfig -> {
+                                { unavailableServiceRestart() }
+                            }
+                        },
                     rootOperationsEnabled = rootOperationsEnabled,
                     rootAvailability = rootAvailability,
                     runtimeRotationRequestHandlerFactory =
@@ -380,7 +402,7 @@ internal fun createProductionCloudflareTunnelRuntime(
                 controlPlane = controlPlane,
                 connector = connector,
                 sessionRegistry = sessionRegistry,
-            ).reconnectIfDegraded(
+            ).reconnectIfActive(
                 expectedSnapshot = controlPlane.snapshot(),
                 credentials = credentials,
             ).transitionResultOrCurrent()
@@ -421,8 +443,10 @@ internal class RuntimeCompositionExecutorResources(
     val queuedClientTimeoutExecutor: ScheduledExecutorService,
     val acceptLoopExecutor: ExecutorService,
     val rotationContinuationExecutor: ScheduledExecutorService = ScheduledThreadPoolExecutor(1),
+    val serviceRestartExecutor: ScheduledExecutorService = ScheduledThreadPoolExecutor(1),
 ) : Closeable {
     override fun close() {
+        serviceRestartExecutor.shutdownNow()
         rotationContinuationExecutor.shutdownNow()
         acceptLoopExecutor.shutdownNow()
         queuedClientTimeoutExecutor.shutdownNow()
@@ -500,6 +524,41 @@ internal fun createProductionRuntimeRotationRequestHandlerFactory(
     }
 }
 
+internal fun createProductionServiceRestartScheduler(
+    packageName: String,
+    sensitiveConfig: SensitiveConfig,
+    rootCommandProcessExecutor: RootCommandProcessExecutor,
+    recordRootAudit: (RootCommandAuditRecord) -> Unit,
+    executor: ScheduledExecutorService,
+): () -> ManagementApiServiceRestartResult {
+    val controller =
+        ServiceRestartRootController(
+            RootCommandExecutor(
+                processExecutor = rootCommandProcessExecutor,
+                recordAudit = recordRootAudit,
+            ),
+        )
+    return {
+        ManagementApiServiceRestartResult.accepted(
+            packageName = packageName,
+            afterResponseSent = {
+                try {
+                    executor.execute {
+                        controller.restart(
+                            packageName = packageName,
+                            timeoutMillis = ROOT_SERVICE_RESTART_COMMAND_TIMEOUT_MILLIS,
+                            secrets = sensitiveConfig.logRedactionSecrets(),
+                        )
+                    }
+                } catch (_: RejectedExecutionException) {
+                    // The response has already been delivered; the root audit log cannot
+                    // record a command that never reached the root executor.
+                }
+            },
+        )
+    }
+}
+
 private class RuntimeCompositionCleanup(
     private val installResult: ProxyServerForegroundRuntimeInstallResult?,
     private val routeMonitor: Closeable,
@@ -564,6 +623,10 @@ internal fun unavailableRotationExecutionTransition(operation: RotationOperation
         ),
 )
 
+private fun unavailableServiceRestart(
+    failureReason: ManagementApiServiceRestartFailureReason = ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
+): ManagementApiServiceRestartResult = ManagementApiServiceRestartResult.rejected(failureReason)
+
 internal fun createRootAvailabilityProvider(
     rootOperationsEnabled: () -> Boolean,
     processExecutor: RootCommandProcessExecutor = BlockingRootCommandProcessExecutor(),
@@ -605,6 +668,8 @@ private fun logRootAuditFailure(exception: Exception) {
 private const val COMPOSITION_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L
 private const val ROOT_AVAILABILITY_CHECK_TIMEOUT_MILLIS = 2_000L
 private const val ROOT_ROTATION_COMMAND_TIMEOUT_MILLIS = 10_000L
+private const val ROOT_SERVICE_RESTART_COMMAND_TIMEOUT_MILLIS = 10_000L
 private const val ROOT_AUDIT_LOG_TAG = "CellularProxyAudit"
+private const val DEFAULT_SERVICE_RESTART_PACKAGE_NAME = "com.cellularproxy"
 private const val DEFAULT_PUBLIC_IP_PROBE_HOST = "api.ipify.org"
 private val DEFAULT_ROTATION_CONNECTION_DRAIN_TIME = 15.seconds

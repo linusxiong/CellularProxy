@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     kotlin("android")
@@ -15,6 +17,40 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val e2eLocalProperties =
+            Properties().apply {
+                val file =
+                    rootProject.layout.projectDirectory
+                        .file("e2e.local.properties")
+                        .asFile
+                if (file.isFile) {
+                    file.inputStream().use { input -> load(input) }
+                }
+            }
+
+        fun cloudflareE2eValue(localProperty: String): String? = e2eLocalProperties
+            .getProperty(localProperty)
+            .trimmedOrNull()
+
+        mapOf(
+            "cloudflareTunnelToken" to
+                cloudflareE2eValue(
+                    localProperty = "cellularproxy.e2e.cloudflareTunnelToken",
+                ),
+            "cloudflareManagementHostname" to
+                cloudflareE2eValue(
+                    localProperty = "cellularproxy.e2e.cloudflareManagementHostname",
+                ),
+            "cloudflareManagementApiToken" to
+                cloudflareE2eValue(
+                    localProperty = "cellularproxy.e2e.cloudflareManagementApiToken",
+                ),
+        ).forEach { (argumentName, value) ->
+            if (value != null) {
+                testInstrumentationRunnerArguments[argumentName] = value
+            }
+        }
     }
 
     compileOptions {
@@ -54,3 +90,7 @@ dependencies {
     debugImplementation(platform("androidx.compose:compose-bom:2026.03.01"))
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+private fun String?.trimmedOrNull(): String? = this
+    ?.trim()
+    ?.takeIf(String::isNotEmpty)

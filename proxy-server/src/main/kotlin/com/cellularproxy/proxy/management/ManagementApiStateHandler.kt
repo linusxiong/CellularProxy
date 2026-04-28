@@ -26,6 +26,11 @@ data class ManagementApiCallbacks(
     val rotationCooldownRemainingMillis: () -> Long? = { null },
     val cloudflareEdgeSessionSummary: () -> String? = { null },
     val serviceStop: () -> ProxyServiceStopTransitionResult,
+    val serviceRestart: () -> ManagementApiServiceRestartResult = {
+        ManagementApiServiceRestartResult.rejected(
+            ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
+        )
+    },
     val rootOperationsEnabled: () -> Boolean,
 )
 
@@ -56,6 +61,8 @@ class ManagementApiStateHandler(
             ManagementApiRotationActionResponses.transition(callbacks.rotateAirplaneMode())
         ManagementApiOperation.ServiceStop ->
             ManagementApiServiceStopActionResponses.transition(callbacks.serviceStop())
+        ManagementApiOperation.ServiceRestart ->
+            ManagementApiServiceRestartActionResponses.transition(callbacks.serviceRestart())
     }
 
     private fun renderStatus(): ManagementApiResponse {

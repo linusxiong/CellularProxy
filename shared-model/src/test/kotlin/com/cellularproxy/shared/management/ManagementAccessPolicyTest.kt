@@ -45,6 +45,7 @@ class ManagementAccessPolicyTest {
                 HttpMethod.Post to "/api/rotate/mobile-data",
                 HttpMethod.Post to "/api/rotate/airplane-mode",
                 HttpMethod.Post to "/api/service/stop",
+                HttpMethod.Post to "/api/service/restart",
             )
 
         endpoints.forEach { (method, path) ->

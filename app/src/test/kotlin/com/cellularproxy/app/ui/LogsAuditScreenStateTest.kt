@@ -360,6 +360,30 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `search matches redacted row text when query contains raw secret material`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "secret-auth",
+                            category = LogsAuditScreenCategory.ManagementApi,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "Management call failed",
+                            detail = "Authorization: Bearer management-secret",
+                        ),
+                    ),
+                filter = LogsAuditScreenFilter(search = "Authorization: Bearer management-secret"),
+                secrets = LogRedactionSecrets(managementApiToken = "management-secret"),
+            )
+
+        assertEquals("Authorization: [REDACTED]", state.searchDisplayText)
+        assertEquals("Authorization: [REDACTED]", state.filter.search)
+        assertEquals(listOf("secret-auth"), state.rows.map(LogsAuditScreenRow::id))
+    }
+
+    @Test
     fun `controller selection preserves the current filter`() {
         val controller =
             LogsAuditScreenController(
@@ -430,6 +454,50 @@ class LogsAuditScreenStateTest {
         val export = (effects[1] as LogsAuditScreenEffect.ExportBundle).bundle
         assertEquals("cellularproxy-logs-audit-300.txt", export.fileName)
         assertFalse(export.text.contains("secret-token"))
+    }
+
+    @Test
+    fun `controller copy and export actions emit metadata only audit effects`() {
+        val controller =
+            LogsAuditScreenController(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "secret-token",
+                            category = LogsAuditScreenCategory.ManagementApi,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "Management failed for secret-token",
+                            detail = "Authorization: Bearer secret-token",
+                        ),
+                    ),
+                secrets = LogRedactionSecrets(managementApiToken = "secret-token"),
+                exportSupported = true,
+                exportGeneratedAtEpochMillis = 300,
+                auditOccurredAtEpochMillisProvider = { 400 },
+                auditActionsEnabled = true,
+            )
+
+        controller.handle(LogsAuditScreenEvent.SelectRecord("secret-token"))
+        controller.handle(LogsAuditScreenEvent.CopySelectedRecord)
+        controller.handle(LogsAuditScreenEvent.CopyFilteredSummary)
+        controller.handle(LogsAuditScreenEvent.ExportRedactedBundle)
+
+        val auditRecords =
+            controller
+                .consumeEffects()
+                .filterIsInstance<LogsAuditScreenEffect.RecordAuditAction>()
+                .map(LogsAuditScreenEffect.RecordAuditAction::record)
+        assertEquals(
+            listOf(
+                "action=copy_selected_record rowCount=1 selectedCategory=ManagementApi",
+                "action=copy_filtered_summary rowCount=1",
+                "action=export_redacted_bundle rowCount=1 fileName=cellularproxy-logs-audit-300.txt",
+            ),
+            auditRecords.map { record -> record.detail },
+        )
+        assertEquals(List(3) { LogsAuditRecordCategory.Audit }, auditRecords.map { record -> record.category })
+        assertFalse(auditRecords.joinToString(separator = "\n").contains("secret-token"))
     }
 
     @Test
@@ -552,6 +620,36 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `controller can defer provider reads until first refresh`() {
+        var providerReadCount = 0
+        val controller =
+            LogsAuditScreenController(
+                rowsProvider = {
+                    providerReadCount += 1
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "runtime",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 100,
+                            title = "Runtime started",
+                            detail = "No issue",
+                        ),
+                    )
+                },
+                loadInitialState = false,
+            )
+
+        assertEquals(0, providerReadCount)
+        assertTrue(controller.state.rows.isEmpty())
+
+        controller.handle(LogsAuditScreenEvent.Refresh)
+
+        assertEquals(1, providerReadCount)
+        assertEquals(listOf("runtime"), controller.state.rows.map(LogsAuditScreenRow::id))
+    }
+
+    @Test
     fun `selected record copy payload is derived from redacted selected row`() {
         val state =
             LogsAuditScreenState.from(
@@ -603,5 +701,43 @@ class LogsAuditScreenStateTest {
             )
 
         assertNull(state.copyableSelectedRecord)
+    }
+
+    @Test
+    fun `state result summary identifies when visible rows are capped by recent record limit`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "oldest",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 100,
+                            title = "Oldest runtime event",
+                            detail = "Oldest detail",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "middle",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 200,
+                            title = "Middle runtime event",
+                            detail = "Middle detail",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "newest",
+                            category = LogsAuditScreenCategory.AppRuntime,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 300,
+                            title = "Newest runtime event",
+                            detail = "Newest detail",
+                        ),
+                    ),
+                maxRows = 2,
+            )
+
+        assertEquals("2 of 3 records (limited to recent 2)", state.resultSummary)
+        assertEquals(listOf("newest", "middle"), state.rows.map(LogsAuditScreenRow::id))
     }
 }

@@ -15,6 +15,79 @@ import kotlin.test.assertTrue
 
 class CloudflareTunnelReconnectCoordinatorTest {
     @Test
+    fun `successful connected reconnect replaces active session without changing tunnel state`() {
+        val controlPlane = connectedControlPlane()
+        val connected = controlPlane.snapshot()
+        val registry = CloudflareTunnelEdgeSessionRegistry()
+        val oldConnection = TrackableEdgeConnection()
+        val newConnection = TrackableEdgeConnection()
+        registry.install(connected, oldConnection)
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Connected(newConnection)
+                    },
+                sessionRegistry = registry,
+            )
+
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
+                coordinator.reconnectIfActive(connected, credentials()),
+            )
+
+        assertIs<CloudflareTunnelEdgeConnectionResult.Connected>(result.connectionResult)
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
+        assertEquals(CloudflareTunnelStatus.connected(), result.transition.status)
+        assertEquals(CloudflareTunnelStatus.connected(), controlPlane.currentStatus)
+        assertSame(newConnection, registry.currentSessionOrNull()?.connection)
+        assertEquals(connected, registry.currentSessionOrNull()?.snapshot)
+        assertTrue(oldConnection.closed)
+    }
+
+    @Test
+    fun `failed connected reconnect records failed lifecycle without closing active session`() {
+        val controlPlane = connectedControlPlane()
+        val connected = controlPlane.snapshot()
+        val registry = CloudflareTunnelEdgeSessionRegistry()
+        val oldConnection = TrackableEdgeConnection()
+        registry.install(connected, oldConnection)
+        val coordinator =
+            CloudflareTunnelReconnectCoordinator(
+                controlPlane = controlPlane,
+                connector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Failed(
+                            CloudflareTunnelEdgeConnectionFailure.AuthenticationRejected,
+                        )
+                    },
+                sessionRegistry = registry,
+            )
+
+        val result =
+            assertIs<CloudflareTunnelReconnectCoordinatorResult.Applied>(
+                coordinator.reconnectIfActive(connected, credentials()),
+            )
+
+        assertEquals(
+            CloudflareTunnelEdgeConnectionResult.Failed(CloudflareTunnelEdgeConnectionFailure.AuthenticationRejected),
+            result.connectionResult,
+        )
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, result.transition.disposition)
+        assertEquals(
+            CloudflareTunnelStatus.failed(CloudflareTunnelEdgeConnectionFailure.AuthenticationRejected.name),
+            result.transition.status,
+        )
+        assertEquals(
+            CloudflareTunnelStatus.failed(CloudflareTunnelEdgeConnectionFailure.AuthenticationRejected.name),
+            controlPlane.currentStatus,
+        )
+        assertSame(oldConnection, registry.currentSessionOrNull()?.connection)
+        assertFalse(oldConnection.closed)
+    }
+
+    @Test
     fun `successful degraded reconnect advances tunnel to connected`() {
         val controlPlane = degradedControlPlane()
         val degraded = controlPlane.snapshot()
@@ -185,13 +258,19 @@ class CloudflareTunnelReconnectCoordinatorTest {
         return controlPlane
     }
 
-    private fun credentials(): CloudflareTunnelCredentials =
-        CloudflareTunnelCredentials(
-            accountTag = "account-tag",
-            tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-            tunnelSecret = byteArrayOf(1, 2, 3),
-            endpoint = "edge.example.com",
-        )
+    private fun connectedControlPlane(): CloudflareTunnelControlPlane {
+        val controlPlane = CloudflareTunnelControlPlane()
+        controlPlane.apply(CloudflareTunnelEvent.StartRequested)
+        controlPlane.apply(CloudflareTunnelEvent.Connected)
+        return controlPlane
+    }
+
+    private fun credentials(): CloudflareTunnelCredentials = CloudflareTunnelCredentials(
+        accountTag = "account-tag",
+        tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+        tunnelSecret = byteArrayOf(1, 2, 3),
+        endpoint = "edge.example.com",
+    )
 
     private class TrackableEdgeConnection : CloudflareTunnelEdgeConnection {
         var closed: Boolean = false

@@ -50,6 +50,7 @@ class ManagementApiRouterTest {
                 "/api/rotate/mobile-data" to ManagementApiOperation.RotateMobileData,
                 "/api/rotate/airplane-mode" to ManagementApiOperation.RotateAirplaneMode,
                 "/api/service/stop" to ManagementApiOperation.ServiceStop,
+                "/api/service/restart" to ManagementApiOperation.ServiceRestart,
             )
 
         endpoints.forEach { (target, expectedOperation) ->
@@ -83,6 +84,7 @@ class ManagementApiRouterTest {
                 HttpMethod.Post to "/api/rotate/mobile-data",
                 HttpMethod.Post to "/api/rotate/airplane-mode",
                 HttpMethod.Post to "/api/service/stop",
+                HttpMethod.Post to "/api/service/restart",
             )
 
         routedEndpoints.forEach { (method, target) ->
@@ -106,6 +108,7 @@ class ManagementApiRouterTest {
                 managementRequest(HttpMethod.Post, "/api/status") to HttpMethod.Get,
                 managementRequest(HttpMethod.Get, "/api/cloudflare/start") to HttpMethod.Post,
                 managementRequest(HttpMethod.Get, "/api/service/stop") to HttpMethod.Post,
+                managementRequest(HttpMethod.Get, "/api/service/restart") to HttpMethod.Post,
             )
 
         unsupportedMethodRequests.forEach { (request, expectedAllowedMethod) ->

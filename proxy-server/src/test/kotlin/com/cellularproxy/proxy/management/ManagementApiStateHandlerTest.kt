@@ -302,6 +302,19 @@ class ManagementApiStateHandlerTest {
     }
 
     @Test
+    fun `service restart uses only service restart callback and action renderer`() {
+        val callbacks = RecordingCallbacks()
+        val expectedResult =
+            ManagementApiServiceRestartResult.accepted(packageName = "com.cellularproxy")
+        callbacks.serviceRestartResult = expectedResult
+
+        val response = callbacks.handler().handle(ManagementApiOperation.ServiceRestart)
+
+        assertSameResponse(ManagementApiServiceRestartActionResponses.transition(expectedResult), response)
+        callbacks.assertCalls("serviceRestart")
+    }
+
+    @Test
     fun `handler redacts configured secret in cloudflare status response`() {
         val callbacks = RecordingCallbacks()
         callbacks.cloudflareStatusResult = CloudflareTunnelStatus.failed("failed with cloudflare-secret in log")
@@ -383,6 +396,10 @@ class ManagementApiStateHandlerTest {
                 ProxyServiceStopTransitionDisposition.Ignored,
                 stoppedStatus(),
             )
+        var serviceRestartResult: ManagementApiServiceRestartResult =
+            ManagementApiServiceRestartResult.rejected(
+                failureReason = ManagementApiServiceRestartFailureReason.RootOperationsDisabled,
+            )
 
         fun handler(secrets: LogRedactionSecrets = LogRedactionSecrets()): ManagementApiStateHandler = ManagementApiStateHandler(
             callbacks =
@@ -405,6 +422,7 @@ class ManagementApiStateHandlerTest {
                         record("cloudflareEdgeSessionSummary", cloudflareEdgeSessionSummaryResult)
                     },
                     serviceStop = { record("serviceStop", serviceStopResult) },
+                    serviceRestart = { record("serviceRestart", serviceRestartResult) },
                     rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
                 ),
             secrets = secrets,

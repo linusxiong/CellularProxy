@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.cellularproxy.app.status.DashboardBoundRoute
 import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardLogSummary
+import com.cellularproxy.app.status.DashboardManagementApiStatus
 import com.cellularproxy.app.status.DashboardRecentError
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
@@ -45,6 +46,7 @@ internal fun CellularProxyDashboardRoute(
     },
     onStartProxyService: () -> Unit = {},
     onStopProxyService: () -> Unit = {},
+    onRestartProxyService: () -> Unit = {},
     onRefreshStatus: () -> Unit = {},
     onOpenRiskDetails: () -> Unit = {},
     onOpenCloudflare: () -> Unit = {},
@@ -56,6 +58,7 @@ internal fun CellularProxyDashboardRoute(
     val currentStatusProvider by rememberUpdatedState(statusProvider)
     val currentOnStartProxyService by rememberUpdatedState(onStartProxyService)
     val currentOnStopProxyService by rememberUpdatedState(onStopProxyService)
+    val currentOnRestartProxyService by rememberUpdatedState(onRestartProxyService)
     val currentOnRefreshStatus by rememberUpdatedState(onRefreshStatus)
     val currentOnOpenRiskDetails by rememberUpdatedState(onOpenRiskDetails)
     val currentOnOpenCloudflare by rememberUpdatedState(onOpenCloudflare)
@@ -71,6 +74,7 @@ internal fun CellularProxyDashboardRoute(
                     when (action) {
                         DashboardScreenAction.StartProxy -> currentOnStartProxyService()
                         DashboardScreenAction.StopProxy -> currentOnStopProxyService()
+                        DashboardScreenAction.RestartProxy -> currentOnRestartProxyService()
                         DashboardScreenAction.RefreshStatus -> currentOnRefreshStatus()
                         DashboardScreenAction.OpenRiskDetails -> currentOnOpenRiskDetails()
                         DashboardScreenAction.OpenCloudflare -> currentOnOpenCloudflare()
@@ -102,6 +106,7 @@ internal fun CellularProxyDashboardRoute(
         actionsEnabled = true,
         onStartProxy = { dispatchEvent(DashboardScreenEvent.StartProxy) },
         onStopProxy = { dispatchEvent(DashboardScreenEvent.StopProxy) },
+        onRestartProxy = { dispatchEvent(DashboardScreenEvent.RestartProxy) },
         onRefreshStatus = { dispatchEvent(DashboardScreenEvent.RefreshStatus) },
         onCopyProxyEndpoint = { dispatchEvent(DashboardScreenEvent.CopyProxyEndpoint) },
         onOpenRiskDetails = { dispatchEvent(DashboardScreenEvent.OpenRiskDetails) },
@@ -124,6 +129,7 @@ internal fun CellularProxyDashboardScreen(
     actionsEnabled: Boolean = false,
     onStartProxy: () -> Unit = {},
     onStopProxy: () -> Unit = {},
+    onRestartProxy: () -> Unit = {},
     onRefreshStatus: () -> Unit = {},
     onCopyProxyEndpoint: () -> Unit = {},
     onOpenRiskDetails: () -> Unit = {},
@@ -140,6 +146,7 @@ internal fun CellularProxyDashboardScreen(
         when (action) {
             DashboardScreenAction.StartProxy -> onStartProxy()
             DashboardScreenAction.StopProxy -> onStopProxy()
+            DashboardScreenAction.RestartProxy -> onRestartProxy()
             DashboardScreenAction.RefreshStatus -> onRefreshStatus()
             DashboardScreenAction.CopyProxyEndpoint -> onCopyProxyEndpoint()
             DashboardScreenAction.OpenRiskDetails -> onOpenRiskDetails()
@@ -220,6 +227,7 @@ internal fun CellularProxyDashboardScreen(
 
         DashboardSection("Service") {
             DashboardField("Service state", status.serviceState.name)
+            DashboardField("Pending operation", screenState.pendingOperation)
             DashboardField("Proxy endpoint", status.listenEndpoint)
             DashboardField("Proxy authentication", proxyAuthenticationSummary(status))
             DashboardField("Management API", managementApiSummary(status))
@@ -243,7 +251,8 @@ internal fun CellularProxyDashboardScreen(
 
         DashboardSection("Remote And Root") {
             DashboardField("Cloudflare tunnel", status.cloudflare.state.name)
-            DashboardField("Remote management", managementApiSummary(status))
+            DashboardField("Remote management", remoteManagementSummary(status))
+            DashboardField("Cloudflare management API", cloudflareManagementApiCheckSummary(status))
             DashboardField("Root availability", status.root.name)
         }
 
@@ -285,6 +294,7 @@ internal data class DashboardScreenState(
     val status: DashboardStatusModel,
     val riskWarnings: List<String>,
     val recentHighSeverityErrors: List<String>,
+    val pendingOperation: String = "None",
     val availableActions: List<DashboardScreenAction>,
 ) {
     companion object {
@@ -292,6 +302,7 @@ internal data class DashboardScreenState(
             status = status,
             riskWarnings = status.warnings.map(DashboardWarning::toDashboardText),
             recentHighSeverityErrors = status.recentHighSeverityErrors.map(DashboardRecentError::toDashboardText),
+            pendingOperation = "None",
             availableActions = status.availableActions(),
         )
     }
@@ -303,6 +314,9 @@ internal enum class DashboardScreenAction(
     StartProxy,
     StopProxy(
         confirmationTitle = "Confirm proxy service stop",
+    ),
+    RestartProxy(
+        confirmationTitle = "Confirm proxy service restart",
     ),
     RefreshStatus,
     CopyProxyEndpoint,
@@ -353,6 +367,7 @@ internal class DashboardScreenController(
         when (event) {
             DashboardScreenEvent.StartProxy -> dispatchAction(DashboardScreenAction.StartProxy)
             DashboardScreenEvent.StopProxy -> dispatchAction(DashboardScreenAction.StopProxy)
+            DashboardScreenEvent.RestartProxy -> dispatchAction(DashboardScreenAction.RestartProxy)
             DashboardScreenEvent.RefreshStatus -> dispatchAction(DashboardScreenAction.RefreshStatus)
             DashboardScreenEvent.OpenRiskDetails -> dispatchAction(DashboardScreenAction.OpenRiskDetails)
             DashboardScreenEvent.OpenCloudflare -> dispatchAction(DashboardScreenAction.OpenCloudflare)
@@ -422,6 +437,8 @@ internal sealed interface DashboardScreenEvent {
 
     data object StopProxy : DashboardScreenEvent
 
+    data object RestartProxy : DashboardScreenEvent
+
     data object RefreshStatus : DashboardScreenEvent
 
     data object CopyProxyEndpoint : DashboardScreenEvent
@@ -446,18 +463,44 @@ internal sealed interface DashboardScreenEffect {
 }
 
 private val DashboardScreenAction.isLifecycleAction: Boolean
-    get() = this == DashboardScreenAction.StartProxy || this == DashboardScreenAction.StopProxy
+    get() =
+        this == DashboardScreenAction.StartProxy ||
+            this == DashboardScreenAction.StopProxy ||
+            this == DashboardScreenAction.RestartProxy
 
 private fun DashboardScreenState.withoutPendingLifecycleActions(
     pendingLifecycleActions: Set<DashboardScreenAction>,
-): DashboardScreenState = copy(
-    availableActions =
-        if (pendingLifecycleActions.isNotEmpty()) {
-            availableActions.filterNot(DashboardScreenAction::isLifecycleAction)
-        } else {
-            availableActions
-        },
-)
+): DashboardScreenState {
+    val pendingOperation = pendingLifecycleActions.pendingOperationLabel()
+    return copy(
+        pendingOperation = pendingOperation,
+        availableActions =
+            if (pendingLifecycleActions.isNotEmpty()) {
+                availableActions.filterNot(DashboardScreenAction::isLifecycleAction)
+            } else {
+                availableActions
+            },
+    )
+}
+
+private fun Set<DashboardScreenAction>.pendingOperationLabel(): String = firstOrNull()?.let { action ->
+    "In progress: ${action.operationLabel}"
+} ?: "None"
+
+private val DashboardScreenAction.operationLabel: String
+    get() =
+        when (this) {
+            DashboardScreenAction.StartProxy -> "Start proxy"
+            DashboardScreenAction.StopProxy -> "Stop proxy"
+            DashboardScreenAction.RestartProxy -> "Restart proxy service"
+            DashboardScreenAction.RefreshStatus -> "Refresh status"
+            DashboardScreenAction.CopyProxyEndpoint -> "Copy proxy endpoint"
+            DashboardScreenAction.OpenRiskDetails -> "Open risk details"
+            DashboardScreenAction.OpenCloudflare -> "Open Cloudflare"
+            DashboardScreenAction.OpenRotation -> "Open rotation"
+            DashboardScreenAction.OpenLogs -> "Open logs"
+            DashboardScreenAction.OpenDiagnostics -> "Open diagnostics"
+        }
 
 @Composable
 private fun DashboardActionRow(
@@ -496,6 +539,20 @@ private fun DashboardActionRow(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Stop proxy")
+        }
+        OutlinedButton(
+            onClick = {
+                onAction(DashboardScreenAction.RestartProxy)
+            },
+            enabled =
+                dashboardActionCanDispatch(
+                    action = DashboardScreenAction.RestartProxy,
+                    actionsEnabled = actionsEnabled,
+                    availableActions = availableActions,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Restart proxy service")
         }
         OutlinedButton(
             onClick = {
@@ -644,10 +701,25 @@ private fun proxyAuthenticationSummary(status: DashboardStatusModel): String = i
     "No broad unauthenticated listener risk reported"
 }
 
-private fun managementApiSummary(status: DashboardStatusModel): String = if (status.cloudflare.remoteManagementAvailable) {
+private fun managementApiSummary(status: DashboardStatusModel): String = when (status.managementApiStatus) {
+    DashboardManagementApiStatus.Available -> "Local management available"
+    DashboardManagementApiStatus.Unavailable -> "Local management unavailable"
+    DashboardManagementApiStatus.MissingToken -> "Management API token missing"
+}
+
+private fun remoteManagementSummary(status: DashboardStatusModel): String = if (status.cloudflare.remoteManagementAvailable) {
     "Remote management available"
 } else {
     "Remote management unavailable"
+}
+
+private fun cloudflareManagementApiCheckSummary(status: DashboardStatusModel): String = when (
+    status.cloudflareManagementApiCheck
+) {
+    com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck.NotRun -> "Not run"
+    com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck.Running -> "Running"
+    com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck.Passed -> "Passed"
+    com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck.Failed -> "Failed"
 }
 
 private fun recentTrafficSummary(status: DashboardStatusModel): String = status.recentTraffic?.let { traffic ->
@@ -665,6 +737,7 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.RootUnavailable -> "Root access is unavailable"
     DashboardWarning.SelectedRouteUnavailable -> "Selected route is unavailable"
     DashboardWarning.CloudflareTokenMissing -> "Cloudflare tunnel token is missing"
+    DashboardWarning.CloudflareTokenInvalid -> "Cloudflare tunnel token is invalid"
     DashboardWarning.ManagementApiTokenMissing -> "Management API token is missing"
     DashboardWarning.SensitiveConfigurationInvalid -> "Sensitive configuration is invalid"
     DashboardWarning.PortAlreadyInUse -> "Proxy port is already in use"
@@ -672,6 +745,8 @@ private fun DashboardWarning.toDashboardText(): String = when (this) {
     DashboardWarning.InvalidListenPort -> "Proxy listen port is invalid"
     DashboardWarning.InvalidMaxConcurrentConnections -> "Proxy connection limit is invalid"
     DashboardWarning.StartupFailed -> "Proxy startup failed"
+    DashboardWarning.RotationCooldownActive -> "Rotation blocked by cooldown"
+    DashboardWarning.RotationInProgress -> "Rotation already in progress"
 }
 
 private fun DashboardRecentError.toDashboardText(): String = "$title: $detail"
@@ -680,7 +755,12 @@ private fun DashboardStatusModel.availableActions(): List<DashboardScreenAction>
     when (serviceState) {
         DashboardServiceState.Starting,
         DashboardServiceState.Running,
-        -> add(DashboardScreenAction.StopProxy)
+        -> {
+            add(DashboardScreenAction.StopProxy)
+            if (serviceState == DashboardServiceState.Running) {
+                add(DashboardScreenAction.RestartProxy)
+            }
+        }
         DashboardServiceState.Stopping -> Unit
         DashboardServiceState.Stopped,
         DashboardServiceState.Failed,
