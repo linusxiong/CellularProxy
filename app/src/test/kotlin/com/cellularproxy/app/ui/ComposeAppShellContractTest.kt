@@ -57,6 +57,14 @@ class ComposeAppShellContractTest {
             "App build must include Navigation Compose for the operator console graph.",
         )
         assertTrue(
+            appBuild.contains("androidx.lifecycle:lifecycle-viewmodel-compose"),
+            "App build must include Lifecycle ViewModel Compose for screen ViewModels.",
+        )
+        assertTrue(
+            appBuild.contains("androidx.lifecycle:lifecycle-runtime-compose"),
+            "App build must include Lifecycle Runtime Compose for StateFlow collection.",
+        )
+        assertTrue(
             appBuild.contains("androidx.compose.material:material-icons-extended"),
             "App build must include Compose Material icons for recognizable navigation controls.",
         )
@@ -382,15 +390,16 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             dashboardSource.contains("DashboardScreenController("),
-            "Dashboard route must use the tested screen controller boundary.",
+            "Dashboard route ViewModel must preserve the tested screen controller boundary.",
         )
         assertTrue(
-            dashboardSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
-            "Dashboard route must mirror controller state into Compose state for recomposition.",
+            dashboardSource.contains("viewModel<DashboardViewModel>") &&
+                dashboardSource.contains("collectAsStateWithLifecycle()"),
+            "Dashboard route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
         )
         assertTrue(
             dashboardSource.contains("state = screenState"),
-            "Dashboard route must pass the full controller-backed screen state so pending duplicate actions disable visibly.",
+            "Dashboard route must pass the full ViewModel-backed screen state so pending duplicate actions disable visibly.",
         )
         assertTrue(
             dashboardSource.contains("state: DashboardScreenState ="),
@@ -413,8 +422,8 @@ class ComposeAppShellContractTest {
             "Dashboard route must send copy endpoint actions through the dashboard controller.",
         )
         assertTrue(
-            dashboardSource.contains("controller.consumeEffects()"),
-            "Dashboard route must consume one-shot controller effects after dispatch.",
+            dashboardSource.contains("dashboardViewModel.consumeEffects()"),
+            "Dashboard route must consume one-shot ViewModel effects after dispatch.",
         )
         assertTrue(
             shellSource.contains("LocalClipboardManager.current"),

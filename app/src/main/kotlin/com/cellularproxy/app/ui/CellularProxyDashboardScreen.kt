@@ -25,6 +25,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
@@ -36,6 +40,7 @@ import com.cellularproxy.app.status.DashboardRecentError
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.status.DashboardWarning
+import com.cellularproxy.app.viewmodel.DashboardViewModel
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 
@@ -62,6 +67,7 @@ internal fun CellularProxyDashboardRoute(
     auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     val currentStatusProvider by rememberUpdatedState(statusProvider)
+    val currentAuditOccurredAtEpochMillisProvider by rememberUpdatedState(auditOccurredAtEpochMillisProvider)
     val currentOnStartProxyService by rememberUpdatedState(onStartProxyService)
     val currentOnStopProxyService by rememberUpdatedState(onStopProxyService)
     val currentOnRestartProxyService by rememberUpdatedState(onRestartProxyService)
@@ -73,43 +79,43 @@ internal fun CellularProxyDashboardRoute(
     val currentOnOpenLogs by rememberUpdatedState(onOpenLogs)
     val currentOnOpenDiagnostics by rememberUpdatedState(onOpenDiagnostics)
     val observedStatus = statusProvider()
-    val controller =
-        remember {
-            DashboardScreenController(
-                statusProvider = { currentStatusProvider() },
-                auditActionsEnabled = true,
-                auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
-                actionHandler = { action ->
-                    when (action) {
-                        DashboardScreenAction.StartProxy -> currentOnStartProxyService()
-                        DashboardScreenAction.StopProxy -> currentOnStopProxyService()
-                        DashboardScreenAction.RestartProxy -> currentOnRestartProxyService()
-                        DashboardScreenAction.RefreshStatus -> currentOnRefreshStatus()
-                        DashboardScreenAction.OpenRiskDetails -> currentOnOpenRiskDetails()
-                        DashboardScreenAction.OpenSettings -> currentOnOpenSettings()
-                        DashboardScreenAction.OpenCloudflare -> currentOnOpenCloudflare()
-                        DashboardScreenAction.OpenRotation -> currentOnOpenRotation()
-                        DashboardScreenAction.OpenLogs -> currentOnOpenLogs()
-                        DashboardScreenAction.OpenDiagnostics -> currentOnOpenDiagnostics()
-                        else -> Unit
-                    }
+    val dashboardViewModel =
+        viewModel<DashboardViewModel>(
+            factory =
+                remember {
+                    DashboardViewModelFactory(
+                        statusProvider = { currentStatusProvider() },
+                        auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
+                        actionHandler = { action ->
+                            when (action) {
+                                DashboardScreenAction.StartProxy -> currentOnStartProxyService()
+                                DashboardScreenAction.StopProxy -> currentOnStopProxyService()
+                                DashboardScreenAction.RestartProxy -> currentOnRestartProxyService()
+                                DashboardScreenAction.RefreshStatus -> currentOnRefreshStatus()
+                                DashboardScreenAction.OpenRiskDetails -> currentOnOpenRiskDetails()
+                                DashboardScreenAction.OpenSettings -> currentOnOpenSettings()
+                                DashboardScreenAction.OpenCloudflare -> currentOnOpenCloudflare()
+                                DashboardScreenAction.OpenRotation -> currentOnOpenRotation()
+                                DashboardScreenAction.OpenLogs -> currentOnOpenLogs()
+                                DashboardScreenAction.OpenDiagnostics -> currentOnOpenDiagnostics()
+                                else -> Unit
+                            }
+                        },
+                    )
                 },
-            )
-        }
-    var screenState by remember { mutableStateOf(controller.state) }
+        )
+    val screenState by dashboardViewModel.state.collectAsStateWithLifecycle()
     val dispatchEvent: (DashboardScreenEvent) -> Unit = { event ->
-        controller.handle(event)
-        controller.consumeEffects().forEach { effect ->
+        dashboardViewModel.handle(event)
+        dashboardViewModel.consumeEffects().forEach { effect ->
             when (effect) {
                 is DashboardScreenEffect.CopyText -> onCopyProxyEndpointText(effect.text)
                 is DashboardScreenEffect.RecordAuditAction -> onRecordDashboardAuditAction(effect.record)
             }
         }
-        screenState = controller.state
     }
     LaunchedEffect(observedStatus) {
-        controller.handle(DashboardScreenEvent.Refresh)
-        screenState = controller.state
+        dashboardViewModel.handle(DashboardScreenEvent.Refresh)
     }
 
     CellularProxyDashboardScreen(
@@ -127,6 +133,20 @@ internal fun CellularProxyDashboardRoute(
         onOpenLogs = { dispatchEvent(DashboardScreenEvent.OpenLogs) },
         onOpenDiagnostics = { dispatchEvent(DashboardScreenEvent.OpenDiagnostics) },
     )
+}
+
+private class DashboardViewModelFactory(
+    private val statusProvider: () -> DashboardStatusModel,
+    private val auditOccurredAtEpochMillisProvider: () -> Long,
+    private val actionHandler: (DashboardScreenAction) -> Unit,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = DashboardViewModel(
+        statusProvider = statusProvider,
+        auditActionsEnabled = true,
+        auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
+        actionHandler = actionHandler,
+    ) as T
 }
 
 @Composable
