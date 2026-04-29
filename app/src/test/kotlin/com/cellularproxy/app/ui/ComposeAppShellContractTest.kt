@@ -529,7 +529,7 @@ class ComposeAppShellContractTest {
             state.riskWarnings,
         )
         assertEquals(
-            listOf("Management API failed: HTTP 503"),
+            listOf("200 | Management API failed: HTTP 503"),
             state.recentHighSeverityErrors,
         )
         assertTrue(DashboardWarning.BroadUnauthenticatedProxy in state.status.warnings)

@@ -5,6 +5,7 @@ import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.app.status.DashboardLogSeverity
+import com.cellularproxy.app.status.DashboardLogSummary
 import com.cellularproxy.app.status.DashboardServiceState
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.status.DashboardWarning
@@ -723,5 +724,31 @@ class DashboardScreenControllerTest {
         assertEquals(listOf("failed-row", "warning-row"), summaries.map { it.id })
         assertEquals(listOf("Proxy failed", "Cloudflare degraded"), summaries.map { it.title })
         assertEquals(listOf("bind error", "edge unavailable"), summaries.map { it.detail })
+    }
+
+    @Test
+    fun `dashboard recent high severity error text includes occurrence time`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    recentLogs =
+                        listOf(
+                            DashboardLogSummary(
+                                id = "failed-row",
+                                occurredAtEpochMillis = 42L,
+                                severity = DashboardLogSeverity.Failed,
+                                title = "Proxy failed",
+                                detail = "bind error",
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf("42 | Proxy failed: bind error"),
+            state.recentHighSeverityErrors,
+        )
     }
 }

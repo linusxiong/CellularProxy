@@ -953,7 +953,7 @@ private fun DashboardStatusModel.toDashboardRiskItems(): List<DashboardRiskItem>
     return warningsForRiskItems.mapNotNull(DashboardWarning::toDashboardRiskItem)
 }
 
-private fun DashboardRecentError.toDashboardText(): String = "$title: $detail"
+private fun DashboardRecentError.toDashboardText(): String = "$occurredAtEpochMillis | $title: $detail"
 
 private fun DashboardStatusModel.availableActions(): List<DashboardScreenAction> = buildList {
     when (serviceState) {
