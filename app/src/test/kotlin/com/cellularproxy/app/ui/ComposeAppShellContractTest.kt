@@ -282,6 +282,19 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `app shell has no generic destination placeholder fallback`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertFalse(
+            shellSource.contains("CellularProxyDestinationPlaceholder"),
+            "All operator destinations must render dedicated screens; the generic placeholder fallback should be removed.",
+        )
+    }
+
+    @Test
     fun `dashboard route renders dedicated status screen`() {
         val shellSource =
             repoRoot()

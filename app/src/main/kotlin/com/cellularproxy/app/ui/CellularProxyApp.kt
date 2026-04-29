@@ -6,9 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -35,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -1010,24 +1007,4 @@ internal fun logRedactionSecretsFromSensitiveConfigLoadResult(
     SensitiveConfigLoadResult.MissingRequiredSecrets,
     is SensitiveConfigLoadResult.Invalid,
     -> LogRedactionSecrets()
-}
-
-@Composable
-private fun CellularProxyDestinationPlaceholder(destination: CellularProxyNavigationDestination) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = destination.label,
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            text = "${destination.label} console will be wired here.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
 }
