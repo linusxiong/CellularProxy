@@ -68,7 +68,7 @@ class DiagnosticsSuiteControllerTest {
     }
 
     @Test
-    fun `thrown exception records failed diagnostic`() {
+    fun `thrown exception records bounded failed diagnostic`() {
         var now = 5_000_000_000L
         val controller =
             DiagnosticsSuiteController(
@@ -87,14 +87,16 @@ class DiagnosticsSuiteControllerTest {
 
         assertEquals(DiagnosticResultStatus.Failed, record.status)
         assertEquals(12.milliseconds, record.duration)
-        assertEquals("IllegalStateException", record.errorCategory)
+        assertEquals("check-exception", record.errorCategory)
 
         val result =
             controller
                 .resultModel(LogRedactionSecrets(managementApiToken = "management-token"))
                 .results
                 .single { it.type == DiagnosticCheckType.LocalManagementApi }
+        assertEquals("check-exception", result.errorCategory)
         assertEquals("management-token failed".replace("management-token", "[REDACTED]"), result.details)
+        assertFalse(result.summaryLine().contains("IllegalStateException"))
         assertFalse(result.details.orEmpty().contains("management-token"))
     }
 

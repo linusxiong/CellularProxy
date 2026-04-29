@@ -38,7 +38,7 @@ class DiagnosticsSuiteController(
             } catch (exception: Exception) {
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Failed,
-                    errorCategory = exception::class.simpleName ?: "Exception",
+                    errorCategory = CHECK_EXCEPTION_ERROR_CATEGORY,
                     details = exception.message ?: exception.toString(),
                 )
             }
@@ -70,3 +70,5 @@ class DiagnosticsSuiteController(
         )
     }
 }
+
+private const val CHECK_EXCEPTION_ERROR_CATEGORY = "check-exception"
