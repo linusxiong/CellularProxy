@@ -53,7 +53,13 @@ class ManagementApiStateHandlerTest {
             ),
             response,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status")
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
     }
 
     @Test
@@ -72,7 +78,84 @@ class ManagementApiStateHandlerTest {
                 ).body,
             response.body,
         )
-        callbacks.assertCalls("rootOperationsEnabled", "status")
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
+    }
+
+    @Test
+    fun `status includes current rotation status from rotation callback`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus()
+        callbacks.rootOperationsEnabledResult = true
+        callbacks.rotationStatusResult =
+            RotationStatus(
+                state = RotationState.WaitingForNetworkReturn,
+                operation = RotationOperation.AirplaneMode,
+                oldPublicIp = "198.51.100.10",
+            )
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            """{"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8080,"configuredRoute":"automatic","boundRoute":null,"publicIp":"198.51.100.10","highSecurityRisk":false,"startupError":null},"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"failed with status-secret"},"root":{"operationsEnabled":true,"availability":"unknown"},"rotation":{"state":"waiting_for_network_return","operation":"airplane_mode","oldPublicIp":"198.51.100.10","newPublicIp":null,"publicIpChanged":null,"failureReason":null}}""",
+            response.body,
+        )
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
+    }
+
+    @Test
+    fun `status includes current rotation cooldown remaining from callback`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus()
+        callbacks.rootOperationsEnabledResult = true
+        callbacks.rotationCooldownRemainingMillisResult = 8_500
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            true,
+            response.body.contains(""""cooldownRemainingMillis":8500"""),
+        )
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
+    }
+
+    @Test
+    fun `status includes cloudflare edge session summary from callback`() {
+        val callbacks = RecordingCallbacks()
+        callbacks.statusResult = runningStatus()
+        callbacks.rootOperationsEnabledResult = true
+        callbacks.cloudflareEdgeSessionSummaryResult = "Connected edge session"
+
+        val response = callbacks.handler().handle(ManagementApiOperation.Status)
+
+        assertEquals(
+            true,
+            response.body.contains(""""edgeSessionSummary":"Connected edge session""""),
+        )
+        callbacks.assertCalls(
+            "rootOperationsEnabled",
+            "status",
+            "rotationStatus",
+            "rotationCooldownRemainingMillis",
+            "cloudflareEdgeSessionSummary",
+        )
     }
 
     @Test
@@ -148,6 +231,25 @@ class ManagementApiStateHandlerTest {
     }
 
     @Test
+    fun `cloudflare reconnect uses only cloudflare reconnect callback and action renderer`() {
+        val callbacks = RecordingCallbacks()
+        val expectedResult =
+            CloudflareTunnelTransitionResult(
+                disposition = CloudflareTunnelTransitionDisposition.Accepted,
+                status = CloudflareTunnelStatus.connected(),
+            )
+        callbacks.cloudflareReconnectResult = expectedResult
+
+        val response = callbacks.handler().handle(ManagementApiOperation.CloudflareReconnect)
+
+        assertSameResponse(
+            ManagementApiCloudflareActionResponses.transition(expectedResult, LogRedactionSecrets()),
+            response,
+        )
+        callbacks.assertCalls("cloudflareReconnect")
+    }
+
+    @Test
     fun `rotate mobile data uses only mobile data rotation callback and action renderer`() {
         val callbacks = RecordingCallbacks()
         val expectedResult =
@@ -197,6 +299,19 @@ class ManagementApiStateHandlerTest {
 
         assertSameResponse(ManagementApiServiceStopActionResponses.transition(expectedResult), response)
         callbacks.assertCalls("serviceStop")
+    }
+
+    @Test
+    fun `service restart uses only service restart callback and action renderer`() {
+        val callbacks = RecordingCallbacks()
+        val expectedResult =
+            ManagementApiServiceRestartResult.accepted(packageName = "com.cellularproxy")
+        callbacks.serviceRestartResult = expectedResult
+
+        val response = callbacks.handler().handle(ManagementApiOperation.ServiceRestart)
+
+        assertSameResponse(ManagementApiServiceRestartActionResponses.transition(expectedResult), response)
+        callbacks.assertCalls("serviceRestart")
     }
 
     @Test
@@ -258,6 +373,11 @@ class ManagementApiStateHandlerTest {
                 CloudflareTunnelTransitionDisposition.Ignored,
                 CloudflareTunnelStatus.disabled(),
             )
+        var cloudflareReconnectResult: CloudflareTunnelTransitionResult =
+            CloudflareTunnelTransitionResult(
+                CloudflareTunnelTransitionDisposition.Ignored,
+                CloudflareTunnelStatus.disabled(),
+            )
         var rotateMobileDataResult: RotationTransitionResult =
             RotationTransitionResult(
                 RotationTransitionDisposition.Ignored,
@@ -268,30 +388,45 @@ class ManagementApiStateHandlerTest {
                 RotationTransitionDisposition.Ignored,
                 RotationStatus.idle(),
             )
+        var rotationStatusResult: RotationStatus = RotationStatus.idle()
+        var rotationCooldownRemainingMillisResult: Long? = null
+        var cloudflareEdgeSessionSummaryResult: String? = null
         var serviceStopResult: ProxyServiceStopTransitionResult =
             ProxyServiceStopTransitionResult(
                 ProxyServiceStopTransitionDisposition.Ignored,
                 stoppedStatus(),
             )
-
-        fun handler(secrets: LogRedactionSecrets = LogRedactionSecrets()): ManagementApiStateHandler =
-            ManagementApiStateHandler(
-                callbacks =
-                    ManagementApiCallbacks(
-                        healthStatus = { record("healthStatus", healthStatusResult) },
-                        status = { record("status", statusResult) },
-                        networks = { record("networks", networksResult) },
-                        publicIp = { record("publicIp", publicIpResult) },
-                        cloudflareStatus = { record("cloudflareStatus", cloudflareStatusResult) },
-                        cloudflareStart = { record("cloudflareStart", cloudflareStartResult) },
-                        cloudflareStop = { record("cloudflareStop", cloudflareStopResult) },
-                        rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
-                        rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
-                        serviceStop = { record("serviceStop", serviceStopResult) },
-                        rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
-                    ),
-                secrets = secrets,
+        var serviceRestartResult: ManagementApiServiceRestartResult =
+            ManagementApiServiceRestartResult.rejected(
+                failureReason = ManagementApiServiceRestartFailureReason.RootOperationsDisabled,
             )
+
+        fun handler(secrets: LogRedactionSecrets = LogRedactionSecrets()): ManagementApiStateHandler = ManagementApiStateHandler(
+            callbacks =
+                ManagementApiCallbacks(
+                    healthStatus = { record("healthStatus", healthStatusResult) },
+                    status = { record("status", statusResult) },
+                    networks = { record("networks", networksResult) },
+                    publicIp = { record("publicIp", publicIpResult) },
+                    cloudflareStatus = { record("cloudflareStatus", cloudflareStatusResult) },
+                    cloudflareStart = { record("cloudflareStart", cloudflareStartResult) },
+                    cloudflareStop = { record("cloudflareStop", cloudflareStopResult) },
+                    cloudflareReconnect = { record("cloudflareReconnect", cloudflareReconnectResult) },
+                    rotateMobileData = { record("rotateMobileData", rotateMobileDataResult) },
+                    rotateAirplaneMode = { record("rotateAirplaneMode", rotateAirplaneModeResult) },
+                    rotationStatus = { record("rotationStatus", rotationStatusResult) },
+                    rotationCooldownRemainingMillis = {
+                        record("rotationCooldownRemainingMillis", rotationCooldownRemainingMillisResult)
+                    },
+                    cloudflareEdgeSessionSummary = {
+                        record("cloudflareEdgeSessionSummary", cloudflareEdgeSessionSummaryResult)
+                    },
+                    serviceStop = { record("serviceStop", serviceStopResult) },
+                    serviceRestart = { record("serviceRestart", serviceRestartResult) },
+                    rootOperationsEnabled = { record("rootOperationsEnabled", rootOperationsEnabledResult) },
+                ),
+            secrets = secrets,
+        )
 
         fun assertCalls(vararg expected: String) {
             assertEquals(expected.toList(), calls)
@@ -319,13 +454,12 @@ private fun assertSameResponse(
 
 private fun stoppedStatus(): ProxyServiceStatus = ProxyServiceStatus.stopped()
 
-private fun runningStatus(): ProxyServiceStatus =
-    ProxyServiceStatus.running(
-        listenHost = "0.0.0.0",
-        listenPort = 8080,
-        configuredRoute = RouteTarget.Automatic,
-        boundRoute = null,
-        publicIp = "198.51.100.10",
-        hasHighSecurityRisk = false,
-        cloudflare = CloudflareTunnelStatus.failed("failed with status-secret"),
-    )
+private fun runningStatus(): ProxyServiceStatus = ProxyServiceStatus.running(
+    listenHost = "0.0.0.0",
+    listenPort = 8080,
+    configuredRoute = RouteTarget.Automatic,
+    boundRoute = null,
+    publicIp = "198.51.100.10",
+    hasHighSecurityRisk = false,
+    cloudflare = CloudflareTunnelStatus.failed("failed with status-secret"),
+)

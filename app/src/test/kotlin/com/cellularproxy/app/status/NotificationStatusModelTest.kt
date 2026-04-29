@@ -1,7 +1,9 @@
 package com.cellularproxy.app.status
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RouteTarget
@@ -11,6 +13,10 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -56,10 +62,11 @@ class NotificationStatusModelTest {
         assertEquals("CellularProxy running", model.title)
         assertEquals("0.0.0.0:8080 | Carrier LTE | 3 active", model.contentText)
         assertEquals("IP 203.0.113.42 | Cloudflare connected | Root unavailable", model.detailText)
-        assertEquals(NotificationPriority.Foreground, model.priority)
+        assertEquals(NotificationPriority.Warning, model.priority)
         assertTrue(model.isOngoing)
         assertTrue(model.stopActionEnabled)
-        assertEquals(emptySet(), model.warnings)
+        assertEquals(setOf(NotificationWarning.RootUnavailable), model.warnings)
+        assertEquals("Root access is unavailable", model.warningText)
     }
 
     @Test
@@ -132,13 +139,324 @@ class NotificationStatusModelTest {
         assertEquals("0.0.0.0:8080 | Automatic | 0 active", model.contentText)
         assertEquals("IP unknown | Cloudflare failed | Root disabled", model.detailText)
         assertEquals(
-            setOf(NotificationWarning.StartupFailed, NotificationWarning.CloudflareFailed),
+            setOf(
+                NotificationWarning.StartupFailed,
+                NotificationWarning.CloudflareFailed,
+                NotificationWarning.PortAlreadyInUse,
+            ),
             model.warnings,
         )
-        assertEquals("Service startup failed | Cloudflare tunnel failed", model.warningText)
+        assertEquals(
+            "Service startup failed | Cloudflare tunnel failed | Proxy port is already in use",
+            model.warningText,
+        )
         assertFalse(model.warningText.orEmpty().contains("secret-token"))
         assertEquals(NotificationPriority.Warning, model.priority)
         assertFalse(model.isOngoing)
         assertFalse(model.stopActionEnabled)
+    }
+
+    @Test
+    fun `notification warns when Cloudflare tunnel is degraded`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.degraded(),
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.CloudflareDegraded), model.warnings)
+        assertEquals("Cloudflare tunnel is degraded", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when connected Cloudflare management api check is failing`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.connected(),
+                    ),
+                latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+            )
+
+        assertEquals(setOf(NotificationWarning.CloudflareManagementApiCheckFailing), model.warnings)
+        assertEquals("Cloudflare management API check is failing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns specifically when proxy port is already in use at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.PortAlreadyInUse,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.PortAlreadyInUse),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Proxy port is already in use", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns specifically when proxy configuration is invalid at startup`() {
+        listOf(
+            Triple(
+                ProxyStartupError.InvalidListenAddress,
+                NotificationWarning.InvalidListenAddress,
+                "Service startup failed | Proxy listen address is invalid",
+            ),
+            Triple(
+                ProxyStartupError.InvalidListenPort,
+                NotificationWarning.InvalidListenPort,
+                "Service startup failed | Proxy listen port is invalid",
+            ),
+            Triple(
+                ProxyStartupError.InvalidMaxConcurrentConnections,
+                NotificationWarning.InvalidMaxConcurrentConnections,
+                "Service startup failed | Proxy connection limit is invalid",
+            ),
+        ).forEach { (startupError, warning, warningText) ->
+            val model =
+                NotificationStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = startupError),
+                )
+
+            assertEquals(
+                setOf(NotificationWarning.StartupFailed, warning),
+                model.warnings,
+                "startupError=$startupError",
+            )
+            assertEquals(
+                warningText,
+                model.warningText,
+                "startupError=$startupError",
+            )
+            assertEquals(NotificationPriority.Warning, model.priority)
+        }
+    }
+
+    @Test
+    fun `notification warns specifically when selected route is unavailable at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.UnavailableSelectedRoute,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.SelectedRouteUnavailable),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Selected route is unavailable", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when running bound route becomes unavailable`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "0.0.0.0",
+                        listenPort = 8080,
+                        configuredRoute = RouteTarget.Cellular,
+                        boundRoute =
+                            NetworkDescriptor(
+                                id = "cell-1",
+                                category = NetworkCategory.Cellular,
+                                displayName = "Carrier LTE",
+                                isAvailable = false,
+                            ),
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.SelectedRouteUnavailable), model.warnings)
+        assertEquals("Selected route is unavailable", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns specifically when Cloudflare is enabled but tunnel token is missing at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingCloudflareTunnelToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.CloudflareTokenMissing),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Cloudflare tunnel token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when Cloudflare is enabled but tunnel token is missing before startup fails`() {
+        val model =
+            NotificationStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = false,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+            )
+
+        assertEquals(setOf(NotificationWarning.CloudflareTokenMissing), model.warnings)
+        assertEquals("Cloudflare tunnel token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns specifically when management api token is missing at startup`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingManagementApiToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(NotificationWarning.StartupFailed, NotificationWarning.ManagementApiTokenMissing),
+            model.warnings,
+        )
+        assertEquals("Service startup failed | Management API token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when management api token is missing before startup fails`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                managementApiTokenPresent = false,
+            )
+
+        assertEquals(setOf(NotificationWarning.ManagementApiTokenMissing), model.warnings)
+        assertEquals("Management API token is missing", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when sensitive configuration is invalid before startup fails`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidProxyCredential,
+            )
+
+        assertEquals(setOf(NotificationWarning.SensitiveConfigurationInvalid), model.warnings)
+        assertEquals("Sensitive configuration is invalid", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns specifically when Cloudflare tunnel token is invalid`() {
+        val model =
+            NotificationStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = true,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+            )
+
+        assertEquals(
+            setOf(
+                NotificationWarning.CloudflareTokenInvalid,
+                NotificationWarning.SensitiveConfigurationInvalid,
+            ),
+            model.warnings,
+        )
+        assertEquals(
+            "Cloudflare tunnel token is invalid | Sensitive configuration is invalid",
+            model.warningText,
+        )
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when rotation is blocked by cooldown`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationCooldownRemainingSeconds = 12,
+            )
+
+        assertEquals(setOf(NotificationWarning.RotationCooldownActive), model.warnings)
+        assertEquals("Rotation is blocked by cooldown", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when last rotation action was rejected by cooldown`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.MobileData,
+                        failureReason = RotationFailureReason.CooldownActive,
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.RotationCooldownActive), model.warnings)
+        assertEquals("Rotation is blocked by cooldown", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
+    }
+
+    @Test
+    fun `notification warns when rotation is already active`() {
+        val model =
+            NotificationStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
+
+        assertEquals(setOf(NotificationWarning.RotationInProgress), model.warnings)
+        assertEquals("Rotation already in progress", model.warningText)
+        assertEquals(NotificationPriority.Warning, model.priority)
     }
 }

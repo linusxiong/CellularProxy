@@ -33,6 +33,7 @@ class ManagementApiResponse(
     val reasonPhrase: String,
     headers: Map<String, String>,
     val body: String,
+    private val afterResponseSent: () -> Unit = {},
 ) {
     val headers: Map<String, String>
 
@@ -64,30 +65,34 @@ class ManagementApiResponse(
         this.headers = Collections.unmodifiableMap(LinkedHashMap(headers))
     }
 
-    fun toHttpString(): String =
-        buildString {
-            append("HTTP/1.1 ")
-            append(statusCode)
-            append(' ')
-            append(reasonPhrase)
+    fun toHttpString(): String = buildString {
+        append("HTTP/1.1 ")
+        append(statusCode)
+        append(' ')
+        append(reasonPhrase)
+        append(CRLF)
+        headers.forEach { (name, value) ->
+            append(name)
+            append(": ")
+            append(value)
             append(CRLF)
-            headers.forEach { (name, value) ->
-                append(name)
-                append(": ")
-                append(value)
-                append(CRLF)
-            }
-            append(CRLF)
-            append(body)
         }
+        append(CRLF)
+        append(body)
+    }
 
     fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
+
+    fun notifyResponseSent() {
+        afterResponseSent()
+    }
 
     companion object {
         fun json(
             statusCode: Int,
             body: String,
             extraHeaders: Map<String, String> = emptyMap(),
+            afterResponseSent: () -> Unit = {},
         ): ManagementApiResponse {
             val headers = linkedMapOf<String, String>()
             headers.putAll(extraHeaders)
@@ -101,12 +106,14 @@ class ManagementApiResponse(
                 reasonPhrase = reasonPhraseFor(statusCode),
                 headers = headers,
                 body = body,
+                afterResponseSent = afterResponseSent,
             )
         }
 
         fun empty(
             statusCode: Int,
             extraHeaders: Map<String, String> = emptyMap(),
+            afterResponseSent: () -> Unit = {},
         ): ManagementApiResponse {
             val headers = linkedMapOf<String, String>()
             headers.putAll(extraHeaders)
@@ -119,6 +126,7 @@ class ManagementApiResponse(
                 reasonPhrase = reasonPhraseFor(statusCode),
                 headers = headers,
                 body = "",
+                afterResponseSent = afterResponseSent,
             )
         }
     }
@@ -128,59 +136,56 @@ object ManagementApiDispatcher {
     fun dispatch(
         request: ParsedProxyRequest.Management,
         handler: ManagementApiHandler,
-    ): ManagementApiDispatchDecision =
-        when (val route = ManagementApiRouter.route(request)) {
-            is ManagementApiRouteDecision.Accepted -> {
-                val response =
-                    try {
-                        handler.handle(route.operation)
-                    } catch (failure: Exception) {
-                        throw ManagementApiHandlerException(
-                            operation = route.operation,
-                            requiresAuditLog = route.requiresAuditLog,
-                            cause = failure,
-                        )
-                    }
+    ): ManagementApiDispatchDecision = when (val route = ManagementApiRouter.route(request)) {
+        is ManagementApiRouteDecision.Accepted -> {
+            val response =
+                try {
+                    handler.handle(route.operation)
+                } catch (failure: Exception) {
+                    throw ManagementApiHandlerException(
+                        operation = route.operation,
+                        requiresAuditLog = route.requiresAuditLog,
+                        cause = failure,
+                    )
+                }
 
-                ManagementApiDispatchDecision.Respond(
-                    operation = route.operation,
-                    response = response,
-                    requiresAuditLog = route.requiresAuditLog,
-                )
-            }
-            is ManagementApiRouteDecision.Rejected ->
-                ManagementApiDispatchDecision.Reject(
-                    response = route.reason.toResponse(),
-                    requiresAuditLog = request.requiresAuditLog,
-                )
+            ManagementApiDispatchDecision.Respond(
+                operation = route.operation,
+                response = response,
+                requiresAuditLog = route.requiresAuditLog,
+            )
         }
+        is ManagementApiRouteDecision.Rejected ->
+            ManagementApiDispatchDecision.Reject(
+                response = route.reason.toResponse(),
+                requiresAuditLog = request.requiresAuditLog,
+            )
+    }
 
-    private fun ManagementApiRouteRejectionReason.toResponse(): ManagementApiResponse =
-        when (this) {
-            ManagementApiRouteRejectionReason.UnknownEndpoint ->
-                ManagementApiResponse.json(statusCode = 404, body = """{"error":"not_found"}""")
-            is ManagementApiRouteRejectionReason.UnsupportedMethod ->
-                ManagementApiResponse.json(
-                    statusCode = 405,
-                    body = """{"error":"method_not_allowed"}""",
-                    extraHeaders = linkedMapOf("Allow" to allowedMethod.httpToken()),
-                )
-            ManagementApiRouteRejectionReason.QueryUnsupported ->
-                ManagementApiResponse.json(statusCode = 400, body = """{"error":"query_unsupported"}""")
-        }
+    private fun ManagementApiRouteRejectionReason.toResponse(): ManagementApiResponse = when (this) {
+        ManagementApiRouteRejectionReason.UnknownEndpoint ->
+            ManagementApiResponse.json(statusCode = 404, body = """{"error":"not_found"}""")
+        is ManagementApiRouteRejectionReason.UnsupportedMethod ->
+            ManagementApiResponse.json(
+                statusCode = 405,
+                body = """{"error":"method_not_allowed"}""",
+                extraHeaders = linkedMapOf("Allow" to allowedMethod.httpToken()),
+            )
+        ManagementApiRouteRejectionReason.QueryUnsupported ->
+            ManagementApiResponse.json(statusCode = 400, body = """{"error":"query_unsupported"}""")
+    }
 }
 
-private fun reasonPhraseFor(statusCode: Int): String =
-    when (statusCode) {
-        200 -> "OK"
-        202 -> "Accepted"
-        204 -> "No Content"
-        400 -> "Bad Request"
-        404 -> "Not Found"
-        405 -> "Method Not Allowed"
-        500 -> "Internal Server Error"
-        else -> "Status"
-    }
+private fun reasonPhraseFor(statusCode: Int): String = when (statusCode) {
+    200 -> "OK"
+    202 -> "Accepted"
+    204 -> "No Content"
+    400 -> "Bad Request"
+    404 -> "Not Found"
+    405 -> "Method Not Allowed"
+    500 -> "Internal Server Error"
+    else -> "Status"
+}
 
 private fun MutableMap<String, String>.setProtectedHeader(
     name: String,
@@ -193,12 +198,11 @@ private fun MutableMap<String, String>.setProtectedHeader(
     this[name] = value
 }
 
-private fun com.cellularproxy.shared.management.HttpMethod.httpToken(): String =
-    when (this) {
-        com.cellularproxy.shared.management.HttpMethod.Get -> "GET"
-        com.cellularproxy.shared.management.HttpMethod.Post -> "POST"
-        com.cellularproxy.shared.management.HttpMethod.Connect -> "CONNECT"
-    }
+private fun com.cellularproxy.shared.management.HttpMethod.httpToken(): String = when (this) {
+    com.cellularproxy.shared.management.HttpMethod.Get -> "GET"
+    com.cellularproxy.shared.management.HttpMethod.Post -> "POST"
+    com.cellularproxy.shared.management.HttpMethod.Connect -> "CONNECT"
+}
 
 private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 

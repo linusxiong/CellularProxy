@@ -145,6 +145,7 @@ class ManagementApiStreamExchangeHandler(
 
         clientOutput.write(bytes)
         clientOutput.flush()
+        response.notifyResponseSent()
 
         return result
     }
@@ -158,17 +159,16 @@ class ManagementApiStreamExchangeHandler(
     }
 }
 
-private fun ManagementApiStreamExchangeHandlingResult.Responded.toAuditEvent(): ManagementApiStreamAuditEvent =
-    ManagementApiStreamAuditEvent(
-        operation = operation,
-        outcome =
-            when (disposition) {
-                ManagementApiStreamExchangeDisposition.Routed -> ManagementApiStreamAuditOutcome.Responded
-                ManagementApiStreamExchangeDisposition.RouteRejected -> ManagementApiStreamAuditOutcome.RouteRejected
-            },
-        statusCode = statusCode,
-        disposition = disposition,
-    )
+private fun ManagementApiStreamExchangeHandlingResult.Responded.toAuditEvent(): ManagementApiStreamAuditEvent = ManagementApiStreamAuditEvent(
+    operation = operation,
+    outcome =
+        when (disposition) {
+            ManagementApiStreamExchangeDisposition.Routed -> ManagementApiStreamAuditOutcome.Responded
+            ManagementApiStreamExchangeDisposition.RouteRejected -> ManagementApiStreamAuditOutcome.RouteRejected
+        },
+    statusCode = statusCode,
+    disposition = disposition,
+)
 
 internal fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull(): ManagementApiOperation? {
     val path = originTarget.substringBefore('?').substringBefore('#')
@@ -177,12 +177,16 @@ internal fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull(
             ManagementApiOperation.CloudflareStart
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/stop" ->
             ManagementApiOperation.CloudflareStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/reconnect" ->
+            ManagementApiOperation.CloudflareReconnect
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/mobile-data" ->
             ManagementApiOperation.RotateMobileData
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/airplane-mode" ->
             ManagementApiOperation.RotateAirplaneMode
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/service/stop" ->
             ManagementApiOperation.ServiceStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/service/restart" ->
+            ManagementApiOperation.ServiceRestart
         else -> null
     }
 }

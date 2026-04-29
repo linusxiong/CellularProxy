@@ -3,23 +3,32 @@ package com.cellularproxy.app.service
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.cloudflare.CloudflareTunnelEdgeConnectionResult
+import com.cellularproxy.cloudflare.CloudflareTunnelEdgeConnector
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.root.RootCommandAuditPhase
 import com.cellularproxy.shared.root.RootCommandAuditRecord
+import com.cellularproxy.shared.root.RootCommandCategory
+import com.cellularproxy.shared.root.RootCommandOutcome
 import com.cellularproxy.shared.rotation.RotationOperation
 import com.cellularproxy.shared.rotation.RotationState
 import com.cellularproxy.shared.rotation.RotationStatus
 import com.cellularproxy.shared.rotation.RotationTransitionDisposition
 import com.cellularproxy.shared.rotation.RotationTransitionResult
 import java.io.Closeable
+import java.util.Base64
+import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -207,7 +216,7 @@ class CellularProxyRuntimeCompositionInstallerTest {
     }
 
     @Test
-    fun `default production rotation callbacks reject when execution is not wired`() {
+    fun `default production rotation handler checks root availability before rotation work`() {
         val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
         val executors =
             RuntimeCompositionExecutorResources(
@@ -215,6 +224,7 @@ class CellularProxyRuntimeCompositionInstallerTest {
                 queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
                 acceptLoopExecutor = Executors.newSingleThreadExecutor(),
             )
+        val auditRecords = mutableListOf<RootCommandAuditRecord>()
         val installation =
             CellularProxyRuntimeCompositionInstaller.installForTesting(
                 bootstrapResult = readyBootstrap(),
@@ -223,6 +233,15 @@ class CellularProxyRuntimeCompositionInstallerTest {
                 socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
                 executorResources = executors,
                 rootOperationsEnabled = { true },
+                rootCommandProcessExecutor = { _, _ ->
+                    com.cellularproxy.root.RootCommandProcessResult.Completed(
+                        exitCode = 0,
+                        stdout = "2000",
+                        stderr = "",
+                    )
+                },
+                recordRootAudit = auditRecords::add,
+                nowElapsedMillis = { 0L },
                 bindListener = { listenHost: String, _: Int, backlog: Int ->
                     ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
                 },
@@ -237,19 +256,19 @@ class CellularProxyRuntimeCompositionInstallerTest {
             ForegroundProxyRuntimeLifecycleRegistry.foregroundProxyRuntimeLifecycle.startProxyRuntime()
 
             val mobileData = installed.managementHandlerReference.handle(ManagementApiOperation.RotateMobileData)
-            val airplaneMode = installed.managementHandlerReference.handle(ManagementApiOperation.RotateAirplaneMode)
 
-            assertEquals(409, mobileData.statusCode)
-            assertContains(mobileData.body, """"disposition":"rejected"""")
+            assertEquals(202, mobileData.statusCode)
+            assertContains(mobileData.body, """"disposition":"accepted"""")
             assertContains(mobileData.body, """"state":"failed"""")
             assertContains(mobileData.body, """"operation":"mobile_data"""")
-            assertContains(mobileData.body, """"failureReason":"execution_unavailable"""")
-
-            assertEquals(409, airplaneMode.statusCode)
-            assertContains(airplaneMode.body, """"disposition":"rejected"""")
-            assertContains(airplaneMode.body, """"state":"failed"""")
-            assertContains(airplaneMode.body, """"operation":"airplane_mode"""")
-            assertContains(airplaneMode.body, """"failureReason":"execution_unavailable"""")
+            assertContains(mobileData.body, """"failureReason":"root_unavailable"""")
+            assertEquals(
+                listOf(
+                    RootCommandCategory.RootAvailabilityCheck,
+                    RootCommandCategory.RootAvailabilityCheck,
+                ),
+                auditRecords.map { it.category },
+            )
         } finally {
             installation.close()
             assertTerminates(executors.workerExecutor)
@@ -312,6 +331,206 @@ class CellularProxyRuntimeCompositionInstallerTest {
         }
     }
 
+    @Test
+    fun `default production service restart action schedules root restart command after accepting response`() {
+        val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val auditRecords = mutableListOf<RootCommandAuditRecord>()
+        val restartAuditCompleted = CountDownLatch(1)
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+                rootOperationsEnabled = { true },
+                rootCommandProcessExecutor = { _, _ ->
+                    com.cellularproxy.root.RootCommandProcessResult.Completed(
+                        exitCode = 0,
+                        stdout = "restarted",
+                        stderr = "",
+                    )
+                },
+                recordRootAudit = { auditRecord ->
+                    auditRecords += auditRecord
+                    if (auditRecord.phase == RootCommandAuditPhase.Completed) {
+                        restartAuditCompleted.countDown()
+                    }
+                },
+                bindListener = { listenHost: String, _: Int, backlog: Int ->
+                    ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                },
+            )
+
+        try {
+            val installed =
+                assertIs<ProxyServerForegroundRuntimeInstallResult.Installed>(
+                    installation.installResult,
+                )
+            ForegroundProxyRuntimeLifecycleRegistry.foregroundProxyRuntimeLifecycle.startProxyRuntime()
+
+            val response = installed.managementHandlerReference.handle(ManagementApiOperation.ServiceRestart)
+
+            assertEquals(202, response.statusCode)
+            assertEquals("""{"accepted":true,"restart":{"packageName":"com.cellularproxy","failureReason":null}}""", response.body)
+            assertEquals(emptyList(), auditRecords)
+            response.notifyResponseSent()
+            assertTrue(restartAuditCompleted.await(1, TimeUnit.SECONDS))
+            assertEquals(
+                listOf(RootCommandAuditPhase.Started, RootCommandAuditPhase.Completed),
+                auditRecords.map { it.phase },
+            )
+            assertEquals(
+                listOf(RootCommandCategory.ServiceRestart, RootCommandCategory.ServiceRestart),
+                auditRecords.map { it.category },
+            )
+            assertEquals(RootCommandOutcome.Success, auditRecords.last().outcome)
+        } finally {
+            installation.close()
+            assertTerminates(executors.workerExecutor)
+            assertTerminates(executors.queuedClientTimeoutExecutor)
+            assertTerminates(executors.acceptLoopExecutor)
+        }
+    }
+
+    @Test
+    fun `production cloudflare runtime shares control plane and edge session registry`() {
+        var closedConnections = 0
+        val runtime =
+            createProductionCloudflareTunnelRuntime(
+                plainConfig =
+                    readyBootstrap().plainConfig.copy(
+                        cloudflare = AppConfig.default().cloudflare.copy(enabled = true),
+                    ),
+                sensitiveConfig =
+                    readyBootstrap().sensitiveConfig.copy(
+                        cloudflareTunnelToken = validCloudflareTunnelToken(),
+                    ),
+                edgeConnector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Connected(
+                            connection = { closedConnections += 1 },
+                        )
+                    },
+            )
+
+        val start = runtime.start()
+
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, start.disposition)
+        assertEquals(CloudflareTunnelState.Connected, runtime.status().state)
+        assertEquals(
+            "Active edge session: Connected (generation 2)",
+            runtime.edgeSessionSummary(),
+        )
+
+        val stop = runtime.stop()
+
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, stop.disposition)
+        assertEquals(CloudflareTunnelState.Stopped, runtime.status().state)
+        assertEquals(null, runtime.edgeSessionSummary())
+        assertEquals(1, closedConnections)
+    }
+
+    @Test
+    fun `production cloudflare runtime reconnect replaces connected edge session`() {
+        val closedConnections = mutableListOf<String>()
+        var connectionIndex = 0
+        val runtime =
+            createProductionCloudflareTunnelRuntime(
+                plainConfig =
+                    readyBootstrap().plainConfig.copy(
+                        cloudflare = AppConfig.default().cloudflare.copy(enabled = true),
+                    ),
+                sensitiveConfig =
+                    readyBootstrap().sensitiveConfig.copy(
+                        cloudflareTunnelToken = validCloudflareTunnelToken(),
+                    ),
+                edgeConnector =
+                    CloudflareTunnelEdgeConnector {
+                        connectionIndex += 1
+                        val connectionId = "connection-$connectionIndex"
+                        CloudflareTunnelEdgeConnectionResult.Connected(
+                            connection = { closedConnections += connectionId },
+                        )
+                    },
+            )
+
+        val start = runtime.start()
+        val reconnect = runtime.reconnect()
+        val stop = runtime.stop()
+
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, start.disposition)
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, reconnect.disposition)
+        assertEquals(CloudflareTunnelTransitionDisposition.Accepted, stop.disposition)
+        assertEquals(
+            listOf("connection-1", "connection-2"),
+            closedConnections,
+        )
+    }
+
+    @Test
+    fun `production cloudflare runtime close releases active edge session`() {
+        var closedConnections = 0
+        val runtime =
+            createProductionCloudflareTunnelRuntime(
+                plainConfig =
+                    readyBootstrap().plainConfig.copy(
+                        cloudflare = AppConfig.default().cloudflare.copy(enabled = true),
+                    ),
+                sensitiveConfig =
+                    readyBootstrap().sensitiveConfig.copy(
+                        cloudflareTunnelToken = validCloudflareTunnelToken(),
+                    ),
+                edgeConnector =
+                    CloudflareTunnelEdgeConnector {
+                        CloudflareTunnelEdgeConnectionResult.Connected(
+                            connection = { closedConnections += 1 },
+                        )
+                    },
+            )
+
+        runtime.start()
+        runtime.close()
+        runtime.close()
+
+        assertEquals(null, runtime.edgeSessionSummary())
+        assertEquals(1, closedConnections)
+    }
+
+    @Test
+    fun `installation close releases owned cloudflare runtime cleanup`() {
+        val routeMonitor = RecordingRouteMonitor(listOf(wifiRoute()))
+        val executors =
+            RuntimeCompositionExecutorResources(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1),
+                acceptLoopExecutor = Executors.newSingleThreadExecutor(),
+            )
+        val cloudflareCleanup = CompositionRecordingCloseable()
+        val installation =
+            CellularProxyRuntimeCompositionInstaller.installForTesting(
+                bootstrapResult = readyBootstrap(),
+                observedNetworks = routeMonitor::observedNetworks,
+                routeMonitor = routeMonitor,
+                socketConnector = CompositionUnavailableBoundNetworkSocketConnector,
+                executorResources = executors,
+                cloudflareRuntimeCleanup = cloudflareCleanup,
+            )
+
+        installation.close()
+
+        assertTrue(cloudflareCleanup.closed)
+        assertTerminates(executors.workerExecutor)
+        assertTerminates(executors.queuedClientTimeoutExecutor)
+        assertTerminates(executors.acceptLoopExecutor)
+    }
+
     private fun readyBootstrap(): AppConfigBootstrapResult.Ready = AppConfigBootstrapResult.Ready(
         plainConfig =
             AppConfig.default().copy(
@@ -340,6 +559,13 @@ class CellularProxyRuntimeCompositionInstallerTest {
         displayName = "Home Wi-Fi",
         isAvailable = true,
     )
+
+    private fun validCloudflareTunnelToken(): String {
+        val tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+        val secret = Base64.getEncoder().encodeToString(ByteArray(32) { index -> (index + 1).toByte() })
+        val json = """{"a":"account-tag","s":"$secret","t":"$tunnelId","e":"edge.example.com"}"""
+        return Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
+    }
 }
 
 private class RecordingRouteMonitor(
@@ -349,6 +575,15 @@ private class RecordingRouteMonitor(
         private set
 
     fun observedNetworks(): List<NetworkDescriptor> = networks
+
+    override fun close() {
+        closed = true
+    }
+}
+
+private class CompositionRecordingCloseable : Closeable {
+    var closed: Boolean = false
+        private set
 
     override fun close() {
         closed = true

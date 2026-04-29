@@ -88,6 +88,7 @@ class CloudflareManagementApiBridge(
                                 ),
                             )
                         }
+                        decision.response.notifyResponseSent()
                     }
                 is ManagementApiDispatchDecision.Reject ->
                     decision.response.toCloudflareResponse().also { response ->
@@ -101,6 +102,7 @@ class CloudflareManagementApiBridge(
                                 ),
                             )
                         }
+                        decision.response.notifyResponseSent()
                     }
             }
         } catch (failure: ManagementApiHandlerException) {
@@ -117,18 +119,17 @@ class CloudflareManagementApiBridge(
             throw failure
         }
 
-    private fun ProxyRequestAdmissionDecision.Rejected.toCloudflareResponse(): CloudflareTunnelResponse =
-        when (
-            val decision =
-                ProxyErrorResponseMapper.map(
-                    ProxyServerFailure.Admission(reason = reason),
-                )
-        ) {
-            is ProxyErrorResponseDecision.Emit ->
-                decision.response.toCloudflareResponse()
-            ProxyErrorResponseDecision.Suppress ->
-                CloudflareTunnelResponse.empty(statusCode = 500)
-        }
+    private fun ProxyRequestAdmissionDecision.Rejected.toCloudflareResponse(): CloudflareTunnelResponse = when (
+        val decision =
+            ProxyErrorResponseMapper.map(
+                ProxyServerFailure.Admission(reason = reason),
+            )
+    ) {
+        is ProxyErrorResponseDecision.Emit ->
+            decision.response.toCloudflareResponse()
+        ProxyErrorResponseDecision.Suppress ->
+            CloudflareTunnelResponse.empty(statusCode = 500)
+    }
 
     companion object {
         fun create(
@@ -154,22 +155,20 @@ class CloudflareManagementApiBridge(
 internal fun nonFatalManagementAuditRecorder(
     recordManagementAudit: (ManagementApiAuditRecord) -> Unit,
     reportManagementAuditFailure: (Exception) -> Unit = ::logManagementAuditFailure,
-): (ManagementApiAuditRecord) -> Unit =
-    { auditRecord ->
-        try {
-            recordManagementAudit(auditRecord)
-        } catch (exception: Exception) {
-            reportManagementAuditFailure(exception)
-        }
+): (ManagementApiAuditRecord) -> Unit = { auditRecord ->
+    try {
+        recordManagementAudit(auditRecord)
+    } catch (exception: Exception) {
+        reportManagementAuditFailure(exception)
     }
+}
 
-private fun ManagementApiResponse.toCloudflareResponse(): CloudflareTunnelResponse =
-    CloudflareTunnelResponse(
-        statusCode = statusCode,
-        reasonPhrase = reasonPhrase,
-        headers = headers,
-        body = body,
-    )
+private fun ManagementApiResponse.toCloudflareResponse(): CloudflareTunnelResponse = CloudflareTunnelResponse(
+    statusCode = statusCode,
+    reasonPhrase = reasonPhrase,
+    headers = headers,
+    body = body,
+)
 
 private fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull(): ManagementApiOperation? {
     val path = originTarget.substringBefore('?').substringBefore('#')
@@ -178,12 +177,16 @@ private fun ParsedProxyRequest.Management.toAttemptedHighImpactOperationOrNull()
             ManagementApiOperation.CloudflareStart
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/stop" ->
             ManagementApiOperation.CloudflareStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/cloudflare/reconnect" ->
+            ManagementApiOperation.CloudflareReconnect
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/mobile-data" ->
             ManagementApiOperation.RotateMobileData
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/rotate/airplane-mode" ->
             ManagementApiOperation.RotateAirplaneMode
         com.cellularproxy.shared.management.HttpMethod.Post to "/api/service/stop" ->
             ManagementApiOperation.ServiceStop
+        com.cellularproxy.shared.management.HttpMethod.Post to "/api/service/restart" ->
+            ManagementApiOperation.ServiceRestart
         else -> null
     }
 }
@@ -194,10 +197,9 @@ private fun logManagementAuditFailure(exception: Exception) {
 
 private const val MANAGEMENT_AUDIT_LOG_TAG = "CellularProxyAudit"
 
-private fun ProxyErrorResponse.toCloudflareResponse(): CloudflareTunnelResponse =
-    CloudflareTunnelResponse(
-        statusCode = statusCode,
-        reasonPhrase = reasonPhrase,
-        headers = headers,
-        body = body,
-    )
+private fun ProxyErrorResponse.toCloudflareResponse(): CloudflareTunnelResponse = CloudflareTunnelResponse(
+    statusCode = statusCode,
+    reasonPhrase = reasonPhrase,
+    headers = headers,
+    body = body,
+)

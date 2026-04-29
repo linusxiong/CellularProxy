@@ -12,9 +12,11 @@ enum class ManagementApiOperation {
     CloudflareStatus,
     CloudflareStart,
     CloudflareStop,
+    CloudflareReconnect,
     RotateMobileData,
     RotateAirplaneMode,
     ServiceStop,
+    ServiceRestart,
 }
 
 sealed interface ManagementApiRouteDecision {
@@ -84,6 +86,11 @@ private val ENDPOINTS =
                 method = HttpMethod.Post,
                 operation = ManagementApiOperation.CloudflareStop,
             ),
+        "/api/cloudflare/reconnect" to
+            ManagementApiEndpoint(
+                method = HttpMethod.Post,
+                operation = ManagementApiOperation.CloudflareReconnect,
+            ),
         "/api/rotate/mobile-data" to
             ManagementApiEndpoint(
                 method = HttpMethod.Post,
@@ -98,5 +105,10 @@ private val ENDPOINTS =
             ManagementApiEndpoint(
                 method = HttpMethod.Post,
                 operation = ManagementApiOperation.ServiceStop,
+            ),
+        "/api/service/restart" to
+            ManagementApiEndpoint(
+                method = HttpMethod.Post,
+                operation = ManagementApiOperation.ServiceRestart,
             ),
     )

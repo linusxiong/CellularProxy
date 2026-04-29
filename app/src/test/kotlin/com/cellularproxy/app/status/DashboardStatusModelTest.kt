@@ -1,16 +1,24 @@
 package com.cellularproxy.app.status
 
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
 import com.cellularproxy.shared.config.ProxyConfig
 import com.cellularproxy.shared.config.RootConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationFailureReason
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -92,10 +100,49 @@ class DashboardStatusModelTest {
         assertEquals(1, model.rejectedConnections)
         assertEquals(1_024, model.bytesReceived)
         assertEquals(2_048, model.bytesSent)
+        assertNull(model.recentTraffic)
         assertEquals(DashboardCloudflareState.Connected, model.cloudflare.state)
         assertTrue(model.cloudflare.remoteManagementAvailable)
         assertEquals(DashboardRootState.Available, model.root)
         assertEquals(setOf(DashboardWarning.BroadUnauthenticatedProxy), model.warnings)
+    }
+
+    @Test
+    fun `model exposes recent traffic only from explicit recent sample`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8181,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = null,
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                        metrics =
+                            ProxyTrafficMetrics(
+                                totalConnections = 7,
+                                bytesReceived = 1_024,
+                                bytesSent = 2_048,
+                            ),
+                    ),
+                recentTraffic =
+                    DashboardTrafficSummary(
+                        windowLabel = "Last 60 seconds",
+                        bytesReceived = 128,
+                        bytesSent = 256,
+                    ),
+            )
+
+        assertEquals(
+            DashboardTrafficSummary(
+                windowLabel = "Last 60 seconds",
+                bytesReceived = 128,
+                bytesSent = 256,
+            ),
+            model.recentTraffic,
+        )
     }
 
     @Test
@@ -134,9 +181,130 @@ class DashboardStatusModelTest {
         assertEquals(DashboardCloudflareState.Failed, model.cloudflare.state)
         assertEquals("Cloudflare tunnel failed", model.cloudflare.failureReason)
         assertEquals(
-            setOf(DashboardWarning.StartupFailed, DashboardWarning.CloudflareFailed),
+            setOf(
+                DashboardWarning.StartupFailed,
+                DashboardWarning.CloudflareFailed,
+                DashboardWarning.PortAlreadyInUse,
+            ),
             model.warnings,
         )
+    }
+
+    @Test
+    fun `model warns when Cloudflare tunnel is degraded`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.degraded(),
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.CloudflareDegraded), model.warnings)
+    }
+
+    @Test
+    fun `model warns when connected Cloudflare management api check is failing`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.connected(),
+                    ),
+                latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+            )
+
+        assertEquals(setOf(DashboardWarning.CloudflareManagementApiCheckFailing), model.warnings)
+    }
+
+    @Test
+    fun `model exposes Cloudflare management api check independently from tunnel availability`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.stopped(
+                        cloudflare = CloudflareTunnelStatus.connected(),
+                    ),
+                latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+            )
+
+        assertEquals(DashboardCloudflareManagementApiCheck.Failed, model.cloudflareManagementApiCheck)
+        assertTrue(model.cloudflare.remoteManagementAvailable)
+    }
+
+    @Test
+    fun `model exposes local management api status independently from Cloudflare remote management`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8181,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = null,
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                        cloudflare = CloudflareTunnelStatus.stopped(),
+                    ),
+                managementApiTokenPresent = true,
+            )
+
+        assertEquals(DashboardManagementApiStatus.Available, model.managementApiStatus)
+        assertFalse(model.cloudflare.remoteManagementAvailable)
+    }
+
+    @Test
+    fun `model exposes local management api missing token status`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                managementApiTokenPresent = false,
+            )
+
+        assertEquals(DashboardManagementApiStatus.MissingToken, model.managementApiStatus)
+    }
+
+    @Test
+    fun `model warns specifically when proxy port is already in use at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.PortAlreadyInUse,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.PortAlreadyInUse),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns specifically when proxy configuration is invalid at startup`() {
+        listOf(
+            ProxyStartupError.InvalidListenAddress to DashboardWarning.InvalidListenAddress,
+            ProxyStartupError.InvalidListenPort to DashboardWarning.InvalidListenPort,
+            ProxyStartupError.InvalidMaxConcurrentConnections to DashboardWarning.InvalidMaxConcurrentConnections,
+        ).forEach { (startupError, warning) ->
+            val model =
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = startupError),
+                )
+
+            assertEquals(
+                setOf(DashboardWarning.StartupFailed, warning),
+                model.warnings,
+                "startupError=$startupError",
+            )
+        }
     }
 
     @Test
@@ -154,6 +322,311 @@ class DashboardStatusModelTest {
             )
 
         assertEquals(DashboardRootState.Unavailable, model.root)
+    }
+
+    @Test
+    fun `model warns when root operations are enabled but root is unavailable`() {
+        val model =
+            DashboardStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        root = RootConfig(operationsEnabled = true),
+                    ),
+                status =
+                    ProxyServiceStatus.stopped(
+                        rootAvailability = RootAvailabilityStatus.Unavailable,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.RootUnavailable), model.warnings)
+    }
+
+    @Test
+    fun `model warns specifically when selected route is unavailable at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.UnavailableSelectedRoute,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.SelectedRouteUnavailable),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns when running bound route becomes unavailable`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = "0.0.0.0",
+                        listenPort = 8080,
+                        configuredRoute = RouteTarget.Cellular,
+                        boundRoute =
+                            NetworkDescriptor(
+                                id = "cell-1",
+                                category = NetworkCategory.Cellular,
+                                displayName = "Carrier LTE",
+                                isAvailable = false,
+                            ),
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.SelectedRouteUnavailable), model.warnings)
+    }
+
+    @Test
+    fun `model warns specifically when Cloudflare is enabled but tunnel token is missing at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingCloudflareTunnelToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.CloudflareTokenMissing),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns when Cloudflare is enabled but tunnel token is missing before or during startup`() {
+        listOf(
+            ProxyServiceStatus.stopped(),
+            ProxyServiceStatus(state = ProxyServiceState.Starting),
+        ).forEach { status ->
+            val model =
+                DashboardStatusModel.from(
+                    config =
+                        AppConfig.default().copy(
+                            cloudflare =
+                                CloudflareConfig(
+                                    enabled = true,
+                                    tunnelTokenPresent = false,
+                                ),
+                        ),
+                    status = status,
+                )
+
+            assertEquals(setOf(DashboardWarning.CloudflareTokenMissing), model.warnings, "status=${status.state}")
+        }
+    }
+
+    @Test
+    fun `model warns specifically when management api token is missing at startup`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = ProxyStartupError.MissingManagementApiToken,
+                    ),
+            )
+
+        assertEquals(
+            setOf(DashboardWarning.StartupFailed, DashboardWarning.ManagementApiTokenMissing),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns when management api token is missing before startup fails`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                managementApiTokenPresent = false,
+            )
+
+        assertEquals(setOf(DashboardWarning.ManagementApiTokenMissing), model.warnings)
+    }
+
+    @Test
+    fun `model warns when sensitive configuration is invalid before startup fails`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.PartiallyMissingRequiredSecrets,
+            )
+
+        assertEquals(setOf(DashboardWarning.SensitiveConfigurationInvalid), model.warnings)
+    }
+
+    @Test
+    fun `model warns specifically when enabled Cloudflare has an invalid tunnel token`() {
+        val model =
+            DashboardStatusModel.from(
+                config =
+                    AppConfig.default().copy(
+                        cloudflare =
+                            CloudflareConfig(
+                                enabled = true,
+                                tunnelTokenPresent = true,
+                            ),
+                    ),
+                status = ProxyServiceStatus.stopped(),
+                invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+            )
+
+        assertEquals(
+            setOf(
+                DashboardWarning.CloudflareTokenInvalid,
+                DashboardWarning.SensitiveConfigurationInvalid,
+            ),
+            model.warnings,
+        )
+    }
+
+    @Test
+    fun `model warns when rotation is blocked by cooldown`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationCooldownRemainingSeconds = 12,
+            )
+
+        assertEquals(setOf(DashboardWarning.RotationCooldownActive), model.warnings)
+    }
+
+    @Test
+    fun `model warns when last rotation action was rejected by cooldown`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.Failed,
+                        operation = RotationOperation.MobileData,
+                        failureReason = RotationFailureReason.CooldownActive,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.RotationCooldownActive), model.warnings)
+    }
+
+    @Test
+    fun `model warns when rotation is already active`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.CheckingRoot,
+                        operation = RotationOperation.MobileData,
+                    ),
+            )
+
+        assertEquals(setOf(DashboardWarning.RotationInProgress), model.warnings)
+    }
+
+    @Test
+    fun `model ignores inactive rotation cooldown values`() {
+        listOf(null, 0L, -1L).forEach { cooldownRemainingSeconds ->
+            val model =
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    rotationCooldownRemainingSeconds = cooldownRemainingSeconds,
+                )
+
+            assertEquals(emptySet(), model.warnings, "cooldownRemainingSeconds=$cooldownRemainingSeconds")
+        }
+    }
+
+    @Test
+    fun `model exposes newest failed log rows as bounded recent high severity errors`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                recentLogs =
+                    listOf(
+                        DashboardLogSummary(
+                            id = "old-failed",
+                            occurredAtEpochMillis = 100,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Old failure",
+                            detail = "Old failed detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "new-warning",
+                            occurredAtEpochMillis = 500,
+                            severity = DashboardLogSeverity.Warning,
+                            title = "Newest warning",
+                            detail = "Newest warning detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "newest-failed",
+                            occurredAtEpochMillis = 400,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Newest failure",
+                            detail = "Newest failed detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "middle-failed",
+                            occurredAtEpochMillis = 300,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Middle failure",
+                            detail = "Middle failed detail",
+                        ),
+                        DashboardLogSummary(
+                            id = "third-failed",
+                            occurredAtEpochMillis = 200,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Third failure",
+                            detail = "Third failed detail",
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            listOf("newest-failed", "middle-failed", "third-failed"),
+            model.recentHighSeverityErrors.map(DashboardRecentError::id),
+        )
+    }
+
+    @Test
+    fun `model redacts recent high severity error text before dashboard display`() {
+        val model =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.stopped(),
+                recentLogs =
+                    listOf(
+                        DashboardLogSummary(
+                            id = "failed-management",
+                            occurredAtEpochMillis = 100,
+                            severity = DashboardLogSeverity.Failed,
+                            title = "Management failed with plain-secret-token",
+                            detail = "Authorization: Bearer secret-token\nhttps://example.test/api/status?token=secret-token",
+                        ),
+                    ),
+                redactionSecrets =
+                    LogRedactionSecrets(
+                        managementApiToken = "plain-secret-token",
+                    ),
+            )
+        val error = model.recentHighSeverityErrors.single()
+
+        assertFalse(error.title.contains("plain-secret-token"))
+        assertFalse(error.detail.contains("secret-token"))
+        assertTrue(error.title.contains("[REDACTED]"))
+        assertTrue(error.detail.contains("[REDACTED]"))
     }
 
     @Test

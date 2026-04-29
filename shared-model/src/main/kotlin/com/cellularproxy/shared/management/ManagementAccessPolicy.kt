@@ -93,7 +93,9 @@ private val HIGH_IMPACT_ENDPOINTS =
     setOf(
         HttpMethod.Post to "/api/cloudflare/start",
         HttpMethod.Post to "/api/cloudflare/stop",
+        HttpMethod.Post to "/api/cloudflare/reconnect",
         HttpMethod.Post to "/api/rotate/mobile-data",
         HttpMethod.Post to "/api/rotate/airplane-mode",
         HttpMethod.Post to "/api/service/stop",
+        HttpMethod.Post to "/api/service/restart",
     )

@@ -1,11 +1,16 @@
 package com.cellularproxy.app.ui
 
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RotationConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,6 +52,580 @@ class ProxySettingsFormModelTest {
         assertEquals("90", form.networkReturnTimeoutSeconds)
         assertEquals("300", form.cooldownSeconds)
         assertEquals(false, form.rootOperationsEnabled)
+    }
+
+    @Test
+    fun `settings actions are available only when editable fields changed`() {
+        val persisted = ProxySettingsFormState.from(AppConfig.default())
+        val unchangedState =
+            ProxySettingsScreenState.from(
+                form = persisted,
+                persistedForm = persisted,
+            )
+        val changedPlainSettingState =
+            ProxySettingsScreenState.from(
+                form = persisted.copy(listenPort = "8181"),
+                persistedForm = persisted,
+            )
+        val changedSensitiveSettingState =
+            ProxySettingsScreenState.from(
+                form = persisted.copy(managementApiToken = "new-management-token"),
+                persistedForm = persisted,
+            )
+
+        assertEquals(
+            emptyList(),
+            unchangedState.availableActions,
+        )
+        assertEquals(
+            listOf(
+                ProxySettingsScreenAction.SaveChanges,
+                ProxySettingsScreenAction.DiscardChanges,
+            ),
+            changedPlainSettingState.availableActions,
+        )
+        assertEquals(
+            listOf(
+                ProxySettingsScreenAction.SaveChanges,
+                ProxySettingsScreenAction.DiscardChanges,
+            ),
+            changedSensitiveSettingState.availableActions,
+        )
+    }
+
+    @Test
+    fun `settings screen state exposes safe Cloudflare tunnel token status`() {
+        val missingForm = ProxySettingsFormState.from(AppConfig.default())
+        val presentForm =
+            ProxySettingsFormState.from(
+                AppConfig.default().copy(
+                    cloudflare =
+                        AppConfig.default().cloudflare.copy(
+                            tunnelTokenPresent = true,
+                        ),
+                ),
+            )
+        val editedForm =
+            missingForm.copy(
+                cloudflareTunnelToken = "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0=",
+            )
+        val invalidForm =
+            missingForm.copy(
+                cloudflareTunnelToken = "not-a-tunnel-token",
+            )
+
+        assertEquals(
+            ProxySettingsCloudflareTokenStatus.Missing,
+            ProxySettingsScreenState
+                .from(form = missingForm, persistedForm = missingForm)
+                .cloudflareTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsCloudflareTokenStatus.Present,
+            ProxySettingsScreenState
+                .from(form = presentForm, persistedForm = presentForm)
+                .cloudflareTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsCloudflareTokenStatus.Edited,
+            ProxySettingsScreenState
+                .from(form = editedForm, persistedForm = missingForm)
+                .cloudflareTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsCloudflareTokenStatus.Invalid,
+            ProxySettingsScreenState
+                .from(form = invalidForm, persistedForm = missingForm)
+                .cloudflareTokenStatus,
+        )
+    }
+
+    @Test
+    fun `settings screen state exposes safe proxy credential and management token statuses`() {
+        val missingForm = ProxySettingsFormState.from(AppConfig.default())
+        val presentForm =
+            ProxySettingsFormState.from(
+                AppConfig.default(),
+                sensitiveConfig = sensitiveConfig("management-token"),
+            )
+        val editedForm =
+            missingForm.copy(
+                proxyUsername = "new-user",
+                proxyPassword = "new-password",
+                managementApiToken = "new-management-token",
+            )
+        val invalidCredentialForm =
+            missingForm.copy(
+                proxyUsername = "new-user",
+            )
+        val invalidManagementTokenForm =
+            missingForm.copy(
+                managementApiToken = " new-management-token ",
+            )
+
+        assertEquals(
+            ProxySettingsSecretStatus.Missing,
+            ProxySettingsScreenState
+                .from(form = missingForm, persistedForm = missingForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Missing,
+            ProxySettingsScreenState
+                .from(form = missingForm, persistedForm = missingForm)
+                .managementApiTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Present,
+            ProxySettingsScreenState
+                .from(form = presentForm, persistedForm = presentForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Present,
+            ProxySettingsScreenState
+                .from(form = presentForm, persistedForm = presentForm)
+                .managementApiTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Edited,
+            ProxySettingsScreenState
+                .from(form = editedForm, persistedForm = missingForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Edited,
+            ProxySettingsScreenState
+                .from(form = editedForm, persistedForm = missingForm)
+                .managementApiTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Invalid,
+            ProxySettingsScreenState
+                .from(form = invalidCredentialForm, persistedForm = missingForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Invalid,
+            ProxySettingsScreenState
+                .from(form = invalidManagementTokenForm, persistedForm = missingForm)
+                .managementApiTokenStatus,
+        )
+    }
+
+    @Test
+    fun `settings controller exposes invalid secret statuses when sensitive storage is invalid`() {
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                        loadSensitiveConfigResult = {
+                            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+                        },
+                    ),
+            )
+
+        assertEquals(ProxySettingsSecretStatus.Invalid, controller.state.proxyCredentialStatus)
+        assertEquals(ProxySettingsSecretStatus.Invalid, controller.state.managementApiTokenStatus)
+        assertEquals(ProxySettingsCloudflareTokenStatus.Invalid, controller.state.cloudflareTokenStatus)
+    }
+
+    @Test
+    fun `settings controller does not load legacy save-time sensitive callback for display status`() {
+        var loadSensitiveConfigCalled = false
+
+        ProxySettingsScreenController(
+            initialConfigProvider = AppConfig::default,
+            formController =
+                ProxySettingsFormController(
+                    loadConfig = AppConfig::default,
+                    saveConfig = {},
+                    loadSensitiveConfig = {
+                        loadSensitiveConfigCalled = true
+                        sensitiveConfig("management-token")
+                    },
+                ),
+        )
+
+        assertFalse(loadSensitiveConfigCalled)
+    }
+
+    @Test
+    fun `settings screen state exposes visible warnings for risky current form`() {
+        val persisted = ProxySettingsFormState.from(AppConfig.default())
+        val cloudflareMissingTokenForm =
+            persisted.copy(
+                cloudflareEnabled = true,
+                cloudflareTunnelTokenPresent = false,
+            )
+        val broadUnauthenticatedForm =
+            persisted.copy(
+                listenHost = "0.0.0.0",
+                authEnabled = false,
+            )
+        val cloudflareInvalidTokenForm =
+            persisted.copy(
+                cloudflareEnabled = true,
+                cloudflareTunnelToken = "not-a-tunnel-token",
+            )
+
+        assertEquals(
+            setOf(ProxySettingsFormWarning.CloudflareEnabledMissingTunnelToken),
+            ProxySettingsScreenState
+                .from(form = cloudflareMissingTokenForm, persistedForm = persisted)
+                .warnings,
+        )
+        assertEquals(
+            setOf(ProxySettingsFormWarning.BroadUnauthenticatedProxy),
+            ProxySettingsScreenState
+                .from(form = broadUnauthenticatedForm, persistedForm = persisted)
+                .warnings,
+        )
+        assertEquals(
+            setOf(ProxySettingsFormWarning.CloudflareEnabledInvalidTunnelToken),
+            ProxySettingsScreenState
+                .from(form = cloudflareInvalidTokenForm, persistedForm = persisted)
+                .warnings,
+        )
+    }
+
+    @Test
+    fun `settings controller refreshes clean form from latest persisted config provider`() {
+        var config = AppConfig.default()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = { config },
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = { config },
+                        saveConfig = { savedConfig -> config = savedConfig },
+                    ),
+            )
+        config =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenPort = 8181,
+                    ),
+            )
+
+        controller.handle(ProxySettingsScreenEvent.Refresh)
+
+        assertEquals("8181", controller.state.form.listenPort)
+        assertEquals("8181", controller.state.persistedForm.listenPort)
+        assertEquals(emptyList(), controller.state.availableActions)
+    }
+
+    @Test
+    fun `settings controller refresh preserves dirty edits while updating persisted baseline`() {
+        var config = AppConfig.default()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = { config },
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = { config },
+                        saveConfig = { savedConfig -> config = savedConfig },
+                    ),
+            )
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(listenHost = "127.0.0.1"),
+            ),
+        )
+        config =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenPort = 8181,
+                    ),
+            )
+
+        controller.handle(ProxySettingsScreenEvent.Refresh)
+
+        assertEquals("127.0.0.1", controller.state.form.listenHost)
+        assertEquals("8080", controller.state.form.listenPort)
+        assertEquals("8181", controller.state.persistedForm.listenPort)
+
+        controller.handle(ProxySettingsScreenEvent.DiscardChanges)
+
+        assertEquals("8181", controller.state.form.listenPort)
+        assertEquals("8181", controller.state.persistedForm.listenPort)
+        assertEquals(emptyList(), controller.state.availableActions)
+    }
+
+    @Test
+    fun `settings controller exposes invalid sensitive storage after failed sensitive save`() {
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                        loadSensitiveConfigResult = {
+                            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+                        },
+                        saveSensitiveConfig = {},
+                    ),
+            )
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(managementApiToken = "new-management-token"),
+            ),
+        )
+
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(
+            setOf(ProxySettingsValidationError.InvalidSensitiveConfiguration),
+            controller.state.validationErrors,
+        )
+        assertTrue(
+            controller.consumeEffects().single() is ProxySettingsScreenEffect.SaveInvalid,
+        )
+    }
+
+    @Test
+    fun `valid replacement secret edits show edited status while repairing invalid sensitive storage`() {
+        val persisted =
+            ProxySettingsFormState.from(
+                config = AppConfig.default(),
+                sensitiveConfigInvalid = true,
+            )
+        val state =
+            ProxySettingsScreenState.from(
+                form =
+                    persisted.copy(
+                        proxyUsername = "replacement-user",
+                        proxyPassword = "replacement-pass",
+                        managementApiToken = "replacement-management-token",
+                    ),
+                persistedForm = persisted,
+            )
+
+        assertEquals(ProxySettingsSecretStatus.Edited, state.proxyCredentialStatus)
+        assertEquals(ProxySettingsSecretStatus.Edited, state.managementApiTokenStatus)
+        assertTrue(ProxySettingsScreenAction.SaveChanges in state.availableActions)
+    }
+
+    @Test
+    fun `settings controller exposes Cloudflare token validation after rejected save`() {
+        var savedConfig: AppConfig? = null
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = { config -> savedConfig = config },
+                        loadSensitiveConfigResult = { SensitiveConfigLoadResult.Loaded(sensitiveConfig("management-token")) },
+                        saveSensitiveConfig = {},
+                    ),
+            )
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(cloudflareEnabled = true),
+            ),
+        )
+
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(null, savedConfig)
+        assertEquals(
+            setOf(ProxySettingsValidationError.InvalidCloudflareTunnelToken),
+            controller.state.validationErrors,
+        )
+        assertTrue(
+            controller.consumeEffects().single() is ProxySettingsScreenEffect.SaveInvalid,
+        )
+    }
+
+    @Test
+    fun `settings controller can disable Cloudflare when sensitive storage is invalid`() {
+        var savedConfig: AppConfig? = null
+        val enabledCloudflareConfig =
+            AppConfig.default().copy(
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = false,
+                    ),
+            )
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = { enabledCloudflareConfig },
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = { enabledCloudflareConfig },
+                        saveConfig = { config -> savedConfig = config },
+                        loadSensitiveConfigResult = {
+                            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken)
+                        },
+                    ),
+            )
+
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(cloudflareEnabled = false),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(false, savedConfig?.cloudflare?.enabled)
+        assertEquals(emptySet(), controller.state.validationErrors)
+        assertTrue(controller.consumeEffects().single() is ProxySettingsScreenEffect.SaveSucceeded)
+    }
+
+    @Test
+    fun `settings form controller saves through latest sensitive callback provider`() {
+        val oldSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val newSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        var loadSensitiveConfig = { sensitiveConfig("old-management-token") }
+        var saveSensitiveConfig: (SensitiveConfig) -> Unit = oldSavedSensitiveConfigs::add
+        val controller =
+            ProxySettingsFormController(
+                loadConfig = AppConfig::default,
+                saveConfig = {},
+                loadSensitiveConfigProvider = { loadSensitiveConfig },
+                saveSensitiveConfigProvider = { saveSensitiveConfig },
+            )
+        loadSensitiveConfig = { sensitiveConfig("new-management-token") }
+        saveSensitiveConfig = newSavedSensitiveConfigs::add
+
+        controller.save(
+            ProxySettingsFormState
+                .from(AppConfig.default())
+                .copy(managementApiToken = "newer-management-token"),
+        )
+
+        assertEquals(emptyList(), oldSavedSensitiveConfigs)
+        assertEquals(listOf("newer-management-token"), newSavedSensitiveConfigs.map(SensitiveConfig::managementApiToken))
+    }
+
+    @Test
+    fun `settings state withholds save and exposes validation errors for invalid dirty fields`() {
+        val persisted = ProxySettingsFormState.from(AppConfig.default())
+        val state =
+            ProxySettingsScreenState.from(
+                form =
+                    persisted.copy(
+                        listenPort = "65536",
+                        maxConcurrentConnections = "0",
+                        mobileDataOffDelaySeconds = "1.5",
+                        proxyUsername = "new-user",
+                    ),
+                persistedForm = persisted,
+            )
+
+        assertEquals(
+            listOf(ProxySettingsScreenAction.DiscardChanges),
+            state.availableActions,
+        )
+        assertEquals(
+            setOf(
+                ProxySettingsValidationError.InvalidListenPort,
+                ProxySettingsValidationError.InvalidMaxConcurrentConnections,
+                ProxySettingsValidationError.InvalidRotationTiming,
+                ProxySettingsValidationError.InvalidProxyCredential,
+            ),
+            state.validationErrors,
+        )
+    }
+
+    @Test
+    fun `successful settings save clears sensitive edit fields from the next editable baseline`() {
+        val savedConfig =
+            AppConfig.default().copy(
+                proxy =
+                    AppConfig.default().proxy.copy(
+                        listenPort = 8181,
+                    ),
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+            )
+        val editedForm =
+            ProxySettingsFormState
+                .from(AppConfig.default())
+                .copy(
+                    listenPort = "8181",
+                    proxyUsername = "new-user",
+                    proxyPassword = "new-password",
+                    managementApiToken = "new-management-token",
+                    cloudflareEnabled = true,
+                    cloudflareTunnelToken = "eyJhIjoiZmFrZSIsInQiOiJmYWtlIiwicyI6Ik1EUXpNVEkyTnpndE9Ua3dPUzAwTkRnNUxUaGhOV1F0TWpVMk1qYzRPVEV5TXpRMSJ9",
+                    cloudflareHostnameLabel = "manage.example.com",
+                )
+
+        val nextForm = editedForm.afterSuccessfulSave(savedConfig)
+
+        assertEquals("8181", nextForm.listenPort)
+        assertEquals(true, nextForm.cloudflareEnabled)
+        assertEquals("manage.example.com", nextForm.cloudflareHostnameLabel)
+        assertEquals("", nextForm.proxyUsername)
+        assertEquals("", nextForm.proxyPassword)
+        assertEquals("", nextForm.managementApiToken)
+        assertEquals("", nextForm.cloudflareTunnelToken)
+    }
+
+    @Test
+    fun `successful settings save preserves edited Cloudflare fields when saved config has stale Cloudflare state`() {
+        val savedConfigWithStaleCloudflare = AppConfig.default()
+        val editedForm =
+            ProxySettingsFormState
+                .from(AppConfig.default())
+                .copy(
+                    cloudflareEnabled = true,
+                    cloudflareHostnameLabel = "manage.example.com",
+                    cloudflareTunnelToken = "eyJhIjoiZmFrZSIsInQiOiJmYWtlIiwicyI6Ik1EUXpNVEkyTnpndE9Ua3dPUzAwTkRnNUxUaGhOV1F0TWpVMk1qYzRPVEV5TXpRMSJ9",
+                )
+
+        val nextForm = editedForm.afterSuccessfulSave(savedConfigWithStaleCloudflare)
+
+        assertEquals(true, nextForm.cloudflareEnabled)
+        assertEquals("manage.example.com", nextForm.cloudflareHostnameLabel)
+        assertEquals("", nextForm.cloudflareTunnelToken)
+    }
+
+    @Test
+    fun `successful settings save marks Cloudflare token present only after sensitive token persistence`() {
+        val tunnelToken =
+            "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="
+        val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                        loadSensitiveConfigResult = { SensitiveConfigLoadResult.Loaded(sensitiveConfig("management-token")) },
+                        saveSensitiveConfig = savedSensitiveConfigs::add,
+                    ),
+            )
+
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(
+                    cloudflareEnabled = true,
+                    cloudflareTunnelToken = tunnelToken,
+                ),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(listOf(tunnelToken), savedSensitiveConfigs.map(SensitiveConfig::cloudflareTunnelToken))
+        assertEquals("", controller.state.form.cloudflareTunnelToken)
+        assertTrue(controller.state.form.cloudflareTunnelTokenPresent)
+        assertEquals(ProxySettingsCloudflareTokenStatus.Present, controller.state.cloudflareTokenStatus)
+        assertFalse(ProxySettingsFormWarning.CloudflareEnabledMissingTunnelToken in controller.state.warnings)
     }
 
     @Test
@@ -143,6 +722,7 @@ class ProxySettingsFormModelTest {
                 listenPort = "8181",
                 authEnabled = true,
                 route = RouteTarget.Automatic,
+                cloudflareEnabled = true,
             ).toAppConfig(base = staleCloudflareConfig)
 
         val saved = result as ProxySettingsFormResult.Valid
@@ -205,4 +785,9 @@ class ProxySettingsFormModelTest {
             )
         }
     }
+
+    private fun sensitiveConfig(managementApiToken: String): SensitiveConfig = SensitiveConfig(
+        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+        managementApiToken = managementApiToken,
+    )
 }

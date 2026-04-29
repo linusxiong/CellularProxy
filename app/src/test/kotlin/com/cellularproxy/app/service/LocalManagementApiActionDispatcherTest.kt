@@ -1,0 +1,339 @@
+package com.cellularproxy.app.service
+
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.CloudflareConfig
+import com.cellularproxy.shared.config.ProxyConfig
+import com.cellularproxy.shared.proxy.ProxyCredential
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+
+class LocalManagementApiActionDispatcherTest {
+    @Test
+    fun `dispatch posts authenticated Cloudflare start request to loopback management endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareStart,
+            config =
+                AppConfig.default().copy(
+                    proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 9090),
+                    cloudflare = CloudflareConfig(enabled = true, tunnelTokenPresent = true),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:9090/api/cloudflare/start",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `dispatch maps rotation actions to management endpoints on explicit loopback host`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 409)
+                },
+            )
+        val config =
+            AppConfig.default().copy(
+                proxy = ProxyConfig(listenHost = "127.0.0.1", listenPort = 8181),
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.RotateMobileData,
+            config = config,
+            sensitiveConfig = sensitiveConfig(),
+        )
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.RotateAirplaneMode,
+            config = config,
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8181/api/rotate/mobile-data",
+                    bearerToken = "management-token",
+                ),
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8181/api/rotate/airplane-mode",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `dispatch maps rotation read-only probes to authenticated local management endpoints`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 200)
+                },
+            )
+        val config =
+            AppConfig.default().copy(
+                proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 8181),
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.RootStatus,
+            config = config,
+            sensitiveConfig = sensitiveConfig(),
+        )
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.PublicIp,
+            config = config,
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "GET",
+                    url = "http://127.0.0.1:8181/api/status",
+                    bearerToken = "management-token",
+                ),
+                LocalManagementApiActionRequest(
+                    method = "GET",
+                    url = "http://127.0.0.1:8181/api/ip",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `service restart maps to authenticated local management endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.ServiceRestart,
+            config =
+                AppConfig.default().copy(
+                    proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 8181),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8181/api/service/restart",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `service stop maps to authenticated local management endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.ServiceStop,
+            config =
+                AppConfig.default().copy(
+                    proxy = ProxyConfig(listenHost = "0.0.0.0", listenPort = 8181),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8181/api/service/stop",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `response treats only 2xx management action statuses as successful`() {
+        assertEquals(true, LocalManagementApiActionResponse(statusCode = 202).isSuccessful)
+        assertEquals(false, LocalManagementApiActionResponse(statusCode = 409).isSuccessful)
+        assertEquals(false, LocalManagementApiActionResponse(statusCode = 503).isSuccessful)
+    }
+
+    @Test
+    fun `cloudflare stop maps to management stop endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareStop,
+            config = AppConfig.default(),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8080/api/cloudflare/stop",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `cloudflare reconnect maps to management reconnect endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 202)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareReconnect,
+            config = AppConfig.default(),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:8080/api/cloudflare/reconnect",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `cloudflare management tunnel test maps to configured public hostname status endpoint`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 200)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareManagementStatus,
+            config =
+                AppConfig.default().copy(
+                    cloudflare =
+                        CloudflareConfig(
+                            enabled = true,
+                            tunnelTokenPresent = true,
+                            managementHostnameLabel = "manage.example.test",
+                        ),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        assertEquals(
+            listOf(
+                LocalManagementApiActionRequest(
+                    method = "GET",
+                    url = "https://manage.example.test/api/status",
+                    bearerToken = "management-token",
+                ),
+            ),
+            requests,
+        )
+    }
+
+    @Test
+    fun `cloudflare management tunnel test strips unsafe URL components from configured hostname`() {
+        val requests = mutableListOf<LocalManagementApiActionRequest>()
+        val dispatcher =
+            LocalManagementApiActionDispatcher(
+                transport = { request ->
+                    requests += request
+                    LocalManagementApiActionResponse(statusCode = 200)
+                },
+            )
+
+        dispatcher.dispatch(
+            action = LocalManagementApiAction.CloudflareManagementStatus,
+            config =
+                AppConfig.default().copy(
+                    cloudflare =
+                        CloudflareConfig(
+                            enabled = true,
+                            tunnelTokenPresent = true,
+                            managementHostnameLabel =
+                                "https://operator:hostname-secret@management.example.test/private" +
+                                    "?token=query-secret#fragment-secret",
+                        ),
+                ),
+            sensitiveConfig = sensitiveConfig(),
+        )
+
+        val request = requests.single()
+        assertEquals("https://management.example.test/api/status", request.url)
+        assertFalse(request.url.contains("operator"))
+        assertFalse(request.url.contains("hostname-secret"))
+        assertFalse(request.url.contains("query-secret"))
+        assertFalse(request.url.contains("fragment-secret"))
+        assertFalse(request.url.contains("/private"))
+    }
+}
+
+private fun sensitiveConfig(): SensitiveConfig = SensitiveConfig(
+    proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+    managementApiToken = "management-token",
+    cloudflareTunnelToken = "cloudflare-token",
+)

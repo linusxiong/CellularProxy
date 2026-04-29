@@ -11,6 +11,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
+import com.cellularproxy.app.audit.CellularProxyForegroundServiceAuditStore
 import com.cellularproxy.app.status.NotificationStatusModel
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.proxy.ProxyServiceState
@@ -19,7 +21,10 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 class CellularProxyForegroundService : Service() {
     private val runtimeCompositionOwner =
         ForegroundServiceRuntimeCompositionOwner {
-            CellularProxyRuntimeCompositionInstaller.install(this)
+            CellularProxyRuntimeCompositionInstaller.install(
+                context = this,
+                onRuntimeStatusAvailable = ::updateForegroundNotification,
+            )
         }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -33,6 +38,10 @@ class CellularProxyForegroundService : Service() {
             commandResult = ForegroundServiceCommandParser.parse(intent?.action),
             runtimeLifecycle = runtimeCompositionOwner,
             applyServiceEffect = { effect -> applyServiceEffect(effect, startId) },
+            recordAudit = CellularProxyForegroundServiceAuditStore.foregroundServiceAuditLog(this)::record,
+            reportAuditFailure = { exception ->
+                Log.w(FOREGROUND_SERVICE_AUDIT_LOG_TAG, "Failed to persist foreground service audit record", exception)
+            },
         )
 
         return START_NOT_STICKY
@@ -77,6 +86,21 @@ class CellularProxyForegroundService : Service() {
         } else {
             startForeground(descriptor.notificationId, notification)
         }
+    }
+
+    private fun updateForegroundNotification(runtimeStatus: NotificationRuntimeStatus) {
+        val descriptor =
+            ForegroundServiceNotificationDescriptor.from(
+                NotificationStatusModel.from(
+                    config = runtimeStatus.config,
+                    status = runtimeStatus.status,
+                    rotationStatus = runtimeStatus.rotationStatus,
+                    rotationCooldownRemainingSeconds = runtimeStatus.rotationCooldownRemainingSeconds,
+                ),
+            )
+        createNotificationChannel(descriptor)
+        getSystemService(NotificationManager::class.java)
+            .notify(descriptor.notificationId, buildNotification(descriptor))
     }
 
     private fun stopForegroundAndSelf(startId: Int) {
@@ -155,9 +179,9 @@ class CellularProxyForegroundService : Service() {
     }
 }
 
-private fun NotificationChannelImportance.toAndroidImportance(): Int =
-    when (this) {
-        NotificationChannelImportance.Low -> NotificationManager.IMPORTANCE_LOW
-    }
+private fun NotificationChannelImportance.toAndroidImportance(): Int = when (this) {
+    NotificationChannelImportance.Low -> NotificationManager.IMPORTANCE_LOW
+}
 
+private const val FOREGROUND_SERVICE_AUDIT_LOG_TAG = "CellularProxyFgAudit"
 private const val STOP_ACTION_REQUEST_CODE = 1

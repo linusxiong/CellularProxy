@@ -1,0 +1,754 @@
+package com.cellularproxy.app.ui
+
+import com.cellularproxy.app.audit.LogsAuditRecordCategory
+import com.cellularproxy.app.audit.LogsAuditRecordSeverity
+import com.cellularproxy.app.config.SensitiveConfigInvalidReason
+import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
+import com.cellularproxy.app.status.DashboardLogSeverity
+import com.cellularproxy.app.status.DashboardLogSummary
+import com.cellularproxy.app.status.DashboardServiceState
+import com.cellularproxy.app.status.DashboardStatusModel
+import com.cellularproxy.app.status.DashboardWarning
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.RootConfig
+import com.cellularproxy.shared.proxy.ProxyServiceState
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.proxy.ProxyStartupError
+import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class DashboardScreenControllerTest {
+    @Test
+    fun `controller dispatches available service actions and refreshes screen state`() {
+        var proxyStatus = ProxyServiceStatus.stopped()
+        val actions = mutableListOf<DashboardScreenAction>()
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+                actionHandler = { action ->
+                    actions += action
+                    proxyStatus = ProxyServiceStatus(ProxyServiceState.Starting)
+                },
+            )
+
+        controller.handle(DashboardScreenEvent.StartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.StartProxy), actions)
+        assertEquals(DashboardServiceState.Starting, controller.state.status.serviceState)
+        assertFalse(DashboardScreenAction.StartProxy in controller.state.availableActions)
+        assertTrue(DashboardScreenAction.StopProxy in controller.state.availableActions)
+    }
+
+    @Test
+    fun `controller suppresses unavailable service actions`() {
+        val actions = mutableListOf<DashboardScreenAction>()
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                    )
+                },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(DashboardScreenEvent.StopProxy)
+
+        assertTrue(actions.isEmpty())
+        assertTrue(DashboardScreenAction.StartProxy in controller.state.availableActions)
+        assertFalse(DashboardScreenAction.StopProxy in controller.state.availableActions)
+    }
+
+    @Test
+    fun `controller dispatches service restart only while proxy is running`() {
+        val actions = mutableListOf<DashboardScreenAction>()
+        var proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(DashboardScreenEvent.RestartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.RestartProxy), actions)
+        assertFalse(DashboardScreenAction.RestartProxy in controller.state.availableActions)
+
+        proxyStatus = ProxyServiceStatus.stopped()
+        controller.handle(DashboardScreenEvent.Refresh)
+        controller.handle(DashboardScreenEvent.RestartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.RestartProxy), actions)
+        assertFalse(DashboardScreenAction.RestartProxy in controller.state.availableActions)
+    }
+
+    @Test
+    fun `controller suppresses duplicate service lifecycle actions until provider state changes`() {
+        val actions = mutableListOf<DashboardScreenAction>()
+        var proxyStatus = ProxyServiceStatus.stopped()
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(DashboardScreenEvent.StartProxy)
+        controller.handle(DashboardScreenEvent.StartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.StartProxy), actions)
+        assertFalse(DashboardScreenAction.StartProxy in controller.state.availableActions)
+
+        controller.handle(DashboardScreenEvent.Refresh)
+        controller.handle(DashboardScreenEvent.StartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.StartProxy), actions)
+
+        proxyStatus = ProxyServiceStatus(ProxyServiceState.Starting)
+        controller.handle(DashboardScreenEvent.Refresh)
+        proxyStatus = ProxyServiceStatus.failed(ProxyStartupError.PortAlreadyInUse)
+        controller.handle(DashboardScreenEvent.Refresh)
+        controller.handle(DashboardScreenEvent.StartProxy)
+
+        assertEquals(
+            listOf(
+                DashboardScreenAction.StartProxy,
+                DashboardScreenAction.StartProxy,
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun `controller exposes pending service lifecycle action until provider state changes`() {
+        var proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+            )
+
+        assertEquals("None", controller.state.pendingOperation)
+
+        controller.handle(DashboardScreenEvent.RestartProxy)
+
+        assertEquals("In progress: Restart proxy service", controller.state.pendingOperation)
+
+        proxyStatus = ProxyServiceStatus(ProxyServiceState.Starting)
+        controller.handle(DashboardScreenEvent.Refresh)
+
+        assertEquals("None", controller.state.pendingOperation)
+    }
+
+    @Test
+    fun `controller emits copy endpoint effect once from state`() {
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status =
+                            ProxyServiceStatus.running(
+                                listenHost = "127.0.0.1",
+                                listenPort = 8080,
+                                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                                boundRoute = null,
+                                publicIp = null,
+                                hasHighSecurityRisk = false,
+                            ),
+                    )
+                },
+            )
+
+        controller.handle(DashboardScreenEvent.CopyProxyEndpoint)
+
+        assertEquals(
+            DashboardScreenEffect.CopyText("127.0.0.1:8080"),
+            controller.consumeEffects().single(),
+        )
+        assertTrue(controller.consumeEffects().isEmpty())
+    }
+
+    @Test
+    fun `controller refreshes status before copying the proxy endpoint`() {
+        var proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+            )
+
+        proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "0.0.0.0",
+                listenPort = 9090,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        controller.handle(DashboardScreenEvent.CopyProxyEndpoint)
+
+        assertEquals(
+            DashboardScreenEffect.CopyText("0.0.0.0:9090"),
+            controller.consumeEffects().single(),
+        )
+    }
+
+    @Test
+    fun `controller emits metadata-only audit records for dispatched operational actions`() {
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                    )
+                },
+                auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { 123L },
+            )
+
+        controller.handle(DashboardScreenEvent.StartProxy)
+        controller.handle(DashboardScreenEvent.RefreshStatus)
+        controller.handle(DashboardScreenEvent.CopyProxyEndpoint)
+        controller.handle(DashboardScreenEvent.OpenLogs)
+
+        val auditRecords =
+            controller
+                .consumeEffects()
+                .filterIsInstance<DashboardScreenEffect.RecordAuditAction>()
+                .map(DashboardScreenEffect.RecordAuditAction::record)
+
+        assertEquals(3, auditRecords.size)
+        assertEquals(
+            listOf("Dashboard start_proxy", "Dashboard refresh_status", "Dashboard copy_proxy_endpoint"),
+            auditRecords.map { it.title },
+        )
+        assertEquals(
+            listOf(
+                "action=start_proxy serviceState=Stopped",
+                "action=refresh_status serviceState=Stopped",
+                "action=copy_proxy_endpoint serviceState=Stopped",
+            ),
+            auditRecords.map { it.detail },
+        )
+        assertEquals(listOf(123L, 123L, 123L), auditRecords.map { it.occurredAtEpochMillis })
+        assertTrue(auditRecords.all { it.category == LogsAuditRecordCategory.AppRuntime })
+        assertTrue(auditRecords.all { it.severity == LogsAuditRecordSeverity.Info })
+        assertTrue(auditRecords.none { record -> record.detail.contains("127.0.0.1:8080") })
+    }
+
+    @Test
+    fun `dashboard exposes Cloudflare missing token risk as action item`() {
+        val defaultConfig = AppConfig.default()
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        defaultConfig.copy(
+                            cloudflare =
+                                defaultConfig.cloudflare.copy(
+                                    enabled = true,
+                                    tunnelTokenPresent = false,
+                                ),
+                        ),
+                    status = ProxyServiceStatus.stopped(),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Cloudflare tunnel token is missing",
+                    action = DashboardScreenAction.OpenCloudflare,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes broad unauthenticated proxy risk as settings action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        AppConfig.default().copy(
+                            proxy =
+                                AppConfig.default().proxy.copy(
+                                    authEnabled = false,
+                                    listenHost = "0.0.0.0",
+                                ),
+                        ),
+                    status = ProxyServiceStatus.stopped(),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Broad unauthenticated proxy listener",
+                    action = DashboardScreenAction.OpenSettings,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes Cloudflare invalid token risk as action item`() {
+        val defaultConfig = AppConfig.default()
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        defaultConfig.copy(
+                            cloudflare =
+                                defaultConfig.cloudflare.copy(
+                                    enabled = true,
+                                    tunnelTokenPresent = true,
+                                ),
+                        ),
+                    status = ProxyServiceStatus.stopped(),
+                    invalidSensitiveConfigReason = SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Cloudflare tunnel token is invalid",
+                    action = DashboardScreenAction.OpenCloudflare,
+                ),
+                DashboardRiskItem(
+                    label = "Sensitive configuration is invalid",
+                    action = DashboardScreenAction.OpenSettings,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes unavailable selected route risk as diagnostics action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.UnavailableSelectedRoute,
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Selected route is unavailable",
+                    action = DashboardScreenAction.OpenDiagnostics,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes unavailable root risk as rotation action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config =
+                        AppConfig.default().copy(
+                            root = RootConfig(operationsEnabled = true),
+                        ),
+                    status =
+                        ProxyServiceStatus.stopped(
+                            rootAvailability = RootAvailabilityStatus.Unavailable,
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Root access is unavailable",
+                    action = DashboardScreenAction.OpenRotation,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes rotation blocked risks as rotation action items`() {
+        val cases =
+            listOf(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    rotationCooldownRemainingSeconds = 12,
+                ) to
+                    DashboardRiskItem(
+                        label = "Rotation blocked by cooldown",
+                        action = DashboardScreenAction.OpenRotation,
+                    ),
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    rotationStatus =
+                        RotationStatus(
+                            state = RotationState.CheckingRoot,
+                            operation = RotationOperation.MobileData,
+                        ),
+                ) to
+                    DashboardRiskItem(
+                        label = "Rotation already in progress",
+                        action = DashboardScreenAction.OpenRotation,
+                    ),
+            )
+
+        cases.forEach { (status, expectedRiskItem) ->
+            val state = DashboardScreenState.from(status)
+
+            assertEquals(listOf(expectedRiskItem), state.riskItems)
+        }
+    }
+
+    @Test
+    fun `dashboard exposes failing Cloudflare management API check risk as Cloudflare action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.stopped(
+                            cloudflare = CloudflareTunnelStatus.connected(),
+                        ),
+                    latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.Failed,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Cloudflare management API check is failing",
+                    action = DashboardScreenAction.OpenCloudflare,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes failed and degraded Cloudflare tunnel risks as Cloudflare action items`() {
+        val cases =
+            listOf(
+                CloudflareTunnelStatus.failed("edge connection failed") to
+                    DashboardRiskItem(
+                        label = "Cloudflare tunnel failed",
+                        action = DashboardScreenAction.OpenCloudflare,
+                    ),
+                CloudflareTunnelStatus.degraded() to
+                    DashboardRiskItem(
+                        label = "Cloudflare tunnel is degraded",
+                        action = DashboardScreenAction.OpenCloudflare,
+                    ),
+            )
+
+        cases.forEach { (cloudflareStatus, expectedRiskItem) ->
+            val state =
+                DashboardScreenState.from(
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status =
+                            ProxyServiceStatus.stopped(
+                                cloudflare = cloudflareStatus,
+                            ),
+                    ),
+                )
+
+            assertEquals(listOf(expectedRiskItem), state.riskItems)
+        }
+    }
+
+    @Test
+    fun `dashboard exposes invalid sensitive configuration risk as settings action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    invalidSensitiveConfigReason = SensitiveConfigInvalidReason.UndecryptableSecret,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Sensitive configuration is invalid",
+                    action = DashboardScreenAction.OpenSettings,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes missing management API token risk as settings action item`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    managementApiTokenPresent = false,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Management API token is missing",
+                    action = DashboardScreenAction.OpenSettings,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard exposes invalid proxy configuration risks as settings action items`() {
+        val cases =
+            listOf(
+                ProxyStartupError.PortAlreadyInUse to
+                    DashboardRiskItem(
+                        label = "Proxy port is already in use",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+                ProxyStartupError.InvalidListenAddress to
+                    DashboardRiskItem(
+                        label = "Proxy listen address is invalid",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+                ProxyStartupError.InvalidListenPort to
+                    DashboardRiskItem(
+                        label = "Proxy listen port is invalid",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+                ProxyStartupError.InvalidMaxConcurrentConnections to
+                    DashboardRiskItem(
+                        label = "Proxy connection limit is invalid",
+                        action = DashboardScreenAction.OpenSettings,
+                    ),
+            )
+
+        cases.forEach { (startupError, expectedRiskItem) ->
+            val state =
+                DashboardScreenState.from(
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.failed(startupError = startupError),
+                    ),
+                )
+
+            assertEquals(listOf(expectedRiskItem), state.riskItems)
+        }
+    }
+
+    @Test
+    fun `dashboard suppresses generic startup action when a specific startup risk action exists`() {
+        val cases =
+            listOf(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.UnavailableSelectedRoute,
+                        ),
+                ) to "Selected route is unavailable",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.MissingCloudflareTunnelToken,
+                        ),
+                ) to "Cloudflare tunnel token is missing",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.MissingManagementApiToken,
+                        ),
+                ) to "Management API token is missing",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+                ) to "Proxy port is already in use",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidListenAddress),
+                ) to "Proxy listen address is invalid",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.failed(startupError = ProxyStartupError.InvalidListenPort),
+                ) to "Proxy listen port is invalid",
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status =
+                        ProxyServiceStatus.failed(
+                            startupError = ProxyStartupError.InvalidMaxConcurrentConnections,
+                        ),
+                ) to "Proxy connection limit is invalid",
+            )
+
+        cases.forEach { (status, expectedLabel) ->
+            val state = DashboardScreenState.from(status)
+
+            assertEquals(expectedLabel, state.riskItems.single().label)
+            assertFalse(
+                state.riskItems.any { it.label == "Proxy startup failed" },
+            )
+        }
+    }
+
+    @Test
+    fun `dashboard exposes generic startup failure risk as diagnostics action item`() {
+        val baseStatus =
+            DashboardStatusModel.from(
+                config = AppConfig.default(),
+                status = ProxyServiceStatus.failed(startupError = ProxyStartupError.PortAlreadyInUse),
+            )
+        val status =
+            baseStatus.copy(
+                warnings = setOf(DashboardWarning.StartupFailed),
+            )
+        val state =
+            DashboardScreenState.from(
+                status,
+            )
+
+        assertEquals(
+            listOf(
+                DashboardRiskItem(
+                    label = "Proxy startup failed",
+                    action = DashboardScreenAction.OpenDiagnostics,
+                ),
+            ),
+            state.riskItems,
+        )
+    }
+
+    @Test
+    fun `dashboard log summaries preserve row data and severity for recent errors`() {
+        val summaries =
+            dashboardLogSummariesFromLogsAuditRows(
+                listOf(
+                    LogsAuditScreenInputRow(
+                        id = "failed-row",
+                        category = LogsAuditScreenCategory.ProxyServer,
+                        severity = LogsAuditScreenSeverity.Failed,
+                        occurredAtEpochMillis = 42L,
+                        title = "Proxy failed",
+                        detail = "bind error",
+                    ),
+                    LogsAuditScreenInputRow(
+                        id = "warning-row",
+                        category = LogsAuditScreenCategory.CloudflareTunnel,
+                        severity = LogsAuditScreenSeverity.Warning,
+                        occurredAtEpochMillis = 43L,
+                        title = "Cloudflare degraded",
+                        detail = "edge unavailable",
+                    ),
+                ),
+            )
+
+        assertEquals(
+            listOf(DashboardLogSeverity.Failed, DashboardLogSeverity.Warning),
+            summaries.map { it.severity },
+        )
+        assertEquals(listOf("failed-row", "warning-row"), summaries.map { it.id })
+        assertEquals(listOf("Proxy failed", "Cloudflare degraded"), summaries.map { it.title })
+        assertEquals(listOf("bind error", "edge unavailable"), summaries.map { it.detail })
+    }
+
+    @Test
+    fun `dashboard recent high severity error text includes occurrence time`() {
+        val state =
+            DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                    recentLogs =
+                        listOf(
+                            DashboardLogSummary(
+                                id = "failed-row",
+                                occurredAtEpochMillis = 42L,
+                                severity = DashboardLogSeverity.Failed,
+                                title = "Proxy failed",
+                                detail = "bind error",
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf("42 | Proxy failed: bind error"),
+            state.recentHighSeverityErrors,
+        )
+    }
+}

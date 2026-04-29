@@ -48,6 +48,38 @@ class ManagementApiStreamExchangeHandlerTest {
     }
 
     @Test
+    fun `runs response sent callback only after writing management response`() {
+        val output = ByteArrayOutputStream()
+        var callbackObservedOutput = ""
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(
+                    statusCode = 202,
+                    body = """{"accepted":true}""",
+                    afterResponseSent = {
+                        callbackObservedOutput = output.toString(Charsets.UTF_8)
+                    },
+                ),
+            )
+
+        ManagementApiStreamExchangeHandler(handler).handle(
+            accepted =
+                accepted(
+                    ParsedProxyRequest.Management(
+                        method = HttpMethod.Post,
+                        originTarget = "/api/service/restart",
+                        requiresToken = true,
+                        requiresAuditLog = true,
+                    ),
+                ),
+            clientOutput = output,
+        )
+
+        assertContains(callbackObservedOutput, "HTTP/1.1 202 Accepted")
+        assertContains(callbackObservedOutput, """{"accepted":true}""")
+    }
+
+    @Test
     fun `writes management router rejection response and preserves precomputed audit metadata`() {
         val output = ByteArrayOutputStream()
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
@@ -75,6 +107,39 @@ class ManagementApiStreamExchangeHandlerTest {
         assertContains(output.toString(Charsets.UTF_8), "HTTP/1.1 400 Bad Request")
         assertContains(output.toString(Charsets.UTF_8), """{"error":"query_unsupported"}""")
         assertEquals(false, output.toString(Charsets.UTF_8).contains("reason=remote"))
+    }
+
+    @Test
+    fun `service restart route rejection preserves attempted high impact operation in audit`() {
+        val auditEvents = mutableListOf<ManagementApiStreamAuditEvent>()
+
+        ManagementApiStreamExchangeHandler(
+            handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204)),
+            recordManagementAudit = auditEvents::add,
+        ).handle(
+            accepted =
+                accepted(
+                    ParsedProxyRequest.Management(
+                        method = HttpMethod.Post,
+                        originTarget = "/api/service/restart?reason=remote",
+                        requiresToken = true,
+                        requiresAuditLog = true,
+                    ),
+                ),
+            clientOutput = ByteArrayOutputStream(),
+        )
+
+        assertEquals(
+            listOf(
+                ManagementApiStreamAuditEvent(
+                    operation = ManagementApiOperation.ServiceRestart,
+                    outcome = ManagementApiStreamAuditOutcome.RouteRejected,
+                    statusCode = 400,
+                    disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
+                ),
+            ),
+            auditEvents,
+        )
     }
 
     @Test
@@ -144,15 +209,14 @@ class ManagementApiStreamExchangeHandlerTest {
         }
     }
 
-    private fun accepted(request: ParsedProxyRequest): ProxyIngressStreamPreflightDecision.Accepted =
-        ProxyIngressStreamPreflightDecision.Accepted(
-            httpRequest =
-                ParsedHttpRequest(
-                    request = request,
-                    headers = emptyMap(),
-                ),
-            activeConnectionsAfterAdmission = 1,
-            requiresAuditLog = request is ParsedProxyRequest.Management && request.requiresAuditLog,
-            headerBytesRead = 32,
-        )
+    private fun accepted(request: ParsedProxyRequest): ProxyIngressStreamPreflightDecision.Accepted = ProxyIngressStreamPreflightDecision.Accepted(
+        httpRequest =
+            ParsedHttpRequest(
+                request = request,
+                headers = emptyMap(),
+            ),
+        activeConnectionsAfterAdmission = 1,
+        requiresAuditLog = request is ParsedProxyRequest.Management && request.requiresAuditLog,
+        headerBytesRead = 32,
+    )
 }

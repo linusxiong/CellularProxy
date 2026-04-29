@@ -1,0 +1,452 @@
+@file:Suppress("FunctionName")
+
+package com.cellularproxy.app.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.audit.PersistedLogsAuditRecord
+import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.DiagnosticCheckType
+import com.cellularproxy.app.diagnostics.DiagnosticResultItem
+import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
+import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
+import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
+import com.cellularproxy.app.diagnostics.DiagnosticsSuiteControllerFactory
+import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.ProxyBindDiagnosticsProbe
+import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
+import com.cellularproxy.app.viewmodel.DiagnosticsViewModel
+import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.logging.LogRedactor
+import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+@Composable
+internal fun CellularProxyDiagnosticsRoute(
+    configProvider: () -> AppConfig = AppConfig::default,
+    proxyStatusProvider: () -> ProxyServiceStatus = { ProxyServiceStatus.stopped() },
+    observedNetworksProvider: () -> List<NetworkDescriptor> = { emptyList() },
+    redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
+    publicIpProbeResultProvider: () -> PublicIpDiagnosticsProbeResult = { PublicIpDiagnosticsProbeResult.Unavailable },
+    localManagementApiProbeResultProvider: () -> LocalManagementApiProbeResult = { LocalManagementApiProbeResult.Unavailable },
+    cloudflareManagementApiProbeResultProvider: () -> CloudflareManagementApiProbeResult = {
+        CloudflareManagementApiProbeResult.NotConfigured
+    },
+    onCopyDiagnosticsSummaryText: (String) -> Unit = {},
+    onRecordDiagnosticsAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
+    auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
+) {
+    val currentConfigProvider by rememberUpdatedState(configProvider)
+    val currentProxyStatusProvider by rememberUpdatedState(proxyStatusProvider)
+    val currentObservedNetworksProvider by rememberUpdatedState(observedNetworksProvider)
+    val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
+    val currentPublicIpProbeResultProvider by rememberUpdatedState(publicIpProbeResultProvider)
+    val currentLocalManagementApiProbeResultProvider by rememberUpdatedState(localManagementApiProbeResultProvider)
+    val currentCloudflareManagementApiProbeResultProvider by rememberUpdatedState(cloudflareManagementApiProbeResultProvider)
+    val currentAuditOccurredAtEpochMillisProvider by rememberUpdatedState(auditOccurredAtEpochMillisProvider)
+    val observedConfig = configProvider()
+    val observedProxyStatus = proxyStatusProvider()
+    val observedNetworks = observedNetworksProvider()
+    val observedRedactionSecrets = redactionSecretsProvider()
+    val coroutineScope = rememberCoroutineScope()
+    val eventMutex = remember { Mutex() }
+    val proxyBindDiagnosticsProbe = remember { ProxyBindDiagnosticsProbe(config = { currentConfigProvider().proxy }) }
+    val diagnosticsViewModel =
+        viewModel<DiagnosticsViewModel>(
+            factory =
+                remember {
+                    DiagnosticsViewModelFactory(
+                        suiteController =
+                            DiagnosticsSuiteControllerFactory.create(
+                                config = { currentConfigProvider() },
+                                proxyStatus = { currentProxyStatusProvider() },
+                                observedNetworks = { currentObservedNetworksProvider() },
+                                publicIpProbeResult = { currentPublicIpProbeResultProvider() },
+                                localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() },
+                                cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
+                                proxyBindProbeResult = { proxyBindDiagnosticsProbe.probe(currentProxyStatusProvider()) },
+                            ),
+                        secretsProvider = { currentRedactionSecretsProvider() },
+                        auditActionsEnabled = true,
+                        auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
+                    )
+                },
+        )
+    val screenState by diagnosticsViewModel.state.collectAsStateWithLifecycle()
+    val dispatchEvent: (DiagnosticsScreenEvent) -> Unit = { event ->
+        diagnosticsViewModel.markRunning(event.runningTypes())
+        coroutineScope.launch {
+            val effects =
+                withContext(Dispatchers.IO) {
+                    eventMutex.withLock {
+                        diagnosticsViewModel.handle(event)
+                        diagnosticsViewModel.consumeEffects()
+                    }
+                }
+            effects.forEach { effect ->
+                when (effect) {
+                    is DiagnosticsScreenEffect.CopyText -> onCopyDiagnosticsSummaryText(effect.text)
+                    is DiagnosticsScreenEffect.RecordAuditAction -> onRecordDiagnosticsAuditAction(effect.record)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(
+        observedConfig,
+        observedProxyStatus,
+        observedNetworks,
+        observedRedactionSecrets,
+    ) {
+        dispatchEvent(DiagnosticsScreenEvent.Refresh)
+    }
+
+    CellularProxyDiagnosticsScreen(
+        state = screenState,
+        actionsEnabled = true,
+        onRunAllChecks = { dispatchEvent(DiagnosticsScreenEvent.RunAllChecks) },
+        onRunCheck = { type -> dispatchEvent(DiagnosticsScreenEvent.RunCheck(type)) },
+        onCopyCheck = { type -> dispatchEvent(DiagnosticsScreenEvent.CopyCheck(type)) },
+        onCopySummary = { dispatchEvent(DiagnosticsScreenEvent.CopySummary) },
+    )
+}
+
+private class DiagnosticsViewModelFactory(
+    private val suiteController: DiagnosticsSuiteController,
+    private val secretsProvider: () -> LogRedactionSecrets,
+    private val auditActionsEnabled: Boolean,
+    private val auditOccurredAtEpochMillisProvider: () -> Long,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = DiagnosticsViewModel(
+        suiteController = suiteController,
+        secretsProvider = secretsProvider,
+        auditActionsEnabled = auditActionsEnabled,
+        auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
+    ) as T
+}
+
+@Composable
+internal fun CellularProxyDiagnosticsScreen(
+    state: DiagnosticsScreenState = DiagnosticsScreenState.from(DiagnosticsResultModel.empty()),
+    actionsEnabled: Boolean = false,
+    onRunAllChecks: () -> Unit = {},
+    onRunCheck: (DiagnosticCheckType) -> Unit = {},
+    onCopyCheck: (DiagnosticCheckType) -> Unit = {},
+    onCopySummary: () -> Unit = {},
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = "Diagnostics",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            text = state.overallStatus,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = state.completionSummary,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        DiagnosticsActionRow(
+            state = state,
+            actionsEnabled = actionsEnabled,
+            onRunAllChecks = onRunAllChecks,
+            onCopySummary = onCopySummary,
+        )
+        state.items.forEach { item ->
+            DiagnosticsCheckRow(
+                item = item,
+                actionsEnabled = actionsEnabled,
+                onRunCheck = onRunCheck,
+                onCopyCheck = onCopyCheck,
+            )
+        }
+    }
+}
+
+internal fun DiagnosticsScreenState.withRunningChecks(
+    runningTypes: Set<DiagnosticCheckType>,
+): DiagnosticsScreenState {
+    if (runningTypes.isEmpty()) {
+        return this
+    }
+    return DiagnosticsScreenState.from(
+        DiagnosticsResultModel(
+            results =
+                items.map { item ->
+                    item.toDiagnosticResultItem(
+                        statusOverride =
+                            if (item.type in runningTypes) {
+                                DiagnosticResultStatus.Running
+                            } else {
+                                null
+                            },
+                    )
+                },
+            copyableSummary = copyableSummary,
+        ),
+    )
+}
+
+internal data class DiagnosticsScreenState(
+    val overallStatus: String,
+    val completionSummary: String,
+    val items: List<DiagnosticsScreenItem>,
+    val copyableSummary: String,
+    val availableActions: List<DiagnosticsScreenAction>,
+) {
+    companion object {
+        fun from(model: DiagnosticsResultModel): DiagnosticsScreenState {
+            val completedCount = model.results.count { it.status.isCompleted }
+            val anyRunning = model.results.any { it.status == DiagnosticResultStatus.Running }
+            val completedBulkSafeTypes =
+                model
+                    .results
+                    .filter { it.type in bulkSafeDiagnosticCheckTypes && it.status.isCompleted }
+                    .map(DiagnosticResultItem::type)
+                    .toSet()
+            val allBulkSafeChecksCompleted = completedBulkSafeTypes.containsAll(bulkSafeDiagnosticCheckTypes)
+            val overallStatus =
+                when {
+                    model.results.any { it.status == DiagnosticResultStatus.Failed } -> DiagnosticResultStatus.Failed.label
+                    model.results.any { it.status == DiagnosticResultStatus.Warning } -> DiagnosticResultStatus.Warning.label
+                    model.results.any { it.status == DiagnosticResultStatus.Running } -> DiagnosticResultStatus.Running.label
+                    allBulkSafeChecksCompleted -> DiagnosticResultStatus.Passed.label
+                    completedCount == model.results.size -> DiagnosticResultStatus.Passed.label
+                    else -> DiagnosticResultStatus.NotRun.label
+                }
+            val items = model.results.map(DiagnosticResultItem::toScreenItem)
+            return DiagnosticsScreenState(
+                overallStatus = overallStatus,
+                completionSummary = "$completedCount of ${model.results.size} checks complete",
+                items = items,
+                copyableSummary = items.joinToString(separator = "\n", transform = DiagnosticsScreenItem::summaryLine),
+                availableActions =
+                    buildList {
+                        if (!anyRunning) {
+                            add(DiagnosticsScreenAction.RunAllChecks)
+                        }
+                        if (completedCount > 0) {
+                            add(DiagnosticsScreenAction.CopySummary)
+                        }
+                    },
+            )
+        }
+    }
+}
+
+internal data class DiagnosticsScreenItem(
+    val type: DiagnosticCheckType,
+    val label: String,
+    val status: String,
+    val duration: String,
+    val errorCategory: String,
+    val details: String,
+    val availableActions: List<DiagnosticsScreenAction>,
+) {
+    fun summaryLine(): String {
+        val metadata =
+            listOfNotNull(
+                duration
+                    .takeIf { it != "Not run" && it != "In progress" }
+                    ?.removeSuffix(" ms")
+                    ?.let { "in ${it}ms" },
+                errorCategory.takeIf { it != "None" }?.let { "($it)" },
+            ).joinToString(separator = " ")
+        val detailSuffix = details.takeIf { it != "None" }?.let { " - $it" }.orEmpty()
+        return listOf(label, listOf(status, metadata).filter(String::isNotBlank).joinToString(separator = " "))
+            .joinToString(separator = ": ") + detailSuffix
+    }
+}
+
+internal enum class DiagnosticsScreenAction {
+    RunAllChecks,
+    RunCheck,
+    CopyCheck,
+    CopySummary,
+}
+
+private val DiagnosticResultStatus.isCompleted: Boolean
+    get() = this != DiagnosticResultStatus.NotRun && this != DiagnosticResultStatus.Running
+
+@Composable
+private fun DiagnosticsActionRow(
+    state: DiagnosticsScreenState,
+    actionsEnabled: Boolean,
+    onRunAllChecks: () -> Unit,
+    onCopySummary: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = onRunAllChecks,
+            enabled = actionsEnabled && DiagnosticsScreenAction.RunAllChecks in state.availableActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Run non-Cloudflare checks")
+        }
+        OutlinedButton(
+            onClick = onCopySummary,
+            enabled = actionsEnabled && DiagnosticsScreenAction.CopySummary in state.availableActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Copy summary")
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsCheckRow(
+    item: DiagnosticsScreenItem,
+    actionsEnabled: Boolean,
+    onRunCheck: (DiagnosticCheckType) -> Unit,
+    onCopyCheck: (DiagnosticCheckType) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = item.status,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        DiagnosticsField("Duration", item.duration)
+        DiagnosticsField("Error category", item.errorCategory)
+        DiagnosticsField("Details", item.details)
+        OutlinedButton(
+            onClick = { onRunCheck(item.type) },
+            enabled = actionsEnabled && DiagnosticsScreenAction.RunCheck in item.availableActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Run ${item.label}")
+        }
+        OutlinedButton(
+            onClick = { onCopyCheck(item.type) },
+            enabled = actionsEnabled && DiagnosticsScreenAction.CopyCheck in item.availableActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Copy ${item.label}")
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsField(
+    label: String,
+    value: String,
+) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+private fun DiagnosticResultItem.toScreenItem(): DiagnosticsScreenItem = DiagnosticsScreenItem(
+    type = type,
+    label = label,
+    status = status.label,
+    duration =
+        when (status) {
+            DiagnosticResultStatus.Running -> "In progress"
+            else -> durationMillis?.let { "$it ms" } ?: "Not run"
+        },
+    errorCategory = errorCategory?.let(LogRedactor::redact) ?: "None",
+    details = details?.let(LogRedactor::redact) ?: "None",
+    availableActions =
+        if (status == DiagnosticResultStatus.Running) {
+            emptyList()
+        } else if (status.isCompleted) {
+            listOf(
+                DiagnosticsScreenAction.RunCheck,
+                DiagnosticsScreenAction.CopyCheck,
+            )
+        } else {
+            listOf(DiagnosticsScreenAction.RunCheck)
+        },
+)
+
+private fun DiagnosticsScreenItem.toDiagnosticResultItem(
+    statusOverride: DiagnosticResultStatus?,
+): DiagnosticResultItem {
+    val status = statusOverride ?: statusFromLabel()
+    return DiagnosticResultItem(
+        type = type,
+        label = label,
+        status = status,
+        durationMillis = if (status == DiagnosticResultStatus.Running) null else duration.removeSuffix(" ms").toLongOrNull(),
+        errorCategory = if (status == DiagnosticResultStatus.Running) null else errorCategory.takeUnless { it == "None" },
+        details = if (status == DiagnosticResultStatus.Running) null else details.takeUnless { it == "None" },
+    )
+}
+
+private fun DiagnosticsScreenItem.statusFromLabel(): DiagnosticResultStatus = DiagnosticResultStatus.entries
+    .single { status -> status.label == this.status }
+
+internal fun DiagnosticsScreenEvent.runningTypes(): Set<DiagnosticCheckType> = when (this) {
+    DiagnosticsScreenEvent.RunAllChecks -> bulkSafeDiagnosticCheckTypes
+    is DiagnosticsScreenEvent.RunCheck -> setOf(type)
+    is DiagnosticsScreenEvent.CopyCheck,
+    DiagnosticsScreenEvent.CopySummary,
+    DiagnosticsScreenEvent.Refresh,
+    -> emptySet()
+}
+
+internal val bulkSafeDiagnosticCheckTypes: Set<DiagnosticCheckType> =
+    DiagnosticCheckType.entries
+        .filterNot { type ->
+            type == DiagnosticCheckType.CloudflareTunnel ||
+                type == DiagnosticCheckType.CloudflareManagementApi
+        }.toSet()

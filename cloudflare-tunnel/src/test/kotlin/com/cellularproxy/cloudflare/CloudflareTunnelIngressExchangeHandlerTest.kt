@@ -1,6 +1,7 @@
 package com.cellularproxy.cloudflare
 
 import com.cellularproxy.shared.management.HttpMethod
+import java.util.AbstractMap.SimpleEntry
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -78,13 +79,14 @@ class CloudflareTunnelIngressExchangeHandlerTest {
             RecordingCloudflareLocalManagementHandler(
                 CloudflareTunnelResponse.empty(statusCode = 202),
             )
+        val body = """{"enabled":true}""".toByteArray()
         val headers =
             linkedMapOf(
                 "Authorization" to listOf("Bearer management-token"),
                 "X-Cloudflare-Request" to listOf("first", "second"),
                 "Content-Type" to listOf("application/json"),
+                "Content-Length" to listOf(body.size.toString()),
             )
-        val body = """{"enabled":true}""".toByteArray()
 
         val result =
             CloudflareTunnelIngressExchangeHandler.handle(
@@ -143,6 +145,208 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     }
 
     @Test
+    fun `forwarded management request rejects unsafe header metadata`() {
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Get,
+                originTarget = "/api/status",
+                headers = mapOf("Bad Header" to listOf("safe")),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Get,
+                originTarget = "/api/status",
+                headers = mapOf("X-Test" to listOf("safe\r\nInjected: true")),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Get,
+                originTarget = "/api/status",
+                headers =
+                    linkedMapOf(
+                        "Authorization" to listOf("Bearer token"),
+                        "authorization" to listOf("Bearer other"),
+                    ),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Get,
+                originTarget = "/api/status",
+                headers = mapOf("X-Test" to FlippingHeaderValues()),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Get,
+                originTarget = "/api/status",
+                headers = FlippingRequestHeaders(),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Post,
+                originTarget = "/api/cloudflare/start",
+                headers = FlippingContentLengthRequestHeaders(),
+                body = byteArrayOf(1, 2, 3),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Post,
+                originTarget = "/api/cloudflare/start",
+                headers = FlippingTransferEncodingRequestHeaders(),
+            )
+        }
+    }
+
+    @Test
+    fun `forwarded management request rejects ambiguous framing headers`() {
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Post,
+                originTarget = "/api/cloudflare/start",
+                headers = mapOf("Transfer-Encoding" to listOf("chunked")),
+                body = byteArrayOf(1, 2, 3),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Post,
+                originTarget = "/api/cloudflare/start",
+                body = byteArrayOf(1, 2, 3),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Post,
+                originTarget = "/api/cloudflare/start",
+                headers = mapOf("Content-Length" to listOf("999")),
+                body = byteArrayOf(1, 2, 3),
+            )
+        }
+
+        listOf("-3", "+3", "3.0", "\u0663", "\uff13", "three").forEach { contentLength ->
+            assertFailsWith<IllegalArgumentException> {
+                CloudflareLocalManagementRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/cloudflare/start",
+                    headers = mapOf("Content-Length" to listOf(contentLength)),
+                    body = byteArrayOf(1, 2, 3),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `forwarded management request accepts numeric content length variants`() {
+        val request =
+            CloudflareLocalManagementRequest(
+                method = HttpMethod.Post,
+                originTarget = "/api/cloudflare/start",
+                headers = mapOf("Content-Length" to listOf("003")),
+                body = byteArrayOf(1, 2, 3),
+            )
+
+        assertEquals(listOf("003"), request.headers["Content-Length"])
+        assertContentEquals(byteArrayOf(1, 2, 3), request.body)
+    }
+
+    @Test
+    fun `handler rejects ambiguous forwarded request framing without invoking local management handler`() {
+        val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
+
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                requestHeaders = mapOf("Content-Length" to listOf("999")),
+                requestBody = byteArrayOf(1, 2, 3),
+                localManagementHandler = handler,
+            )
+
+        val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
+        assertEquals(403, rejected.response.statusCode)
+        assertEquals(emptyList(), handler.originTargets)
+    }
+
+    @Test
+    fun `handler validates forwarded request framing against defensive header snapshot`() {
+        val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
+
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                requestHeaders = FlippingContentLengthRequestHeaders(),
+                requestBody = byteArrayOf(1, 2, 3),
+                localManagementHandler = handler,
+            )
+
+        val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
+        assertEquals(403, rejected.response.statusCode)
+        assertEquals(emptyList(), handler.originTargets)
+
+        val transferEncodedResult =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Post,
+                target = "/api/cloudflare/start",
+                requestHeaders = FlippingTransferEncodingRequestHeaders(),
+                localManagementHandler = handler,
+            )
+
+        val transferEncodedRejected = assertIs<CloudflareTunnelIngressResult.Rejected>(transferEncodedResult)
+        assertEquals(403, transferEncodedRejected.response.statusCode)
+        assertEquals(emptyList(), handler.originTargets)
+    }
+
+    @Test
+    fun `forwarded management request rejects non-management origin targets`() {
+        listOf(
+            "/proxy?token=secret",
+            "/api/status#fragment",
+            "/api/status token",
+            "/api/status\r\nHeader: injected",
+            "api/status",
+            "http://127.0.0.1:8080/api/status?token=secret",
+        ).forEach { target ->
+            assertFailsWith<IllegalArgumentException> {
+                CloudflareLocalManagementRequest(
+                    method = HttpMethod.Get,
+                    originTarget = target,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `handler rejects unsafe forwarded request metadata without invoking local management handler`() {
+        val handler = RecordingCloudflareLocalManagementHandler(CloudflareTunnelResponse.empty(statusCode = 204))
+
+        val result =
+            CloudflareTunnelIngressExchangeHandler.handle(
+                method = HttpMethod.Get,
+                target = "/api/status",
+                requestHeaders = mapOf("Bad Header" to listOf("safe")),
+                localManagementHandler = handler,
+            )
+
+        val rejected = assertIs<CloudflareTunnelIngressResult.Rejected>(result)
+        assertEquals(403, rejected.response.statusCode)
+        assertEquals(emptyList(), handler.originTargets)
+    }
+
+    @Test
     fun `forwarded management request body is defensive against caller and handler mutation`() {
         lateinit var capturedRequest: CloudflareLocalManagementRequest
         val originalBody = byteArrayOf(1, 2, 3)
@@ -151,7 +355,7 @@ class CloudflareTunnelIngressExchangeHandlerTest {
             CloudflareTunnelIngressExchangeHandler.handle(
                 method = HttpMethod.Post,
                 target = "/api/cloudflare/start",
-                requestHeaders = emptyMap(),
+                requestHeaders = mapOf("Content-Length" to listOf(originalBody.size.toString())),
                 requestBody = originalBody,
                 localManagementHandler =
                     CloudflareLocalManagementHandler { request ->
@@ -348,6 +552,30 @@ class CloudflareTunnelIngressExchangeHandlerTest {
     }
 
     @Test
+    fun `responses validate content length as unsigned decimal byte count`() {
+        val zeroPaddedResponse =
+            CloudflareTunnelResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = linkedMapOf("Content-Length" to "005"),
+                body = "hello",
+            )
+
+        assertEquals("005", zeroPaddedResponse.headers["Content-Length"])
+
+        listOf("-5", "+5", "5.0", "\u0665", "\uff15", "five").forEach { contentLength ->
+            assertFailsWith<IllegalArgumentException> {
+                CloudflareTunnelResponse(
+                    statusCode = 200,
+                    reasonPhrase = "OK",
+                    headers = linkedMapOf("Content-Length" to contentLength),
+                    body = "hello",
+                )
+            }
+        }
+    }
+
+    @Test
     fun `public response construction rejects unsafe HTTP metadata`() {
         assertFailsWith<IllegalArgumentException> {
             CloudflareTunnelResponse(
@@ -402,6 +630,15 @@ class CloudflareTunnelIngressExchangeHandlerTest {
                 body = "unframed",
             )
         }
+
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareTunnelResponse(
+                statusCode = 200,
+                reasonPhrase = "OK",
+                headers = FlippingResponseHeaders(),
+                body = "",
+            )
+        }
     }
 
     private class RecordingCloudflareLocalManagementHandler(
@@ -415,5 +652,87 @@ class CloudflareTunnelIngressExchangeHandlerTest {
             originTargets += request.originTarget
             return response
         }
+    }
+
+    private class FlippingHeaderValues : AbstractList<String>() {
+        private var reads = 0
+
+        override val size: Int = 1
+
+        override fun get(index: Int): String {
+            require(index == 0)
+            val value =
+                if (reads == 0) {
+                    "unsafe\r\nInjected: true"
+                } else {
+                    "safe"
+                }
+            reads += 1
+            return value
+        }
+    }
+
+    private class FlippingRequestHeaders : AbstractMap<String, List<String>>() {
+        override val keys: Set<String> = setOf("Authorization")
+
+        override val entries: Set<Map.Entry<String, List<String>>>
+            get() =
+                setOf(
+                    SimpleEntry("Authorization", listOf("Bearer token")),
+                    SimpleEntry("authorization", listOf("Bearer other")),
+                )
+    }
+
+    private class FlippingContentLengthRequestHeaders : AbstractMap<String, List<String>>() {
+        private var reads = 0
+
+        override val entries: Set<Map.Entry<String, List<String>>>
+            get() {
+                val contentLength =
+                    if (reads == 0) {
+                        "999"
+                    } else {
+                        "3"
+                    }
+                reads += 1
+                return setOf(SimpleEntry("Content-Length", listOf(contentLength)))
+            }
+    }
+
+    private class FlippingTransferEncodingRequestHeaders : AbstractMap<String, List<String>>() {
+        private var reads = 0
+
+        override val entries: Set<Map.Entry<String, List<String>>>
+            get() {
+                val entries =
+                    if (reads == 0) {
+                        setOf(SimpleEntry("Transfer-Encoding", listOf("chunked")))
+                    } else {
+                        emptySet()
+                    }
+                reads += 1
+                return entries
+            }
+    }
+
+    private class FlippingResponseHeaders : AbstractMap<String, String>() {
+        private var reads = 0
+
+        override val entries: Set<Map.Entry<String, String>>
+            get() =
+                object : AbstractSet<Map.Entry<String, String>>() {
+                    override val size: Int = 1
+
+                    override fun iterator(): Iterator<Map.Entry<String, String>> {
+                        val value =
+                            if (reads == 0) {
+                                "unsafe\r\nInjected: true"
+                            } else {
+                                "safe"
+                            }
+                        reads += 1
+                        return listOf(SimpleEntry("X-Test", value)).iterator()
+                    }
+                }
     }
 }

@@ -249,6 +249,83 @@ class CloudflareManagementApiBridgeTest {
     }
 
     @Test
+    fun `cloudflare service restart response callback runs after routed audit entry`() {
+        val auditRecords = mutableListOf<ManagementApiAuditRecord>()
+        var callbackObservedAuditRecords = emptyList<ManagementApiAuditRecord>()
+        val handler =
+            RecordingManagementApiHandler(
+                ManagementApiResponse.json(
+                    statusCode = 202,
+                    body = """{"accepted":true}""",
+                    afterResponseSent = {
+                        callbackObservedAuditRecords = auditRecords.toList()
+                    },
+                ),
+            )
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = handler,
+                recordManagementAudit = auditRecords::add,
+            )
+
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/service/restart",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
+
+        assertEquals(202, response.statusCode)
+        assertEquals(
+            listOf(
+                ManagementApiAuditRecord(
+                    operation = ManagementApiOperation.ServiceRestart,
+                    outcome = ManagementApiAuditOutcome.Responded,
+                    statusCode = 202,
+                    disposition = ManagementApiStreamExchangeDisposition.Routed,
+                ),
+            ),
+            callbackObservedAuditRecords,
+        )
+    }
+
+    @Test
+    fun `cloudflare service restart route rejection records attempted operation`() {
+        val auditRecords = mutableListOf<ManagementApiAuditRecord>()
+        val bridge =
+            CloudflareManagementApiBridge(
+                admissionConfig = admissionConfig,
+                managementHandler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204)),
+                recordManagementAudit = auditRecords::add,
+            )
+
+        val response =
+            bridge.handle(
+                localRequest(
+                    method = HttpMethod.Post,
+                    originTarget = "/api/service/restart?reason=remote",
+                    headers = mapOf("Authorization" to listOf("Bearer management-token")),
+                ),
+            )
+
+        assertEquals(400, response.statusCode)
+        assertEquals(
+            listOf(
+                ManagementApiAuditRecord(
+                    operation = ManagementApiOperation.ServiceRestart,
+                    outcome = ManagementApiAuditOutcome.RouteRejected,
+                    statusCode = 400,
+                    disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
+                ),
+            ),
+            auditRecords,
+        )
+    }
+
+    @Test
     fun `high impact cloudflare authorization rejection records audit entry`() {
         val auditRecords = mutableListOf<ManagementApiAuditRecord>()
         val handler = RecordingManagementApiHandler(ManagementApiResponse.empty(statusCode = 204))
@@ -399,12 +476,11 @@ class CloudflareManagementApiBridgeTest {
         method: HttpMethod,
         originTarget: String,
         headers: Map<String, List<String>> = emptyMap(),
-    ): CloudflareLocalManagementRequest =
-        CloudflareLocalManagementRequest(
-            method = method,
-            originTarget = originTarget,
-            headers = headers,
-        )
+    ): CloudflareLocalManagementRequest = CloudflareLocalManagementRequest(
+        method = method,
+        originTarget = originTarget,
+        headers = headers,
+    )
 
     private class RecordingManagementApiHandler(
         private val response: ManagementApiResponse,

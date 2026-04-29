@@ -108,12 +108,30 @@ class CloudflareTunnelEdgeSessionRegistryTest {
         assertFalse(registry.toString().contains("second-secret-connection"))
     }
 
+    @Test
+    fun `active session summary reports snapshot state without exposing connection details`() {
+        val registry = CloudflareTunnelEdgeSessionRegistry()
+        val snapshot = degradedSnapshot()
+        registry.install(snapshot, NamedEdgeConnection("edge-session-secret"))
+
+        val summary = registry.activeSessionSummaryOrNull()
+
+        assertEquals("Active edge session: Degraded (generation 1)", summary)
+        assertFalse(summary?.contains("edge-session-secret") ?: false)
+    }
+
+    @Test
+    fun `active session summary is null without active session`() {
+        val registry = CloudflareTunnelEdgeSessionRegistry()
+
+        assertNull(registry.activeSessionSummaryOrNull())
+    }
+
     private fun connectedSnapshot() = CloudflareTunnelControlPlane(CloudflareTunnelStatus.connected()).snapshot()
 
-    private fun degradedSnapshot() =
-        CloudflareTunnelControlPlane(CloudflareTunnelStatus.connected())
-            .also { it.apply(CloudflareTunnelEvent.Degraded) }
-            .snapshot()
+    private fun degradedSnapshot() = CloudflareTunnelControlPlane(CloudflareTunnelStatus.connected())
+        .also { it.apply(CloudflareTunnelEvent.Degraded) }
+        .snapshot()
 
     private class NamedEdgeConnection(
         private val diagnosticName: String,

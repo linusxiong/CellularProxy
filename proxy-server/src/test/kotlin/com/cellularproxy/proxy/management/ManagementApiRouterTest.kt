@@ -46,9 +46,11 @@ class ManagementApiRouterTest {
             mapOf(
                 "/api/cloudflare/start" to ManagementApiOperation.CloudflareStart,
                 "/api/cloudflare/stop" to ManagementApiOperation.CloudflareStop,
+                "/api/cloudflare/reconnect" to ManagementApiOperation.CloudflareReconnect,
                 "/api/rotate/mobile-data" to ManagementApiOperation.RotateMobileData,
                 "/api/rotate/airplane-mode" to ManagementApiOperation.RotateAirplaneMode,
                 "/api/service/stop" to ManagementApiOperation.ServiceStop,
+                "/api/service/restart" to ManagementApiOperation.ServiceRestart,
             )
 
         endpoints.forEach { (target, expectedOperation) ->
@@ -78,9 +80,11 @@ class ManagementApiRouterTest {
                 HttpMethod.Get to "/api/cloudflare/status",
                 HttpMethod.Post to "/api/cloudflare/start",
                 HttpMethod.Post to "/api/cloudflare/stop",
+                HttpMethod.Post to "/api/cloudflare/reconnect",
                 HttpMethod.Post to "/api/rotate/mobile-data",
                 HttpMethod.Post to "/api/rotate/airplane-mode",
                 HttpMethod.Post to "/api/service/stop",
+                HttpMethod.Post to "/api/service/restart",
             )
 
         routedEndpoints.forEach { (method, target) ->
@@ -104,6 +108,7 @@ class ManagementApiRouterTest {
                 managementRequest(HttpMethod.Post, "/api/status") to HttpMethod.Get,
                 managementRequest(HttpMethod.Get, "/api/cloudflare/start") to HttpMethod.Post,
                 managementRequest(HttpMethod.Get, "/api/service/stop") to HttpMethod.Post,
+                managementRequest(HttpMethod.Get, "/api/service/restart") to HttpMethod.Post,
             )
 
         unsupportedMethodRequests.forEach { (request, expectedAllowedMethod) ->
@@ -151,11 +156,10 @@ class ManagementApiRouterTest {
         originTarget: String,
         requiresToken: Boolean = originTarget.startsWith("/api/"),
         requiresAuditLog: Boolean = false,
-    ): ParsedProxyRequest.Management =
-        ParsedProxyRequest.Management(
-            method = method,
-            originTarget = originTarget,
-            requiresToken = requiresToken,
-            requiresAuditLog = requiresAuditLog,
-        )
+    ): ParsedProxyRequest.Management = ParsedProxyRequest.Management(
+        method = method,
+        originTarget = originTarget,
+        requiresToken = requiresToken,
+        requiresAuditLog = requiresAuditLog,
+    )
 }

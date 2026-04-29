@@ -4,11 +4,14 @@ import com.cellularproxy.app.audit.ManagementApiAuditRecord
 import com.cellularproxy.app.config.AppConfigBootstrapResult
 import com.cellularproxy.app.config.SensitiveConfigInvalidReason
 import com.cellularproxy.network.BoundNetworkSocketConnector
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.proxy.metrics.ProxyTrafficMetricsEvent
 import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.root.RootAvailabilityStatus
@@ -36,10 +39,13 @@ object ProxyServerForegroundRuntimeInstaller {
         socketConnector: BoundNetworkSocketConnector,
         publicIp: () -> String?,
         cloudflareStatus: () -> CloudflareTunnelStatus,
+        cloudflareEdgeSessionSummary: () -> String? = { null },
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rootOperationsEnabled: () -> Boolean = {
             (bootstrapResult as? AppConfigBootstrapResult.Ready)?.plainConfig?.root?.operationsEnabled == true
         },
@@ -54,6 +60,7 @@ object ProxyServerForegroundRuntimeInstaller {
         recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): ProxyServerForegroundRuntimeInstallResult = when (bootstrapResult) {
         is AppConfigBootstrapResult.InvalidSensitiveConfig ->
             ProxyServerForegroundRuntimeInstallResult.InvalidSensitiveConfig(bootstrapResult.reason)
@@ -69,10 +76,13 @@ object ProxyServerForegroundRuntimeInstaller {
                     managementHandlerReference = managementHandlerReference,
                     publicIp = publicIp,
                     cloudflareStatus = cloudflareStatus,
+                    cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
                     cloudflareStart = cloudflareStart,
                     cloudflareStop = cloudflareStop,
+                    cloudflareReconnect = cloudflareReconnect,
                     rotateMobileData = rotateMobileData,
                     rotateAirplaneMode = rotateAirplaneMode,
+                    serviceRestart = serviceRestart,
                     rootOperationsEnabled = rootOperationsEnabled,
                     rootAvailability = rootAvailability,
                     runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
@@ -86,6 +96,7 @@ object ProxyServerForegroundRuntimeInstaller {
                     recordMetricEvent = recordMetricEvent,
                     recordManagementAudit = recordManagementAudit,
                     bindListener = bindListener,
+                    onRuntimeStatusAvailable = onRuntimeStatusAvailable,
                 )
             ProxyServerForegroundRuntimeInstallResult.Installed(
                 registration = ForegroundProxyRuntimeLifecycleInstaller.install(lifecycle),
@@ -94,5 +105,14 @@ object ProxyServerForegroundRuntimeInstaller {
         }
     }
 }
+
+private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = CloudflareTunnelStatus.disabled(),
+)
+
+private fun unavailableServiceRestart(): ManagementApiServiceRestartResult = ManagementApiServiceRestartResult.rejected(
+    ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
+)
 
 private const val INSTALLER_DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L

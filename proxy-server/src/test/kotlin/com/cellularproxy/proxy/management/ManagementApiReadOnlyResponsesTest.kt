@@ -9,6 +9,9 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
+import com.cellularproxy.shared.rotation.RotationOperation
+import com.cellularproxy.shared.rotation.RotationState
+import com.cellularproxy.shared.rotation.RotationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -76,7 +79,8 @@ class ManagementApiReadOnlyResponsesTest {
                 """"service":{"state":"running","listenHost":"0.0.0.0","listenPort":8080,"configuredRoute":"cellular","boundRoute":{"id":"cell-1","category":"cellular","displayName":"Carrier LTE","available":true},"publicIp":"198.51.100.23","highSecurityRisk":true,"startupError":null},""" +
                 """"metrics":{"activeConnections":2,"totalConnections":5,"rejectedConnections":1,"bytesReceived":42,"bytesSent":99},""" +
                 """"cloudflare":{"state":"failed","remoteManagementAvailable":false,"failureReason":"edge rejected Authorization: [REDACTED]"},""" +
-                """"root":{"operationsEnabled":true,"availability":"available"}""" +
+                """"root":{"operationsEnabled":true,"availability":"available"},""" +
+                """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null}""" +
                 "}",
             response.body,
         )
@@ -110,10 +114,67 @@ class ManagementApiReadOnlyResponsesTest {
                 """"service":{"state":"failed","listenHost":null,"listenPort":null,"configuredRoute":"automatic","boundRoute":null,"publicIp":null,"highSecurityRisk":false,"startupError":"port_already_in_use"},""" +
                 """"metrics":{"activeConnections":0,"totalConnections":0,"rejectedConnections":0,"bytesReceived":0,"bytesSent":0},""" +
                 """"cloudflare":{"state":"disabled","remoteManagementAvailable":false,"failureReason":null},""" +
-                """"root":{"operationsEnabled":false,"availability":"unknown"}""" +
+                """"root":{"operationsEnabled":false,"availability":"unknown"},""" +
+                """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null}""" +
                 "}",
             response.body,
         )
+    }
+
+    @Test
+    fun `status response includes current rotation status`() {
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.stopped(),
+                rootOperationsEnabled = true,
+                rotationStatus =
+                    RotationStatus(
+                        state = RotationState.WaitingForNetworkReturn,
+                        operation = RotationOperation.MobileData,
+                        oldPublicIp = "198.51.100.10",
+                    ),
+            )
+
+        assertEquals(
+            true,
+            response.body.contains(
+                """"rotation":{"state":"waiting_for_network_return","operation":"mobile_data","oldPublicIp":"198.51.100.10","newPublicIp":null,"publicIpChanged":null,"failureReason":null}""",
+            ),
+        )
+    }
+
+    @Test
+    fun `status response includes live rotation cooldown remaining when available`() {
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.stopped(),
+                rootOperationsEnabled = true,
+                rotationCooldownRemainingMillis = 17_250,
+            )
+
+        assertEquals(
+            true,
+            response.body.contains(
+                """"rotation":{"state":"idle","operation":null,"oldPublicIp":null,"newPublicIp":null,"publicIpChanged":null,"failureReason":null,"cooldownRemainingMillis":17250}""",
+            ),
+        )
+    }
+
+    @Test
+    fun `status response includes redacted cloudflare edge session summary when available`() {
+        val response =
+            ManagementApiReadOnlyResponses.status(
+                status = ProxyServiceStatus.stopped(),
+                rootOperationsEnabled = true,
+                cloudflareEdgeSessionSummary = "connected edge session for tunnel-secret",
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
+            )
+
+        assertEquals(
+            true,
+            response.body.contains(""""edgeSessionSummary":"connected edge session for [REDACTED]""""),
+        )
+        assertFalse(response.body.contains("tunnel-secret"))
     }
 
     @Test

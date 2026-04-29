@@ -33,6 +33,13 @@ class CloudflareTunnelEdgeSessionRegistry :
     fun currentSessionOrNull(): CloudflareTunnelEdgeSession? = activeSession
 
     @Synchronized
+    fun activeSessionSummaryOrNull(): String? {
+        val session = activeSession ?: return null
+        val snapshot = session.snapshot
+        return "Active edge session: ${snapshot.status.state} (generation ${snapshot.transitionGeneration})"
+    }
+
+    @Synchronized
     override fun install(
         snapshot: CloudflareTunnelControlPlaneSnapshot,
         connection: CloudflareTunnelEdgeConnection,
@@ -93,12 +100,11 @@ class CloudflareTunnelEdgeSessionRegistry :
     }
 
     @Synchronized
-    override fun toString(): String =
-        if (activeSession == null) {
-            "CloudflareTunnelEdgeSessionRegistry(activeSession=null)"
-        } else {
-            "CloudflareTunnelEdgeSessionRegistry(activeSession=<redacted>)"
-        }
+    override fun toString(): String = if (activeSession == null) {
+        "CloudflareTunnelEdgeSessionRegistry(activeSession=null)"
+    } else {
+        "CloudflareTunnelEdgeSessionRegistry(activeSession=<redacted>)"
+    }
 }
 
 class CloudflareTunnelEdgeSession internal constructor(
@@ -111,10 +117,9 @@ class CloudflareTunnelEdgeSession internal constructor(
 class CloudflareTunnelEdgeSessionInstallResult internal constructor(
     val replacedSession: CloudflareTunnelEdgeSession?,
 ) {
-    override fun toString(): String =
-        if (replacedSession == null) {
-            "CloudflareTunnelEdgeSessionInstallResult(replacedSession=null)"
-        } else {
-            "CloudflareTunnelEdgeSessionInstallResult(replacedSession=<redacted>)"
-        }
+    override fun toString(): String = if (replacedSession == null) {
+        "CloudflareTunnelEdgeSessionInstallResult(replacedSession=null)"
+    } else {
+        "CloudflareTunnelEdgeSessionInstallResult(replacedSession=<redacted>)"
+    }
 }

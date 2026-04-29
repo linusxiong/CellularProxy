@@ -9,6 +9,8 @@ import com.cellularproxy.network.RouteBoundSocketProvider
 import com.cellularproxy.proxy.management.ManagementApiHandler
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.management.ManagementApiResponse
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
+import com.cellularproxy.proxy.management.ManagementApiServiceRestartResult
 import com.cellularproxy.proxy.management.ManagementApiStateHandler
 import com.cellularproxy.proxy.management.ManagementApiStreamAuditEvent
 import com.cellularproxy.proxy.management.ManagementApiStreamAuditOutcome
@@ -23,6 +25,7 @@ import com.cellularproxy.proxy.server.ProxyServerSocketBindResult
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.proxy.server.RunningProxyServerRuntime
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
+import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionDisposition
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelTransitionResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
@@ -57,6 +60,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): ProxyServerForegroundRuntimeLifecycle = create(
         plainConfig = plainConfig,
         sensitiveConfig = sensitiveConfig,
@@ -75,6 +79,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordMetricEvent = recordMetricEvent,
         recordManagementAudit = recordManagementAudit,
         bindListener = bindListener,
+        onRuntimeStatusAvailable = onRuntimeStatusAvailable,
     )
 
     fun create(
@@ -85,10 +90,13 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         managementHandlerReference: RuntimeManagementApiHandlerReference,
         publicIp: () -> String?,
         cloudflareStatus: () -> CloudflareTunnelStatus,
+        cloudflareEdgeSessionSummary: () -> String? = { null },
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
         rootAvailability: () -> RootAvailabilityStatus,
         runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
@@ -101,6 +109,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): ProxyServerForegroundRuntimeLifecycle = create(
         plainConfig = plainConfig,
         sensitiveConfig = sensitiveConfig,
@@ -113,10 +122,13 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         managementHandlerReference = managementHandlerReference,
         publicIp = publicIp,
         cloudflareStatus = cloudflareStatus,
+        cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
         cloudflareStart = cloudflareStart,
         cloudflareStop = cloudflareStop,
+        cloudflareReconnect = cloudflareReconnect,
         rotateMobileData = rotateMobileData,
         rotateAirplaneMode = rotateAirplaneMode,
+        serviceRestart = serviceRestart,
         rootOperationsEnabled = rootOperationsEnabled,
         rootAvailability = rootAvailability,
         runtimeRotationRequestHandlerFactory = runtimeRotationRequestHandlerFactory,
@@ -128,6 +140,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordMetricEvent = recordMetricEvent,
         recordManagementAudit = recordManagementAudit,
         bindListener = bindListener,
+        onRuntimeStatusAvailable = onRuntimeStatusAvailable,
     )
 
     fun create(
@@ -138,10 +151,13 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         managementHandlerReference: RuntimeManagementApiHandlerReference,
         publicIp: () -> String?,
         cloudflareStatus: () -> CloudflareTunnelStatus,
+        cloudflareEdgeSessionSummary: () -> String? = { null },
         cloudflareStart: () -> CloudflareTunnelTransitionResult,
         cloudflareStop: () -> CloudflareTunnelTransitionResult,
+        cloudflareReconnect: () -> CloudflareTunnelTransitionResult = ::ignoredCloudflareTransition,
         rotateMobileData: () -> RotationTransitionResult,
         rotateAirplaneMode: () -> RotationTransitionResult,
+        serviceRestart: () -> ManagementApiServiceRestartResult = ::unavailableServiceRestart,
         rootOperationsEnabled: () -> Boolean = { plainConfig.root.operationsEnabled },
         rootAvailability: () -> RootAvailabilityStatus,
         runtimeRotationRequestHandlerFactory: (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler? = { null },
@@ -154,6 +170,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
     ): ProxyServerForegroundRuntimeLifecycle = create(
         plainConfig = plainConfig,
         sensitiveConfig = sensitiveConfig,
@@ -168,10 +185,21 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordMetricEvent = recordMetricEvent,
         recordManagementAudit = recordManagementAudit,
         bindListener = bindListener,
+        onRuntimeStatusAvailable = onRuntimeStatusAvailable,
         installRuntimeManagementHandler = { runtime ->
             var runtimeRotationRequestHandler: RuntimeRotationRequestHandler? = null
             try {
                 runtimeRotationRequestHandler = runtimeRotationRequestHandlerFactory(runtime)
+                var currentRotationStatus = RotationStatus.idle()
+                val publishNotificationStatus = {
+                    onRuntimeStatusAvailable.bestEffortPublish(
+                        NotificationRuntimeStatus(
+                            config = plainConfig,
+                            status = runtime.status,
+                            rotationStatus = currentRotationStatus,
+                        ),
+                    )
+                }
                 val rotateMobileDataRequest =
                     runtimeRotationRequestHandler?.let { it::rotateMobileData } ?: rotateMobileData
                 val rotateAirplaneModeRequest =
@@ -186,6 +214,20 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                         rootOperationsEnabled = rootOperationsEnabled,
                         operation = RotationOperation.AirplaneMode,
                     )
+                val publishableRotateMobileData = {
+                    rotateMobileDataIfRootEnabled()
+                        .also { result ->
+                            currentRotationStatus = result.status
+                            publishNotificationStatus()
+                        }
+                }
+                val publishableRotateAirplaneMode = {
+                    rotateAirplaneModeIfRootEnabled()
+                        .also { result ->
+                            currentRotationStatus = result.status
+                            publishNotificationStatus()
+                        }
+                }
                 val stateHandler =
                     ManagementApiStateHandler(
                         callbacks =
@@ -194,12 +236,16 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
                                 networks = observedNetworks,
                                 publicIp = publicIp,
                                 cloudflareStatus = cloudflareStatus,
+                                cloudflareEdgeSessionSummary = cloudflareEdgeSessionSummary,
                                 cloudflareStart = cloudflareStart,
                                 cloudflareStop = cloudflareStop,
+                                cloudflareReconnect = cloudflareReconnect,
                                 rootOperationsEnabled = rootOperationsEnabled,
                                 rootAvailability = rootAvailability,
-                                rotateMobileData = rotateMobileDataIfRootEnabled,
-                                rotateAirplaneMode = rotateAirplaneModeIfRootEnabled,
+                                rotateMobileData = publishableRotateMobileData,
+                                rotateAirplaneMode = publishableRotateAirplaneMode,
+                                serviceRestart = serviceRestart,
+                                rotationStatus = { currentRotationStatus },
                             ),
                         secrets = sensitiveConfig.logRedactionSecrets(),
                     )
@@ -233,6 +279,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordManagementAudit: (ManagementApiAuditRecord) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
         installRuntimeManagementHandler: (RunningProxyServerRuntime) -> Closeable? = { null },
     ): ProxyServerForegroundRuntimeLifecycle {
         val outboundConnectors =
@@ -261,6 +308,7 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
             maxConcurrentConnections = maxConcurrentConnections,
             recordMetricEvent = recordMetricEvent,
             bindListener = bindListener,
+            onRuntimeStatusAvailable = onRuntimeStatusAvailable,
             installRuntimeManagementHandler = installRuntimeManagementHandler,
         )
     }
@@ -277,56 +325,65 @@ object ProxyServerForegroundRuntimeLifecycleFactory {
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult =
             ProxyServerSocketBinder::bind,
+        onRuntimeStatusAvailable: (NotificationRuntimeStatus) -> Unit = {},
         installRuntimeManagementHandler: (RunningProxyServerRuntime) -> Closeable? = { null },
-    ): ProxyServerForegroundRuntimeLifecycle = ProxyServerForegroundRuntimeLifecycle(
-        startRuntime = startRuntime@{
-            val runtimeConfig = plainConfig.reconcileCloudflareTokenPresence(sensitiveConfig)
-            val effectiveRuntimeConfig =
-                runtimeConfig.copy(
-                    proxy =
-                        runtimeConfig.proxy.copy(
+    ): ProxyServerForegroundRuntimeLifecycle {
+        val effectiveRuntimeConfig =
+            plainConfig.effectiveRuntimeConfig(
+                sensitiveConfig = sensitiveConfig,
+                maxConcurrentConnections = maxConcurrentConnections,
+            )
+        return ProxyServerForegroundRuntimeLifecycle(
+            startRuntime = startRuntime@{
+                val startupNetworks = observedNetworks()
+                when (
+                    val startup =
+                        ProxyServiceStartupPolicy.evaluate(
+                            config = effectiveRuntimeConfig,
+                            managementApiTokenPresent = true,
+                            observedNetworks = startupNetworks,
+                        )
+                ) {
+                    is ProxyServiceStartupDecision.Failed ->
+                        return@startRuntime ProxyServerRuntimeResult.StartupFailed(
+                            ProxyServerRuntimeStartupResult.Failed(
+                                startupError = startup.startupError,
+                                status = startup.status,
+                            ),
+                        )
+
+                    is ProxyServiceStartupDecision.Ready -> Unit
+                }
+                ProxyServerRuntime.start(
+                    config = effectiveRuntimeConfig,
+                    managementApiTokenPresent = true,
+                    observedNetworks = startupNetworks,
+                    ingressConfig =
+                        ProxyRuntimeIngressConfigFactory.from(
+                            plainConfig = effectiveRuntimeConfig,
+                            sensitiveConfig = sensitiveConfig,
                             maxConcurrentConnections = maxConcurrentConnections,
                         ),
+                    connectionHandler = connectionHandler,
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    recordMetricEvent = recordMetricEvent,
+                    bindListener = bindListener,
                 )
-            val startupNetworks = observedNetworks()
-            when (
-                val startup =
-                    ProxyServiceStartupPolicy.evaluate(
+            },
+            onRuntimeStarted = { runtime ->
+                val registration = installRuntimeManagementHandler(runtime)
+                onRuntimeStatusAvailable.bestEffortPublish(
+                    NotificationRuntimeStatus(
                         config = effectiveRuntimeConfig,
-                        managementApiTokenPresent = true,
-                        observedNetworks = startupNetworks,
-                    )
-            ) {
-                is ProxyServiceStartupDecision.Failed ->
-                    return@startRuntime ProxyServerRuntimeResult.StartupFailed(
-                        ProxyServerRuntimeStartupResult.Failed(
-                            startupError = startup.startupError,
-                            status = startup.status,
-                        ),
-                    )
-
-                is ProxyServiceStartupDecision.Ready -> Unit
-            }
-            ProxyServerRuntime.start(
-                config = effectiveRuntimeConfig,
-                managementApiTokenPresent = true,
-                observedNetworks = startupNetworks,
-                ingressConfig =
-                    ProxyRuntimeIngressConfigFactory.from(
-                        plainConfig = effectiveRuntimeConfig,
-                        sensitiveConfig = sensitiveConfig,
-                        maxConcurrentConnections = maxConcurrentConnections,
+                        status = runtime.status,
                     ),
-                connectionHandler = connectionHandler,
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                recordMetricEvent = recordMetricEvent,
-                bindListener = bindListener,
-            )
-        },
-        onRuntimeStarted = installRuntimeManagementHandler,
-    )
+                )
+                registration
+            },
+        )
+    }
 }
 
 private fun AppConfig.reconcileCloudflareTokenPresence(sensitiveConfig: SensitiveConfig): AppConfig = copy(
@@ -335,6 +392,31 @@ private fun AppConfig.reconcileCloudflareTokenPresence(sensitiveConfig: Sensitiv
             tunnelTokenPresent = sensitiveConfig.cloudflareTunnelToken != null,
         ),
 )
+
+private fun AppConfig.effectiveRuntimeConfig(
+    sensitiveConfig: SensitiveConfig,
+    maxConcurrentConnections: Int,
+): AppConfig {
+    val runtimeConfig = reconcileCloudflareTokenPresence(sensitiveConfig)
+    return runtimeConfig.copy(
+        proxy =
+            runtimeConfig.proxy.copy(
+                maxConcurrentConnections = maxConcurrentConnections,
+            ),
+    )
+}
+
+private fun ((NotificationRuntimeStatus) -> Unit).bestEffortPublish(status: NotificationRuntimeStatus) {
+    try {
+        invoke(status)
+    } catch (throwable: Throwable) {
+        if (throwable.isFatal()) {
+            throw throwable
+        }
+    }
+}
+
+private fun Throwable.isFatal(): Boolean = this is VirtualMachineError || this is ThreadDeath || this is LinkageError
 
 private fun SensitiveConfig.logRedactionSecrets(): LogRedactionSecrets = LogRedactionSecrets(
     managementApiToken = managementApiToken,
@@ -376,6 +458,10 @@ private fun rootOperationsDisabledRotationTransition(operation: RotationOperatio
         ),
 )
 
+private fun unavailableServiceRestart(): ManagementApiServiceRestartResult = ManagementApiServiceRestartResult.rejected(
+    ManagementApiServiceRestartFailureReason.ExecutionUnavailable,
+)
+
 private class CloseableManagementApiHandler(
     private val delegate: ManagementApiHandler,
     private val closeable: Closeable,
@@ -395,5 +481,10 @@ private fun Closeable.closeSuppressingExceptions() {
         // Startup failure cleanup must not hide the original installation error.
     }
 }
+
+private fun ignoredCloudflareTransition(): CloudflareTunnelTransitionResult = CloudflareTunnelTransitionResult(
+    disposition = CloudflareTunnelTransitionDisposition.Ignored,
+    status = CloudflareTunnelStatus.disabled(),
+)
 
 private const val DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MILLIS = 30_000L
