@@ -1388,6 +1388,11 @@ class ComposeAppShellContractTest {
             "Rotation route must use the tested screen controller boundary.",
         )
         assertTrue(
+            rotationSource.contains("viewModel<RotationViewModel>") &&
+                rotationSource.contains("collectAsStateWithLifecycle()"),
+            "Rotation route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
+        )
+        assertTrue(
             rotationSource.contains("configProvider: () -> AppConfig = AppConfig::default") &&
                 rotationSource.contains("redactionSecretsProvider: () -> LogRedactionSecrets"),
             "Rotation route must accept injectable config and redaction providers.",
@@ -1401,10 +1406,10 @@ class ComposeAppShellContractTest {
         assertTrue(
             rotationSource.contains("configProvider = { currentConfigProvider() }") &&
                 rotationSource.contains("rotationStatusProvider = { currentRotationStatusProvider() }") &&
-                rotationSource.contains("secretsProvider = { currentRedactionSecretsProvider() }") &&
+                rotationSource.contains("redactionSecretsProvider = { currentRedactionSecretsProvider() }") &&
                 rotationSource.contains("rootAvailabilityProvider = { currentRootAvailabilityProvider() }") &&
                 rotationSource.contains("activeConnectionsProvider = { currentActiveConnectionsProvider() }"),
-            "Rotation route controller must be backed by injected Rotation state providers.",
+            "Rotation route ViewModel must be backed by injected Rotation state providers.",
         )
         assertTrue(
             rotationSource.contains("rememberUpdatedState(configProvider)") &&
@@ -1431,8 +1436,8 @@ class ComposeAppShellContractTest {
                     "observedActiveConnections",
                     "observedRedactionSecrets",
                 ).all(rotationRefreshEffectKeys::contains) &&
-                rotationSource.contains("controller.handle(RotationScreenEvent.Refresh)"),
-            "Rotation route must refresh remembered controller state when observed provider-backed state or redaction inputs change.",
+                rotationSource.contains("rotationViewModel.handle(RotationScreenEvent.Refresh)"),
+            "Rotation route must refresh remembered ViewModel state when observed provider-backed state or redaction inputs change.",
         )
         assertTrue(
             rotationSource.contains("RotationScreenEvent.RotateMobileData"),

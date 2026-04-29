@@ -25,9 +25,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
+import com.cellularproxy.app.viewmodel.RotationViewModel
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
@@ -71,39 +76,40 @@ internal fun CellularProxyRotationRoute(
     val observedCooldownRemainingSeconds = cooldownRemainingSecondsProvider()
     val observedActiveConnections = activeConnectionsProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
-    val controller =
-        remember {
-            RotationScreenController(
-                configProvider = { currentConfigProvider() },
-                rotationStatusProvider = { currentRotationStatusProvider() },
-                currentPublicIpProvider = { currentCurrentPublicIpProvider() },
-                rootAvailabilityProvider = { currentRootAvailabilityProvider() },
-                cooldownRemainingSecondsProvider = { currentCooldownRemainingSecondsProvider() },
-                activeConnectionsProvider = { currentActiveConnectionsProvider() },
-                secretsProvider = { currentRedactionSecretsProvider() },
-                auditActionsEnabled = true,
-                auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
-                actionHandler = { action ->
-                    when (action) {
-                        RotationScreenAction.CheckRoot -> currentOnCheckRoot()
-                        RotationScreenAction.ProbeCurrentPublicIp -> currentOnProbeCurrentPublicIp()
-                        RotationScreenAction.RotateMobileData -> currentOnRotateMobileData()
-                        RotationScreenAction.RotateAirplaneMode -> currentOnRotateAirplaneMode()
-                        RotationScreenAction.CopyDiagnostics -> Unit
-                    }
+    val rotationViewModel =
+        viewModel<RotationViewModel>(
+            factory =
+                remember {
+                    RotationViewModelFactory(
+                        configProvider = { currentConfigProvider() },
+                        rotationStatusProvider = { currentRotationStatusProvider() },
+                        currentPublicIpProvider = { currentCurrentPublicIpProvider() },
+                        rootAvailabilityProvider = { currentRootAvailabilityProvider() },
+                        cooldownRemainingSecondsProvider = { currentCooldownRemainingSecondsProvider() },
+                        activeConnectionsProvider = { currentActiveConnectionsProvider() },
+                        redactionSecretsProvider = { currentRedactionSecretsProvider() },
+                        auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
+                        actionHandler = { action ->
+                            when (action) {
+                                RotationScreenAction.CheckRoot -> currentOnCheckRoot()
+                                RotationScreenAction.ProbeCurrentPublicIp -> currentOnProbeCurrentPublicIp()
+                                RotationScreenAction.RotateMobileData -> currentOnRotateMobileData()
+                                RotationScreenAction.RotateAirplaneMode -> currentOnRotateAirplaneMode()
+                                RotationScreenAction.CopyDiagnostics -> Unit
+                            }
+                        },
+                    )
                 },
-            )
-        }
-    var screenState by remember { mutableStateOf(controller.state) }
+        )
+    val screenState by rotationViewModel.state.collectAsStateWithLifecycle()
     val dispatchEvent: (RotationScreenEvent) -> Unit = { event ->
-        controller.handle(event)
-        controller.consumeEffects().forEach { effect ->
+        rotationViewModel.handle(event)
+        rotationViewModel.consumeEffects().forEach { effect ->
             when (effect) {
                 is RotationScreenEffect.CopyText -> onCopyRotationDiagnosticsText(effect.text)
                 is RotationScreenEffect.RecordAuditAction -> onRecordRotationAuditAction(effect.record)
             }
         }
-        screenState = controller.state
     }
     LaunchedEffect(Unit) {
         dispatchEvent(RotationScreenEvent.Refresh)
@@ -117,8 +123,7 @@ internal fun CellularProxyRotationRoute(
         observedActiveConnections,
         observedRedactionSecrets,
     ) {
-        controller.handle(RotationScreenEvent.Refresh)
-        screenState = controller.state
+        rotationViewModel.handle(RotationScreenEvent.Refresh)
     }
 
     CellularProxyRotationScreen(
@@ -130,6 +135,32 @@ internal fun CellularProxyRotationRoute(
         onRotateAirplaneMode = { dispatchEvent(RotationScreenEvent.RotateAirplaneMode) },
         onCopyDiagnostics = { dispatchEvent(RotationScreenEvent.CopyDiagnostics) },
     )
+}
+
+private class RotationViewModelFactory(
+    private val configProvider: () -> AppConfig,
+    private val rotationStatusProvider: () -> RotationStatus,
+    private val currentPublicIpProvider: () -> String?,
+    private val rootAvailabilityProvider: () -> RootAvailabilityStatus,
+    private val cooldownRemainingSecondsProvider: () -> Long?,
+    private val activeConnectionsProvider: () -> Long,
+    private val redactionSecretsProvider: () -> LogRedactionSecrets,
+    private val auditOccurredAtEpochMillisProvider: () -> Long,
+    private val actionHandler: (RotationScreenAction) -> Unit,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = RotationViewModel(
+        configProvider = configProvider,
+        rotationStatusProvider = rotationStatusProvider,
+        currentPublicIpProvider = currentPublicIpProvider,
+        rootAvailabilityProvider = rootAvailabilityProvider,
+        cooldownRemainingSecondsProvider = cooldownRemainingSecondsProvider,
+        activeConnectionsProvider = activeConnectionsProvider,
+        secretsProvider = redactionSecretsProvider,
+        auditActionsEnabled = true,
+        auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
+        actionHandler = actionHandler,
+    ) as T
 }
 
 @Composable
