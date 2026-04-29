@@ -148,27 +148,29 @@ data class ProxySettingsFormState(
                 invalidCloudflareTunnelToken = true,
             )
         }
+        val sanitizedCloudflareHostnameLabel: String? =
+            cloudflareHostnameLabel
+                .trim()
+                .takeIf { it.isNotEmpty() }
+                ?.safeCloudflareManagementHostnameLabel()
+                ?.takeIf { it.isNotEmpty() }
+        val updatedCloudflare =
+            if (appliesSensitiveEdits) {
+                base.cloudflare.copy(
+                    enabled = cloudflareEnabled,
+                    tunnelTokenPresent = tunnelTokenPresent,
+                    managementHostnameLabel = sanitizedCloudflareHostnameLabel,
+                )
+            } else if (shouldApplyPlainCloudflareEnabledChange(base)) {
+                base.cloudflare.copy(
+                    enabled = cloudflareEnabled,
+                )
+            } else {
+                base.cloudflare
+            }
         val candidate =
             proxyAndRouteCandidate.copy(
-                cloudflare =
-                    if (appliesSensitiveEdits) {
-                        base.cloudflare.copy(
-                            enabled = cloudflareEnabled,
-                            tunnelTokenPresent = tunnelTokenPresent,
-                            managementHostnameLabel =
-                                cloudflareHostnameLabel
-                                    .trim()
-                                    .takeIf(String::isNotEmpty)
-                                    ?.safeCloudflareManagementHostnameLabel()
-                                    ?.takeIf(String::isNotEmpty),
-                        )
-                    } else if (cloudflareEnabled != base.cloudflare.enabled) {
-                        base.cloudflare.copy(
-                            enabled = cloudflareEnabled,
-                        )
-                    } else {
-                        base.cloudflare
-                    },
+                cloudflare = updatedCloudflare,
             )
 
         val warnings =
@@ -401,6 +403,16 @@ private fun ProxySettingsFormState.requiresSensitiveConfig(base: AppConfig): Boo
     cloudflareTunnelToken.isNotEmpty() ||
     (cloudflareEnabled && cloudflareEnabled != base.cloudflare.enabled) ||
     cloudflareHostnameLabel.trim() != base.cloudflare.managementHostnameLabel.orEmpty()
+
+private fun ProxySettingsFormState.shouldApplyPlainCloudflareEnabledChange(base: AppConfig): Boolean = cloudflareEnabled !=
+    base.cloudflare.enabled &&
+    (
+        sensitiveConfigInvalid ||
+            (
+                cloudflareTunnelTokenPresent == base.cloudflare.tunnelTokenPresent &&
+                    cloudflareHostnameLabel.trim() == base.cloudflare.managementHostnameLabel.orEmpty()
+            )
+    )
 
 data class SensitiveConfigDisplayState(
     val sensitiveConfig: SensitiveConfig? = null,
