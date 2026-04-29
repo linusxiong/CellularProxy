@@ -390,6 +390,29 @@ class ProxySettingsFormModelTest {
     }
 
     @Test
+    fun `valid replacement secret edits show edited status while repairing invalid sensitive storage`() {
+        val persisted =
+            ProxySettingsFormState.from(
+                config = AppConfig.default(),
+                sensitiveConfigInvalid = true,
+            )
+        val state =
+            ProxySettingsScreenState.from(
+                form =
+                    persisted.copy(
+                        proxyUsername = "replacement-user",
+                        proxyPassword = "replacement-pass",
+                        managementApiToken = "replacement-management-token",
+                    ),
+                persistedForm = persisted,
+            )
+
+        assertEquals(ProxySettingsSecretStatus.Edited, state.proxyCredentialStatus)
+        assertEquals(ProxySettingsSecretStatus.Edited, state.managementApiTokenStatus)
+        assertTrue(ProxySettingsScreenAction.SaveChanges in state.availableActions)
+    }
+
+    @Test
     fun `settings controller exposes Cloudflare token validation after rejected save`() {
         var savedConfig: AppConfig? = null
         val controller =

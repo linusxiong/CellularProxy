@@ -367,26 +367,26 @@ private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
 )
 
 private fun ProxySettingsFormState.proxyCredentialStatus(): ProxySettingsSecretStatus = when {
-    sensitiveConfigInvalid -> ProxySettingsSecretStatus.Invalid
     hasInvalidProxyCredentialEdit() -> ProxySettingsSecretStatus.Invalid
     proxyUsername.isNotEmpty() || proxyPassword.isNotEmpty() -> ProxySettingsSecretStatus.Edited
+    sensitiveConfigInvalid -> ProxySettingsSecretStatus.Invalid
     proxyCredentialPresent -> ProxySettingsSecretStatus.Present
     else -> ProxySettingsSecretStatus.Missing
 }
 
 private fun ProxySettingsFormState.managementApiTokenStatus(): ProxySettingsSecretStatus = when {
-    sensitiveConfigInvalid -> ProxySettingsSecretStatus.Invalid
     hasInvalidManagementApiTokenEdit() -> ProxySettingsSecretStatus.Invalid
     managementApiToken.isNotEmpty() -> ProxySettingsSecretStatus.Edited
+    sensitiveConfigInvalid -> ProxySettingsSecretStatus.Invalid
     managementApiTokenPresent -> ProxySettingsSecretStatus.Present
     else -> ProxySettingsSecretStatus.Missing
 }
 
 private fun ProxySettingsFormState.cloudflareTokenStatus(): ProxySettingsCloudflareTokenStatus = when {
-    sensitiveConfigInvalid -> ProxySettingsCloudflareTokenStatus.Invalid
     cloudflareTunnelToken.isNotEmpty() && cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit() ->
         ProxySettingsCloudflareTokenStatus.Invalid
     cloudflareTunnelToken.isNotEmpty() -> ProxySettingsCloudflareTokenStatus.Edited
+    sensitiveConfigInvalid -> ProxySettingsCloudflareTokenStatus.Invalid
     cloudflareTunnelTokenPresent -> ProxySettingsCloudflareTokenStatus.Present
     else -> ProxySettingsCloudflareTokenStatus.Missing
 }
