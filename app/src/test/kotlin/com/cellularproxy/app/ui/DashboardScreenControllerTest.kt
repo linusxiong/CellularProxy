@@ -376,7 +376,7 @@ class DashboardScreenControllerTest {
                 ),
                 DashboardRiskItem(
                     label = "Sensitive configuration is invalid",
-                    action = DashboardScreenAction.OpenRiskDetails,
+                    action = DashboardScreenAction.OpenSettings,
                 ),
             ),
             state.riskItems,
@@ -527,7 +527,7 @@ class DashboardScreenControllerTest {
     }
 
     @Test
-    fun `dashboard exposes invalid sensitive configuration risk as risk details action item`() {
+    fun `dashboard exposes invalid sensitive configuration risk as settings action item`() {
         val state =
             DashboardScreenState.from(
                 DashboardStatusModel.from(
@@ -541,7 +541,7 @@ class DashboardScreenControllerTest {
             listOf(
                 DashboardRiskItem(
                     label = "Sensitive configuration is invalid",
-                    action = DashboardScreenAction.OpenRiskDetails,
+                    action = DashboardScreenAction.OpenSettings,
                 ),
             ),
             state.riskItems,

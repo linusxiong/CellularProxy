@@ -901,7 +901,7 @@ private fun DashboardWarning.toDashboardRiskItem(): DashboardRiskItem? = when (t
     DashboardWarning.SensitiveConfigurationInvalid ->
         DashboardRiskItem(
             label = toDashboardText(),
-            action = DashboardScreenAction.OpenRiskDetails,
+            action = DashboardScreenAction.OpenSettings,
         )
     DashboardWarning.StartupFailed ->
         DashboardRiskItem(
