@@ -211,6 +211,44 @@ class DashboardScreenControllerTest {
     }
 
     @Test
+    fun `controller refreshes status before copying the proxy endpoint`() {
+        var proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = proxyStatus,
+                    )
+                },
+            )
+
+        proxyStatus =
+            ProxyServiceStatus.running(
+                listenHost = "0.0.0.0",
+                listenPort = 9090,
+                configuredRoute = AppConfig.default().network.defaultRoutePolicy,
+                boundRoute = null,
+                publicIp = null,
+                hasHighSecurityRisk = false,
+            )
+        controller.handle(DashboardScreenEvent.CopyProxyEndpoint)
+
+        assertEquals(
+            DashboardScreenEffect.CopyText("0.0.0.0:9090"),
+            controller.consumeEffects().single(),
+        )
+    }
+
+    @Test
     fun `controller emits metadata-only audit records for dispatched operational actions`() {
         val controller =
             DashboardScreenController(
