@@ -174,7 +174,7 @@ class DiagnosticChecksTest {
         assertEquals(
             DiagnosticCheckResult(
                 status = DiagnosticResultStatus.Passed,
-                details = "Proxy listening on 127.0.0.1:8080",
+                details = "Proxy bind preflight succeeded on 127.0.0.1:8080",
             ),
             DiagnosticChecks
                 .proxyBind(
@@ -213,7 +213,7 @@ class DiagnosticChecksTest {
             DiagnosticCheckResult(
                 status = DiagnosticResultStatus.Failed,
                 errorCategory = "proxy-bind-failed",
-                details = "Proxy bind failed: PortAlreadyInUse",
+                details = "Proxy bind preflight failed: PortAlreadyInUse",
             ),
             DiagnosticChecks.proxyBind(status = { ProxyServiceStatus.failed(ProxyStartupError.PortAlreadyInUse) }).run(),
         )
@@ -226,6 +226,61 @@ class DiagnosticChecksTest {
             ),
             DiagnosticChecks
                 .proxyBind(status = { ProxyServiceStatus.failed(ProxyStartupError.MissingManagementApiToken) })
+                .run(),
+        )
+    }
+
+    @Test
+    fun `proxy bind check maps explicit probe outcomes`() {
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Passed,
+                details = "Proxy bind preflight succeeded on 127.0.0.1:18080",
+            ),
+            DiagnosticChecks
+                .proxyBind(
+                    probeResult = {
+                        ProxyBindDiagnosticsProbeResult.Bound(
+                            listenHost = "127.0.0.1",
+                            listenPort = 18080,
+                        )
+                    },
+                ).run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "proxy-bind-failed",
+                details = "Proxy bind preflight failed: PortAlreadyInUse",
+            ),
+            DiagnosticChecks
+                .proxyBind(probeResult = { ProxyBindDiagnosticsProbeResult.BindFailed })
+                .run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Failed,
+                errorCategory = "proxy-startup-blocked",
+                details = "Proxy startup blocked before bind: MissingManagementApiToken",
+            ),
+            DiagnosticChecks
+                .proxyBind(
+                    probeResult = {
+                        ProxyBindDiagnosticsProbeResult.StartupBlocked(ProxyStartupError.MissingManagementApiToken)
+                    },
+                ).run(),
+        )
+
+        assertEquals(
+            DiagnosticCheckResult(
+                status = DiagnosticResultStatus.Warning,
+                errorCategory = "proxy-bind-not-ready",
+                details = "Proxy is stopped and not bound",
+            ),
+            DiagnosticChecks
+                .proxyBind(probeResult = { ProxyBindDiagnosticsProbeResult.NotReady(ProxyServiceState.Stopped) })
                 .run(),
         )
     }

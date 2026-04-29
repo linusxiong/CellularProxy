@@ -11,6 +11,7 @@ import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import java.net.Inet6Address
 import java.net.InetAddress
+import kotlin.jvm.JvmName
 
 object DiagnosticChecks {
     fun rootAvailability(
@@ -141,24 +142,31 @@ object DiagnosticChecks {
         }
     }
 
-    fun proxyBind(status: () -> ProxyServiceStatus): DiagnosticCheck = DiagnosticCheck {
-        val proxyStatus = status()
-        when (proxyStatus.state) {
-            ProxyServiceState.Running ->
+    @JvmName("proxyBindFromStatus")
+    fun proxyBind(status: () -> ProxyServiceStatus): DiagnosticCheck = proxyBind(
+        probeResult = { ProxyBindDiagnosticsProbeResult.fromStatus(status()) },
+    )
+
+    fun proxyBind(probeResult: () -> ProxyBindDiagnosticsProbeResult): DiagnosticCheck = DiagnosticCheck {
+        when (val result = probeResult()) {
+            is ProxyBindDiagnosticsProbeResult.Bound ->
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Passed,
-                    details = "Proxy listening on ${proxyStatus.listenHost}:${proxyStatus.listenPort}",
+                    details = "Proxy bind preflight succeeded on ${result.listenHost}:${result.listenPort}",
                 )
-            ProxyServiceState.Failed ->
-                proxyStatus.startupError.toProxyBindFailureResult()
-            ProxyServiceState.Starting,
-            ProxyServiceState.Stopping,
-            ProxyServiceState.Stopped,
-            ->
+            ProxyBindDiagnosticsProbeResult.BindFailed ->
+                DiagnosticCheckResult(
+                    status = DiagnosticResultStatus.Failed,
+                    errorCategory = "proxy-bind-failed",
+                    details = "Proxy bind preflight failed: PortAlreadyInUse",
+                )
+            is ProxyBindDiagnosticsProbeResult.StartupBlocked ->
+                result.startupError.toProxyBindStartupBlockedResult()
+            is ProxyBindDiagnosticsProbeResult.NotReady ->
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Warning,
                     errorCategory = "proxy-bind-not-ready",
-                    details = "Proxy is ${proxyStatus.state.name.lowercase()} and not bound",
+                    details = "Proxy is ${result.state.name.lowercase()} and not bound",
                 )
         }
     }
@@ -233,6 +241,52 @@ enum class LocalManagementApiProbeResult {
     Error,
 }
 
+sealed interface ProxyBindDiagnosticsProbeResult {
+    data class Bound(
+        val listenHost: String,
+        val listenPort: Int,
+    ) : ProxyBindDiagnosticsProbeResult {
+        init {
+            require(listenHost.isNotBlank()) { "Proxy bind listen host must not be blank" }
+            require(listenPort in 1..65535) { "Proxy bind listen port must be in 1..65535" }
+        }
+    }
+
+    data object BindFailed : ProxyBindDiagnosticsProbeResult
+
+    data class StartupBlocked(
+        val startupError: ProxyStartupError?,
+    ) : ProxyBindDiagnosticsProbeResult
+
+    data class NotReady(
+        val state: ProxyServiceState,
+    ) : ProxyBindDiagnosticsProbeResult {
+        init {
+            require(state != ProxyServiceState.Running) { "Running proxy state must be represented as bound" }
+            require(state != ProxyServiceState.Failed) { "Failed proxy state must be represented as a failure result" }
+        }
+    }
+
+    companion object {
+        fun fromStatus(proxyStatus: ProxyServiceStatus): ProxyBindDiagnosticsProbeResult = when (proxyStatus.state) {
+            ProxyServiceState.Running ->
+                Bound(
+                    listenHost = proxyStatus.listenHost ?: "unknown",
+                    listenPort = proxyStatus.listenPort ?: 1,
+                )
+            ProxyServiceState.Failed ->
+                when (val startupError = proxyStatus.startupError) {
+                    ProxyStartupError.PortAlreadyInUse -> BindFailed
+                    else -> StartupBlocked(startupError)
+                }
+            ProxyServiceState.Starting,
+            ProxyServiceState.Stopping,
+            ProxyServiceState.Stopped,
+            -> NotReady(proxyStatus.state)
+        }
+    }
+}
+
 sealed interface PublicIpDiagnosticsProbeResult {
     data object Unavailable : PublicIpDiagnosticsProbeResult
 
@@ -254,19 +308,11 @@ enum class CloudflareManagementApiProbeResult {
     Error,
 }
 
-private fun ProxyStartupError?.toProxyBindFailureResult(): DiagnosticCheckResult = if (this == ProxyStartupError.PortAlreadyInUse) {
-    DiagnosticCheckResult(
-        status = DiagnosticResultStatus.Failed,
-        errorCategory = "proxy-bind-failed",
-        details = "Proxy bind failed: $this",
-    )
-} else {
-    DiagnosticCheckResult(
-        status = DiagnosticResultStatus.Failed,
-        errorCategory = "proxy-startup-blocked",
-        details = "Proxy startup blocked before bind: $this",
-    )
-}
+private fun ProxyStartupError?.toProxyBindStartupBlockedResult(): DiagnosticCheckResult = DiagnosticCheckResult(
+    status = DiagnosticResultStatus.Failed,
+    errorCategory = "proxy-startup-blocked",
+    details = "Proxy startup blocked before bind: $this",
+)
 
 private val RouteTarget.label: String
     get() =

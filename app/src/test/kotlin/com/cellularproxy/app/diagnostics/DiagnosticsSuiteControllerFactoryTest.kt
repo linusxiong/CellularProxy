@@ -43,6 +43,12 @@ class DiagnosticsSuiteControllerFactoryTest {
                 proxyStatus = { status },
                 observedNetworks = { listOf(wifi) },
                 publicIpProbeResult = { PublicIpDiagnosticsProbeResult.Observed("203.0.113.9") },
+                proxyBindProbeResult = {
+                    ProxyBindDiagnosticsProbeResult.Bound(
+                        listenHost = "127.0.0.1",
+                        listenPort = 18080,
+                    )
+                },
                 localManagementApiProbeResult = { LocalManagementApiProbeResult.Authenticated },
                 cloudflareManagementApiProbeResult = { CloudflareManagementApiProbeResult.Authenticated },
                 nanoTime = { 0L },
@@ -61,5 +67,9 @@ class DiagnosticsSuiteControllerFactoryTest {
         assertEquals(DiagnosticResultStatus.Passed, results.getValue(DiagnosticCheckType.CloudflareTunnel).status)
         assertEquals(DiagnosticResultStatus.Passed, results.getValue(DiagnosticCheckType.CloudflareManagementApi).status)
         assertEquals("Public IP 203.0.113.9", results.getValue(DiagnosticCheckType.PublicIp).details)
+        assertEquals(
+            "Proxy bind preflight succeeded on 127.0.0.1:18080",
+            results.getValue(DiagnosticCheckType.ProxyBind).details,
+        )
     }
 }
