@@ -17,23 +17,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
 import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
+import com.cellularproxy.app.diagnostics.DiagnosticsSuiteController
 import com.cellularproxy.app.diagnostics.DiagnosticsSuiteControllerFactory
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.ProxyBindDiagnosticsProbe
 import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
+import com.cellularproxy.app.viewmodel.DiagnosticsViewModel
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
@@ -75,45 +79,44 @@ internal fun CellularProxyDiagnosticsRoute(
     val coroutineScope = rememberCoroutineScope()
     val eventMutex = remember { Mutex() }
     val proxyBindDiagnosticsProbe = remember { ProxyBindDiagnosticsProbe(config = { currentConfigProvider().proxy }) }
-    val controller =
-        remember {
-            DiagnosticsScreenController(
-                suiteController =
-                    DiagnosticsSuiteControllerFactory.create(
-                        config = { currentConfigProvider() },
-                        proxyStatus = { currentProxyStatusProvider() },
-                        observedNetworks = { currentObservedNetworksProvider() },
-                        publicIpProbeResult = { currentPublicIpProbeResultProvider() },
-                        localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() },
-                        cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
-                        proxyBindProbeResult = { proxyBindDiagnosticsProbe.probe(currentProxyStatusProvider()) },
-                    ),
-                secretsProvider = { currentRedactionSecretsProvider() },
-                auditActionsEnabled = true,
-                auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
-            )
-        }
-    var screenState by remember { mutableStateOf(controller.state) }
+    val diagnosticsViewModel =
+        viewModel<DiagnosticsViewModel>(
+            factory =
+                remember {
+                    DiagnosticsViewModelFactory(
+                        suiteController =
+                            DiagnosticsSuiteControllerFactory.create(
+                                config = { currentConfigProvider() },
+                                proxyStatus = { currentProxyStatusProvider() },
+                                observedNetworks = { currentObservedNetworksProvider() },
+                                publicIpProbeResult = { currentPublicIpProbeResultProvider() },
+                                localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() },
+                                cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
+                                proxyBindProbeResult = { proxyBindDiagnosticsProbe.probe(currentProxyStatusProvider()) },
+                            ),
+                        secretsProvider = { currentRedactionSecretsProvider() },
+                        auditActionsEnabled = true,
+                        auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
+                    )
+                },
+        )
+    val screenState by diagnosticsViewModel.state.collectAsStateWithLifecycle()
     val dispatchEvent: (DiagnosticsScreenEvent) -> Unit = { event ->
-        screenState = screenState.withRunningChecks(event.runningTypes())
+        diagnosticsViewModel.markRunning(event.runningTypes())
         coroutineScope.launch {
-            val result =
+            val effects =
                 withContext(Dispatchers.IO) {
                     eventMutex.withLock {
-                        controller.handle(event)
-                        DiagnosticsRouteEventResult(
-                            state = controller.state,
-                            effects = controller.consumeEffects(),
-                        )
+                        diagnosticsViewModel.handle(event)
+                        diagnosticsViewModel.consumeEffects()
                     }
                 }
-            result.effects.forEach { effect ->
+            effects.forEach { effect ->
                 when (effect) {
                     is DiagnosticsScreenEffect.CopyText -> onCopyDiagnosticsSummaryText(effect.text)
                     is DiagnosticsScreenEffect.RecordAuditAction -> onRecordDiagnosticsAuditAction(effect.record)
                 }
             }
-            screenState = result.state
         }
     }
 
@@ -136,10 +139,20 @@ internal fun CellularProxyDiagnosticsRoute(
     )
 }
 
-private data class DiagnosticsRouteEventResult(
-    val state: DiagnosticsScreenState,
-    val effects: List<DiagnosticsScreenEffect>,
-)
+private class DiagnosticsViewModelFactory(
+    private val suiteController: DiagnosticsSuiteController,
+    private val secretsProvider: () -> LogRedactionSecrets,
+    private val auditActionsEnabled: Boolean,
+    private val auditOccurredAtEpochMillisProvider: () -> Long,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = DiagnosticsViewModel(
+        suiteController = suiteController,
+        secretsProvider = secretsProvider,
+        auditActionsEnabled = auditActionsEnabled,
+        auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
+    ) as T
+}
 
 @Composable
 internal fun CellularProxyDiagnosticsScreen(
@@ -422,7 +435,7 @@ private fun DiagnosticsScreenItem.toDiagnosticResultItem(
 private fun DiagnosticsScreenItem.statusFromLabel(): DiagnosticResultStatus = DiagnosticResultStatus.entries
     .single { status -> status.label == this.status }
 
-private fun DiagnosticsScreenEvent.runningTypes(): Set<DiagnosticCheckType> = when (this) {
+internal fun DiagnosticsScreenEvent.runningTypes(): Set<DiagnosticCheckType> = when (this) {
     DiagnosticsScreenEvent.RunAllChecks -> bulkSafeDiagnosticCheckTypes
     is DiagnosticsScreenEvent.RunCheck -> setOf(type)
     is DiagnosticsScreenEvent.CopyCheck,

@@ -1919,8 +1919,9 @@ class ComposeAppShellContractTest {
             "Diagnostics route must not use the generic destination placeholder.",
         )
         assertTrue(
-            diagnosticsSource.contains("DiagnosticsScreenController("),
-            "Diagnostics route must use the tested screen controller boundary.",
+            diagnosticsSource.contains("viewModel<DiagnosticsViewModel>") &&
+                diagnosticsSource.contains("collectAsStateWithLifecycle()"),
+            "Diagnostics route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
         )
         assertTrue(
             diagnosticsSource.contains("DiagnosticsSuiteControllerFactory.create("),
@@ -1950,7 +1951,7 @@ class ComposeAppShellContractTest {
                     "cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() }",
                 ) &&
                 diagnosticsSource.contains("secretsProvider = { currentRedactionSecretsProvider() }"),
-            "Diagnostics controller construction must use the latest injected providers instead of static defaults.",
+            "Diagnostics route ViewModel construction must use the latest injected providers instead of static defaults.",
         )
         assertTrue(
             shellSource.contains("configProvider = settingsInitialConfigProvider") &&
@@ -1977,8 +1978,8 @@ class ComposeAppShellContractTest {
             "Diagnostics route must not hard-code an empty diagnostics suite that reports every check as missing.",
         )
         assertTrue(
-            diagnosticsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
-            "Diagnostics route must mirror controller state into Compose state for recomposition.",
+            diagnosticsSource.contains("DiagnosticsViewModel("),
+            "Diagnostics route ViewModel must preserve the tested screen controller boundary.",
         )
         val diagnosticsRefreshEffectKeys =
             Regex("""LaunchedEffect\(([\s\S]*?)\)\s+\{\s+dispatchEvent\(DiagnosticsScreenEvent\.Refresh\)\s+}""")
@@ -2003,15 +2004,15 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             diagnosticsSource.contains("DiagnosticsScreenEvent.RunAllChecks"),
-            "Diagnostics route must dispatch run-all actions through the controller.",
+            "Diagnostics route must dispatch run-all actions through the ViewModel.",
         )
         assertTrue(
             diagnosticsSource.contains("DiagnosticsScreenEvent.RunCheck(type)"),
-            "Diagnostics route must dispatch per-check actions through the controller.",
+            "Diagnostics route must dispatch per-check actions through the ViewModel.",
         )
         assertTrue(
             diagnosticsSource.contains("DiagnosticsScreenEffect.CopyText"),
-            "Diagnostics route must consume copy summary effects from the controller.",
+            "Diagnostics route must consume copy summary effects from the ViewModel.",
         )
         assertTrue(
             diagnosticsSource.contains("DiagnosticsScreenEffect.RecordAuditAction") &&
@@ -2269,8 +2270,8 @@ class ComposeAppShellContractTest {
             "Run-all must leave the explicit Cloudflare management API check idle.",
         )
         assertTrue(
-            diagnosticsSource.contains("screenState = screenState.withRunningChecks(event.runningTypes())"),
-            "Diagnostics route must update Compose state to running before dispatching synchronous check work to IO.",
+            diagnosticsSource.contains("diagnosticsViewModel.markRunning(event.runningTypes())"),
+            "Diagnostics route must update ViewModel state to running before dispatching synchronous check work to IO.",
         )
     }
 

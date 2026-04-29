@@ -62,6 +62,55 @@ class DiagnosticsViewModelTest {
     }
 
     @Test
+    fun `view model can expose optimistic running state before checks complete`() {
+        val viewModel =
+            DiagnosticsViewModel(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks = emptyMap(),
+                        nanoTime = { 0L },
+                    ),
+            )
+
+        viewModel.markRunning(setOf(DiagnosticCheckType.RootAvailability))
+
+        assertEquals(
+            DiagnosticResultStatus.Running.label,
+            viewModel
+                .state
+                .value
+                .items
+                .single { item -> item.type == DiagnosticCheckType.RootAvailability }
+                .status,
+        )
+    }
+
+    @Test
+    fun `view model preserves queued optimistic running state when another event completes first`() {
+        val viewModel =
+            DiagnosticsViewModel(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks = emptyMap(),
+                        nanoTime = { 0L },
+                    ),
+            )
+
+        viewModel.markRunning(setOf(DiagnosticCheckType.RootAvailability))
+        viewModel.handle(DiagnosticsScreenEvent.Refresh)
+
+        assertEquals(
+            DiagnosticResultStatus.Running.label,
+            viewModel
+                .state
+                .value
+                .items
+                .single { item -> item.type == DiagnosticCheckType.RootAvailability }
+                .status,
+        )
+    }
+
+    @Test
     fun `view model exposes one-shot controller effects without retaining them`() {
         val viewModel =
             DiagnosticsViewModel(
