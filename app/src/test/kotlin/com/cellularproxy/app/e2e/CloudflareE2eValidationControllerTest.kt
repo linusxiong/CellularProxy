@@ -54,7 +54,7 @@ class CloudflareE2eValidationControllerTest {
             )
         val ready =
             CloudflareE2eValidationConfig.Ready(
-                tunnelToken = "real-token-value",
+                tunnelToken = validTunnelToken,
                 managementApiToken = "management-secret",
                 managementHostname = "https://management.example.test",
             )
@@ -69,7 +69,7 @@ class CloudflareE2eValidationControllerTest {
                 "edgeSession=management_api_round_trip, httpStatus=204",
             evidence.safeSummary,
         )
-        assertFalse(evidence.safeSummary.contains("real-token-value"))
+        assertFalse(evidence.safeSummary.contains(validTunnelToken))
         assertFalse(evidence.safeSummary.contains("management-secret"))
     }
 
@@ -91,7 +91,7 @@ class CloudflareE2eValidationControllerTest {
         val evidence =
             controller.run(
                 CloudflareE2eValidationConfig.Ready(
-                    tunnelToken = "real-token-value",
+                    tunnelToken = validTunnelToken,
                     managementApiToken = null,
                     managementHostname = null,
                 ),
@@ -102,7 +102,7 @@ class CloudflareE2eValidationControllerTest {
                 "httpStatus=503, errorClass=unavailable",
             evidence.safeSummary,
         )
-        assertFalse(evidence.safeSummary.contains("real-token-value"))
+        assertFalse(evidence.safeSummary.contains(validTunnelToken))
     }
 
     @Test
@@ -118,7 +118,7 @@ class CloudflareE2eValidationControllerTest {
         val evidence =
             controller.run(
                 CloudflareE2eValidationConfig.Ready(
-                    tunnelToken = "real-token-value",
+                    tunnelToken = validTunnelToken,
                     managementApiToken = "management-secret",
                     managementHostname = "management.example.test",
                 ),
@@ -131,7 +131,7 @@ class CloudflareE2eValidationControllerTest {
         )
         assertFalse(evidence.safeSummary.contains("management-secret"))
         assertFalse(evidence.safeSummary.contains("Authorization"))
-        assertFalse(evidence.safeSummary.contains("real-token-value"))
+        assertFalse(evidence.safeSummary.contains(validTunnelToken))
     }
 
     @Test
@@ -152,3 +152,6 @@ class CloudflareE2eValidationControllerTest {
         }
     }
 }
+
+private const val validTunnelToken =
+    "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="

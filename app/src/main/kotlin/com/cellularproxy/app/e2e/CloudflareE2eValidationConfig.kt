@@ -22,6 +22,9 @@ sealed interface CloudflareE2eValidationConfig {
             require(tunnelToken.trimmedOrNull() == tunnelToken) {
                 "tunnelToken must be normalized and non-blank"
             }
+            require(CloudflareTunnelToken.parse(tunnelToken) is CloudflareTunnelTokenParseResult.Valid) {
+                "tunnelToken must be valid"
+            }
             require(managementApiToken == null || managementApiToken.trimmedOrNull() == managementApiToken) {
                 "managementApiToken must be normalized or null"
             }

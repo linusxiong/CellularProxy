@@ -187,6 +187,13 @@ class CloudflareE2eValidationConfigTest {
         assertFailsWith<IllegalArgumentException> {
             CloudflareE2eValidationConfig.Ready(
                 tunnelToken = "token",
+                managementApiToken = null,
+                managementHostname = null,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareE2eValidationConfig.Ready(
+                tunnelToken = " $validTunnelToken ",
                 managementApiToken = " management-secret ",
                 managementHostname = null,
             )
