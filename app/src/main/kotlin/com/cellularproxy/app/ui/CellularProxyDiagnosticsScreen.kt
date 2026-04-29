@@ -57,6 +57,7 @@ internal fun CellularProxyDiagnosticsRoute(
     },
     onCopyDiagnosticsSummaryText: (String) -> Unit = {},
     onRecordDiagnosticsAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
+    auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
 ) {
     val currentConfigProvider by rememberUpdatedState(configProvider)
     val currentProxyStatusProvider by rememberUpdatedState(proxyStatusProvider)
@@ -65,6 +66,7 @@ internal fun CellularProxyDiagnosticsRoute(
     val currentPublicIpProbeResultProvider by rememberUpdatedState(publicIpProbeResultProvider)
     val currentLocalManagementApiProbeResultProvider by rememberUpdatedState(localManagementApiProbeResultProvider)
     val currentCloudflareManagementApiProbeResultProvider by rememberUpdatedState(cloudflareManagementApiProbeResultProvider)
+    val currentAuditOccurredAtEpochMillisProvider by rememberUpdatedState(auditOccurredAtEpochMillisProvider)
     val observedConfig = configProvider()
     val observedProxyStatus = proxyStatusProvider()
     val observedNetworks = observedNetworksProvider()
@@ -85,6 +87,7 @@ internal fun CellularProxyDiagnosticsRoute(
                     ),
                 secretsProvider = { currentRedactionSecretsProvider() },
                 auditActionsEnabled = true,
+                auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
             )
         }
     var screenState by remember { mutableStateOf(controller.state) }
