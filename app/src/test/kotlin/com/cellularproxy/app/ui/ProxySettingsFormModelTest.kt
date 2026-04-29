@@ -445,6 +445,42 @@ class ProxySettingsFormModelTest {
     }
 
     @Test
+    fun `settings controller can disable Cloudflare when sensitive storage is invalid`() {
+        var savedConfig: AppConfig? = null
+        val enabledCloudflareConfig =
+            AppConfig.default().copy(
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        enabled = true,
+                        tunnelTokenPresent = false,
+                    ),
+            )
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = { enabledCloudflareConfig },
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = { enabledCloudflareConfig },
+                        saveConfig = { config -> savedConfig = config },
+                        loadSensitiveConfigResult = {
+                            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.InvalidCloudflareTunnelToken)
+                        },
+                    ),
+            )
+
+        controller.handle(
+            ProxySettingsScreenEvent.UpdateForm(
+                controller.state.form.copy(cloudflareEnabled = false),
+            ),
+        )
+        controller.handle(ProxySettingsScreenEvent.SaveChanges)
+
+        assertEquals(false, savedConfig?.cloudflare?.enabled)
+        assertEquals(emptySet(), controller.state.validationErrors)
+        assertTrue(controller.consumeEffects().single() is ProxySettingsScreenEffect.SaveSucceeded)
+    }
+
+    @Test
     fun `settings form controller saves through latest sensitive callback provider`() {
         val oldSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
         val newSavedSensitiveConfigs = mutableListOf<SensitiveConfig>()
@@ -686,6 +722,7 @@ class ProxySettingsFormModelTest {
                 listenPort = "8181",
                 authEnabled = true,
                 route = RouteTarget.Automatic,
+                cloudflareEnabled = true,
             ).toAppConfig(base = staleCloudflareConfig)
 
         val saved = result as ProxySettingsFormResult.Valid

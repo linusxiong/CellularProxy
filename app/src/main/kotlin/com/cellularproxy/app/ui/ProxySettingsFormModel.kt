@@ -162,6 +162,10 @@ data class ProxySettingsFormState(
                                     ?.safeCloudflareManagementHostnameLabel()
                                     ?.takeIf(String::isNotEmpty),
                         )
+                    } else if (cloudflareEnabled != base.cloudflare.enabled) {
+                        base.cloudflare.copy(
+                            enabled = cloudflareEnabled,
+                        )
                     } else {
                         base.cloudflare
                     },
@@ -395,7 +399,7 @@ private fun ProxySettingsFormState.requiresSensitiveConfig(base: AppConfig): Boo
     proxyPassword.isNotEmpty() ||
     managementApiToken.isNotEmpty() ||
     cloudflareTunnelToken.isNotEmpty() ||
-    cloudflareEnabled != base.cloudflare.enabled ||
+    (cloudflareEnabled && cloudflareEnabled != base.cloudflare.enabled) ||
     cloudflareHostnameLabel.trim() != base.cloudflare.managementHostnameLabel.orEmpty()
 
 data class SensitiveConfigDisplayState(
