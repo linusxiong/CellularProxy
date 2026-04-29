@@ -32,6 +32,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
 import com.cellularproxy.app.diagnostics.DiagnosticsSuiteControllerFactory
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
+import com.cellularproxy.app.diagnostics.ProxyBindDiagnosticsProbe
 import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.logging.LogRedactionSecrets
@@ -73,6 +74,7 @@ internal fun CellularProxyDiagnosticsRoute(
     val observedRedactionSecrets = redactionSecretsProvider()
     val coroutineScope = rememberCoroutineScope()
     val eventMutex = remember { Mutex() }
+    val proxyBindDiagnosticsProbe = remember { ProxyBindDiagnosticsProbe(config = { currentConfigProvider().proxy }) }
     val controller =
         remember {
             DiagnosticsScreenController(
@@ -84,6 +86,7 @@ internal fun CellularProxyDiagnosticsRoute(
                         publicIpProbeResult = { currentPublicIpProbeResultProvider() },
                         localManagementApiProbeResult = { currentLocalManagementApiProbeResultProvider() },
                         cloudflareManagementApiProbeResult = { currentCloudflareManagementApiProbeResultProvider() },
+                        proxyBindProbeResult = { proxyBindDiagnosticsProbe.probe(currentProxyStatusProvider()) },
                     ),
                 secretsProvider = { currentRedactionSecretsProvider() },
                 auditActionsEnabled = true,
