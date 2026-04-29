@@ -61,6 +61,32 @@ class CloudflareE2eValidationEvidenceTest {
     }
 
     @Test
+    fun `successful evidence requirement rejects failed management round trips with safe message`() {
+        val success =
+            CloudflareE2eValidationEvidence.success(
+                durationMillis = 100,
+                edgeSessionCategory = CloudflareE2eEdgeSessionCategory.ManagementApiRoundTrip,
+                httpStatusCode = 200,
+            )
+        val failure =
+            CloudflareE2eValidationEvidence.failure(
+                durationMillis = 200,
+                edgeSessionCategory = CloudflareE2eEdgeSessionCategory.ManagementApiRoundTrip,
+                httpStatusCode = 503,
+                errorClass = CloudflareE2eErrorClass.Unavailable,
+            )
+
+        assertEquals(success, requireSuccessfulCloudflareE2eEvidence(success))
+        val exception =
+            assertFailsWith<IllegalStateException> {
+                requireSuccessfulCloudflareE2eEvidence(failure)
+            }
+
+        assertEquals(failure.safeSummary, exception.message)
+        assertFalse(exception.message.orEmpty().contains("Authorization"))
+    }
+
+    @Test
     fun `evidence rejects negative duration invalid http status and blank throwable class name`() {
         assertFailsWith<IllegalArgumentException> {
             CloudflareE2eValidationEvidence.success(

@@ -38,6 +38,7 @@ class CloudflareE2eInstrumentationArgumentsTest {
                 validator = CloudflareE2eManagementApiRoundTripValidator()::validate,
             ).run(config)
 
+        requireSuccessfulCloudflareE2eEvidence(evidence)
         assertNotNull(evidence.safeSummary)
         assertFalse(evidence.safeSummary.contains(config.tunnelToken))
         config.managementApiToken?.let { managementApiToken ->

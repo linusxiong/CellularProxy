@@ -109,3 +109,12 @@ enum class CloudflareE2eErrorClass(
     InvalidTunnelToken("invalid_tunnel_token"),
     Unknown("unknown"),
 }
+
+fun requireSuccessfulCloudflareE2eEvidence(
+    evidence: CloudflareE2eValidationEvidence,
+): CloudflareE2eValidationEvidence {
+    check(evidence.status == CloudflareE2eValidationEvidenceStatus.Success) {
+        evidence.safeSummary
+    }
+    return evidence
+}
