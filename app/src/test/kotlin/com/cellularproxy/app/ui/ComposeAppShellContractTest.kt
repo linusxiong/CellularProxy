@@ -199,6 +199,16 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
+            shellSource.contains(
+                "internal val cellularProxyPrimaryNavigationDestinations = listOf(\n" +
+                    "    Dashboard,\n" +
+                    "    Settings,\n" +
+                    "    LogsAudit,\n" +
+                    ")",
+            ),
+            "Primary navigation chrome should keep only the high-frequency app entry points.",
+        )
+        assertTrue(
             shellSource.contains("NavigationBar"),
             "Compose shell must expose top-level navigation controls.",
         )
@@ -211,12 +221,24 @@ class ComposeAppShellContractTest {
             "Top-level navigation controls must track the currently selected route.",
         )
         assertTrue(
-            shellSource.contains("navController.navigate(destination.route)"),
+            shellSource.contains("cellularProxyPrimaryNavigationDestinations.forEach"),
+            "Top-level navigation controls must render only primary destinations.",
+        )
+        assertTrue(
+            shellSource.contains("navController.navigateToCellularProxyTopLevelDestination(destination)"),
             "Top-level navigation items must navigate to their destination route.",
         )
         assertTrue(
-            shellSource.contains("Icon(destination.icon, contentDescription = null)"),
+            shellSource.contains("Icon(destination.icon, contentDescription = destination.label)"),
             "Top-level navigation items must render a recognizable destination icon.",
+        )
+        assertFalse(
+            shellSource.contains("label = {\n                    Text(destination.label)\n                }"),
+            "Phone bottom navigation must not render visible English destination labels.",
+        )
+        assertFalse(
+            shellSource.contains("label = {\n                    Text(destination.label)\n                },\n                icon"),
+            "Navigation rail items must not render visible English destination labels.",
         )
         assertFalse(
             shellSource.contains("icon = {}"),
@@ -227,7 +249,7 @@ class ComposeAppShellContractTest {
             "Top-level navigation should avoid stacking duplicate destination copies.",
         )
         assertTrue(
-            shellSource.contains("popUpTo(navController.graph.findStartDestination().id)"),
+            shellSource.contains("popUpTo(graph.findStartDestination().id)"),
             "Top-level navigation should pop to the graph start destination instead of stacking tab history.",
         )
         assertTrue(
@@ -237,6 +259,12 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("restoreState = true"),
             "Top-level navigation should restore destination state when returning to a tab.",
+        )
+        assertTrue(
+            shellSource.contains("if (destination == Dashboard)") &&
+                shellSource.contains("restoreState = false") &&
+                shellSource.contains("saveState = false"),
+            "Reselecting Dashboard must pop to the real Dashboard instead of restoring a previously opened child route.",
         )
     }
 
@@ -485,27 +513,27 @@ class ComposeAppShellContractTest {
             "Dashboard foreground-service dispatch must target CellularProxyForegroundService with explicit command actions.",
         )
         assertTrue(
-            shellSource.contains("onOpenRiskDetails = { navController.navigate(LogsAudit.route) }"),
+            shellSource.contains("onOpenRiskDetails = { navController.navigateToCellularProxyDestination(LogsAudit) }"),
             "Dashboard risk-details action must navigate to a concrete detail surface instead of doing nothing.",
         )
         assertTrue(
-            shellSource.contains("onOpenSettings = { navController.navigate(Settings.route) }"),
+            shellSource.contains("onOpenSettings = { navController.navigateToCellularProxyDestination(Settings) }"),
             "Dashboard settings action must navigate to the Settings screen.",
         )
         assertTrue(
-            shellSource.contains("onOpenCloudflare = { navController.navigate(Cloudflare.route) }"),
+            shellSource.contains("onOpenCloudflare = { navController.navigateToCellularProxyDestination(Cloudflare) }"),
             "Dashboard cloudflare action must navigate to the Cloudflare screen.",
         )
         assertTrue(
-            shellSource.contains("onOpenRotation = { navController.navigate(Rotation.route) }"),
+            shellSource.contains("onOpenRotation = { navController.navigateToCellularProxyDestination(Rotation) }"),
             "Dashboard rotation action must navigate to the Rotation screen.",
         )
         assertTrue(
-            shellSource.contains("onOpenLogs = { navController.navigate(LogsAudit.route) }"),
+            shellSource.contains("onOpenLogs = { navController.navigateToCellularProxyDestination(LogsAudit) }"),
             "Dashboard logs action must navigate to the Logs/Audit screen.",
         )
         assertTrue(
-            shellSource.contains("onOpenDiagnostics = { navController.navigate(Diagnostics.route) }"),
+            shellSource.contains("onOpenDiagnostics = { navController.navigateToCellularProxyDestination(Diagnostics) }"),
             "Dashboard diagnostics action must navigate to the Diagnostics screen.",
         )
     }

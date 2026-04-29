@@ -549,6 +549,12 @@ internal fun cellularProxyNavigationChromeFor(availableWidthDp: Int) = if (avail
     CellularProxyNavigationChrome.BottomBar
 }
 
+internal val cellularProxyPrimaryNavigationDestinations = listOf(
+    Dashboard,
+    Settings,
+    LogsAudit,
+)
+
 internal fun proxyStatusFromLiveStatusOrConfigFallback(
     config: AppConfig,
     liveStatus: () -> ProxyServiceStatus?,
@@ -721,23 +727,14 @@ internal fun CellularProxyNavigationBar(navController: NavHostController) {
     val currentRoute = backStackEntry?.destination?.route
 
     NavigationBar {
-        CellularProxyNavigationDestination.entries.forEach { destination ->
+        cellularProxyPrimaryNavigationDestinations.forEach { destination ->
             NavigationBarItem(
                 selected = currentRoute == destination.route,
                 onClick = {
-                    navController.navigate(destination.route) {
-                        launchSingleTop = true
-                        restoreState = true
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                    }
-                },
-                label = {
-                    Text(destination.label)
+                    navController.navigateToCellularProxyTopLevelDestination(destination)
                 },
                 icon = {
-                    Icon(destination.icon, contentDescription = null)
+                    Icon(destination.icon, contentDescription = destination.label)
                 },
             )
         }
@@ -750,25 +747,51 @@ internal fun CellularProxyNavigationRail(navController: NavHostController) {
     val currentRoute = backStackEntry?.destination?.route
 
     NavigationRail {
-        CellularProxyNavigationDestination.entries.forEach { destination ->
+        cellularProxyPrimaryNavigationDestinations.forEach { destination ->
             NavigationRailItem(
                 selected = currentRoute == destination.route,
                 onClick = {
-                    navController.navigate(destination.route) {
-                        launchSingleTop = true
-                        restoreState = true
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                    }
-                },
-                label = {
-                    Text(destination.label)
+                    navController.navigateToCellularProxyTopLevelDestination(destination)
                 },
                 icon = {
-                    Icon(destination.icon, contentDescription = null)
+                    Icon(destination.icon, contentDescription = destination.label)
                 },
             )
+        }
+    }
+}
+
+internal fun NavHostController.navigateToCellularProxyTopLevelDestination(
+    destination: CellularProxyNavigationDestination,
+) {
+    if (destination == Dashboard) {
+        navigate(destination.route) {
+            launchSingleTop = true
+            restoreState = false
+            popUpTo(graph.findStartDestination().id) {
+                saveState = false
+            }
+        }
+        return
+    }
+
+    navigate(destination.route) {
+        launchSingleTop = true
+        restoreState = true
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+    }
+}
+
+internal fun NavHostController.navigateToCellularProxyDestination(
+    destination: CellularProxyNavigationDestination,
+) {
+    if (destination in cellularProxyPrimaryNavigationDestinations) {
+        navigateToCellularProxyTopLevelDestination(destination)
+    } else {
+        navigate(destination.route) {
+            launchSingleTop = true
         }
     }
 }
@@ -837,12 +860,12 @@ internal fun CellularProxyNavigationHost(
                 onStopProxyService = onStopProxyService,
                 onRestartProxyService = onRestartProxyService,
                 onRefreshStatus = onRefreshProxyStatus,
-                onOpenRiskDetails = { navController.navigate(LogsAudit.route) },
-                onOpenSettings = { navController.navigate(Settings.route) },
-                onOpenCloudflare = { navController.navigate(Cloudflare.route) },
-                onOpenRotation = { navController.navigate(Rotation.route) },
-                onOpenLogs = { navController.navigate(LogsAudit.route) },
-                onOpenDiagnostics = { navController.navigate(Diagnostics.route) },
+                onOpenRiskDetails = { navController.navigateToCellularProxyDestination(LogsAudit) },
+                onOpenSettings = { navController.navigateToCellularProxyDestination(Settings) },
+                onOpenCloudflare = { navController.navigateToCellularProxyDestination(Cloudflare) },
+                onOpenRotation = { navController.navigateToCellularProxyDestination(Rotation) },
+                onOpenLogs = { navController.navigateToCellularProxyDestination(LogsAudit) },
+                onOpenDiagnostics = { navController.navigateToCellularProxyDestination(Diagnostics) },
                 onCopyProxyEndpointText = onCopyText,
                 onRecordDashboardAuditAction = onRecordLogsAuditAction,
             )
