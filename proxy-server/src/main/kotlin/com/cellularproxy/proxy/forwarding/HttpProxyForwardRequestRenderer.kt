@@ -120,15 +120,14 @@ object HttpProxyForwardRequestRenderer {
 
     private fun ParsedProxyRequest.HttpProxy.forwardHostHeaderValue(): String = if (port == HTTP_DEFAULT_PORT) host else "$host:$port"
 
-    private fun ParsedHttpRequest.connectionNominatedHeaderNames(): Set<String> =
-        headers
-            .filterKeys { headerName -> headerName.lowercase(Locale.US) == CONNECTION_HEADER }
-            .values
-            .flatten()
-            .flatMap { value -> value.split(',') }
-            .map { option -> option.trim().lowercase(Locale.US) }
-            .filter { option -> option.isHttpToken() }
-            .toSet()
+    private fun ParsedHttpRequest.connectionNominatedHeaderNames(): Set<String> = headers
+        .filterKeys { headerName -> headerName.lowercase(Locale.US) == CONNECTION_HEADER }
+        .values
+        .flatten()
+        .flatMap { value -> value.split(',') }
+        .map { option -> option.trim().lowercase(Locale.US) }
+        .filter { option -> option.isHttpToken() }
+        .toSet()
 }
 
 private fun String.isSafeSingleLine(): Boolean = isNotEmpty() && none(Char::isISOControl)
@@ -181,16 +180,15 @@ private fun copySafeForwardedRequestHeaders(headers: Map<String, List<String>>):
 private fun renderRequestHeaderString(
     requestLine: String,
     headers: Map<String, List<String>>,
-): String =
-    buildString {
-        append(requestLine).append(CRLF)
-        headers.forEach { (name, values) ->
-            values.forEach { value ->
-                append(name).append(": ").append(value).append(CRLF)
-            }
+): String = buildString {
+    append(requestLine).append(CRLF)
+    headers.forEach { (name, values) ->
+        values.forEach { value ->
+            append(name).append(": ").append(value).append(CRLF)
         }
-        append(CRLF)
     }
+    append(CRLF)
+}
 
 private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String): List<String> {
     val normalizedName = name.lowercase(Locale.US)
@@ -201,17 +199,16 @@ private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String):
 
 private fun Map<String, List<String>>.containsHeader(name: String): Boolean = caseInsensitiveHeaderValues(name).isNotEmpty()
 
-private fun ByteArray.decodeStrictUtf8(): String =
-    try {
-        Charsets.UTF_8
-            .newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-            .decode(ByteBuffer.wrap(this))
-            .toString()
-    } catch (_: CharacterCodingException) {
-        throw IllegalStateException("Forwarded request body is not valid UTF-8; use toByteArray() for byte-accurate rendering")
-    }
+private fun ByteArray.decodeStrictUtf8(): String = try {
+    Charsets.UTF_8
+        .newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(ByteBuffer.wrap(this))
+        .toString()
+} catch (_: CharacterCodingException) {
+    throw IllegalStateException("Forwarded request body is not valid UTF-8; use toByteArray() for byte-accurate rendering")
+}
 
 private const val CRLF = "\r\n"
 private const val DELETE_CONTROL_CHAR = 0x7F

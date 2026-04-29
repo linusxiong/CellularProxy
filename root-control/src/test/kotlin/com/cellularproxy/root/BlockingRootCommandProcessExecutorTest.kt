@@ -2,6 +2,7 @@ package com.cellularproxy.root
 
 import com.cellularproxy.shared.root.RootCommandCategory
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 import kotlin.test.Test
@@ -11,6 +12,25 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class BlockingRootCommandProcessExecutorTest {
+    @Test
+    fun `executor source avoids Process descendant APIs that are unavailable on Android`() {
+        val source =
+            Files.readString(
+                Path.of(
+                    "src/main/kotlin/com/cellularproxy/root/BlockingRootCommandProcessExecutor.kt",
+                ),
+            )
+
+        assertTrue(
+            "descendants()" !in source,
+            "Android java.lang.Process does not expose descendants() on supported devices",
+        )
+        assertTrue(
+            "ProcessHandle" !in source,
+            "Android root execution must not depend on java.lang.ProcessHandle",
+        )
+    }
+
     @Test
     fun `completed process captures exit code stdout and stderr`() {
         val executor = BlockingRootCommandProcessExecutor()
@@ -77,25 +97,17 @@ class BlockingRootCommandProcessExecutorTest {
     }
 
     @Test
-    fun `timed out process destroys descendant process before returning`() {
+    fun `timed out process closes direct process streams before returning`() {
         val executor = BlockingRootCommandProcessExecutor()
 
         val result =
             executor.execute(
-                command = shellCommand("sleep 5 & echo child-pid:$!; sleep 5"),
+                command = shellCommand("printf before; sleep 5"),
                 timeoutMillis = 250,
             )
 
         val timedOut = assertIs<RootCommandProcessResult.TimedOut>(result)
-        val childPid =
-            requireNotNull(
-                Regex("child-pid:(\\d+)")
-                    .find(timedOut.stdout)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.toLong(),
-            )
-        assertProcessStops(childPid)
+        assertEquals("before", timedOut.stdout)
     }
 
     @Test
@@ -119,16 +131,15 @@ class BlockingRootCommandProcessExecutorTest {
     }
 
     @Test
-    fun `interrupted process wait destroys descendant process before propagating interruption`() {
+    fun `interrupted process wait destroys direct process before propagating interruption`() {
         val executor = BlockingRootCommandProcessExecutor()
-        val pidFile = Files.createTempFile("cellularproxy-root-child", ".pid")
         val interruptionCaught = AtomicBoolean(false)
         val interruptStatusRestored = AtomicBoolean(false)
         val thread =
             Thread {
                 try {
                     executor.execute(
-                        command = shellCommand("sleep 5 & echo $! > ${pidFile.toAbsolutePath()}; sleep 5"),
+                        command = shellCommand("sleep 5"),
                         timeoutMillis = 10_000,
                     )
                 } catch (_: InterruptedException) {
@@ -138,18 +149,17 @@ class BlockingRootCommandProcessExecutorTest {
             }
 
         thread.start()
-        val childPid = awaitPidFile(pidFile)
+        Thread.sleep(250)
         thread.interrupt()
         thread.join(1_500)
 
         assertTrue(!thread.isAlive, "Expected interrupted executor call to return")
         assertTrue(interruptionCaught.get(), "Expected interruption to propagate")
         assertTrue(interruptStatusRestored.get(), "Expected interrupt status to be restored before propagation")
-        assertProcessStops(childPid)
     }
 
     @Test
-    fun `interrupted stream capture closes inherited pipe before propagating interruption`() {
+    fun `interrupted stream capture closes process pipes before propagating interruption`() {
         val executor = BlockingRootCommandProcessExecutor(streamCleanupTimeoutMillis = 10_000)
         val interruptionCaught = AtomicBoolean(false)
         val interruptStatusRestored = AtomicBoolean(false)
@@ -157,7 +167,7 @@ class BlockingRootCommandProcessExecutorTest {
             Thread {
                 try {
                     executor.execute(
-                        command = shellCommand("printf parent; (sleep 5)& exit 0"),
+                        command = shellCommand("printf parent; sleep 5"),
                         timeoutMillis = 2_000,
                     )
                 } catch (_: InterruptedException) {
@@ -191,11 +201,10 @@ class BlockingRootCommandProcessExecutorTest {
         assertEquals("Root process timeout must be positive", failure.message)
     }
 
-    private fun shellCommand(script: String): RootShellCommand =
-        RootShellCommand.trusted(
-            category = RootCommandCategory.RootAvailabilityCheck,
-            argv = listOf("sh", "-c", script),
-        )
+    private fun shellCommand(script: String): RootShellCommand = RootShellCommand.trusted(
+        category = RootCommandCategory.RootAvailabilityCheck,
+        argv = listOf("sh", "-c", script),
+    )
 
     private fun awaitPidFile(pidFile: java.nio.file.Path): Long {
         val deadline = System.nanoTime() + 1_000_000_000L
@@ -209,18 +218,5 @@ class BlockingRootCommandProcessExecutorTest {
         val content = Files.readString(pidFile).trim()
         assertTrue(content.isNotBlank(), "Expected child process pid in $pidFile")
         return content.toLong()
-    }
-
-    private fun assertProcessStops(pid: Long) {
-        val deadline = System.nanoTime() + 1_000_000_000L
-        while (System.nanoTime() < deadline) {
-            val process = ProcessHandle.of(pid)
-            if (process.isEmpty || !process.get().isAlive) {
-                return
-            }
-            Thread.sleep(25)
-        }
-        val process = ProcessHandle.of(pid)
-        assertTrue(process.isEmpty || !process.get().isAlive, "Expected descendant process $pid to be stopped")
     }
 }

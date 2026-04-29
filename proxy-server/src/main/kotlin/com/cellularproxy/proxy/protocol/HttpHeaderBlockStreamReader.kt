@@ -85,26 +85,24 @@ object HttpHeaderBlockStreamReader {
         secondPrevious: Int,
         previous: Int,
         current: Int,
-    ): Boolean =
-        previous == LINE_FEED &&
-            current == LINE_FEED ||
-            thirdPrevious == CARRIAGE_RETURN &&
-            secondPrevious == LINE_FEED &&
-            previous == CARRIAGE_RETURN &&
-            current == LINE_FEED
+    ): Boolean = previous == LINE_FEED &&
+        current == LINE_FEED ||
+        thirdPrevious == CARRIAGE_RETURN &&
+        secondPrevious == LINE_FEED &&
+        previous == CARRIAGE_RETURN &&
+        current == LINE_FEED
 }
 
-private fun ByteArray.decodeStrictUtf8OrNull(): String? =
-    try {
-        Charsets.UTF_8
-            .newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-            .decode(ByteBuffer.wrap(this))
-            .toString()
-    } catch (_: CharacterCodingException) {
-        null
-    }
+private fun ByteArray.decodeStrictUtf8OrNull(): String? = try {
+    Charsets.UTF_8
+        .newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(ByteBuffer.wrap(this))
+        .toString()
+} catch (_: CharacterCodingException) {
+    null
+}
 
 private const val DEFAULT_MAX_HEADER_BYTES = 16 * 1024
 private const val END_OF_STREAM = -1

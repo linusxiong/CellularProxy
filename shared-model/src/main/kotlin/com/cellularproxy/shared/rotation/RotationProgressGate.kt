@@ -37,25 +37,24 @@ data class RotationProgressGateResult(
         get() = transition.status
 }
 
-private fun RotationEvent.requiresStartGate(): Boolean =
-    when (this) {
-        is RotationEvent.StartRequested,
-        RotationEvent.CooldownPassed,
-        RotationEvent.CooldownRejected,
-        -> true
-        RotationEvent.RootAvailable,
-        RotationEvent.RootUnavailable,
-        is RotationEvent.OldPublicIpProbeSucceeded,
-        RotationEvent.OldPublicIpProbeFailed,
-        RotationEvent.NewRequestsPaused,
-        RotationEvent.ConnectionsDrained,
-        is RotationEvent.RootCommandCompleted,
-        is RotationEvent.RootCommandFailedToStart,
-        RotationEvent.ToggleDelayElapsed,
-        RotationEvent.NetworkReturned,
-        RotationEvent.NetworkReturnTimedOut,
-        is RotationEvent.NewPublicIpProbeSucceeded,
-        RotationEvent.NewPublicIpProbeFailed,
-        RotationEvent.ProxyRequestsResumed,
-        -> false
-    }
+private fun RotationEvent.requiresStartGate(): Boolean = when (this) {
+    is RotationEvent.StartRequested,
+    RotationEvent.CooldownPassed,
+    RotationEvent.CooldownRejected,
+    -> true
+    RotationEvent.RootAvailable,
+    RotationEvent.RootUnavailable,
+    is RotationEvent.OldPublicIpProbeSucceeded,
+    RotationEvent.OldPublicIpProbeFailed,
+    RotationEvent.NewRequestsPaused,
+    RotationEvent.ConnectionsDrained,
+    is RotationEvent.RootCommandCompleted,
+    is RotationEvent.RootCommandFailedToStart,
+    RotationEvent.ToggleDelayElapsed,
+    RotationEvent.NetworkReturned,
+    RotationEvent.NetworkReturnTimedOut,
+    is RotationEvent.NewPublicIpProbeSucceeded,
+    RotationEvent.NewPublicIpProbeFailed,
+    RotationEvent.ProxyRequestsResumed,
+    -> false
+}

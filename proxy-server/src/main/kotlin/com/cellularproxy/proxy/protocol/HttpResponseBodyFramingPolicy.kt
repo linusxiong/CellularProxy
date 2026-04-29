@@ -92,10 +92,9 @@ object HttpResponseBodyFramingPolicy {
 
     private fun String.isAsciiDecimalDigits(): Boolean = isNotEmpty() && all { it in '0'..'9' }
 
-    private fun Int.forbidsResponseBody(): Boolean =
-        this in BODY_FRAMING_INFORMATIONAL_STATUS_RANGE ||
-            this == BODY_FRAMING_NO_CONTENT_STATUS ||
-            this == BODY_FRAMING_NOT_MODIFIED_STATUS
+    private fun Int.forbidsResponseBody(): Boolean = this in BODY_FRAMING_INFORMATIONAL_STATUS_RANGE ||
+        this == BODY_FRAMING_NO_CONTENT_STATUS ||
+        this == BODY_FRAMING_NOT_MODIFIED_STATUS
 }
 
 private const val HEAD_METHOD = "HEAD"

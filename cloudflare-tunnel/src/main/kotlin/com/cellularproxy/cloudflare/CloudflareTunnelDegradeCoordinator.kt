@@ -15,42 +15,41 @@ class CloudflareTunnelDegradeCoordinator(
     fun markDegradedIfCurrent(
         expectedSnapshot: CloudflareTunnelControlPlaneSnapshot,
         activeConnection: CloudflareTunnelEdgeConnection,
-    ): CloudflareTunnelDegradeCoordinatorResult =
-        synchronized(controlPlane) {
-            val currentSnapshot = controlPlane.snapshot()
-            if (currentSnapshot != expectedSnapshot) {
-                return@synchronized CloudflareTunnelDegradeCoordinatorResult.Stale(
-                    expectedSnapshot = expectedSnapshot,
-                    actualSnapshot = currentSnapshot,
-                )
-            }
-            if (expectedSnapshot.status.state != CloudflareTunnelState.Connected) {
-                return@synchronized CloudflareTunnelDegradeCoordinatorResult.NoAction(currentSnapshot)
-            }
-            if (!sessionRegistry.isCurrent(expectedSnapshot, activeConnection)) {
-                return@synchronized CloudflareTunnelDegradeCoordinatorResult.ActiveSessionMismatch(currentSnapshot)
-            }
-
-            when (val guarded = controlPlane.apply(expectedSnapshot, CloudflareTunnelEvent.Degraded)) {
-                is CloudflareTunnelGuardedTransitionResult.Evaluated -> {
-                    check(
-                        sessionRegistry.updateSnapshotIfCurrent(
-                            currentSnapshot = expectedSnapshot,
-                            newSnapshot = guarded.transition.snapshot,
-                            connection = activeConnection,
-                        ),
-                    ) {
-                        "Active Cloudflare tunnel edge session changed while applying degradation"
-                    }
-                    CloudflareTunnelDegradeCoordinatorResult.Applied(guarded.transition)
-                }
-                is CloudflareTunnelGuardedTransitionResult.Stale ->
-                    CloudflareTunnelDegradeCoordinatorResult.Stale(
-                        expectedSnapshot = guarded.expectedSnapshot,
-                        actualSnapshot = guarded.actualSnapshot,
-                    )
-            }
+    ): CloudflareTunnelDegradeCoordinatorResult = synchronized(controlPlane) {
+        val currentSnapshot = controlPlane.snapshot()
+        if (currentSnapshot != expectedSnapshot) {
+            return@synchronized CloudflareTunnelDegradeCoordinatorResult.Stale(
+                expectedSnapshot = expectedSnapshot,
+                actualSnapshot = currentSnapshot,
+            )
         }
+        if (expectedSnapshot.status.state != CloudflareTunnelState.Connected) {
+            return@synchronized CloudflareTunnelDegradeCoordinatorResult.NoAction(currentSnapshot)
+        }
+        if (!sessionRegistry.isCurrent(expectedSnapshot, activeConnection)) {
+            return@synchronized CloudflareTunnelDegradeCoordinatorResult.ActiveSessionMismatch(currentSnapshot)
+        }
+
+        when (val guarded = controlPlane.apply(expectedSnapshot, CloudflareTunnelEvent.Degraded)) {
+            is CloudflareTunnelGuardedTransitionResult.Evaluated -> {
+                check(
+                    sessionRegistry.updateSnapshotIfCurrent(
+                        currentSnapshot = expectedSnapshot,
+                        newSnapshot = guarded.transition.snapshot,
+                        connection = activeConnection,
+                    ),
+                ) {
+                    "Active Cloudflare tunnel edge session changed while applying degradation"
+                }
+                CloudflareTunnelDegradeCoordinatorResult.Applied(guarded.transition)
+            }
+            is CloudflareTunnelGuardedTransitionResult.Stale ->
+                CloudflareTunnelDegradeCoordinatorResult.Stale(
+                    expectedSnapshot = guarded.expectedSnapshot,
+                    actualSnapshot = guarded.actualSnapshot,
+                )
+        }
+    }
 }
 
 sealed interface CloudflareTunnelDegradeCoordinatorResult {

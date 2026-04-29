@@ -69,45 +69,43 @@ class RotationPublicIpProbeCoordinator(
     private fun preflight(
         expectedSnapshot: RotationControlPlaneSnapshot,
         requiredState: RotationState,
-    ): RotationPublicIpProbeAdvanceResult? =
-        synchronized(controlPlane) {
-            val actualSnapshot = controlPlane.snapshot()
-            when {
-                actualSnapshot != expectedSnapshot ->
-                    RotationPublicIpProbeAdvanceResult.Stale(
-                        expectedSnapshot = expectedSnapshot,
-                        actualSnapshot = actualSnapshot,
-                    )
-                actualSnapshot.status.state != requiredState ->
-                    RotationPublicIpProbeAdvanceResult.NoAction(actualSnapshot)
-                else -> null
-            }
+    ): RotationPublicIpProbeAdvanceResult? = synchronized(controlPlane) {
+        val actualSnapshot = controlPlane.snapshot()
+        when {
+            actualSnapshot != expectedSnapshot ->
+                RotationPublicIpProbeAdvanceResult.Stale(
+                    expectedSnapshot = expectedSnapshot,
+                    actualSnapshot = actualSnapshot,
+                )
+            actualSnapshot.status.state != requiredState ->
+                RotationPublicIpProbeAdvanceResult.NoAction(actualSnapshot)
+            else -> null
         }
+    }
 
     private fun applyIfCurrent(
         expectedSnapshot: RotationControlPlaneSnapshot,
         decision: RotationPublicIpProbeDecision,
         nowElapsedMillis: Long,
-    ): RotationPublicIpProbeAdvanceResult =
-        synchronized(controlPlane) {
-            val actualSnapshot = controlPlane.snapshot()
-            if (actualSnapshot != expectedSnapshot) {
-                return RotationPublicIpProbeAdvanceResult.Stale(
-                    expectedSnapshot = expectedSnapshot,
-                    actualSnapshot = actualSnapshot,
-                    decision = decision,
-                )
-            }
-
-            RotationPublicIpProbeAdvanceResult.Applied(
+    ): RotationPublicIpProbeAdvanceResult = synchronized(controlPlane) {
+        val actualSnapshot = controlPlane.snapshot()
+        if (actualSnapshot != expectedSnapshot) {
+            return RotationPublicIpProbeAdvanceResult.Stale(
+                expectedSnapshot = expectedSnapshot,
+                actualSnapshot = actualSnapshot,
                 decision = decision,
-                progress =
-                    controlPlane.applyProgress(
-                        event = decision.event,
-                        nowElapsedMillis = nowElapsedMillis,
-                    ),
             )
         }
+
+        RotationPublicIpProbeAdvanceResult.Applied(
+            decision = decision,
+            progress =
+                controlPlane.applyProgress(
+                    event = decision.event,
+                    nowElapsedMillis = nowElapsedMillis,
+                ),
+        )
+    }
 }
 
 sealed interface RotationPublicIpProbeAdvanceResult {

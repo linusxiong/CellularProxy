@@ -64,13 +64,12 @@ object HttpProxyRequestStreamForwarder {
         input: InputStream,
         output: OutputStream,
         bufferSize: Int = DEFAULT_REQUEST_FORWARD_BUFFER_BYTES,
-    ): HttpProxyRequestStreamForwardingResult =
-        forwardAcceptedRequest(
-            request = accepted.httpRequest,
-            input = input,
-            output = output,
-            bufferSize = bufferSize,
-        )
+    ): HttpProxyRequestStreamForwardingResult = forwardAcceptedRequest(
+        request = accepted.httpRequest,
+        input = input,
+        output = output,
+        bufferSize = bufferSize,
+    )
 
     private fun forwardAcceptedRequest(
         request: ParsedHttpRequest,

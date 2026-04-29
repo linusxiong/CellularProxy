@@ -71,7 +71,7 @@ class RotationScreenControllerTest {
     }
 
     @Test
-    fun `controller suppresses duplicate unsafe rotations until provider state changes`() {
+    fun `controller suppresses duplicate unsafe rotations until operation refresh completes`() {
         val actions = mutableListOf<RotationScreenAction>()
         var rotationStatus = RotationStatus.idle()
         val controller =
@@ -94,7 +94,13 @@ class RotationScreenControllerTest {
         controller.handle(RotationScreenEvent.RotateMobileData)
         controller.handle(RotationScreenEvent.RotateAirplaneMode)
 
-        assertEquals(listOf(RotationScreenAction.RotateMobileData), actions)
+        assertEquals(
+            listOf(
+                RotationScreenAction.RotateMobileData,
+                RotationScreenAction.RotateMobileData,
+            ),
+            actions,
+        )
 
         rotationStatus =
             RotationStatus(
@@ -113,6 +119,7 @@ class RotationScreenControllerTest {
 
         assertEquals(
             listOf(
+                RotationScreenAction.RotateMobileData,
                 RotationScreenAction.RotateMobileData,
                 RotationScreenAction.RotateMobileData,
             ),
@@ -151,6 +158,20 @@ class RotationScreenControllerTest {
         assertEquals("In progress: Check root", controller.state.pendingOperation)
         assertEquals(setOf(RotationScreenWarning.OperationInProgress), controller.state.warnings)
 
+        controller.handle(RotationScreenEvent.Refresh)
+        controller.handle(RotationScreenEvent.CheckRoot)
+        controller.handle(RotationScreenEvent.ProbeCurrentPublicIp)
+
+        assertEquals(
+            listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
+            ),
+            actions,
+        )
+
         rootAvailability = RootAvailabilityStatus.Available
         controller.handle(RotationScreenEvent.Refresh)
         controller.handle(RotationScreenEvent.CheckRoot)
@@ -160,6 +181,8 @@ class RotationScreenControllerTest {
 
         assertEquals(
             listOf(
+                RotationScreenAction.CheckRoot,
+                RotationScreenAction.ProbeCurrentPublicIp,
                 RotationScreenAction.CheckRoot,
                 RotationScreenAction.ProbeCurrentPublicIp,
                 RotationScreenAction.CheckRoot,

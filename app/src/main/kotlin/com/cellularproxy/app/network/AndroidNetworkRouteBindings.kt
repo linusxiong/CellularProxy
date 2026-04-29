@@ -18,6 +18,7 @@ import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,10 +32,9 @@ class AndroidNetworkRouteMonitor private constructor(
         observationSource.start()
     }
 
-    fun observedNetworks(): List<NetworkDescriptor> =
-        observationSource
-            .observations()
-            .mapNotNull(AndroidNetworkObservation::toNetworkDescriptorOrNull)
+    fun observedNetworks(): List<NetworkDescriptor> = observationSource
+        .observations()
+        .mapNotNull(AndroidNetworkObservation::toNetworkDescriptorOrNull)
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) {
@@ -47,17 +47,15 @@ class AndroidNetworkRouteMonitor private constructor(
     companion object {
         fun create(context: Context): AndroidNetworkRouteMonitor = create(context.getSystemService(ConnectivityManager::class.java))
 
-        fun create(connectivityManager: ConnectivityManager): AndroidNetworkRouteMonitor =
-            AndroidNetworkRouteMonitor(
-                ConnectivityManagerNetworkObservationSource(connectivityManager),
-            )
+        fun create(connectivityManager: ConnectivityManager): AndroidNetworkRouteMonitor = AndroidNetworkRouteMonitor(
+            ConnectivityManagerNetworkObservationSource(connectivityManager),
+        )
 
-        internal fun forTesting(observations: () -> List<AndroidNetworkObservation>): AndroidNetworkRouteMonitor =
-            AndroidNetworkRouteMonitor(
-                object : AndroidNetworkObservationSource {
-                    override fun observations(): List<AndroidNetworkObservation> = observations()
-                },
-            )
+        internal fun forTesting(observations: () -> List<AndroidNetworkObservation>): AndroidNetworkRouteMonitor = AndroidNetworkRouteMonitor(
+            object : AndroidNetworkObservationSource {
+                override fun observations(): List<AndroidNetworkObservation> = observations()
+            },
+        )
 
         internal fun forTesting(observationSource: AndroidNetworkObservationSource): AndroidNetworkRouteMonitor = AndroidNetworkRouteMonitor(
             observationSource,
@@ -163,15 +161,13 @@ class AndroidBoundNetworkSocketConnector private constructor(
     }
 
     companion object {
-        fun create(context: Context): AndroidBoundNetworkSocketConnector =
-            create(
-                context.getSystemService(ConnectivityManager::class.java),
-            )
+        fun create(context: Context): AndroidBoundNetworkSocketConnector = create(
+            context.getSystemService(ConnectivityManager::class.java),
+        )
 
-        fun create(connectivityManager: ConnectivityManager): AndroidBoundNetworkSocketConnector =
-            AndroidBoundNetworkSocketConnector(
-                ConnectivityManagerBoundSocketOperations(connectivityManager),
-            )
+        fun create(connectivityManager: ConnectivityManager): AndroidBoundNetworkSocketConnector = AndroidBoundNetworkSocketConnector(
+            ConnectivityManagerBoundSocketOperations(connectivityManager),
+        )
 
         internal fun forTesting(operations: AndroidBoundSocketOperations): AndroidBoundNetworkSocketConnector = AndroidBoundNetworkSocketConnector(
             operations,
@@ -201,6 +197,7 @@ private class ConnectivityManagerNetworkObservationSource(
     private val lock = Any()
     private val observationsByHandle = linkedMapOf<Long, AndroidNetworkObservation>()
     private var callback: ConnectivityManager.NetworkCallback? = null
+    private var cellularCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun start() {
         synchronized(lock) {
@@ -208,35 +205,19 @@ private class ConnectivityManagerNetworkObservationSource(
                 return
             }
             refreshAllLocked()
-            val networkCallback =
-                object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) {
-                        update(network)
-                    }
-
-                    override fun onCapabilitiesChanged(
-                        network: Network,
-                        networkCapabilities: NetworkCapabilities,
-                    ) {
-                        update(network, networkCapabilities)
-                    }
-
-                    override fun onLost(network: Network) {
-                        synchronized(lock) {
-                            observationsByHandle.remove(network.networkHandle)
-                        }
-                    }
-                }
+            val networkCallback = routeDiscoveryCallback()
+            val cellularNetworkCallback = routeDiscoveryCallback()
             connectivityManager.registerNetworkCallback(routeDiscoveryNetworkRequest(), networkCallback)
+            val cellularCallbackRegistered = requestCellularNetworkCallback(cellularNetworkCallback)
             callback = networkCallback
+            cellularCallback = cellularNetworkCallback.takeIf { cellularCallbackRegistered }
         }
     }
 
     @Suppress("DEPRECATION")
-    override fun observations(): List<AndroidNetworkObservation> =
-        synchronized(lock) {
-            observationsByHandle.values.toList()
-        }
+    override fun observations(): List<AndroidNetworkObservation> = synchronized(lock) {
+        observationsByHandle.values.toList()
+    }
 
     override fun stop() {
         val callbackToUnregister =
@@ -246,8 +227,55 @@ private class ConnectivityManagerNetworkObservationSource(
                     observationsByHandle.clear()
                 }
             } ?: return
+        val cellularCallbackToUnregister =
+            synchronized(lock) {
+                cellularCallback.also {
+                    cellularCallback = null
+                }
+            }
 
-        connectivityManager.unregisterNetworkCallback(callbackToUnregister)
+        unregisterNetworkCallbackQuietly(callbackToUnregister)
+        if (cellularCallbackToUnregister != null) {
+            unregisterNetworkCallbackQuietly(cellularCallbackToUnregister)
+        }
+    }
+
+    private fun requestCellularNetworkCallback(callback: ConnectivityManager.NetworkCallback): Boolean = try {
+        connectivityManager.requestNetwork(cellularRouteDiscoveryNetworkRequest(), callback)
+        true
+    } catch (_: SecurityException) {
+        // Devices without CHANGE_NETWORK_STATE still get passive route discovery.
+        false
+    } catch (_: RuntimeException) {
+        // Keep passive discovery alive if the platform rejects a cellular request.
+        false
+    }
+
+    private fun unregisterNetworkCallbackQuietly(callback: ConnectivityManager.NetworkCallback) {
+        try {
+            connectivityManager.unregisterNetworkCallback(callback)
+        } catch (_: RuntimeException) {
+            // The callback is already detached; route observations have been cleared above.
+        }
+    }
+
+    private fun routeDiscoveryCallback(): ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            update(network)
+        }
+
+        override fun onCapabilitiesChanged(
+            network: Network,
+            networkCapabilities: NetworkCapabilities,
+        ) {
+            update(network, networkCapabilities)
+        }
+
+        override fun onLost(network: Network) {
+            synchronized(lock) {
+                observationsByHandle.remove(network.networkHandle)
+            }
+        }
     }
 
     private fun update(network: Network) {
@@ -286,9 +314,8 @@ private class ConnectivityManagerBoundSocketOperations(
     override fun resolveAll(
         handle: Long,
         host: String,
-    ): List<InetAddress> =
-        networkForHandle(handle)?.getAllByName(host)?.toList()
-            ?: emptyList()
+    ): List<InetAddress> = networkForHandle(handle)?.getAllByName(host)?.toList()
+        ?: emptyList()
 
     override fun connect(
         handle: Long,
@@ -301,6 +328,7 @@ private class ConnectivityManagerBoundSocketOperations(
                 ?: throw SelectedAndroidNetworkUnavailableException()
         val socket = Socket()
         try {
+            socket.applyProxyThroughputOptions()
             network.bindSocket(socket)
             socket.connect(InetSocketAddress(address, port), timeoutMillis)
             return socket
@@ -318,66 +346,74 @@ private class ConnectivityManagerBoundSocketOperations(
     private fun networkForHandle(handle: Long): Network? = connectivityManager.allNetworks.firstOrNull { it.networkHandle == handle }
 }
 
+private fun Socket.applyProxyThroughputOptions() {
+    setSocketOptionQuietly { tcpNoDelay = true }
+    setSocketOptionQuietly { receiveBufferSize = PROXY_SOCKET_BUFFER_BYTES }
+    setSocketOptionQuietly { sendBufferSize = PROXY_SOCKET_BUFFER_BYTES }
+}
+
+private inline fun setSocketOptionQuietly(setOption: () -> Unit) {
+    try {
+        setOption()
+    } catch (_: SocketException) {
+        // Socket buffer hints are best-effort and should not block the connection.
+    }
+}
+
 class SelectedAndroidNetworkUnavailableException internal constructor() : IOException("Selected Android network is no longer available")
 
-private fun NetworkCapabilities.toObservation(handle: Long): AndroidNetworkObservation =
-    AndroidNetworkObservation(
-        handle = handle,
-        transports =
-            buildSet {
-                if (hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                    add(AndroidNetworkTransport.WiFi)
-                }
-                if (hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-                    add(AndroidNetworkTransport.Cellular)
-                }
-                if (hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                    add(AndroidNetworkTransport.Vpn)
-                }
-                if (hasAnyOtherTransport()) {
-                    add(AndroidNetworkTransport.Other)
-                }
-                if (isEmpty()) {
-                    add(AndroidNetworkTransport.Other)
-                }
-            },
-        hasInternet = hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
-        isSuspended = !hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED),
-    )
+private fun NetworkCapabilities.toObservation(handle: Long): AndroidNetworkObservation = AndroidNetworkObservation(
+    handle = handle,
+    transports =
+        buildSet {
+            if (hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                add(AndroidNetworkTransport.WiFi)
+            }
+            if (hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                add(AndroidNetworkTransport.Cellular)
+            }
+            if (hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+                add(AndroidNetworkTransport.Vpn)
+            }
+            if (hasAnyOtherTransport()) {
+                add(AndroidNetworkTransport.Other)
+            }
+            if (isEmpty()) {
+                add(AndroidNetworkTransport.Other)
+            }
+        },
+    hasInternet = hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+    isSuspended = !hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED),
+)
 
-private fun NetworkCapabilities.hasAnyOtherTransport(): Boolean =
-    otherAndroidTransportProbesForSdkInt(Build.VERSION.SDK_INT)
-        .any { probe -> hasTransport(probe.transport) }
+private fun NetworkCapabilities.hasAnyOtherTransport(): Boolean = otherAndroidTransportProbesForSdkInt(Build.VERSION.SDK_INT)
+    .any { probe -> hasTransport(probe.transport) }
 
-private fun AndroidNetworkObservation.toNetworkDescriptorOrNull(): NetworkDescriptor? =
-    NetworkSnapshot(
-        id = androidNetworkDescriptorId(handle),
-        displayName = transports.displayName(),
-        isAvailable = hasInternet && !isSuspended,
-        transports = transports.mapTo(mutableSetOf(), AndroidNetworkTransport::toSharedTransport),
-    ).toNetworkDescriptorOrNull()
+private fun AndroidNetworkObservation.toNetworkDescriptorOrNull(): NetworkDescriptor? = NetworkSnapshot(
+    id = androidNetworkDescriptorId(handle),
+    displayName = transports.displayName(),
+    isAvailable = hasInternet && !isSuspended,
+    transports = transports.mapTo(mutableSetOf(), AndroidNetworkTransport::toSharedTransport),
+).toNetworkDescriptorOrNull()
 
-private fun Set<AndroidNetworkTransport>.displayName(): String =
-    when {
-        AndroidNetworkTransport.Vpn in this -> "VPN"
-        this == setOf(AndroidNetworkTransport.WiFi) -> "Wi-Fi"
-        this == setOf(AndroidNetworkTransport.Cellular) -> "Cellular"
-        else -> "Android network"
-    }
+private fun Set<AndroidNetworkTransport>.displayName(): String = when {
+    AndroidNetworkTransport.Vpn in this -> "VPN"
+    this == setOf(AndroidNetworkTransport.WiFi) -> "Wi-Fi"
+    this == setOf(AndroidNetworkTransport.Cellular) -> "Cellular"
+    else -> "Android network"
+}
 
-private fun AndroidNetworkTransport.toSharedTransport(): NetworkTransport =
-    when (this) {
-        AndroidNetworkTransport.WiFi -> NetworkTransport.WiFi
-        AndroidNetworkTransport.Cellular -> NetworkTransport.Cellular
-        AndroidNetworkTransport.Vpn -> NetworkTransport.Vpn
-        AndroidNetworkTransport.Other -> NetworkTransport.Other
-    }
+private fun AndroidNetworkTransport.toSharedTransport(): NetworkTransport = when (this) {
+    AndroidNetworkTransport.WiFi -> NetworkTransport.WiFi
+    AndroidNetworkTransport.Cellular -> NetworkTransport.Cellular
+    AndroidNetworkTransport.Vpn -> NetworkTransport.Vpn
+    AndroidNetworkTransport.Other -> NetworkTransport.Other
+}
 
-private fun NetworkDescriptor.androidHandleOrNull(): Long? =
-    id
-        .removePrefix(ANDROID_NETWORK_ID_PREFIX)
-        .takeIf { it != id && it.isNotBlank() }
-        ?.toLongOrNull()
+private fun NetworkDescriptor.androidHandleOrNull(): Long? = id
+    .removePrefix(ANDROID_NETWORK_ID_PREFIX)
+    .takeIf { it != id && it.isNotBlank() }
+    ?.toLongOrNull()
 
 private fun androidNetworkDescriptorId(handle: Long): String = "$ANDROID_NETWORK_ID_PREFIX$handle"
 
@@ -389,10 +425,9 @@ internal data class AndroidTransportProbe(
     val minSdk: Int,
 )
 
-internal fun otherAndroidTransportProbesForSdkInt(sdkInt: Int): List<AndroidTransportProbe> =
-    OTHER_ANDROID_TRANSPORT_PROBES
-        .filter { probe -> sdkInt >= probe.minSdk }
-        .sortedBy(AndroidTransportProbe::name)
+internal fun otherAndroidTransportProbesForSdkInt(sdkInt: Int): List<AndroidTransportProbe> = OTHER_ANDROID_TRANSPORT_PROBES
+    .filter { probe -> sdkInt >= probe.minSdk }
+    .sortedBy(AndroidTransportProbe::name)
 
 private val OTHER_ANDROID_TRANSPORT_PROBES =
     listOf(
@@ -405,10 +440,16 @@ private val OTHER_ANDROID_TRANSPORT_PROBES =
         AndroidTransportProbe("SATELLITE", NetworkCapabilities.TRANSPORT_SATELLITE, minSdk = 35),
     )
 
-private fun routeDiscoveryNetworkRequest(): NetworkRequest =
-    NetworkRequest
-        .Builder()
-        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        .build()
+private fun routeDiscoveryNetworkRequest(): NetworkRequest = NetworkRequest
+    .Builder()
+    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    .build()
+
+private fun cellularRouteDiscoveryNetworkRequest(): NetworkRequest = NetworkRequest
+    .Builder()
+    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+    .build()
 
 private const val ANDROID_NETWORK_ID_PREFIX = "android-network:"
+private const val PROXY_SOCKET_BUFFER_BYTES = 1024 * 1024

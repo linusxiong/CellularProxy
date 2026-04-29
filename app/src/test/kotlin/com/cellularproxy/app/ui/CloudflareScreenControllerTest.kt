@@ -95,6 +95,37 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `controller allows lifecycle action retry after action completion without tunnel state change`() {
+        val actions = mutableListOf<CloudflareScreenAction>()
+        var actionCompletionVersion = 0L
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.stopped() },
+                actionCompletionVersionProvider = { actionCompletionVersion },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(CloudflareScreenEvent.StartTunnel)
+        controller.handle(CloudflareScreenEvent.StartTunnel)
+
+        assertEquals(listOf(CloudflareScreenAction.StartTunnel), actions)
+        assertFalse(CloudflareScreenAction.StartTunnel in controller.state.availableActions)
+
+        actionCompletionVersion += 1L
+        controller.handle(CloudflareScreenEvent.Refresh)
+        controller.handle(CloudflareScreenEvent.StartTunnel)
+
+        assertEquals(
+            listOf(
+                CloudflareScreenAction.StartTunnel,
+                CloudflareScreenAction.StartTunnel,
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun `controller allows another management tunnel test after round trip result changes`() {
         val actions = mutableListOf<CloudflareScreenAction>()
         var managementRoundTrip: String? = null

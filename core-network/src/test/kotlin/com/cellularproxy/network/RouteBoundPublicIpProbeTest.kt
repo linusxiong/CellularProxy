@@ -198,6 +198,64 @@ class RouteBoundPublicIpProbeTest {
     }
 
     @Test
+    fun `decodes chunked public IP response bodies`() {
+        val network = network("wifi", NetworkCategory.WiFi)
+        scriptedSocketServer(
+            response =
+                "HTTP/1.1 200 OK\r\n" +
+                    "Transfer-Encoding: chunked\r\n" +
+                    "Connection: close\r\n" +
+                    "\r\n" +
+                    "D\r\n198.51.100.42\r\n0\r\n\r\n",
+        ).use { server ->
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(
+                        RecordingBoundSocketProvider(
+                            BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
+                        ),
+                    ).probe(
+                        route = RouteTarget.WiFi,
+                        endpoint = PublicIpProbeEndpoint(host = "api.ipify.org"),
+                    )
+                }
+
+            val success = assertIs<PublicIpProbeResult.Success>(result)
+            assertEquals("198.51.100.42", success.publicIp)
+        }
+    }
+
+    @Test
+    fun `extracts public IP from JSON response bodies`() {
+        val network = network("cell", NetworkCategory.Cellular)
+        scriptedSocketServer(
+            response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"ip\":\"198.51.100.8\",\"colo\":\"SJC\"}",
+        ).use { server ->
+            val result =
+                runSuspend {
+                    RouteBoundPublicIpProbe(
+                        RecordingBoundSocketProvider(
+                            BoundSocketConnectResult.Connected(socket = server.connectClient(), network = network),
+                        ),
+                    ).probe(
+                        route = RouteTarget.Cellular,
+                        endpoint =
+                            PublicIpProbeEndpoint(
+                                host = "ip.api.skk.moe",
+                                path = "/cf-geoip",
+                                responseFormat = PublicIpProbeResponseFormat.JsonIpField,
+                            ),
+                    )
+                }
+
+            val success = assertIs<PublicIpProbeResult.Success>(result)
+            assertEquals("198.51.100.8", success.publicIp)
+            assertContains(server.requestText(), "GET /cf-geoip HTTP/1.1\r\n")
+            assertContains(server.requestText(), "Accept: application/json\r\n")
+        }
+    }
+
+    @Test
     fun `rejects invalid probe endpoint values`() {
         assertFailsWith<IllegalArgumentException> { PublicIpProbeEndpoint(host = "") }
         assertFailsWith<IllegalArgumentException> { PublicIpProbeEndpoint(host = "ip example") }
@@ -254,13 +312,12 @@ class RouteBoundPublicIpProbeTest {
     private fun network(
         id: String,
         category: NetworkCategory,
-    ): NetworkDescriptor =
-        NetworkDescriptor(
-            id = id,
-            category = category,
-            displayName = id,
-            isAvailable = true,
-        )
+    ): NetworkDescriptor = NetworkDescriptor(
+        id = id,
+        category = category,
+        displayName = id,
+        isAvailable = true,
+    )
 
     private fun scriptedSocketServer(response: String): ScriptedSocketServer = ScriptedSocketServer(response.toByteArray(Charsets.US_ASCII))
 

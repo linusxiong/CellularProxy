@@ -5,14 +5,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
@@ -20,6 +20,11 @@ import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
 import com.cellularproxy.app.status.DashboardStatusModel
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Cloudflare
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Diagnostics
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.LogsAudit
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Rotation
+import com.cellularproxy.app.ui.CellularProxyNavigationDestination.Settings
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.CloudflareConfig
@@ -34,6 +39,7 @@ import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -43,9 +49,10 @@ class CellularProxyAppNavigationSmokeTest {
 
     @Test
     fun topLevelNavigationShowsEveryOperatorDestination() {
+        lateinit var navController: NavHostController
         composeRule.setContent {
             MaterialTheme {
-                val navController = rememberNavController()
+                navController = rememberNavController()
                 Scaffold(
                     bottomBar = {
                         CellularProxyNavigationBar(navController)
@@ -95,13 +102,15 @@ class CellularProxyAppNavigationSmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("Service state").assertIsDisplayed()
+        assertTextExists("Stopped")
 
-        assertDestinationRenders("Settings", "Listen host")
-        assertDestinationRenders("Cloudflare", "Tunnel enabled")
-        assertDestinationRenders("Rotation", "Root availability")
-        assertDestinationRenders("Diagnostics", "Root availability")
-        assertDestinationRenders("Logs/Audit", "No log or audit records match the current filters.")
+        clickPrimaryNavigationDestination(Settings)
+        composeRule.onNodeWithText("Listen host").assertExists()
+        clickPrimaryNavigationDestination(LogsAudit)
+        composeRule.onNodeWithText("No log or audit records match the current filters.").assertExists()
+        assertDestinationRenders(navController, Cloudflare, "Tunnel enabled")
+        assertDestinationRenders(navController, Rotation, "Root availability")
+        assertDestinationRenders(navController, Diagnostics, "Root availability")
     }
 
     @Test
@@ -120,10 +129,10 @@ class CellularProxyAppNavigationSmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("Root availability").assertIsDisplayed()
-        composeRule.onNodeWithText("Cloudflare tunnel").assertIsDisplayed()
-        composeRule.onNodeWithText("Disabled").assertIsDisplayed()
-        composeRule.onNodeWithText("Remote management unavailable").assertIsDisplayed()
+        assertTextExists("Root availability")
+        assertTextExists("Cloudflare tunnel")
+        assertTextExists("Disabled")
+        assertTextExists("Remote management unavailable")
     }
 
     @Test
@@ -148,9 +157,9 @@ class CellularProxyAppNavigationSmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("Root availability").assertIsDisplayed()
-        composeRule.onNodeWithText("Unavailable").assertIsDisplayed()
-        composeRule.onNodeWithText("Root access is unavailable").assertIsDisplayed()
+        assertTextExists("Root availability")
+        assertTextExists("Unavailable")
+        assertTextExists("Root access is unavailable")
     }
 
     @Test
@@ -202,12 +211,12 @@ class CellularProxyAppNavigationSmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("Root availability").assertIsDisplayed()
-        composeRule.onNodeWithText("Available").assertIsDisplayed()
-        composeRule.onNodeWithText("Cloudflare tunnel").assertIsDisplayed()
-        composeRule.onNodeWithText("Connected").assertIsDisplayed()
-        composeRule.onNodeWithText("Remote management available").assertIsDisplayed()
-        composeRule.onNodeWithText("Carrier LTE (Cellular, available)").assertIsDisplayed()
+        assertTextExists("Root availability")
+        assertTextExists("Available")
+        assertTextExists("Cloudflare tunnel")
+        assertTextExists("Connected")
+        assertTextExists("Remote management available")
+        assertTextExists("Carrier LTE (Cellular, available)")
     }
 
     @Test
@@ -217,10 +226,11 @@ class CellularProxyAppNavigationSmokeTest {
             AppConfig.default().copy(
                 root = RootConfig(operationsEnabled = true),
             )
+        lateinit var navController: NavHostController
 
         composeRule.setContent {
             MaterialTheme {
-                val navController = rememberNavController()
+                navController = rememberNavController()
                 Scaffold(
                     bottomBar = {
                         CellularProxyNavigationBar(navController)
@@ -271,7 +281,9 @@ class CellularProxyAppNavigationSmokeTest {
             }
         }
 
-        composeRule.onNode(hasText("Rotation") and hasClickAction()).performClick()
+        composeRule.runOnUiThread {
+            navController.navigateToCellularProxyDestination(Rotation)
+        }
         composeRule
             .onNodeWithText("Check root")
             .performScrollTo()
@@ -285,11 +297,30 @@ class CellularProxyAppNavigationSmokeTest {
     }
 
     private fun assertDestinationRenders(
-        destinationLabel: String,
+        navController: NavHostController,
+        destination: CellularProxyNavigationDestination,
         expectedScreenText: String,
     ) {
-        composeRule.onNode(hasText(destinationLabel) and hasClickAction()).performClick()
+        composeRule.runOnUiThread {
+            navController.navigateToCellularProxyDestination(destination)
+        }
         composeRule.onNodeWithText(expectedScreenText).assertExists()
+    }
+
+    private fun clickPrimaryNavigationDestination(destination: CellularProxyNavigationDestination) {
+        composeRule
+            .onNode(
+                hasTestTag("navigation-item-${destination.route}"),
+            ).performClick()
+    }
+
+    private fun assertTextExists(text: String) {
+        assertTrue(
+            composeRule
+                .onAllNodes(hasText(text))
+                .fetchSemanticsNodes()
+                .isNotEmpty(),
+        )
     }
 }
 

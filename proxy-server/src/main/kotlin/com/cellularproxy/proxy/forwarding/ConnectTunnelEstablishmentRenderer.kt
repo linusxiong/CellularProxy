@@ -52,19 +52,18 @@ class ConnectTunnelEstablishedResponse(
         this.headers = Collections.unmodifiableMap(copiedHeaders)
     }
 
-    fun toHttpString(): String =
-        buildString {
-            append("HTTP/1.1 200 ")
-            append(reasonPhrase)
-            append(CRLF)
-            headers.forEach { (name, value) ->
-                append(name)
-                append(": ")
-                append(value)
-                append(CRLF)
-            }
+    fun toHttpString(): String = buildString {
+        append("HTTP/1.1 200 ")
+        append(reasonPhrase)
+        append(CRLF)
+        headers.forEach { (name, value) ->
+            append(name)
+            append(": ")
+            append(value)
             append(CRLF)
         }
+        append(CRLF)
+    }
 
     fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
 }

@@ -145,15 +145,14 @@ class HttpRequestBodyFramingPolicyTest {
         }
     }
 
-    private fun httpProxyRequest(headers: Map<String, List<String>>): ParsedHttpRequest =
-        ParsedHttpRequest(
-            request =
-                ParsedProxyRequest.HttpProxy(
-                    method = "POST",
-                    host = "origin.example",
-                    port = 80,
-                    originTarget = "/submit",
-                ),
-            headers = headers,
-        )
+    private fun httpProxyRequest(headers: Map<String, List<String>>): ParsedHttpRequest = ParsedHttpRequest(
+        request =
+            ParsedProxyRequest.HttpProxy(
+                method = "POST",
+                host = "origin.example",
+                port = 80,
+                originTarget = "/submit",
+            ),
+        headers = headers,
+    )
 }

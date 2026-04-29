@@ -192,22 +192,20 @@ class ProxyServerForegroundRuntimeInstallerTest {
             managementApiToken = "management-token",
         )
 
-    private fun loopbackAppConfig(): AppConfig =
-        AppConfig.default().copy(
-            proxy =
-                AppConfig.default().proxy.copy(
-                    listenHost = "127.0.0.1",
-                    listenPort = 8080,
-                ),
-        )
+    private fun loopbackAppConfig(): AppConfig = AppConfig.default().copy(
+        proxy =
+            AppConfig.default().proxy.copy(
+                listenHost = "127.0.0.1",
+                listenPort = 8080,
+            ),
+    )
 
-    private fun wifiRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "wifi",
-            category = NetworkCategory.WiFi,
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-        )
+    private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "wifi",
+        category = NetworkCategory.WiFi,
+        displayName = "Home Wi-Fi",
+        isAvailable = true,
+    )
 }
 
 private object UnavailableBoundNetworkSocketConnector : BoundNetworkSocketConnector {

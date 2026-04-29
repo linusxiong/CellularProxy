@@ -417,18 +417,16 @@ class RotationStateMachineTest {
         assertEquals(expected, failed.failureReason)
     }
 
-    private fun statusAfter(vararg events: RotationEvent): RotationStatus =
-        events.fold(RotationStatus.idle()) { status, event ->
-            val result = RotationStateMachine.transition(status, event)
-            assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
-            result.status
-        }
+    private fun statusAfter(vararg events: RotationEvent): RotationStatus = events.fold(RotationStatus.idle()) { status, event ->
+        val result = RotationStateMachine.transition(status, event)
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        result.status
+    }
 
-    private fun success(category: RootCommandCategory): RootCommandResult =
-        RootCommandResult.completed(
-            category = category,
-            exitCode = 0,
-            stdout = "ok",
-            stderr = "",
-        )
+    private fun success(category: RootCommandCategory): RootCommandResult = RootCommandResult.completed(
+        category = category,
+        exitCode = 0,
+        stdout = "ok",
+        stderr = "",
+    )
 }

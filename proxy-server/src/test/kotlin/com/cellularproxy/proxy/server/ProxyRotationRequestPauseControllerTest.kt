@@ -30,17 +30,16 @@ class ProxyRotationRequestPauseControllerTest {
         assertFalse(controller.currentConfig().proxyRequestsPaused)
     }
 
-    private fun ingressConfig(): ProxyIngressPreflightConfig =
-        ProxyIngressPreflightConfig(
-            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 4),
-            requestAdmission =
-                ProxyRequestAdmissionConfig(
-                    proxyAuthentication =
-                        ProxyAuthenticationConfig(
-                            authEnabled = false,
-                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-                        ),
-                    managementApiToken = "management-token",
-                ),
-        )
+    private fun ingressConfig(): ProxyIngressPreflightConfig = ProxyIngressPreflightConfig(
+        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 4),
+        requestAdmission =
+            ProxyRequestAdmissionConfig(
+                proxyAuthentication =
+                    ProxyAuthenticationConfig(
+                        authEnabled = false,
+                        credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                    ),
+                managementApiToken = "management-token",
+            ),
+    )
 }

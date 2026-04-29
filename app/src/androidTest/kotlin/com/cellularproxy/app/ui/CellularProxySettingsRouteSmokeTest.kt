@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -15,6 +16,8 @@ import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ProxyConfig
+import com.cellularproxy.shared.network.NetworkCategory
+import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,6 +27,72 @@ import org.junit.Test
 class CellularProxySettingsRouteSmokeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<CellularProxyComposeTestActivity>()
+
+    @Test
+    fun routeSelectorShowsOnlyCurrentlyAvailableConcreteExits() {
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxySettingsRoute(
+                    observedNetworksProvider = {
+                        listOf(
+                            network("wifi", NetworkCategory.WiFi, isAvailable = false),
+                            network("cell", NetworkCategory.Cellular, isAvailable = true),
+                        )
+                    },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Default route").assertIsDisplayed()
+        composeRule.onNodeWithText("Automatic").assertIsDisplayed()
+        composeRule.onNodeWithText("Cellular").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Wi-Fi").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("VPN").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun routeHidesOptionalSecretsUntilTheirFeatureIsEnabledAndExposesLanguageChoice() {
+        val selectedLanguageState = mutableStateOf(SettingsLanguageOption.System)
+        val configState =
+            mutableStateOf(
+                AppConfig.default().copy(
+                    proxy = AppConfig.default().proxy.copy(authEnabled = false),
+                    cloudflare = AppConfig.default().cloudflare.copy(enabled = false),
+                ),
+            )
+
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxySettingsRoute(
+                    initialConfigProvider = { configState.value },
+                    saveConfig = { config -> configState.value = config },
+                    selectedLanguageProvider = { selectedLanguageState.value },
+                    onLanguageChange = { selectedLanguageState.value = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Language").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("System").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("English").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("中文").performScrollTo().assertIsDisplayed()
+
+        assertTrue(composeRule.onAllNodesWithText("Proxy username").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("Proxy password").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("Cloudflare tunnel token").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("Cloudflare hostname").fetchSemanticsNodes().isEmpty())
+
+        composeRule.onNodeWithText("Proxy authentication").performScrollTo().performClick()
+        composeRule.onNodeWithText("Proxy username").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Proxy password").performScrollTo().assertIsDisplayed()
+
+        composeRule.onNodeWithText("Cloudflare enabled").performScrollTo().performClick()
+        composeRule.onNodeWithText("Cloudflare tunnel token").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Cloudflare hostname").performScrollTo().assertIsDisplayed()
+
+        composeRule.onNodeWithText("中文").performScrollTo().performClick()
+        assertEquals(SettingsLanguageOption.ChineseSimplified, selectedLanguageState.value)
+    }
 
     @Test
     fun routeSavesEditedProxySettingsAndReloadsProviderState() {
@@ -132,6 +201,10 @@ class CellularProxySettingsRouteSmokeTest {
             .onNodeWithText("Tunnel token status: Missing")
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Cloudflare enabled")
+            .performScrollTo()
+            .performClick()
 
         composeRule
             .onNode(hasText("Cloudflare tunnel token") and hasSetTextAction())
@@ -170,3 +243,14 @@ private fun sensitiveConfig(): SensitiveConfig = SensitiveConfig(
 )
 
 private fun validCloudflareTunnelToken(): String = "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="
+
+private fun network(
+    id: String,
+    category: NetworkCategory,
+    isAvailable: Boolean,
+): NetworkDescriptor = NetworkDescriptor(
+    id = id,
+    category = category,
+    displayName = id,
+    isAvailable = isAvailable,
+)

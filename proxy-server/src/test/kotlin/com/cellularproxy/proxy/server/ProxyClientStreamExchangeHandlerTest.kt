@@ -752,6 +752,57 @@ class ProxyClientStreamExchangeHandlerTest {
     }
 
     @Test
+    fun `relays direct TLS client hello by SNI when proxy authentication is disabled`() {
+        val clientHello = tlsClientHelloWithSni("secure.example")
+        val input = CloseTrackingInputStream(clientHello + "client tls bytes".toByteArray(Charsets.ISO_8859_1))
+        val output = CloseTrackingOutputStream()
+        val originOutput = ByteArrayOutputStream()
+        val connectConnector =
+            RecordingConnectConnector(
+                OutboundConnectTunnelOpenResult.Connected(
+                    OutboundConnectTunnelConnection(
+                        input = ByteArrayInputStream("origin tls bytes".toByteArray(Charsets.ISO_8859_1)),
+                        output = originOutput,
+                        host = "secure.example",
+                        port = 443,
+                    ),
+                ),
+            )
+        val noAuthConfig =
+            config.copy(
+                requestAdmission =
+                    config.requestAdmission.copy(
+                        proxyAuthentication = ProxyAuthenticationConfig(authEnabled = false, credential = credential),
+                    ),
+            )
+
+        val result =
+            handler(
+                httpConnector = ThrowingHttpConnector(),
+                connectConnector = connectConnector,
+                managementHandler = ThrowingManagementHandler(),
+            ).handle(
+                config = noAuthConfig,
+                activeConnections = 0,
+                client = ProxyClientStreamConnection(input = input, output = output),
+                connectRelayBufferSize = 4,
+            )
+
+        val handled = assertIs<ProxyClientStreamExchangeHandlingResult.TransparentTlsTunnelHandled>(result)
+        val relayed = assertIs<ConnectTunnelOutboundExchangeRelayHandlingResult.Relayed>(handled.result)
+        assertEquals("secure.example", relayed.host)
+        assertEquals(443, relayed.port)
+        assertEquals(listOf("secure.example" to 443), connectConnector.openedOrigins)
+        assertEquals(
+            (clientHello + "client tls bytes".toByteArray(Charsets.ISO_8859_1)).toList(),
+            originOutput.toByteArray().toList(),
+        )
+        assertEquals("origin tls bytes", output.toString())
+        assertTrue(input.wasClosed)
+        assertTrue(output.wasClosed)
+    }
+
+    @Test
     fun `clears header read timeout after accepting request before forwarding body`() {
         val request =
             (
@@ -890,19 +941,46 @@ class ProxyClientStreamExchangeHandlerTest {
         managementHandler: ManagementApiHandler,
         proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
         recordManagementAudit: (ManagementApiStreamAuditEvent) -> Unit = {},
-    ): ProxyClientStreamExchangeHandler =
-        ProxyClientStreamExchangeHandler(
-            httpConnector = httpConnector,
-            connectConnector = connectConnector,
-            managementHandler = managementHandler,
-            proxyActivityTracker = proxyActivityTracker,
-            recordManagementAudit = recordManagementAudit,
-        )
+    ): ProxyClientStreamExchangeHandler = ProxyClientStreamExchangeHandler(
+        httpConnector = httpConnector,
+        connectConnector = connectConnector,
+        managementHandler = managementHandler,
+        proxyActivityTracker = proxyActivityTracker,
+        recordManagementAudit = recordManagementAudit,
+    )
 
     private fun validProxyAuthorization(): String {
         val payload = credential.canonicalBasicPayload().toByteArray(Charsets.UTF_8)
         return "Basic ${Base64.getEncoder().encodeToString(payload)}"
     }
+
+    private fun tlsClientHelloWithSni(host: String): ByteArray {
+        val hostBytes = host.toByteArray(Charsets.US_ASCII)
+        val serverName = byteArrayOf(0x00) + hostBytes.size.toUnsignedShortBytes() + hostBytes
+        val serverNameList = serverName.size.toUnsignedShortBytes() + serverName
+        val serverNameExtension = byteArrayOf(0x00, 0x00) + serverNameList.size.toUnsignedShortBytes() + serverNameList
+        val extensions = serverNameExtension.size.toUnsignedShortBytes() + serverNameExtension
+        val body =
+            byteArrayOf(0x03, 0x03) +
+                ByteArray(32) +
+                byteArrayOf(0x00) +
+                byteArrayOf(0x00, 0x02, 0x13, 0x01) +
+                byteArrayOf(0x01, 0x00) +
+                extensions
+        val handshake = byteArrayOf(0x01) + body.size.toUInt24Bytes() + body
+        return byteArrayOf(0x16, 0x03, 0x01) + handshake.size.toUnsignedShortBytes() + handshake
+    }
+
+    private fun Int.toUnsignedShortBytes(): ByteArray = byteArrayOf(
+        ((this ushr 8) and 0xff).toByte(),
+        (this and 0xff).toByte(),
+    )
+
+    private fun Int.toUInt24Bytes(): ByteArray = byteArrayOf(
+        ((this ushr 16) and 0xff).toByte(),
+        ((this ushr 8) and 0xff).toByte(),
+        (this and 0xff).toByte(),
+    )
 
     private class RecordingHttpConnector(
         private val result: OutboundHttpOriginOpenResult,

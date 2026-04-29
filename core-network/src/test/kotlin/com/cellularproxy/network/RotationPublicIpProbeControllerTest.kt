@@ -421,31 +421,28 @@ class RotationPublicIpProbeControllerTest {
     private fun network(
         id: String,
         category: NetworkCategory,
-    ): NetworkDescriptor =
-        NetworkDescriptor(
-            id = id,
-            category = category,
-            displayName = id,
-            isAvailable = true,
-        )
+    ): NetworkDescriptor = NetworkDescriptor(
+        id = id,
+        category = category,
+        displayName = id,
+        isAvailable = true,
+    )
 
     private fun probingOldIpControlPlane(): RotationControlPlane = RotationControlPlane(initialStatus = probingOldIpStatus())
 
-    private fun probingOldIpStatus(): RotationStatus =
-        RotationStatus(
-            state = RotationState.ProbingOldPublicIp,
-            operation = RotationOperation.MobileData,
-        )
+    private fun probingOldIpStatus(): RotationStatus = RotationStatus(
+        state = RotationState.ProbingOldPublicIp,
+        operation = RotationOperation.MobileData,
+    )
 
-    private fun probingNewIpControlPlane(): RotationControlPlane =
-        RotationControlPlane(
-            initialStatus =
-                RotationStatus(
-                    state = RotationState.ProbingNewPublicIp,
-                    operation = RotationOperation.MobileData,
-                    oldPublicIp = "198.51.100.10",
-                ),
-        )
+    private fun probingNewIpControlPlane(): RotationControlPlane = RotationControlPlane(
+        initialStatus =
+            RotationStatus(
+                state = RotationState.ProbingNewPublicIp,
+                operation = RotationOperation.MobileData,
+                oldPublicIp = "198.51.100.10",
+            ),
+    )
 }
 
 private fun <T> runSuspend(block: suspend () -> T): T {

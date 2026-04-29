@@ -20,28 +20,26 @@ class RootCommandResult private constructor(
             stdout: String,
             stderr: String,
             secrets: LogRedactionSecrets = LogRedactionSecrets(),
-        ): RootCommandResult =
-            RootCommandResult(
-                category = category,
-                outcome = if (exitCode == 0) RootCommandOutcome.Success else RootCommandOutcome.Failure,
-                exitCode = exitCode,
-                stdout = LogRedactor.redact(stdout, secrets),
-                stderr = LogRedactor.redact(stderr, secrets),
-            )
+        ): RootCommandResult = RootCommandResult(
+            category = category,
+            outcome = if (exitCode == 0) RootCommandOutcome.Success else RootCommandOutcome.Failure,
+            exitCode = exitCode,
+            stdout = LogRedactor.redact(stdout, secrets),
+            stderr = LogRedactor.redact(stderr, secrets),
+        )
 
         fun timedOut(
             category: RootCommandCategory,
             stdout: String,
             stderr: String,
             secrets: LogRedactionSecrets = LogRedactionSecrets(),
-        ): RootCommandResult =
-            RootCommandResult(
-                category = category,
-                outcome = RootCommandOutcome.Timeout,
-                exitCode = null,
-                stdout = LogRedactor.redact(stdout, secrets),
-                stderr = LogRedactor.redact(stderr, secrets),
-            )
+        ): RootCommandResult = RootCommandResult(
+            category = category,
+            outcome = RootCommandOutcome.Timeout,
+            exitCode = null,
+            stdout = LogRedactor.redact(stdout, secrets),
+            stderr = LogRedactor.redact(stderr, secrets),
+        )
     }
 }
 
@@ -69,25 +67,23 @@ class RootCommandAuditRecord private constructor(
     val stderr: String?,
 ) {
     companion object {
-        fun started(category: RootCommandCategory): RootCommandAuditRecord =
-            RootCommandAuditRecord(
-                phase = RootCommandAuditPhase.Started,
-                category = category,
-                outcome = null,
-                exitCode = null,
-                stdout = null,
-                stderr = null,
-            )
+        fun started(category: RootCommandCategory): RootCommandAuditRecord = RootCommandAuditRecord(
+            phase = RootCommandAuditPhase.Started,
+            category = category,
+            outcome = null,
+            exitCode = null,
+            stdout = null,
+            stderr = null,
+        )
 
-        fun completed(result: RootCommandResult): RootCommandAuditRecord =
-            RootCommandAuditRecord(
-                phase = RootCommandAuditPhase.Completed,
-                category = result.category,
-                outcome = result.outcome,
-                exitCode = result.exitCode,
-                stdout = result.stdout,
-                stderr = result.stderr,
-            )
+        fun completed(result: RootCommandResult): RootCommandAuditRecord = RootCommandAuditRecord(
+            phase = RootCommandAuditPhase.Completed,
+            category = result.category,
+            outcome = result.outcome,
+            exitCode = result.exitCode,
+            stdout = result.stdout,
+            stderr = result.stderr,
+        )
 
         fun failedToStart(
             category: RootCommandCategory,

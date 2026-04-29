@@ -112,8 +112,7 @@ private fun ProxyServiceStatus.metricsJson(): String = "{" +
     """"bytesSent":${metrics.bytesSent}""" +
     "}"
 
-internal fun CloudflareTunnelStatus.managementApiJson(secrets: LogRedactionSecrets): String =
-    managementApiJson(secrets, edgeSessionSummary = null)
+internal fun CloudflareTunnelStatus.managementApiJson(secrets: LogRedactionSecrets): String = managementApiJson(secrets, edgeSessionSummary = null)
 
 private fun CloudflareTunnelStatus.managementApiJson(
     secrets: LogRedactionSecrets,

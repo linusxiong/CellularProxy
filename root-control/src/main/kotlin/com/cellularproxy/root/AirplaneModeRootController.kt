@@ -11,24 +11,22 @@ class AirplaneModeRootController(
     fun enable(
         timeoutMillis: Long,
         secrets: LogRedactionSecrets = LogRedactionSecrets(),
-    ): AirplaneModeRootCommandResult =
-        run(
-            action = AirplaneModeRootAction.Enable,
-            command = RootShellCommands.airplaneModeEnable(),
-            timeoutMillis = timeoutMillis,
-            secrets = secrets,
-        )
+    ): AirplaneModeRootCommandResult = run(
+        action = AirplaneModeRootAction.Enable,
+        command = RootShellCommands.airplaneModeEnable(),
+        timeoutMillis = timeoutMillis,
+        secrets = secrets,
+    )
 
     fun disable(
         timeoutMillis: Long,
         secrets: LogRedactionSecrets = LogRedactionSecrets(),
-    ): AirplaneModeRootCommandResult =
-        run(
-            action = AirplaneModeRootAction.Disable,
-            command = RootShellCommands.airplaneModeDisable(),
-            timeoutMillis = timeoutMillis,
-            secrets = secrets,
-        )
+    ): AirplaneModeRootCommandResult = run(
+        action = AirplaneModeRootAction.Disable,
+        command = RootShellCommands.airplaneModeDisable(),
+        timeoutMillis = timeoutMillis,
+        secrets = secrets,
+    )
 
     private fun run(
         action: AirplaneModeRootAction,

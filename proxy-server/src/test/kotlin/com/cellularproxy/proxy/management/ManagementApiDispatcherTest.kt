@@ -253,11 +253,10 @@ class ManagementApiDispatcherTest {
         method: HttpMethod,
         originTarget: String,
         requiresAuditLog: Boolean = false,
-    ): ParsedProxyRequest.Management =
-        ParsedProxyRequest.Management(
-            method = method,
-            originTarget = originTarget,
-            requiresToken = originTarget.startsWith("/api/"),
-            requiresAuditLog = requiresAuditLog,
-        )
+    ): ParsedProxyRequest.Management = ParsedProxyRequest.Management(
+        method = method,
+        originTarget = originTarget,
+        requiresToken = originTarget.startsWith("/api/"),
+        requiresAuditLog = requiresAuditLog,
+    )
 }

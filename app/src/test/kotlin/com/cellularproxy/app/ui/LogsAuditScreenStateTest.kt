@@ -408,6 +408,93 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `search requires every unquoted term to match`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "cloudflare-failed",
+                            category = LogsAuditScreenCategory.CloudflareTunnel,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 100,
+                            title = "Cloudflare tunnel failed",
+                            detail = "edge handshake timeout",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "cloudflare-started",
+                            category = LogsAuditScreenCategory.CloudflareTunnel,
+                            severity = LogsAuditScreenSeverity.Info,
+                            occurredAtEpochMillis = 200,
+                            title = "Cloudflare tunnel started",
+                            detail = "edge connected",
+                        ),
+                    ),
+                filter = LogsAuditScreenFilter(search = "cloudflare failed"),
+            )
+
+        assertEquals(listOf("cloudflare-failed"), state.rows.map(LogsAuditScreenRow::id))
+    }
+
+    @Test
+    fun `search supports quoted phrases`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "exact-phrase",
+                            category = LogsAuditScreenCategory.ProxyServer,
+                            severity = LogsAuditScreenSeverity.Warning,
+                            occurredAtEpochMillis = 100,
+                            title = "Proxy warning",
+                            detail = "connection closed by remote",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "loose-terms",
+                            category = LogsAuditScreenCategory.ProxyServer,
+                            severity = LogsAuditScreenSeverity.Warning,
+                            occurredAtEpochMillis = 200,
+                            title = "Remote endpoint",
+                            detail = "connection opened then closed",
+                        ),
+                    ),
+                filter = LogsAuditScreenFilter(search = "\"connection closed\""),
+            )
+
+        assertEquals(listOf("exact-phrase"), state.rows.map(LogsAuditScreenRow::id))
+    }
+
+    @Test
+    fun `search supports excluded terms`() {
+        val state =
+            LogsAuditScreenState.from(
+                rows =
+                    listOf(
+                        LogsAuditScreenInputRow(
+                            id = "root-warning",
+                            category = LogsAuditScreenCategory.RootCommands,
+                            severity = LogsAuditScreenSeverity.Warning,
+                            occurredAtEpochMillis = 100,
+                            title = "Root unavailable",
+                            detail = "permission denied",
+                        ),
+                        LogsAuditScreenInputRow(
+                            id = "root-failed",
+                            category = LogsAuditScreenCategory.RootCommands,
+                            severity = LogsAuditScreenSeverity.Failed,
+                            occurredAtEpochMillis = 200,
+                            title = "Root command failed",
+                            detail = "su timeout",
+                        ),
+                    ),
+                filter = LogsAuditScreenFilter(search = "root -timeout"),
+            )
+
+        assertEquals(listOf("root-warning"), state.rows.map(LogsAuditScreenRow::id))
+    }
+
+    @Test
     fun `search matches redacted row text when query contains raw secret material`() {
         val state =
             LogsAuditScreenState.from(

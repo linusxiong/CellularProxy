@@ -56,7 +56,22 @@ class PlainConfigPreferencesMapperTest {
     fun `missing preferences read as design spec defaults`() {
         val restored = PlainConfigPreferencesMapper.fromPreferences(preferencesOf())
 
-        assertEquals(AppConfig.default(), restored)
+        assertEquals(
+            AppConfig.default().copy(proxy = AppConfig.default().proxy.copy(authEnabled = false)),
+            restored,
+        )
+    }
+
+    @Test
+    fun `explicit persisted proxy authentication setting is preserved`() {
+        val restored =
+            PlainConfigPreferencesMapper.fromPreferences(
+                preferencesOf(
+                    PlainConfigPreferenceKeys.proxyAuthEnabled to true,
+                ),
+            )
+
+        assertTrue(restored.proxy.authEnabled)
     }
 
     @Test

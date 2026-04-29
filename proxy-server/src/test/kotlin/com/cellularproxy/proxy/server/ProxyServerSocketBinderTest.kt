@@ -8,6 +8,8 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
+import kotlin.io.path.Path
+import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -97,6 +99,21 @@ class ProxyServerSocketBinderTest {
 
         val failed = assertIs<ProxyServerSocketBindResult.Failed>(result)
         assertEquals(ProxyStartupError.InvalidListenAddress, failed.startupError)
+    }
+
+    @Test
+    fun `accepted client sockets request throughput oriented TCP options`() {
+        val source =
+            Path("src/main/kotlin/com/cellularproxy/proxy/server/ProxyServerSocketBinder.kt")
+                .readText()
+
+        assertTrue(
+            source.contains("socket.applyProxyThroughputOptions()") &&
+                source.contains("tcpNoDelay = true") &&
+                source.contains("receiveBufferSize = PROXY_SOCKET_BUFFER_BYTES") &&
+                source.contains("sendBufferSize = PROXY_SOCKET_BUFFER_BYTES"),
+            "Accepted proxy client sockets must request larger TCP buffers and disable Nagle for throughput tests.",
+        )
     }
 
     private companion object {

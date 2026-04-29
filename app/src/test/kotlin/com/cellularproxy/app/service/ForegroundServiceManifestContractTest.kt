@@ -75,6 +75,71 @@ class ForegroundServiceManifestContractTest {
         )
     }
 
+    @Test
+    fun `manifest enables loopback cleartext management traffic and platform back callbacks`() {
+        val manifest = parseManifest()
+
+        assertEquals(
+            "@xml/network_security_config",
+            manifest.application.networkSecurityConfig,
+            "App must allow explicit loopback cleartext traffic for the in-process local management API.",
+        )
+        assertEquals(
+            true,
+            manifest.application.enableOnBackInvokedCallback,
+            "App should opt in to platform back callbacks on Android 13+.",
+        )
+
+        val networkSecurityConfig = parseNetworkSecurityConfig()
+        assertTrue(
+            networkSecurityConfig.cleartextPermittedDomains.contains("127.0.0.1"),
+            "Local management API dispatches to 127.0.0.1 and must be cleartext-permitted.",
+        )
+        assertTrue(
+            networkSecurityConfig.cleartextPermittedDomains.contains("localhost"),
+            "Loopback cleartext policy should also cover localhost diagnostics.",
+        )
+        assertEquals(
+            emptySet(),
+            networkSecurityConfig.baseCleartextPermittedValues,
+            "Cleartext must not be enabled globally.",
+        )
+    }
+
+    private fun parseNetworkSecurityConfig(): NetworkSecurityConfigContract {
+        val configFile = File("src/main/res/xml/network_security_config.xml")
+        val document =
+            DocumentBuilderFactory
+                .newInstance()
+                .apply {
+                    isIgnoringComments = true
+                    isNamespaceAware = true
+                }.newDocumentBuilder()
+                .parse(configFile)
+
+        val root = document.documentElement
+        val cleartextPermittedDomains =
+            root
+                .childElements("domain-config")
+                .filter { domainConfig ->
+                    domainConfig.attribute("cleartextTrafficPermitted") == "true"
+                }.flatMap { domainConfig ->
+                    domainConfig
+                        .childElements("domain")
+                        .mapNotNull { domain -> domain.textContent.trim().takeIf(String::isNotBlank) }
+                }.toSet()
+        val baseCleartextPermittedValues =
+            root
+                .childElements("base-config")
+                .mapNotNull { baseConfig -> baseConfig.attribute("cleartextTrafficPermitted") }
+                .toSet()
+
+        return NetworkSecurityConfigContract(
+            cleartextPermittedDomains = cleartextPermittedDomains,
+            baseCleartextPermittedValues = baseCleartextPermittedValues,
+        )
+    }
+
     private fun parseManifest(): ManifestContract {
         val manifestFile = File("src/main/AndroidManifest.xml")
         val document =
@@ -87,15 +152,14 @@ class ForegroundServiceManifestContractTest {
                 .parse(manifestFile)
 
         val root = document.documentElement
+        val application = root.childElements("application").single()
         val usesPermissions =
             root
                 .childElements("uses-permission")
                 .mapNotNull { it.androidAttribute("name") }
                 .toSet()
         val services =
-            root
-                .childElements("application")
-                .single()
+            application
                 .childElements("service")
                 .map { service ->
                     ServiceContract(
@@ -114,9 +178,7 @@ class ForegroundServiceManifestContractTest {
                     )
                 }
         val activities =
-            root
-                .childElements("application")
-                .single()
+            application
                 .childElements("activity")
                 .map { activity ->
                     ActivityContract(
@@ -144,6 +206,14 @@ class ForegroundServiceManifestContractTest {
 
         return ManifestContract(
             usesPermissions = usesPermissions,
+            application =
+                ApplicationContract(
+                    networkSecurityConfig = application.androidAttribute("networkSecurityConfig"),
+                    enableOnBackInvokedCallback =
+                        application
+                            .androidAttribute("enableOnBackInvokedCallback")
+                            ?.toBooleanStrictOrNull(),
+                ),
             activities = activities,
             services = services,
         )
@@ -152,8 +222,19 @@ class ForegroundServiceManifestContractTest {
 
 private data class ManifestContract(
     val usesPermissions: Set<String>,
+    val application: ApplicationContract,
     val activities: List<ActivityContract>,
     val services: List<ServiceContract>,
+)
+
+private data class ApplicationContract(
+    val networkSecurityConfig: String?,
+    val enableOnBackInvokedCallback: Boolean?,
+)
+
+private data class NetworkSecurityConfigContract(
+    val cleartextPermittedDomains: Set<String>,
+    val baseCleartextPermittedValues: Set<String>,
 )
 
 private data class ActivityContract(
@@ -192,5 +273,7 @@ private fun Element.childElements(name: String): List<Element> {
 }
 
 private fun Element.androidAttribute(localName: String): String? = getAttributeNS(ANDROID_NAMESPACE, localName).takeIf(String::isNotBlank)
+
+private fun Element.attribute(name: String): String? = getAttribute(name).takeIf(String::isNotBlank)
 
 private const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"

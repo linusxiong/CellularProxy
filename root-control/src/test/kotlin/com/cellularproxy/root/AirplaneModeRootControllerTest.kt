@@ -285,22 +285,20 @@ class AirplaneModeRootControllerTest {
         }
     }
 
-    private fun airplaneModeExecutor(result: (AirplaneModeCommandCall) -> RootCommandProcessResult): RootCommandExecutor =
-        airplaneModeExecutor(mutableListOf(), result)
+    private fun airplaneModeExecutor(result: (AirplaneModeCommandCall) -> RootCommandProcessResult): RootCommandExecutor = airplaneModeExecutor(mutableListOf(), result)
 
     private fun airplaneModeExecutor(
         calls: MutableList<AirplaneModeCommandCall>,
         result: (AirplaneModeCommandCall) -> RootCommandProcessResult,
-    ): RootCommandExecutor =
-        RootCommandExecutor(
-            processExecutor =
-                RootCommandProcessExecutor { command, timeoutMillis ->
-                    assertTrue(command.category in AIRPLANE_MODE_CATEGORIES)
-                    val call = AirplaneModeCommandCall(command, timeoutMillis)
-                    calls += call
-                    result(call)
-                },
-        )
+    ): RootCommandExecutor = RootCommandExecutor(
+        processExecutor =
+            RootCommandProcessExecutor { command, timeoutMillis ->
+                assertTrue(command.category in AIRPLANE_MODE_CATEGORIES)
+                val call = AirplaneModeCommandCall(command, timeoutMillis)
+                calls += call
+                result(call)
+            },
+    )
 
     private fun airplaneModeExecution(
         category: RootCommandCategory,

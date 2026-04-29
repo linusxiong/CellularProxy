@@ -312,10 +312,9 @@ class HttpProxyResponseStreamForwarderTest {
         statusCode: Int = 200,
         reasonPhrase: String = "OK",
         headers: Map<String, List<String>> = emptyMap(),
-    ): ParsedHttpResponse =
-        ParsedHttpResponse(
-            statusCode = statusCode,
-            reasonPhrase = reasonPhrase,
-            headers = headers,
-        )
+    ): ParsedHttpResponse = ParsedHttpResponse(
+        statusCode = statusCode,
+        reasonPhrase = reasonPhrase,
+        headers = headers,
+    )
 }

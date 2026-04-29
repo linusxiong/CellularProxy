@@ -227,11 +227,10 @@ class RotationNetworkReturnPolicyTest {
         id: String,
         category: NetworkCategory,
         isAvailable: Boolean,
-    ): NetworkDescriptor =
-        NetworkDescriptor(
-            id = id,
-            category = category,
-            displayName = id,
-            isAvailable = isAvailable,
-        )
+    ): NetworkDescriptor = NetworkDescriptor(
+        id = id,
+        category = category,
+        displayName = id,
+        isAvailable = isAvailable,
+    )
 }

@@ -7,6 +7,8 @@ import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ConfigValidationError
 import com.cellularproxy.shared.config.RotationConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.network.NetworkCategory
+import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,6 +17,40 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class ProxySettingsFormModelTest {
+    @Test
+    fun `language options map persisted tags to supported choices`() {
+        assertEquals(SettingsLanguageOption.System, SettingsLanguageOption.fromTag(null))
+        assertEquals(SettingsLanguageOption.System, SettingsLanguageOption.fromTag(""))
+        assertEquals(SettingsLanguageOption.English, SettingsLanguageOption.fromTag("en"))
+        assertEquals(SettingsLanguageOption.ChineseSimplified, SettingsLanguageOption.fromTag("zh-CN"))
+        assertEquals(SettingsLanguageOption.System, SettingsLanguageOption.fromTag("fr"))
+    }
+
+    @Test
+    fun `available route targets include only currently available exits`() {
+        val routes =
+            availableRouteTargetsFromObservedNetworks(
+                listOf(
+                    network("wifi", NetworkCategory.WiFi, isAvailable = false),
+                    network("cell", NetworkCategory.Cellular, isAvailable = true),
+                ),
+            )
+
+        assertEquals(
+            listOf(RouteTarget.Automatic, RouteTarget.Cellular),
+            routes,
+        )
+        assertFalse(RouteTarget.WiFi in routes)
+    }
+
+    @Test
+    fun `available route targets keep automatic when no concrete exit is available`() {
+        assertEquals(
+            listOf(RouteTarget.Automatic),
+            availableRouteTargetsFromObservedNetworks(emptyList()),
+        )
+    }
+
     @Test
     fun `form state starts from persisted proxy and route config`() {
         val config =
@@ -791,3 +827,14 @@ class ProxySettingsFormModelTest {
         managementApiToken = managementApiToken,
     )
 }
+
+private fun network(
+    id: String,
+    category: NetworkCategory,
+    isAvailable: Boolean,
+): NetworkDescriptor = NetworkDescriptor(
+    id = id,
+    category = category,
+    displayName = id,
+    isAvailable = isAvailable,
+)

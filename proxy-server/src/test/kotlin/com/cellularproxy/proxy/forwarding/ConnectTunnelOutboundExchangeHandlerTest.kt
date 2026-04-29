@@ -458,19 +458,17 @@ class ConnectTunnelOutboundExchangeHandlerTest {
     private fun connectRequest(
         host: String = "origin.example",
         port: Int = 443,
-    ): ParsedHttpRequest =
-        ParsedHttpRequest(
-            request = ParsedProxyRequest.ConnectTunnel(host = host, port = port),
-            headers = emptyMap(),
-        )
+    ): ParsedHttpRequest = ParsedHttpRequest(
+        request = ParsedProxyRequest.ConnectTunnel(host = host, port = port),
+        headers = emptyMap(),
+    )
 
-    private fun accepted(request: ParsedHttpRequest): ProxyIngressStreamPreflightDecision.Accepted =
-        ProxyIngressStreamPreflightDecision.Accepted(
-            httpRequest = request,
-            activeConnectionsAfterAdmission = 1,
-            requiresAuditLog = false,
-            headerBytesRead = 128,
-        )
+    private fun accepted(request: ParsedHttpRequest): ProxyIngressStreamPreflightDecision.Accepted = ProxyIngressStreamPreflightDecision.Accepted(
+        httpRequest = request,
+        activeConnectionsAfterAdmission = 1,
+        requiresAuditLog = false,
+        headerBytesRead = 128,
+    )
 
     private class RecordingConnectTunnelConnector(
         private val result: OutboundConnectTunnelOpenResult,

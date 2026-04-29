@@ -24,11 +24,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.R
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
@@ -48,6 +50,7 @@ internal fun CellularProxyRotationRoute(
     rootAvailabilityProvider: () -> RootAvailabilityStatus = { RootAvailabilityStatus.Unknown },
     cooldownRemainingSecondsProvider: () -> Long? = { null },
     activeConnectionsProvider: () -> Long = { 0 },
+    actionCompletionVersionProvider: () -> Long = { 0L },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onCheckRoot: () -> Unit = {},
     onProbeCurrentPublicIp: () -> Unit = {},
@@ -75,6 +78,7 @@ internal fun CellularProxyRotationRoute(
     val observedRootAvailability = rootAvailabilityProvider()
     val observedCooldownRemainingSeconds = cooldownRemainingSecondsProvider()
     val observedActiveConnections = activeConnectionsProvider()
+    val observedActionCompletionVersion = actionCompletionVersionProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
     val rotationViewModel =
         viewModel<RotationViewModel>(
@@ -121,6 +125,7 @@ internal fun CellularProxyRotationRoute(
         observedRootAvailability,
         observedCooldownRemainingSeconds,
         observedActiveConnections,
+        observedActionCompletionVersion,
         observedRedactionSecrets,
     ) {
         rotationViewModel.handle(RotationScreenEvent.Refresh)
@@ -209,10 +214,10 @@ internal fun CellularProxyRotationScreen(
                 pendingConfirmationAction = null
             },
             title = {
-                Text(action.confirmationTitle ?: "Confirm rotation action")
+                Text(action.confirmationTitle ?: stringResource(R.string.rotation_confirm_action_title))
             },
             text = {
-                Text("Confirm this high-impact root rotation action.")
+                Text(stringResource(R.string.rotation_confirm_action_text))
             },
             confirmButton = {
                 TextButton(
@@ -224,7 +229,7 @@ internal fun CellularProxyRotationScreen(
                     },
                     enabled = canConfirm,
                 ) {
-                    Text("Confirm")
+                    Text(stringResource(R.string.action_confirm))
                 }
             },
             dismissButton = {
@@ -233,7 +238,7 @@ internal fun CellularProxyRotationScreen(
                         pendingConfirmationAction = null
                     },
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -247,45 +252,40 @@ internal fun CellularProxyRotationScreen(
                 .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "Rotation",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-
         RotationActionRow(
             actionsEnabled = actionsEnabled,
             availableActions = state.availableActions,
             onAction = ::requestAction,
         )
 
-        RotationSection("Root And Cooldown") {
-            RotationField("Root availability", state.rootAvailability)
-            RotationField("Root operations", state.rootOperations)
-            RotationField("Cooldown status", state.cooldownStatus)
-            RotationField("Strict IP change", state.strictIpChange)
+        RotationSection(stringResource(R.string.rotation_section_root_cooldown)) {
+            RotationField(stringResource(R.string.rotation_root_availability), state.rootAvailability)
+            RotationField(stringResource(R.string.rotation_root_operations), state.rootOperations)
+            RotationField(stringResource(R.string.rotation_cooldown_status), state.cooldownStatus)
+            RotationField(stringResource(R.string.rotation_strict_ip_change), state.strictIpChange)
         }
 
-        RotationSection("Progress") {
-            RotationField("Last rotation result", state.lastRotationResult)
-            RotationField("Current phase", state.currentPhase)
-            RotationField("Pause/drain status", state.pauseDrainStatus)
-            RotationField("Pending operation", state.pendingOperation)
+        RotationSection(stringResource(R.string.rotation_section_progress)) {
+            RotationField(stringResource(R.string.rotation_last_result), state.lastRotationResult)
+            RotationField(stringResource(R.string.rotation_current_phase), state.currentPhase)
+            RotationField(stringResource(R.string.rotation_pause_drain_status), state.pauseDrainStatus)
+            RotationField(stringResource(R.string.rotation_pending_operation), state.pendingOperation)
         }
 
-        RotationSection("Warnings") {
+        RotationSection(stringResource(R.string.rotation_section_warnings)) {
             if (state.warnings.isEmpty()) {
-                RotationField("Current warnings", "None")
+                RotationField(stringResource(R.string.rotation_current_warnings), stringResource(R.string.label_none))
             } else {
                 state.warnings.forEach { warning ->
-                    RotationField("Current warning", warning.label)
+                    RotationField(stringResource(R.string.rotation_current_warning), warning.label)
                 }
             }
         }
 
-        RotationSection("Public IP") {
-            RotationField("Current public IP", state.currentPublicIp)
-            RotationField("Old public IP", state.oldPublicIp)
-            RotationField("New public IP", state.newPublicIp)
+        RotationSection(stringResource(R.string.rotation_section_public_ip)) {
+            RotationField(stringResource(R.string.rotation_current_public_ip), state.currentPublicIp)
+            RotationField(stringResource(R.string.rotation_old_public_ip), state.oldPublicIp)
+            RotationField(stringResource(R.string.rotation_new_public_ip), state.newPublicIp)
         }
     }
 }
@@ -440,7 +440,7 @@ internal class RotationScreenController(
         private set
 
     fun handle(event: RotationScreenEvent) {
-        refreshPendingActions()
+        refreshPendingActions(clearCompletedActions = event == RotationScreenEvent.Refresh)
         when (event) {
             RotationScreenEvent.CopyDiagnostics -> {
                 if (RotationScreenAction.CopyDiagnostics in state.availableActions) {
@@ -474,17 +474,17 @@ internal class RotationScreenController(
         state = buildState()
     }
 
-    private fun refreshPendingActions() {
+    private fun refreshPendingActions(clearCompletedActions: Boolean) {
         val currentStatus = rotationStatusProvider()
         val currentRootAvailability = rootAvailabilityProvider()
         val currentPublicIp = currentPublicIpProvider()
-        if (currentStatus != lastObservedRotationStatus && !currentStatus.isActive) {
+        if (!currentStatus.isActive && (clearCompletedActions || currentStatus != lastObservedRotationStatus)) {
             pendingActions.removeAll(rotationScreenRotationActions)
         }
-        if (currentRootAvailability != lastObservedRootAvailability) {
+        if (clearCompletedActions || currentRootAvailability != lastObservedRootAvailability) {
             pendingActions.remove(RotationScreenAction.CheckRoot)
         }
-        if (currentPublicIp != lastObservedCurrentPublicIp) {
+        if (clearCompletedActions || currentPublicIp != lastObservedCurrentPublicIp) {
             pendingActions.remove(RotationScreenAction.ProbeCurrentPublicIp)
         }
         lastObservedRotationStatus = currentStatus
@@ -672,7 +672,7 @@ private fun RotationActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Check root")
+            Text(stringResource(R.string.rotation_check_root))
         }
         OutlinedButton(
             onClick = {
@@ -686,7 +686,7 @@ private fun RotationActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Probe current public IP")
+            Text(stringResource(R.string.rotation_probe_public_ip))
         }
         Button(
             onClick = {
@@ -700,7 +700,7 @@ private fun RotationActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Rotate mobile data")
+            Text(stringResource(R.string.rotation_rotate_mobile_data))
         }
         OutlinedButton(
             onClick = {
@@ -714,7 +714,7 @@ private fun RotationActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Rotate airplane mode")
+            Text(stringResource(R.string.rotation_rotate_airplane_mode))
         }
         OutlinedButton(
             onClick = {
@@ -728,7 +728,7 @@ private fun RotationActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy diagnostics")
+            Text(stringResource(R.string.action_copy_diagnostics))
         }
     }
 }

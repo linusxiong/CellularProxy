@@ -23,119 +23,119 @@ import kotlin.test.assertTrue
 
 class AppConfigSaveCoordinatorTest {
     @Test
-    fun `save derives token-present flag from encrypted Cloudflare token presence`() =
-        withSaveCoordinatorRepositories { plainRepository, sensitiveRepository, sensitiveStore ->
-            val coordinator =
-                AppConfigSaveCoordinator(
-                    plainRepository = plainRepository,
-                    sensitiveRepository = sensitiveRepository,
-                )
-            val requestedPlainConfig =
-                AppConfig.default().copy(
-                    cloudflare =
-                        CloudflareConfig(
-                            enabled = true,
-                            tunnelTokenPresent = false,
-                            managementHostnameLabel = "manage.example.com",
-                        ),
-                )
-            val sensitiveConfig =
-                SaveCoordinatorFixtures.sensitiveConfig(
-                    cloudflareTunnelToken = "cloudflare-token",
-                )
+    fun `save derives token-present flag from encrypted Cloudflare token presence`() = withSaveCoordinatorRepositories { plainRepository, sensitiveRepository, sensitiveStore ->
+        val coordinator =
+            AppConfigSaveCoordinator(
+                plainRepository = plainRepository,
+                sensitiveRepository = sensitiveRepository,
+            )
+        val requestedPlainConfig =
+            AppConfig.default().copy(
+                cloudflare =
+                    CloudflareConfig(
+                        enabled = true,
+                        tunnelTokenPresent = false,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+            )
+        val sensitiveConfig =
+            SaveCoordinatorFixtures.sensitiveConfig(
+                cloudflareTunnelToken = "cloudflare-token",
+            )
 
-            val result =
-                coordinator.save(
-                    plainConfig = requestedPlainConfig,
-                    sensitiveConfig = sensitiveConfig,
-                )
+        val result =
+            coordinator.save(
+                plainConfig = requestedPlainConfig,
+                sensitiveConfig = sensitiveConfig,
+            )
 
-            val saved = assertIs<AppConfigSaveResult.Saved>(result)
-            val expectedPlainConfig =
-                requestedPlainConfig.copy(
-                    cloudflare = requestedPlainConfig.cloudflare.copy(tunnelTokenPresent = true),
-                )
-            assertEquals(expectedPlainConfig, saved.plainConfig)
-            assertEquals(sensitiveConfig, saved.sensitiveConfig)
-            assertEquals(expectedPlainConfig, plainRepository.load())
-            assertIs<SensitiveConfigLoadResult.Loaded>(sensitiveRepository.load())
-            assertTrue(SensitiveConfigSecretKeys.cloudflareTunnelToken in sensitiveStore.values)
-            assertFalse("cloudflare-token" in sensitiveStore.values.values.joinToString(separator = "\n"))
-        }
+        val saved = assertIs<AppConfigSaveResult.Saved>(result)
+        val expectedPlainConfig =
+            requestedPlainConfig.copy(
+                cloudflare = requestedPlainConfig.cloudflare.copy(tunnelTokenPresent = true),
+            )
+        assertEquals(expectedPlainConfig, saved.plainConfig)
+        assertEquals(sensitiveConfig, saved.sensitiveConfig)
+        assertEquals(expectedPlainConfig, plainRepository.load())
+        assertIs<SensitiveConfigLoadResult.Loaded>(sensitiveRepository.load())
+        assertTrue(SensitiveConfigSecretKeys.cloudflareTunnelToken in sensitiveStore.values)
+        assertFalse("cloudflare-token" in sensitiveStore.values.values.joinToString(separator = "\n"))
+    }
 
     @Test
-    fun `save clears stale token-present flag and encrypted Cloudflare token when token is absent`() =
-        withSaveCoordinatorRepositories { plainRepository, sensitiveRepository, sensitiveStore ->
-            val coordinator =
-                AppConfigSaveCoordinator(
-                    plainRepository = plainRepository,
-                    sensitiveRepository = sensitiveRepository,
-                )
-            sensitiveRepository.save(
-                SaveCoordinatorFixtures.sensitiveConfig(cloudflareTunnelToken = "stale-cloudflare-token"),
+    fun `save clears stale token-present flag and encrypted Cloudflare token when token is absent`() = withSaveCoordinatorRepositories { plainRepository, sensitiveRepository, sensitiveStore ->
+        val coordinator =
+            AppConfigSaveCoordinator(
+                plainRepository = plainRepository,
+                sensitiveRepository = sensitiveRepository,
             )
-            val requestedPlainConfig =
-                AppConfig.default().copy(
-                    cloudflare =
-                        CloudflareConfig(
-                            enabled = false,
-                            tunnelTokenPresent = true,
-                            managementHostnameLabel = "manage.example.com",
-                        ),
-                )
-            val sensitiveConfig = SaveCoordinatorFixtures.sensitiveConfig(cloudflareTunnelToken = null)
+        sensitiveRepository.save(
+            SaveCoordinatorFixtures.sensitiveConfig(cloudflareTunnelToken = "stale-cloudflare-token"),
+        )
+        val requestedPlainConfig =
+            AppConfig.default().copy(
+                cloudflare =
+                    CloudflareConfig(
+                        enabled = false,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
+            )
+        val sensitiveConfig = SaveCoordinatorFixtures.sensitiveConfig(cloudflareTunnelToken = null)
 
-            val result =
-                coordinator.save(
-                    plainConfig = requestedPlainConfig,
-                    sensitiveConfig = sensitiveConfig,
-                )
+        val result =
+            coordinator.save(
+                plainConfig = requestedPlainConfig,
+                sensitiveConfig = sensitiveConfig,
+            )
 
-            val saved = assertIs<AppConfigSaveResult.Saved>(result)
-            val expectedPlainConfig =
-                requestedPlainConfig.copy(
-                    cloudflare = requestedPlainConfig.cloudflare.copy(tunnelTokenPresent = false),
-                )
-            assertEquals(expectedPlainConfig, saved.plainConfig)
-            assertEquals(expectedPlainConfig, plainRepository.load())
-            assertNull(sensitiveStore.values[SensitiveConfigSecretKeys.cloudflareTunnelToken])
-            val loadedSensitive = assertIs<SensitiveConfigLoadResult.Loaded>(sensitiveRepository.load())
-            assertNull(loadedSensitive.config.cloudflareTunnelToken)
-        }
+        val saved = assertIs<AppConfigSaveResult.Saved>(result)
+        val expectedPlainConfig =
+            requestedPlainConfig.copy(
+                cloudflare = requestedPlainConfig.cloudflare.copy(tunnelTokenPresent = false),
+            )
+        assertEquals(expectedPlainConfig, saved.plainConfig)
+        assertEquals(expectedPlainConfig, plainRepository.load())
+        assertNull(sensitiveStore.values[SensitiveConfigSecretKeys.cloudflareTunnelToken])
+        val loadedSensitive = assertIs<SensitiveConfigLoadResult.Loaded>(sensitiveRepository.load())
+        assertNull(loadedSensitive.config.cloudflareTunnelToken)
+    }
 
     @Test
-    fun `invalid reconciled plain config is rejected without saving plain or sensitive state`() =
-        withSaveCoordinatorRepositories { plainRepository, sensitiveRepository, sensitiveStore ->
-            val coordinator =
-                AppConfigSaveCoordinator(
-                    plainRepository = plainRepository,
-                    sensitiveRepository = sensitiveRepository,
-                )
-            val invalidPlainConfig =
-                AppConfig.default().copy(
-                    proxy = ProxyConfig(listenHost = " 127.0.0.1 "),
-                    cloudflare = CloudflareConfig(enabled = true, tunnelTokenPresent = true),
-                )
-            val sensitiveConfig = SaveCoordinatorFixtures.sensitiveConfig(cloudflareTunnelToken = null)
-
-            val result =
-                coordinator.save(
-                    plainConfig = invalidPlainConfig,
-                    sensitiveConfig = sensitiveConfig,
-                )
-
-            val invalid = assertIs<AppConfigSaveResult.InvalidPlainConfig>(result)
-            assertEquals(
-                listOf(
-                    ConfigValidationError.InvalidListenHost,
-                    ConfigValidationError.MissingCloudflareTunnelToken,
-                ),
-                invalid.errors,
+    fun `invalid reconciled plain config is rejected without saving plain or sensitive state`() = withSaveCoordinatorRepositories { plainRepository, sensitiveRepository, sensitiveStore ->
+        val coordinator =
+            AppConfigSaveCoordinator(
+                plainRepository = plainRepository,
+                sensitiveRepository = sensitiveRepository,
             )
-            assertEquals(AppConfig.default(), plainRepository.load())
-            assertEquals(0, sensitiveStore.replaceCallCount)
-            assertEquals(SensitiveConfigLoadResult.MissingRequiredSecrets, sensitiveRepository.load())
-        }
+        val invalidPlainConfig =
+            AppConfig.default().copy(
+                proxy = ProxyConfig(listenHost = " 127.0.0.1 "),
+                cloudflare = CloudflareConfig(enabled = true, tunnelTokenPresent = true),
+            )
+        val sensitiveConfig = SaveCoordinatorFixtures.sensitiveConfig(cloudflareTunnelToken = null)
+
+        val result =
+            coordinator.save(
+                plainConfig = invalidPlainConfig,
+                sensitiveConfig = sensitiveConfig,
+            )
+
+        val invalid = assertIs<AppConfigSaveResult.InvalidPlainConfig>(result)
+        assertEquals(
+            listOf(
+                ConfigValidationError.InvalidListenHost,
+                ConfigValidationError.MissingCloudflareTunnelToken,
+            ),
+            invalid.errors,
+        )
+        assertEquals(
+            AppConfig.default().copy(proxy = AppConfig.default().proxy.copy(authEnabled = false)),
+            plainRepository.load(),
+        )
+        assertEquals(0, sensitiveStore.replaceCallCount)
+        assertEquals(SensitiveConfigLoadResult.MissingRequiredSecrets, sensitiveRepository.load())
+    }
 }
 
 private fun withSaveCoordinatorRepositories(
@@ -172,12 +172,11 @@ private fun withSaveCoordinatorRepositories(
 }
 
 private object SaveCoordinatorFixtures {
-    fun sensitiveConfig(cloudflareTunnelToken: String?): SensitiveConfig =
-        SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-            managementApiToken = "management-token",
-            cloudflareTunnelToken = cloudflareTunnelToken,
-        )
+    fun sensitiveConfig(cloudflareTunnelToken: String?): SensitiveConfig = SensitiveConfig(
+        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+        managementApiToken = "management-token",
+        cloudflareTunnelToken = cloudflareTunnelToken,
+    )
 }
 
 private class SaveCoordinatorInMemorySensitiveKeyValueStore : SensitiveKeyValueStore {
@@ -204,9 +203,8 @@ private class SaveCoordinatorInMemorySensitiveKeyValueStore : SensitiveKeyValueS
 private object SaveCoordinatorReversibleTestCipher : SensitiveValueCipher {
     override fun encrypt(plainText: String): String = "encrypted:" + plainText.reversed()
 
-    override fun decrypt(encryptedValue: String): String? =
-        encryptedValue
-            .takeIf { it.startsWith("encrypted:") }
-            ?.removePrefix("encrypted:")
-            ?.reversed()
+    override fun decrypt(encryptedValue: String): String? = encryptedValue
+        .takeIf { it.startsWith("encrypted:") }
+        ?.removePrefix("encrypted:")
+        ?.reversed()
 }

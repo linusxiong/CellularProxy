@@ -142,11 +142,10 @@ object HttpProxyStreamExchangeForwarder {
     }
 }
 
-private fun com.cellularproxy.proxy.protocol.ParsedProxyRequest.methodForResponseFraming(): String? =
-    when (this) {
-        is com.cellularproxy.proxy.protocol.ParsedProxyRequest.HttpProxy -> method
-        else -> null
-    }
+private fun com.cellularproxy.proxy.protocol.ParsedProxyRequest.methodForResponseFraming(): String? = when (this) {
+    is com.cellularproxy.proxy.protocol.ParsedProxyRequest.HttpProxy -> method
+    else -> null
+}
 
 private const val DEFAULT_EXCHANGE_FORWARD_BUFFER_BYTES = 8 * 1024
 private const val DEFAULT_ORIGIN_RESPONSE_MAX_HEADER_BYTES = 16 * 1024

@@ -5,15 +5,21 @@ package com.cellularproxy.app.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,11 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.R
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
@@ -62,6 +71,7 @@ internal fun CellularProxyDashboardRoute(
     onOpenRotation: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
+    actionCompletionVersionProvider: () -> Long = { 0L },
     onCopyProxyEndpointText: (String) -> Unit = {},
     onRecordDashboardAuditAction: (PersistedLogsAuditRecord) -> Unit = {},
     auditOccurredAtEpochMillisProvider: () -> Long = System::currentTimeMillis,
@@ -79,6 +89,7 @@ internal fun CellularProxyDashboardRoute(
     val currentOnOpenLogs by rememberUpdatedState(onOpenLogs)
     val currentOnOpenDiagnostics by rememberUpdatedState(onOpenDiagnostics)
     val observedStatus = statusProvider()
+    val observedActionCompletionVersion = actionCompletionVersionProvider()
     val dashboardViewModel =
         viewModel<DashboardViewModel>(
             factory =
@@ -114,7 +125,7 @@ internal fun CellularProxyDashboardRoute(
             }
         }
     }
-    LaunchedEffect(observedStatus) {
+    LaunchedEffect(observedStatus, observedActionCompletionVersion) {
         dashboardViewModel.handle(DashboardScreenEvent.Refresh)
     }
 
@@ -173,6 +184,7 @@ internal fun CellularProxyDashboardScreen(
 ) {
     val screenState = state
     val status = screenState.status
+    val focusManager = LocalFocusManager.current
     var pendingConfirmationAction by remember { mutableStateOf<DashboardScreenAction?>(null) }
 
     fun performAction(action: DashboardScreenAction) {
@@ -192,6 +204,7 @@ internal fun CellularProxyDashboardScreen(
     }
 
     fun requestAction(action: DashboardScreenAction) {
+        focusManager.clearFocus(force = true)
         when (dashboardActionDispatchMode(action)) {
             DashboardActionDispatchMode.Immediate -> performAction(action)
             DashboardActionDispatchMode.ConfirmFirst -> pendingConfirmationAction = action
@@ -210,10 +223,10 @@ internal fun CellularProxyDashboardScreen(
                 pendingConfirmationAction = null
             },
             title = {
-                Text(action.confirmationTitle ?: "Confirm dashboard action")
+                Text(action.confirmationTitle ?: stringResource(R.string.dashboard_confirm_action_title))
             },
             text = {
-                Text("Confirm this high-impact proxy service action.")
+                Text(stringResource(R.string.dashboard_confirm_action_text))
             },
             confirmButton = {
                 TextButton(
@@ -225,7 +238,7 @@ internal fun CellularProxyDashboardScreen(
                     },
                     enabled = canConfirm,
                 ) {
-                    Text("Confirm")
+                    Text(stringResource(R.string.action_confirm))
                 }
             },
             dismissButton = {
@@ -234,7 +247,7 @@ internal fun CellularProxyDashboardScreen(
                         pendingConfirmationAction = null
                     },
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -248,10 +261,7 @@ internal fun CellularProxyDashboardScreen(
                 .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "Dashboard",
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        DashboardStatusCard(status)
 
         DashboardActionRow(
             actionsEnabled = actionsEnabled,
@@ -259,41 +269,37 @@ internal fun CellularProxyDashboardScreen(
             onAction = ::requestAction,
         )
 
-        DashboardSection("Service") {
-            DashboardField("Service state", status.serviceState.name)
-            DashboardField("Pending operation", screenState.pendingOperation)
-            DashboardField("Proxy endpoint", status.listenEndpoint)
-            DashboardField("Proxy authentication", proxyAuthenticationSummary(status))
-            DashboardField("Management API", managementApiSummary(status))
+        DashboardSection(stringResource(R.string.dashboard_section_service)) {
+            DashboardField(stringResource(R.string.dashboard_pending_operation), screenState.pendingOperation)
+            DashboardField(stringResource(R.string.dashboard_proxy_authentication), proxyAuthenticationSummary(status))
             status.startupError?.let { startupError ->
-                DashboardField("Startup error", startupError.name)
+                DashboardField(stringResource(R.string.dashboard_startup_error), startupError.name)
             }
         }
 
-        DashboardSection("Route") {
-            DashboardField("Selected route", status.configuredRoute.name)
-            DashboardField("Bound route", status.boundRoute.toDashboardText())
-            DashboardField("Public IP", status.publicIp ?: "Unknown")
+        DashboardSection(stringResource(R.string.dashboard_section_route)) {
+            DashboardField(stringResource(R.string.dashboard_bound_route), status.boundRoute.toDashboardText())
+            DashboardField(stringResource(R.string.dashboard_local_control), managementApiSummary(status))
         }
 
-        DashboardSection("Traffic") {
-            DashboardField("Active connections", status.activeConnections.toString())
-            DashboardField("Recent traffic", recentTrafficSummary(status))
-            DashboardField("Total traffic", totalTrafficSummary(status))
-            DashboardField("Rejected connections", status.rejectedConnections.toString())
+        DashboardSection(stringResource(R.string.dashboard_section_traffic)) {
+            DashboardField(stringResource(R.string.dashboard_active_connections), status.activeConnections.toString())
+            DashboardField(stringResource(R.string.dashboard_recent_traffic), recentTrafficSummary(status))
+            DashboardField(stringResource(R.string.dashboard_total_traffic), totalTrafficSummary(status))
+            DashboardField(stringResource(R.string.dashboard_rejected_connections), status.rejectedConnections.toString())
         }
 
-        DashboardSection("Remote And Root") {
-            DashboardField("Cloudflare tunnel", status.cloudflare.state.name)
-            DashboardField("Remote management", remoteManagementSummary(status))
-            DashboardField("Cloudflare management API", cloudflareManagementApiCheckSummary(status))
-            DashboardField("Root availability", status.root.name)
+        DashboardSection(stringResource(R.string.dashboard_section_remote_root)) {
+            DashboardField(stringResource(R.string.dashboard_cloudflare_tunnel), status.cloudflare.state.name)
+            DashboardField(stringResource(R.string.dashboard_remote_management), remoteManagementSummary(status))
+            DashboardField(stringResource(R.string.dashboard_cloudflare_management_api), cloudflareManagementApiCheckSummary(status))
+            DashboardField(stringResource(R.string.dashboard_root_availability), status.root.name)
         }
 
-        DashboardSection("Recent high-severity errors") {
+        DashboardSection(stringResource(R.string.dashboard_section_recent_errors)) {
             if (screenState.recentHighSeverityErrors.isEmpty()) {
                 Text(
-                    text = "None",
+                    text = stringResource(R.string.label_none),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
@@ -306,10 +312,10 @@ internal fun CellularProxyDashboardScreen(
             }
         }
 
-        DashboardSection("Risk states") {
+        DashboardSection(stringResource(R.string.dashboard_section_risk_states)) {
             if (screenState.riskWarnings.isEmpty() && screenState.riskItems.isEmpty()) {
                 Text(
-                    text = "None",
+                    text = stringResource(R.string.label_none),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
@@ -334,6 +340,42 @@ internal fun CellularProxyDashboardScreen(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardStatusCard(status: DashboardStatusModel) {
+    ElevatedCard(
+        colors =
+            CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = status.serviceState.name,
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Text(
+                text = status.listenEndpoint,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text(status.configuredRoute.name) },
+                )
+                AssistChip(
+                    onClick = {},
+                    label = { Text(status.publicIp ?: stringResource(R.string.dashboard_public_ip_unknown)) },
+                )
             }
         }
     }
@@ -422,7 +464,7 @@ internal class DashboardScreenController(
         private set
 
     fun handle(event: DashboardScreenEvent) {
-        refreshPendingActions()
+        refreshPendingActions(clearLifecycleActions = event == DashboardScreenEvent.Refresh)
         when (event) {
             DashboardScreenEvent.StartProxy -> dispatchAction(DashboardScreenAction.StartProxy)
             DashboardScreenEvent.StopProxy -> dispatchAction(DashboardScreenAction.StopProxy)
@@ -462,9 +504,9 @@ internal class DashboardScreenController(
         refreshPendingActions()
     }
 
-    private fun refreshPendingActions() {
+    private fun refreshPendingActions(clearLifecycleActions: Boolean = false) {
         val currentServiceState = statusProvider().serviceState
-        if (currentServiceState != lastObservedServiceState) {
+        if (clearLifecycleActions || currentServiceState != lastObservedServiceState) {
             pendingLifecycleActions.clear()
             lastObservedServiceState = currentServiceState
         }
@@ -632,7 +674,7 @@ private fun DashboardActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Start proxy")
+            Text(stringResource(R.string.dashboard_start_proxy))
         }
         OutlinedButton(
             onClick = {
@@ -646,7 +688,7 @@ private fun DashboardActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Stop proxy")
+            Text(stringResource(R.string.dashboard_stop_proxy))
         }
         OutlinedButton(
             onClick = {
@@ -660,7 +702,7 @@ private fun DashboardActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Restart proxy service")
+            Text(stringResource(R.string.dashboard_restart_proxy))
         }
         OutlinedButton(
             onClick = {
@@ -674,9 +716,9 @@ private fun DashboardActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Refresh status")
+            Text(stringResource(R.string.dashboard_refresh_status))
         }
-        OutlinedButton(
+        FilledTonalButton(
             onClick = {
                 onAction(DashboardScreenAction.CopyProxyEndpoint)
             },
@@ -688,49 +730,7 @@ private fun DashboardActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy proxy endpoint")
-        }
-        OutlinedButton(
-            onClick = {
-                onAction(DashboardScreenAction.OpenRiskDetails)
-            },
-            enabled =
-                dashboardActionCanDispatch(
-                    action = DashboardScreenAction.OpenRiskDetails,
-                    actionsEnabled = actionsEnabled,
-                    availableActions = availableActions,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Open risk details")
-        }
-        OutlinedButton(
-            onClick = {
-                onAction(DashboardScreenAction.OpenSettings)
-            },
-            enabled =
-                dashboardActionCanDispatch(
-                    action = DashboardScreenAction.OpenSettings,
-                    actionsEnabled = actionsEnabled,
-                    availableActions = availableActions,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Open settings")
-        }
-        OutlinedButton(
-            onClick = {
-                onAction(DashboardScreenAction.OpenCloudflare)
-            },
-            enabled =
-                dashboardActionCanDispatch(
-                    action = DashboardScreenAction.OpenCloudflare,
-                    actionsEnabled = actionsEnabled,
-                    availableActions = availableActions,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Open Cloudflare")
+            Text(stringResource(R.string.dashboard_copy_proxy_endpoint))
         }
         OutlinedButton(
             onClick = {
@@ -744,35 +744,7 @@ private fun DashboardActionRow(
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Open rotation")
-        }
-        OutlinedButton(
-            onClick = {
-                onAction(DashboardScreenAction.OpenLogs)
-            },
-            enabled =
-                dashboardActionCanDispatch(
-                    action = DashboardScreenAction.OpenLogs,
-                    actionsEnabled = actionsEnabled,
-                    availableActions = availableActions,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Open logs")
-        }
-        OutlinedButton(
-            onClick = {
-                onAction(DashboardScreenAction.OpenDiagnostics)
-            },
-            enabled =
-                dashboardActionCanDispatch(
-                    action = DashboardScreenAction.OpenDiagnostics,
-                    actionsEnabled = actionsEnabled,
-                    availableActions = availableActions,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Open diagnostics")
+            Text(stringResource(R.string.dashboard_open_rotation))
         }
     }
 }
@@ -782,14 +754,23 @@ private fun DashboardSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    OutlinedCard(
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-        )
-        content()
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            content()
+        }
     }
 }
 
@@ -824,9 +805,9 @@ private fun proxyAuthenticationSummary(status: DashboardStatusModel): String = i
 }
 
 private fun managementApiSummary(status: DashboardStatusModel): String = when (status.managementApiStatus) {
-    DashboardManagementApiStatus.Available -> "Local management available"
-    DashboardManagementApiStatus.Unavailable -> "Local management unavailable"
-    DashboardManagementApiStatus.MissingToken -> "Management API token missing"
+    DashboardManagementApiStatus.Available -> "Internal control available"
+    DashboardManagementApiStatus.Unavailable -> "Internal control unavailable"
+    DashboardManagementApiStatus.MissingToken -> "Internal control token missing"
 }
 
 private fun remoteManagementSummary(status: DashboardStatusModel): String = if (status.cloudflare.remoteManagementAvailable) {

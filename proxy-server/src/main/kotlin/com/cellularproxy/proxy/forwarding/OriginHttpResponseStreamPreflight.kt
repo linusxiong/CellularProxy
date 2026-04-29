@@ -17,10 +17,9 @@ sealed interface OriginHttpResponseStreamPreflightResult {
             require(headerBytesRead > 0) { "Header bytes read must be positive" }
         }
 
-        override fun toString(): String =
-            "Accepted(statusCode=${response.statusCode}, " +
-                "headerCount=${response.headers.size}, " +
-                "headerBytesRead=$headerBytesRead)"
+        override fun toString(): String = "Accepted(statusCode=${response.statusCode}, " +
+            "headerCount=${response.headers.size}, " +
+            "headerBytesRead=$headerBytesRead)"
     }
 
     data class Rejected(
@@ -87,25 +86,24 @@ object OriginHttpResponseStreamPreflight {
         headerBlock: String,
         headerBytesRead: Int,
         maxHeaderBytes: Int,
-    ): OriginHttpResponseStreamPreflightResult =
-        when (
-            val parseResult =
-                HttpResponseHeaderBlockParser.parse(
-                    headerBlock = headerBlock,
-                    maxHeaderBytes = maxHeaderBytes,
-                )
-        ) {
-            is HttpResponseHeaderBlockParseResult.Accepted ->
-                OriginHttpResponseStreamPreflightResult.Accepted(
-                    response = parseResult.response,
-                    headerBytesRead = headerBytesRead,
-                )
-            is HttpResponseHeaderBlockParseResult.Rejected ->
-                OriginHttpResponseStreamPreflightResult.Rejected(
-                    reason = OriginHttpResponseStreamPreflightRejectionReason.HeaderParseRejected(parseResult.reason),
-                    headerBytesRead = headerBytesRead,
-                )
-        }
+    ): OriginHttpResponseStreamPreflightResult = when (
+        val parseResult =
+            HttpResponseHeaderBlockParser.parse(
+                headerBlock = headerBlock,
+                maxHeaderBytes = maxHeaderBytes,
+            )
+    ) {
+        is HttpResponseHeaderBlockParseResult.Accepted ->
+            OriginHttpResponseStreamPreflightResult.Accepted(
+                response = parseResult.response,
+                headerBytesRead = headerBytesRead,
+            )
+        is HttpResponseHeaderBlockParseResult.Rejected ->
+            OriginHttpResponseStreamPreflightResult.Rejected(
+                reason = OriginHttpResponseStreamPreflightRejectionReason.HeaderParseRejected(parseResult.reason),
+                headerBytesRead = headerBytesRead,
+            )
+    }
 }
 
 private const val DEFAULT_ORIGIN_RESPONSE_MAX_HEADER_BYTES = 16 * 1024

@@ -125,35 +125,33 @@ class ProxyBoundClientConnectionHandler(
         maxResponseTrailerBytes: Int = DEFAULT_BOUND_RESPONSE_TRAILER_BYTES,
         connectRelayBufferSize: Int = DEFAULT_BOUND_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
-    ): ProxyBoundClientConnectionHandlingResult =
-        try {
-            ProxyBoundClientConnectionHandlingResult(
-                activeConnectionsBeforeAdmission = reservation.activeConnectionsBeforeAdmission,
-                exchange =
-                    exchangeHandler.handle(
-                        config = config,
-                        activeConnections = reservation.activeConnectionsBeforeAdmission,
-                        client = reservation.client,
-                        httpBufferSize = httpBufferSize,
-                        maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                        maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                        maxResponseTrailerBytes = maxResponseTrailerBytes,
-                        connectRelayBufferSize = connectRelayBufferSize,
-                        recordMetricEvent = { event ->
-                            if (!event.isSocketLifecycleEvent()) {
-                                recordMetricEvent(event)
-                            }
-                        },
-                    ),
-            )
-        } finally {
-            reservation.release()
-        }
+    ): ProxyBoundClientConnectionHandlingResult = try {
+        ProxyBoundClientConnectionHandlingResult(
+            activeConnectionsBeforeAdmission = reservation.activeConnectionsBeforeAdmission,
+            exchange =
+                exchangeHandler.handle(
+                    config = config,
+                    activeConnections = reservation.activeConnectionsBeforeAdmission,
+                    client = reservation.client,
+                    httpBufferSize = httpBufferSize,
+                    maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                    maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                    maxResponseTrailerBytes = maxResponseTrailerBytes,
+                    connectRelayBufferSize = connectRelayBufferSize,
+                    recordMetricEvent = { event ->
+                        if (!event.isSocketLifecycleEvent()) {
+                            recordMetricEvent(event)
+                        }
+                    },
+                ),
+        )
+    } finally {
+        reservation.release()
+    }
 }
 
-private fun ProxyTrafficMetricsEvent.isSocketLifecycleEvent(): Boolean =
-    this == ProxyTrafficMetricsEvent.ConnectionAccepted ||
-        this == ProxyTrafficMetricsEvent.ConnectionClosed
+private fun ProxyTrafficMetricsEvent.isSocketLifecycleEvent(): Boolean = this == ProxyTrafficMetricsEvent.ConnectionAccepted ||
+    this == ProxyTrafficMetricsEvent.ConnectionClosed
 
 private fun ProxyTrafficMetricsEvent.recordSafely(recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit) {
     try {

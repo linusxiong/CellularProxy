@@ -151,7 +151,24 @@ class ProxyServerForegroundRuntimeLifecycleTest {
     }
 
     @Test
-    fun `start while stop is pending is rejected instead of losing restart request`() {
+    fun `start while stop is pending waits for stop completion before launching replacement runtime`() {
+        RuntimeHarness().use { harness ->
+            val lifecycle = harness.lifecycle()
+
+            lifecycle.startProxyRuntime()
+            lifecycle.stopProxyRuntime()
+
+            assertTrue(lifecycle.hasPendingStop)
+            lifecycle.startProxyRuntime()
+
+            assertFalse(lifecycle.hasPendingStop)
+            assertTrue(lifecycle.hasRunningRuntime)
+            assertEquals(2, harness.startCalls)
+        }
+    }
+
+    @Test
+    fun `start while stop remains pending is rejected after bounded wait`() {
         RuntimeHarness(acceptLoopExecutor = NeverRunningExecutorService()).use { harness ->
             val lifecycle = harness.lifecycle(stopTimeoutMillis = 1)
 
@@ -318,40 +335,39 @@ private class RuntimeHarness(
     fun lifecycle(
         stopTimeoutMillis: Long = 1_000,
         onRuntimeStarted: (com.cellularproxy.proxy.server.RunningProxyServerRuntime) -> Closeable? = { null },
-    ): ProxyServerForegroundRuntimeLifecycle =
-        ProxyServerForegroundRuntimeLifecycle(
-            startRuntime = {
-                startCalls += 1
-                ProxyServerRuntime
-                    .start(
-                        config =
-                            AppConfig.default().copy(
-                                proxy =
-                                    AppConfig.default().proxy.copy(
-                                        listenHost = LOOPBACK_HOST,
-                                        listenPort = 65_535,
-                                    ),
-                            ),
-                        managementApiTokenPresent = true,
-                        observedNetworks = listOf(wifiRoute()),
-                        ingressConfig = ingressConfig(),
-                        connectionHandler = connectionHandler(),
-                        workerExecutor = workerExecutor,
-                        queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                        acceptLoopExecutor = acceptLoopExecutor,
-                        recordMetricEvent = { _: ProxyTrafficMetricsEvent -> },
-                        bindListener = { listenHost, _, backlog ->
-                            ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
-                        },
-                    ).also { result ->
-                        if (result is ProxyServerRuntimeResult.Running) {
-                            lastRunningRuntime = result.runtime
-                        }
+    ): ProxyServerForegroundRuntimeLifecycle = ProxyServerForegroundRuntimeLifecycle(
+        startRuntime = {
+            startCalls += 1
+            ProxyServerRuntime
+                .start(
+                    config =
+                        AppConfig.default().copy(
+                            proxy =
+                                AppConfig.default().proxy.copy(
+                                    listenHost = LOOPBACK_HOST,
+                                    listenPort = 65_535,
+                                ),
+                        ),
+                    managementApiTokenPresent = true,
+                    observedNetworks = listOf(wifiRoute()),
+                    ingressConfig = ingressConfig(),
+                    connectionHandler = connectionHandler(),
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    recordMetricEvent = { _: ProxyTrafficMetricsEvent -> },
+                    bindListener = { listenHost, _, backlog ->
+                        ProxyServerSocketBinder.bindEphemeral(listenHost, backlog)
+                    },
+                ).also { result ->
+                    if (result is ProxyServerRuntimeResult.Running) {
+                        lastRunningRuntime = result.runtime
                     }
-            },
-            onRuntimeStarted = onRuntimeStarted,
-            stopTimeoutMillis = stopTimeoutMillis,
-        )
+                }
+        },
+        onRuntimeStarted = onRuntimeStarted,
+        stopTimeoutMillis = stopTimeoutMillis,
+    )
 
     override fun close() {
         lastRunningRuntime?.stop()
@@ -532,46 +548,43 @@ private class ErrorAcceptLoopFuture<T> : RunnableFuture<T> {
     ): T = get()
 }
 
-private fun ingressConfig(): ProxyIngressPreflightConfig =
-    ProxyIngressPreflightConfig(
-        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 10),
-        requestAdmission =
-            ProxyRequestAdmissionConfig(
-                proxyAuthentication =
-                    ProxyAuthenticationConfig(
-                        authEnabled = true,
-                        credential =
-                            ProxyCredential(
-                                username = "proxy-user",
-                                password = "proxy-password",
-                            ),
-                    ),
-                managementApiToken = "management-token",
-            ),
-    )
+private fun ingressConfig(): ProxyIngressPreflightConfig = ProxyIngressPreflightConfig(
+    connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 10),
+    requestAdmission =
+        ProxyRequestAdmissionConfig(
+            proxyAuthentication =
+                ProxyAuthenticationConfig(
+                    authEnabled = true,
+                    credential =
+                        ProxyCredential(
+                            username = "proxy-user",
+                            password = "proxy-password",
+                        ),
+                ),
+            managementApiToken = "management-token",
+        ),
+)
 
-private fun connectionHandler(): ProxyBoundClientConnectionHandler =
-    ProxyBoundClientConnectionHandler(
-        exchangeHandler =
-            com.cellularproxy.proxy.server.ProxyClientStreamExchangeHandler(
-                httpConnector = {
-                    OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.OutboundConnectionFailed)
-                },
-                connectConnector = {
-                    OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionFailed)
-                },
-                managementHandler = {
-                    ManagementApiResponse.json(statusCode = 200, body = "{}")
-                },
-            ),
-    )
+private fun connectionHandler(): ProxyBoundClientConnectionHandler = ProxyBoundClientConnectionHandler(
+    exchangeHandler =
+        com.cellularproxy.proxy.server.ProxyClientStreamExchangeHandler(
+            httpConnector = {
+                OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.OutboundConnectionFailed)
+            },
+            connectConnector = {
+                OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionFailed)
+            },
+            managementHandler = {
+                ManagementApiResponse.json(statusCode = 200, body = "{}")
+            },
+        ),
+)
 
-private fun wifiRoute(): NetworkDescriptor =
-    NetworkDescriptor(
-        id = "wifi",
-        category = NetworkCategory.WiFi,
-        displayName = "Home Wi-Fi",
-        isAvailable = true,
-    )
+private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+    id = "wifi",
+    category = NetworkCategory.WiFi,
+    displayName = "Home Wi-Fi",
+    isAvailable = true,
+)
 
 private const val LOOPBACK_HOST = "127.0.0.1"

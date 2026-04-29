@@ -11,20 +11,18 @@ class CloudflareTunnelStopCoordinator(
     private val controlPlane: CloudflareTunnelControlPlane,
     private val sessionRegistry: CloudflareTunnelEdgeSessionStore? = null,
 ) {
-    fun stopIfCurrent(expectedSnapshot: CloudflareTunnelControlPlaneSnapshot): CloudflareTunnelStopCoordinatorResult =
-        stopIfCurrent(
-            expectedSnapshot = expectedSnapshot,
-            activeConnectionProvider = { sessionRegistry?.takeActiveConnection() },
-        )
+    fun stopIfCurrent(expectedSnapshot: CloudflareTunnelControlPlaneSnapshot): CloudflareTunnelStopCoordinatorResult = stopIfCurrent(
+        expectedSnapshot = expectedSnapshot,
+        activeConnectionProvider = { sessionRegistry?.takeActiveConnection() },
+    )
 
     fun stopIfCurrent(
         expectedSnapshot: CloudflareTunnelControlPlaneSnapshot,
         activeConnection: CloudflareTunnelEdgeConnection?,
-    ): CloudflareTunnelStopCoordinatorResult =
-        stopIfCurrent(
-            expectedSnapshot = expectedSnapshot,
-            activeConnectionProvider = { activeConnection },
-        )
+    ): CloudflareTunnelStopCoordinatorResult = stopIfCurrent(
+        expectedSnapshot = expectedSnapshot,
+        activeConnectionProvider = { activeConnection },
+    )
 
     private fun stopIfCurrent(
         expectedSnapshot: CloudflareTunnelControlPlaneSnapshot,
@@ -60,17 +58,16 @@ class CloudflareTunnelStopCoordinator(
         return result
     }
 
-    private fun CloudflareTunnelState.isStoppableTunnelState(): Boolean =
-        when (this) {
-            CloudflareTunnelState.Starting,
-            CloudflareTunnelState.Connected,
-            CloudflareTunnelState.Degraded,
-            CloudflareTunnelState.Failed,
-            -> true
-            CloudflareTunnelState.Disabled,
-            CloudflareTunnelState.Stopped,
-            -> false
-        }
+    private fun CloudflareTunnelState.isStoppableTunnelState(): Boolean = when (this) {
+        CloudflareTunnelState.Starting,
+        CloudflareTunnelState.Connected,
+        CloudflareTunnelState.Degraded,
+        CloudflareTunnelState.Failed,
+        -> true
+        CloudflareTunnelState.Disabled,
+        CloudflareTunnelState.Stopped,
+        -> false
+    }
 }
 
 sealed interface CloudflareTunnelStopCoordinatorResult {

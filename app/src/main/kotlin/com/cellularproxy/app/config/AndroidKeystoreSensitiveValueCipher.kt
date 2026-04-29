@@ -79,11 +79,10 @@ class AndroidKeystoreSensitiveValueCipher private constructor(
         internal fun forTesting(
             keyProvider: SecretKeyProvider,
             cipherFactory: AesGcmCipherFactory = JcaAesGcmCipherFactory,
-        ): AndroidKeystoreSensitiveValueCipher =
-            AndroidKeystoreSensitiveValueCipher(
-                keyProvider = keyProvider,
-                cipherFactory = cipherFactory,
-            )
+        ): AndroidKeystoreSensitiveValueCipher = AndroidKeystoreSensitiveValueCipher(
+            keyProvider = keyProvider,
+            cipherFactory = cipherFactory,
+        )
     }
 }
 
@@ -91,10 +90,9 @@ private object JcaAesGcmCipherFactory : AndroidKeystoreSensitiveValueCipher.AesG
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_TAG_BITS = 128
 
-    override fun encryptCipher(key: SecretKey): Cipher =
-        Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.ENCRYPT_MODE, key)
-        }
+    override fun encryptCipher(key: SecretKey): Cipher = Cipher.getInstance(TRANSFORMATION).apply {
+        init(Cipher.ENCRYPT_MODE, key)
+    }
 
     override fun decryptCipher(
         key: SecretKey,

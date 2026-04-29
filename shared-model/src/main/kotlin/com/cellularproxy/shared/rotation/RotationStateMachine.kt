@@ -233,128 +233,117 @@ object RotationStateMachine {
         event: RotationEvent,
     ): RotationTransitionResult = transition(status, event)
 
-    private fun RotationStatus.afterCooldown(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.CooldownPassed -> copy(state = RotationState.CheckingRoot)
-            RotationEvent.CooldownRejected -> failed(RotationFailureReason.CooldownActive)
-            else -> null
-        }
+    private fun RotationStatus.afterCooldown(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.CooldownPassed -> copy(state = RotationState.CheckingRoot)
+        RotationEvent.CooldownRejected -> failed(RotationFailureReason.CooldownActive)
+        else -> null
+    }
 
-    private fun RotationStatus.afterRootCheck(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.RootAvailable -> copy(state = RotationState.ProbingOldPublicIp)
-            RotationEvent.RootUnavailable -> failed(RotationFailureReason.RootUnavailable)
-            else -> null
-        }
+    private fun RotationStatus.afterRootCheck(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.RootAvailable -> copy(state = RotationState.ProbingOldPublicIp)
+        RotationEvent.RootUnavailable -> failed(RotationFailureReason.RootUnavailable)
+        else -> null
+    }
 
-    private fun RotationStatus.afterOldIpProbe(event: RotationEvent): RotationStatus? =
-        when (event) {
-            is RotationEvent.OldPublicIpProbeSucceeded ->
-                copy(
-                    state = RotationState.PausingNewRequests,
-                    oldPublicIp = event.publicIp,
-                )
-            RotationEvent.OldPublicIpProbeFailed ->
-                failed(RotationFailureReason.OldPublicIpProbeFailed)
-            else -> null
-        }
+    private fun RotationStatus.afterOldIpProbe(event: RotationEvent): RotationStatus? = when (event) {
+        is RotationEvent.OldPublicIpProbeSucceeded ->
+            copy(
+                state = RotationState.PausingNewRequests,
+                oldPublicIp = event.publicIp,
+            )
+        RotationEvent.OldPublicIpProbeFailed ->
+            failed(RotationFailureReason.OldPublicIpProbeFailed)
+        else -> null
+    }
 
-    private fun RotationStatus.afterNewRequestsPaused(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.NewRequestsPaused -> copy(state = RotationState.DrainingConnections)
-            else -> null
-        }
+    private fun RotationStatus.afterNewRequestsPaused(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.NewRequestsPaused -> copy(state = RotationState.DrainingConnections)
+        else -> null
+    }
 
-    private fun RotationStatus.afterConnectionDrain(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.ConnectionsDrained -> copy(state = RotationState.RunningDisableCommand)
-            else -> null
-        }
+    private fun RotationStatus.afterConnectionDrain(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.ConnectionsDrained -> copy(state = RotationState.RunningDisableCommand)
+        else -> null
+    }
 
-    private fun RotationStatus.afterDisableCommand(event: RotationEvent): RotationStatus? =
-        when (event) {
-            is RotationEvent.RootCommandCompleted -> {
-                if (event.result.category != disableCommandCategory()) {
-                    null
-                } else {
-                    when (event.result.outcome) {
-                        RootCommandOutcome.Success -> copy(state = RotationState.WaitingForToggleDelay)
-                        RootCommandOutcome.Failure ->
-                            resumingFailure(RotationFailureReason.RootCommandFailed)
-                        RootCommandOutcome.Timeout ->
-                            resumingFailure(RotationFailureReason.RootCommandTimedOut)
-                    }
+    private fun RotationStatus.afterDisableCommand(event: RotationEvent): RotationStatus? = when (event) {
+        is RotationEvent.RootCommandCompleted -> {
+            if (event.result.category != disableCommandCategory()) {
+                null
+            } else {
+                when (event.result.outcome) {
+                    RootCommandOutcome.Success -> copy(state = RotationState.WaitingForToggleDelay)
+                    RootCommandOutcome.Failure ->
+                        resumingFailure(RotationFailureReason.RootCommandFailed)
+                    RootCommandOutcome.Timeout ->
+                        resumingFailure(RotationFailureReason.RootCommandTimedOut)
                 }
             }
-            is RotationEvent.RootCommandFailedToStart ->
-                if (event.category == disableCommandCategory()) {
-                    resumingFailure(RotationFailureReason.RootCommandFailed)
-                } else {
-                    null
-                }
-            else -> null
         }
+        is RotationEvent.RootCommandFailedToStart ->
+            if (event.category == disableCommandCategory()) {
+                resumingFailure(RotationFailureReason.RootCommandFailed)
+            } else {
+                null
+            }
+        else -> null
+    }
 
-    private fun RotationStatus.afterToggleDelay(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.ToggleDelayElapsed -> copy(state = RotationState.RunningEnableCommand)
-            else -> null
-        }
+    private fun RotationStatus.afterToggleDelay(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.ToggleDelayElapsed -> copy(state = RotationState.RunningEnableCommand)
+        else -> null
+    }
 
-    private fun RotationStatus.afterEnableCommand(event: RotationEvent): RotationStatus? =
-        when (event) {
-            is RotationEvent.RootCommandCompleted -> {
-                if (event.result.category != enableCommandCategory()) {
-                    null
-                } else {
-                    when (event.result.outcome) {
-                        RootCommandOutcome.Success -> copy(state = RotationState.WaitingForNetworkReturn)
-                        RootCommandOutcome.Failure ->
-                            resumingFailure(RotationFailureReason.RootCommandFailed)
-                        RootCommandOutcome.Timeout ->
-                            resumingFailure(RotationFailureReason.RootCommandTimedOut)
-                    }
+    private fun RotationStatus.afterEnableCommand(event: RotationEvent): RotationStatus? = when (event) {
+        is RotationEvent.RootCommandCompleted -> {
+            if (event.result.category != enableCommandCategory()) {
+                null
+            } else {
+                when (event.result.outcome) {
+                    RootCommandOutcome.Success -> copy(state = RotationState.WaitingForNetworkReturn)
+                    RootCommandOutcome.Failure ->
+                        resumingFailure(RotationFailureReason.RootCommandFailed)
+                    RootCommandOutcome.Timeout ->
+                        resumingFailure(RotationFailureReason.RootCommandTimedOut)
                 }
             }
-            is RotationEvent.RootCommandFailedToStart ->
-                if (event.category == enableCommandCategory()) {
-                    resumingFailure(RotationFailureReason.RootCommandFailed)
-                } else {
-                    null
-                }
-            else -> null
         }
+        is RotationEvent.RootCommandFailedToStart ->
+            if (event.category == enableCommandCategory()) {
+                resumingFailure(RotationFailureReason.RootCommandFailed)
+            } else {
+                null
+            }
+        else -> null
+    }
 
-    private fun RotationStatus.afterNetworkReturn(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.NetworkReturned -> copy(state = RotationState.ProbingNewPublicIp)
-            RotationEvent.NetworkReturnTimedOut ->
-                resumingFailure(RotationFailureReason.NetworkReturnTimedOut)
-            else -> null
-        }
+    private fun RotationStatus.afterNetworkReturn(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.NetworkReturned -> copy(state = RotationState.ProbingNewPublicIp)
+        RotationEvent.NetworkReturnTimedOut ->
+            resumingFailure(RotationFailureReason.NetworkReturnTimedOut)
+        else -> null
+    }
 
-    private fun RotationStatus.afterNewIpProbe(event: RotationEvent): RotationStatus? =
-        when (event) {
-            is RotationEvent.NewPublicIpProbeSucceeded ->
-                completeWithNewIp(
-                    publicIp = event.publicIp,
-                    strictIpChangeRequired = event.strictIpChangeRequired,
-                )
-            RotationEvent.NewPublicIpProbeFailed ->
-                resumingFailure(RotationFailureReason.NewPublicIpProbeFailed)
-            else -> null
-        }
+    private fun RotationStatus.afterNewIpProbe(event: RotationEvent): RotationStatus? = when (event) {
+        is RotationEvent.NewPublicIpProbeSucceeded ->
+            completeWithNewIp(
+                publicIp = event.publicIp,
+                strictIpChangeRequired = event.strictIpChangeRequired,
+            )
+        RotationEvent.NewPublicIpProbeFailed ->
+            resumingFailure(RotationFailureReason.NewPublicIpProbeFailed)
+        else -> null
+    }
 
-    private fun RotationStatus.afterProxyRequestsResumed(event: RotationEvent): RotationStatus? =
-        when (event) {
-            RotationEvent.ProxyRequestsResumed ->
-                if (failureReason == null) {
-                    copy(state = RotationState.Completed)
-                } else {
-                    copy(state = RotationState.Failed)
-                }
-            else -> null
-        }
+    private fun RotationStatus.afterProxyRequestsResumed(event: RotationEvent): RotationStatus? = when (event) {
+        RotationEvent.ProxyRequestsResumed ->
+            if (failureReason == null) {
+                copy(state = RotationState.Completed)
+            } else {
+                copy(state = RotationState.Failed)
+            }
+        else -> null
+    }
 
     private fun RotationStatus.completeWithNewIp(
         publicIp: String,
@@ -380,50 +369,43 @@ object RotationStateMachine {
         reason: RotationFailureReason,
         newPublicIp: String? = null,
         publicIpChanged: Boolean? = null,
-    ): RotationStatus =
-        RotationStatus(
-            state = RotationState.Failed,
-            operation = requireNotNull(operation),
-            oldPublicIp = oldPublicIp,
-            newPublicIp = newPublicIp,
-            publicIpChanged = publicIpChanged,
-            failureReason = reason,
-        )
+    ): RotationStatus = RotationStatus(
+        state = RotationState.Failed,
+        operation = requireNotNull(operation),
+        oldPublicIp = oldPublicIp,
+        newPublicIp = newPublicIp,
+        publicIpChanged = publicIpChanged,
+        failureReason = reason,
+    )
 
     private fun RotationStatus.resumingFailure(
         reason: RotationFailureReason,
         newPublicIp: String? = null,
         publicIpChanged: Boolean? = null,
-    ): RotationStatus =
-        copy(
-            state = RotationState.ResumingProxyRequests,
-            newPublicIp = newPublicIp,
-            publicIpChanged = publicIpChanged,
-            failureReason = reason,
-        )
+    ): RotationStatus = copy(
+        state = RotationState.ResumingProxyRequests,
+        newPublicIp = newPublicIp,
+        publicIpChanged = publicIpChanged,
+        failureReason = reason,
+    )
 
-    private fun RotationStatus.disableCommandCategory() =
-        when (operation) {
-            RotationOperation.MobileData -> RootCommandCategory.MobileDataDisable
-            RotationOperation.AirplaneMode -> RootCommandCategory.AirplaneModeEnable
-            null -> error("Rotation operation is required")
-        }
+    private fun RotationStatus.disableCommandCategory() = when (operation) {
+        RotationOperation.MobileData -> RootCommandCategory.MobileDataDisable
+        RotationOperation.AirplaneMode -> RootCommandCategory.AirplaneModeEnable
+        null -> error("Rotation operation is required")
+    }
 
-    private fun RotationStatus.enableCommandCategory() =
-        when (operation) {
-            RotationOperation.MobileData -> RootCommandCategory.MobileDataEnable
-            RotationOperation.AirplaneMode -> RootCommandCategory.AirplaneModeDisable
-            null -> error("Rotation operation is required")
-        }
+    private fun RotationStatus.enableCommandCategory() = when (operation) {
+        RotationOperation.MobileData -> RootCommandCategory.MobileDataEnable
+        RotationOperation.AirplaneMode -> RootCommandCategory.AirplaneModeDisable
+        null -> error("Rotation operation is required")
+    }
 
-    private fun accepted(status: RotationStatus): RotationTransitionResult =
-        RotationTransitionResult(RotationTransitionDisposition.Accepted, status)
+    private fun accepted(status: RotationStatus): RotationTransitionResult = RotationTransitionResult(RotationTransitionDisposition.Accepted, status)
 
-    private fun duplicate(status: RotationStatus): RotationTransitionResult =
-        RotationTransitionResult(RotationTransitionDisposition.Duplicate, status)
+    private fun duplicate(status: RotationStatus): RotationTransitionResult = RotationTransitionResult(RotationTransitionDisposition.Duplicate, status)
 
-    private fun ignored(status: RotationStatus): RotationTransitionResult =
-        RotationTransitionResult(RotationTransitionDisposition.Ignored, status)
+    private fun ignored(status: RotationStatus): RotationTransitionResult = RotationTransitionResult(RotationTransitionDisposition.Ignored, status)
 }
 
 private val TERMINAL_STATES =

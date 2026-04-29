@@ -17,28 +17,26 @@ class RotationPublicIpProbeController(
     suspend fun probeOldPublicIp(
         route: RouteTarget,
         endpoint: PublicIpProbeEndpoint,
-    ): RotationPublicIpProbeDecision =
-        when (val result = probeRunner.probe(route, endpoint)) {
-            is PublicIpProbeResult.Success ->
-                RotationPublicIpProbeDecision.OldProbeSucceeded(result)
-            is PublicIpProbeResult.Failed ->
-                RotationPublicIpProbeDecision.OldProbeFailed(result)
-        }
+    ): RotationPublicIpProbeDecision = when (val result = probeRunner.probe(route, endpoint)) {
+        is PublicIpProbeResult.Success ->
+            RotationPublicIpProbeDecision.OldProbeSucceeded(result)
+        is PublicIpProbeResult.Failed ->
+            RotationPublicIpProbeDecision.OldProbeFailed(result)
+    }
 
     suspend fun probeNewPublicIp(
         route: RouteTarget,
         endpoint: PublicIpProbeEndpoint,
         strictIpChangeRequired: Boolean,
-    ): RotationPublicIpProbeDecision =
-        when (val result = probeRunner.probe(route, endpoint)) {
-            is PublicIpProbeResult.Success ->
-                RotationPublicIpProbeDecision.NewProbeSucceeded(
-                    result = result,
-                    strictIpChangeRequired = strictIpChangeRequired,
-                )
-            is PublicIpProbeResult.Failed ->
-                RotationPublicIpProbeDecision.NewProbeFailed(result)
-        }
+    ): RotationPublicIpProbeDecision = when (val result = probeRunner.probe(route, endpoint)) {
+        is PublicIpProbeResult.Success ->
+            RotationPublicIpProbeDecision.NewProbeSucceeded(
+                result = result,
+                strictIpChangeRequired = strictIpChangeRequired,
+            )
+        is PublicIpProbeResult.Failed ->
+            RotationPublicIpProbeDecision.NewProbeFailed(result)
+    }
 }
 
 sealed interface RotationPublicIpProbeDecision {

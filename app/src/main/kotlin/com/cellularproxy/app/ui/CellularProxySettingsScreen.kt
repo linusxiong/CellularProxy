@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -24,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -31,17 +36,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.R
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.app.viewmodel.SettingsViewModel
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
+import com.cellularproxy.shared.network.NetworkCategory
+import com.cellularproxy.shared.network.NetworkDescriptor
 
 @Composable
 internal fun CellularProxySettingsRoute(
     initialConfigProvider: () -> AppConfig = AppConfig::default,
     saveConfig: (AppConfig) -> Unit = {},
+    observedNetworksProvider: () -> List<NetworkDescriptor> = { emptyList() },
+    selectedLanguageProvider: () -> SettingsLanguageOption = { SettingsLanguageOption.System },
+    onLanguageChange: (SettingsLanguageOption) -> Unit = {},
     loadSensitiveConfig: (() -> SensitiveConfig)? = null,
     loadSensitiveConfigResult: (() -> SensitiveConfigLoadResult)? = null,
     saveSensitiveConfig: ((SensitiveConfig) -> Unit)? = null,
@@ -54,6 +65,7 @@ internal fun CellularProxySettingsRoute(
     val currentSaveSensitiveConfig by rememberUpdatedState(saveSensitiveConfig)
     val currentOnRecordSettingsAuditAction by rememberUpdatedState(onRecordSettingsAuditAction)
     val observedConfig = initialConfigProvider()
+    val availableRoutes = availableRouteTargetsFromObservedNetworks(observedNetworksProvider())
     val settingsViewModel =
         viewModel<SettingsViewModel>(
             factory =
@@ -94,6 +106,9 @@ internal fun CellularProxySettingsRoute(
         onFormChange = { updatedForm -> dispatchEvent(ProxySettingsScreenEvent.UpdateForm(updatedForm)) },
         onSaveSettings = { dispatchEvent(ProxySettingsScreenEvent.SaveChanges) },
         onDiscardChanges = { dispatchEvent(ProxySettingsScreenEvent.DiscardChanges) },
+        availableRoutes = availableRoutes,
+        selectedLanguage = selectedLanguageProvider(),
+        onLanguageChange = onLanguageChange,
     )
 }
 
@@ -123,6 +138,9 @@ internal fun CellularProxySettingsScreen(
     onFormChange: (ProxySettingsFormState) -> Unit = {},
     onSaveSettings: () -> Unit = {},
     onDiscardChanges: () -> Unit = {},
+    availableRoutes: List<RouteTarget> = RouteTarget.entries,
+    selectedLanguage: SettingsLanguageOption = SettingsLanguageOption.System,
+    onLanguageChange: (SettingsLanguageOption) -> Unit = {},
 ) {
     val currentForm = state.form
 
@@ -134,98 +152,103 @@ internal fun CellularProxySettingsScreen(
                 .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        SettingsSection(stringResource(R.string.settings_section_appearance)) {
+            SettingsLanguageSelector(
+                selectedLanguage = selectedLanguage,
+                onLanguageChange = onLanguageChange,
+            )
+        }
 
-        SettingsSection("Proxy") {
+        SettingsSection(stringResource(R.string.settings_section_proxy)) {
             SettingsTextField(
-                label = "Listen host",
+                label = stringResource(R.string.settings_listen_host),
                 value = currentForm.listenHost,
                 onValueChange = { value -> onFormChange(currentForm.copy(listenHost = value)) },
             )
             SettingsTextField(
-                label = "Listen port",
+                label = stringResource(R.string.settings_listen_port),
                 value = currentForm.listenPort,
                 keyboardType = KeyboardType.Number,
                 onValueChange = { value -> onFormChange(currentForm.copy(listenPort = value)) },
             )
             SettingsSwitchRow(
-                label = "Proxy authentication",
+                label = stringResource(R.string.settings_proxy_auth_enabled),
                 checked = currentForm.authEnabled,
                 onCheckedChange = { checked -> onFormChange(currentForm.copy(authEnabled = checked)) },
             )
+            if (currentForm.authEnabled) {
+                Text(
+                    text = stringResource(R.string.settings_proxy_credential_status, state.proxyCredentialStatus.label),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                SettingsTextField(
+                    label = stringResource(R.string.settings_proxy_username),
+                    value = currentForm.proxyUsername,
+                    onValueChange = { value -> onFormChange(currentForm.copy(proxyUsername = value)) },
+                )
+                SettingsTextField(
+                    label = stringResource(R.string.settings_proxy_password),
+                    value = currentForm.proxyPassword,
+                    keyboardType = KeyboardType.Password,
+                    visualTransformation = PasswordVisualTransformation(),
+                    onValueChange = { value -> onFormChange(currentForm.copy(proxyPassword = value)) },
+                )
+            }
             SettingsTextField(
-                label = "Max concurrent connections",
+                label = stringResource(R.string.settings_max_concurrent_connections),
                 value = currentForm.maxConcurrentConnections,
                 keyboardType = KeyboardType.Number,
                 onValueChange = { value -> onFormChange(currentForm.copy(maxConcurrentConnections = value)) },
             )
             SettingsRouteSelector(
                 selectedRoute = currentForm.route,
+                availableRoutes = availableRoutes,
                 onRouteChange = { route -> onFormChange(currentForm.copy(route = route)) },
             )
         }
 
-        SettingsSection("Rotation And Root") {
+        SettingsSection(stringResource(R.string.settings_section_rotation_root)) {
             SettingsSwitchRow(
-                label = "Strict IP change",
+                label = stringResource(R.string.settings_strict_ip_change_required),
                 checked = currentForm.strictIpChangeRequired,
                 onCheckedChange = { checked -> onFormChange(currentForm.copy(strictIpChangeRequired = checked)) },
             )
             SettingsTextField(
-                label = "Mobile data off delay",
+                label = stringResource(R.string.settings_mobile_data_off_delay_seconds),
                 value = currentForm.mobileDataOffDelaySeconds,
                 keyboardType = KeyboardType.Number,
                 onValueChange = { value -> onFormChange(currentForm.copy(mobileDataOffDelaySeconds = value)) },
             )
             SettingsTextField(
-                label = "Network return timeout",
+                label = stringResource(R.string.settings_network_return_timeout_seconds),
                 value = currentForm.networkReturnTimeoutSeconds,
                 keyboardType = KeyboardType.Number,
                 onValueChange = { value -> onFormChange(currentForm.copy(networkReturnTimeoutSeconds = value)) },
             )
             SettingsTextField(
-                label = "Rotation cooldown",
+                label = stringResource(R.string.settings_rotation_cooldown_seconds),
                 value = currentForm.cooldownSeconds,
                 keyboardType = KeyboardType.Number,
                 onValueChange = { value -> onFormChange(currentForm.copy(cooldownSeconds = value)) },
             )
             SettingsSwitchRow(
-                label = "Root operations",
+                label = stringResource(R.string.settings_root_operations_enabled),
                 checked = currentForm.rootOperationsEnabled,
                 onCheckedChange = { checked -> onFormChange(currentForm.copy(rootOperationsEnabled = checked)) },
             )
         }
 
-        SettingsSection("Secrets") {
+        SettingsSection(stringResource(R.string.settings_section_secrets)) {
             Text(
-                text = "Leave secret fields blank to keep current values.",
+                text = stringResource(R.string.settings_management_api_token_help),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = "Proxy credential status: ${state.proxyCredentialStatus.label}",
+                text = stringResource(R.string.settings_management_api_token_status, state.managementApiTokenStatus.label),
                 style = MaterialTheme.typography.bodyMedium,
             )
             SettingsTextField(
-                label = "Proxy username",
-                value = currentForm.proxyUsername,
-                onValueChange = { value -> onFormChange(currentForm.copy(proxyUsername = value)) },
-            )
-            SettingsTextField(
-                label = "Proxy password",
-                value = currentForm.proxyPassword,
-                keyboardType = KeyboardType.Password,
-                visualTransformation = PasswordVisualTransformation(),
-                onValueChange = { value -> onFormChange(currentForm.copy(proxyPassword = value)) },
-            )
-            Text(
-                text = "Management API token status: ${state.managementApiTokenStatus.label}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            SettingsTextField(
-                label = "Management API token",
+                label = stringResource(R.string.settings_management_api_token),
                 value = currentForm.managementApiToken,
                 keyboardType = KeyboardType.Password,
                 visualTransformation = PasswordVisualTransformation(),
@@ -233,28 +256,34 @@ internal fun CellularProxySettingsScreen(
             )
         }
 
-        SettingsSection("Cloudflare") {
+        SettingsSection(stringResource(R.string.settings_section_cloudflare)) {
             SettingsSwitchRow(
-                label = "Cloudflare enabled",
+                label = stringResource(R.string.settings_cloudflare_enabled),
                 checked = currentForm.cloudflareEnabled,
                 onCheckedChange = { checked -> onFormChange(currentForm.copy(cloudflareEnabled = checked)) },
             )
             Text(
-                text = "Tunnel token status: ${state.cloudflareTokenStatus.label}",
+                text = stringResource(R.string.settings_tunnel_token_status, state.cloudflareTokenStatus.label),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            SettingsTextField(
-                label = "Cloudflare tunnel token",
-                value = currentForm.cloudflareTunnelToken,
-                keyboardType = KeyboardType.Password,
-                visualTransformation = PasswordVisualTransformation(),
-                onValueChange = { value -> onFormChange(currentForm.copy(cloudflareTunnelToken = value)) },
-            )
-            SettingsTextField(
-                label = "Cloudflare hostname",
-                value = currentForm.cloudflareHostnameLabel,
-                onValueChange = { value -> onFormChange(currentForm.copy(cloudflareHostnameLabel = value)) },
-            )
+            if (currentForm.cloudflareEnabled) {
+                Text(
+                    text = stringResource(R.string.settings_secret_blank_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                SettingsTextField(
+                    label = stringResource(R.string.settings_cloudflare_tunnel_token),
+                    value = currentForm.cloudflareTunnelToken,
+                    keyboardType = KeyboardType.Password,
+                    visualTransformation = PasswordVisualTransformation(),
+                    onValueChange = { value -> onFormChange(currentForm.copy(cloudflareTunnelToken = value)) },
+                )
+                SettingsTextField(
+                    label = stringResource(R.string.settings_cloudflare_hostname_label),
+                    value = currentForm.cloudflareHostnameLabel,
+                    onValueChange = { value -> onFormChange(currentForm.copy(cloudflareHostnameLabel = value)) },
+                )
+            }
         }
 
         SettingsWarnings(state.warnings)
@@ -266,14 +295,14 @@ internal fun CellularProxySettingsScreen(
             enabled = saveEnabled && ProxySettingsScreenAction.SaveChanges in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Save settings")
+            Text(stringResource(R.string.settings_save))
         }
         OutlinedButton(
             onClick = onDiscardChanges,
             enabled = saveEnabled && ProxySettingsScreenAction.DiscardChanges in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Discard changes")
+            Text(stringResource(R.string.settings_discard_changes))
         }
     }
 }
@@ -322,14 +351,23 @@ private fun SettingsSection(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    OutlinedCard(
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-        )
-        content()
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            content()
+        }
     }
 }
 
@@ -382,7 +420,14 @@ private fun SettingsSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .toggleable(
+                    value = checked,
+                    role = Role.Switch,
+                    onValueChange = onCheckedChange,
+                ),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
@@ -392,35 +437,106 @@ private fun SettingsSwitchRow(
         )
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
         )
     }
 }
 
 @Composable
+private fun SettingsLanguageSelector(
+    selectedLanguage: SettingsLanguageOption,
+    onLanguageChange: (SettingsLanguageOption) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_language),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SettingsLanguageOption.entries.forEach { option ->
+                FilterChip(
+                    selected = option == selectedLanguage,
+                    onClick = { onLanguageChange(option) },
+                    label = {
+                        Text(option.localizedLabel())
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsLanguageOption.localizedLabel(): String = when (this) {
+    SettingsLanguageOption.System -> stringResource(R.string.language_system)
+    SettingsLanguageOption.English -> stringResource(R.string.language_english)
+    SettingsLanguageOption.ChineseSimplified -> stringResource(R.string.language_chinese_simplified)
+}
+
+@Composable
 private fun SettingsRouteSelector(
     selectedRoute: RouteTarget,
+    availableRoutes: List<RouteTarget>,
     onRouteChange: (RouteTarget) -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Default route",
+            text = stringResource(R.string.settings_route_policy),
             style = MaterialTheme.typography.labelLarge,
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            RouteTarget.entries.forEach { route ->
+            availableRoutes.forEach { route ->
                 FilterChip(
                     selected = route == selectedRoute,
                     onClick = { onRouteChange(route) },
                     label = {
-                        Text(route.name)
+                        Text(route.localizedLabel())
                     },
                 )
             }
         }
+    }
+}
+
+internal enum class SettingsLanguageOption(
+    val localeTag: String?,
+) {
+    System(localeTag = null),
+    English(localeTag = "en"),
+    ChineseSimplified(localeTag = "zh-CN"),
+    ;
+
+    companion object {
+        fun fromTag(tag: String?): SettingsLanguageOption = entries.firstOrNull { option -> option.localeTag == tag?.takeIf(String::isNotBlank) } ?: System
+    }
+}
+
+@Composable
+private fun RouteTarget.localizedLabel(): String = when (this) {
+    RouteTarget.Automatic -> stringResource(R.string.route_automatic)
+    RouteTarget.WiFi -> stringResource(R.string.route_wifi)
+    RouteTarget.Cellular -> stringResource(R.string.route_cellular)
+    RouteTarget.Vpn -> stringResource(R.string.route_vpn)
+}
+
+internal fun availableRouteTargetsFromObservedNetworks(networks: List<NetworkDescriptor>): List<RouteTarget> {
+    val availableCategories =
+        networks
+            .filter(NetworkDescriptor::isAvailable)
+            .map(NetworkDescriptor::category)
+            .toSet()
+    return buildList {
+        add(RouteTarget.Automatic)
+        if (NetworkCategory.WiFi in availableCategories) add(RouteTarget.WiFi)
+        if (NetworkCategory.Cellular in availableCategories) add(RouteTarget.Cellular)
+        if (NetworkCategory.Vpn in availableCategories) add(RouteTarget.Vpn)
     }
 }

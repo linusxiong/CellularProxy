@@ -213,20 +213,18 @@ class CloudflareTunnelStartCoordinatorTest {
         assertTrue(failure.isFailure)
     }
 
-    private fun validToken(): String =
-        encodedToken(
-            """{"a":"account-tag","s":"${ByteArray(
-                32,
-            ) { index -> (index + 1).toByte() }.base64()}","t":"123e4567-e89b-12d3-a456-426614174000"}""",
-        )
+    private fun validToken(): String = encodedToken(
+        """{"a":"account-tag","s":"${ByteArray(
+            32,
+        ) { index -> (index + 1).toByte() }.base64()}","t":"123e4567-e89b-12d3-a456-426614174000"}""",
+    )
 
-    private fun credentials(): CloudflareTunnelCredentials =
-        CloudflareTunnelCredentials(
-            accountTag = "account-tag",
-            tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-            tunnelSecret = ByteArray(32) { index -> (index + 1).toByte() },
-            endpoint = null,
-        )
+    private fun credentials(): CloudflareTunnelCredentials = CloudflareTunnelCredentials(
+        accountTag = "account-tag",
+        tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+        tunnelSecret = ByteArray(32) { index -> (index + 1).toByte() },
+        endpoint = null,
+    )
 
     private fun encodedToken(json: String): String = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
 

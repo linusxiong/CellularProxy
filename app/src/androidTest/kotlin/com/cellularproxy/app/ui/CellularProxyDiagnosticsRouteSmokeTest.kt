@@ -95,7 +95,7 @@ class CellularProxyDiagnosticsRouteSmokeTest {
             .performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule
-                .onAllNodes(hasText("Local management API unauthorized"))
+                .onAllNodes(hasText("Local management API rejected diagnostics authentication"))
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
@@ -130,7 +130,11 @@ class CellularProxyDiagnosticsRouteSmokeTest {
             ),
             auditRecords,
         )
-        assertEquals("Local management API: warning (unauthorized) - Local management API rejected credentials", copiedTexts.single())
+        assertEquals(
+            "Local management API: failed in 0ms (local-management-api-unauthorized) - " +
+                "Local management API rejected diagnostics authentication",
+            copiedTexts.single(),
+        )
         assertFalse(copiedTexts.single().contains("management-secret"))
     }
 }

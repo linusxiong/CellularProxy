@@ -12,11 +12,10 @@ class RootShellCommand private constructor(
 ) {
     val argv: List<String> = argv.toList()
 
-    override fun equals(other: Any?): Boolean =
-        this === other ||
-            other is RootShellCommand &&
-            category == other.category &&
-            argv == other.argv
+    override fun equals(other: Any?): Boolean = this === other ||
+        other is RootShellCommand &&
+        category == other.category &&
+        argv == other.argv
 
     override fun hashCode(): Int = 31 * category.hashCode() + argv.hashCode()
 
@@ -173,35 +172,30 @@ class RootCommandExecutor(
 }
 
 object RootShellCommands {
-    fun rootAvailabilityCheck(): RootShellCommand =
-        suCommand(
-            category = RootCommandCategory.RootAvailabilityCheck,
-            shellCommand = "id -u",
-        )
+    fun rootAvailabilityCheck(): RootShellCommand = suCommand(
+        category = RootCommandCategory.RootAvailabilityCheck,
+        shellCommand = "id -u",
+    )
 
-    fun mobileDataDisable(): RootShellCommand =
-        suCommand(
-            category = RootCommandCategory.MobileDataDisable,
-            shellCommand = "svc data disable",
-        )
+    fun mobileDataDisable(): RootShellCommand = suCommand(
+        category = RootCommandCategory.MobileDataDisable,
+        shellCommand = "svc data disable",
+    )
 
-    fun mobileDataEnable(): RootShellCommand =
-        suCommand(
-            category = RootCommandCategory.MobileDataEnable,
-            shellCommand = "svc data enable",
-        )
+    fun mobileDataEnable(): RootShellCommand = suCommand(
+        category = RootCommandCategory.MobileDataEnable,
+        shellCommand = "svc data enable",
+    )
 
-    fun airplaneModeEnable(): RootShellCommand =
-        suCommand(
-            category = RootCommandCategory.AirplaneModeEnable,
-            shellCommand = "cmd connectivity airplane-mode enable",
-        )
+    fun airplaneModeEnable(): RootShellCommand = suCommand(
+        category = RootCommandCategory.AirplaneModeEnable,
+        shellCommand = "cmd connectivity airplane-mode enable",
+    )
 
-    fun airplaneModeDisable(): RootShellCommand =
-        suCommand(
-            category = RootCommandCategory.AirplaneModeDisable,
-            shellCommand = "cmd connectivity airplane-mode disable",
-        )
+    fun airplaneModeDisable(): RootShellCommand = suCommand(
+        category = RootCommandCategory.AirplaneModeDisable,
+        shellCommand = "cmd connectivity airplane-mode disable",
+    )
 
     fun serviceRestart(packageName: String): RootShellCommand {
         val trustedPackageName = packageName.validatedAndroidPackageName()
@@ -215,11 +209,10 @@ object RootShellCommands {
     private fun suCommand(
         category: RootCommandCategory,
         shellCommand: String,
-    ): RootShellCommand =
-        RootShellCommand.trusted(
-            category = category,
-            argv = listOf("su", "-c", shellCommand),
-        )
+    ): RootShellCommand = RootShellCommand.trusted(
+        category = category,
+        argv = listOf("su", "-c", shellCommand),
+    )
 }
 
 private fun String.validatedAndroidPackageName(): String {

@@ -125,20 +125,19 @@ class ForegroundServiceNotificationDescriptorTest {
         priority: NotificationPriority = NotificationPriority.Foreground,
         isOngoing: Boolean = true,
         stopAction: ForegroundServiceNotificationAction? = null,
-    ): ForegroundServiceNotificationDescriptor =
-        ForegroundServiceNotificationDescriptor(
-            channelId = ForegroundServiceNotificationDescriptor.CHANNEL_ID,
-            channelNameResId = R.string.notification_channel_proxy_service,
-            channelDescriptionResId = R.string.notification_channel_proxy_service_description,
-            channelImportance = NotificationChannelImportance.Low,
-            notificationId = ForegroundServiceNotificationDescriptor.NOTIFICATION_ID,
-            smallIconResId = R.drawable.ic_stat_cellularproxy,
-            title = "CellularProxy running",
-            contentText = "0.0.0.0:8080 | Cellular | 1 active",
-            detailText = "IP unknown | Cloudflare disabled | Root unknown",
-            warningText = null,
-            priority = priority,
-            isOngoing = isOngoing,
-            stopAction = stopAction,
-        )
+    ): ForegroundServiceNotificationDescriptor = ForegroundServiceNotificationDescriptor(
+        channelId = ForegroundServiceNotificationDescriptor.CHANNEL_ID,
+        channelNameResId = R.string.notification_channel_proxy_service,
+        channelDescriptionResId = R.string.notification_channel_proxy_service_description,
+        channelImportance = NotificationChannelImportance.Low,
+        notificationId = ForegroundServiceNotificationDescriptor.NOTIFICATION_ID,
+        smallIconResId = R.drawable.ic_stat_cellularproxy,
+        title = "CellularProxy running",
+        contentText = "0.0.0.0:8080 | Cellular | 1 active",
+        detailText = "IP unknown | Cloudflare disabled | Root unknown",
+        warningText = null,
+        priority = priority,
+        isOngoing = isOngoing,
+        stopAction = stopAction,
+    )
 }

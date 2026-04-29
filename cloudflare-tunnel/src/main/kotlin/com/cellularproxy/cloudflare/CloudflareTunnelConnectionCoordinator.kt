@@ -115,23 +115,21 @@ sealed interface CloudflareTunnelConnectionCoordinatorResult {
 internal fun connectToCloudflareEdge(
     connector: CloudflareTunnelEdgeConnector,
     credentials: CloudflareTunnelCredentials,
-): CloudflareTunnelEdgeConnectionResult =
-    try {
-        connector.connect(credentials)
-    } catch (exception: InterruptedException) {
-        Thread.currentThread().interrupt()
-        throw exception
-    } catch (exception: CancellationException) {
-        throw exception
-    } catch (_: Exception) {
-        CloudflareTunnelEdgeConnectionResult.Failed(CloudflareTunnelEdgeConnectionFailure.ProtocolError)
-    }
+): CloudflareTunnelEdgeConnectionResult = try {
+    connector.connect(credentials)
+} catch (exception: InterruptedException) {
+    Thread.currentThread().interrupt()
+    throw exception
+} catch (exception: CancellationException) {
+    throw exception
+} catch (_: Exception) {
+    CloudflareTunnelEdgeConnectionResult.Failed(CloudflareTunnelEdgeConnectionFailure.ProtocolError)
+}
 
-internal fun CloudflareTunnelEdgeConnectionResult.toCloudflareTunnelEvent(): CloudflareTunnelEvent =
-    when (this) {
-        is CloudflareTunnelEdgeConnectionResult.Connected -> CloudflareTunnelEvent.Connected
-        is CloudflareTunnelEdgeConnectionResult.Failed -> CloudflareTunnelEvent.Failed(failure.name)
-    }
+internal fun CloudflareTunnelEdgeConnectionResult.toCloudflareTunnelEvent(): CloudflareTunnelEvent = when (this) {
+    is CloudflareTunnelEdgeConnectionResult.Connected -> CloudflareTunnelEvent.Connected
+    is CloudflareTunnelEdgeConnectionResult.Failed -> CloudflareTunnelEvent.Failed(failure.name)
+}
 
 internal fun CloudflareTunnelEdgeSessionStore.installConnectedSession(
     snapshot: CloudflareTunnelControlPlaneSnapshot,

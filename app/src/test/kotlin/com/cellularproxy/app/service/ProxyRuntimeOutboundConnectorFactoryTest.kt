@@ -13,7 +13,6 @@ import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -120,11 +119,50 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
             try {
                 assertTrue(provider.awaitStarted())
                 workerThread.get().interrupt()
-                val failure =
-                    assertFailsWith<ExecutionException> {
-                        future.get(1, TimeUnit.SECONDS)
-                    }
-                assertIs<InterruptedException>(failure.cause)
+                assertEquals(
+                    OutboundHttpOriginOpenResult.Failed(OutboundHttpOriginOpenFailure.OutboundConnectionFailed),
+                    future.get(1, TimeUnit.SECONDS),
+                )
+
+                provider.resumeWith(BoundSocketConnectResult.Connected(socketPair.client, wifiRoute()))
+
+                assertTrue(socketPair.client.isClosed)
+            } finally {
+                executor.shutdownNow()
+                assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun `interrupted connect tunnel connector returns failure instead of crashing worker thread`() {
+        ConnectedSocketPair.open().use { socketPair ->
+            val provider = SuspendedBoundSocketProvider()
+            val connectors =
+                ProxyRuntimeOutboundConnectorFactory.create(
+                    route = RouteTarget.Cellular,
+                    socketProvider = provider,
+                )
+            val executor = Executors.newSingleThreadExecutor()
+            val workerThread = AtomicReference<Thread>()
+            val future =
+                executor.submit<OutboundConnectTunnelOpenResult> {
+                    workerThread.set(Thread.currentThread())
+                    connectors.connectConnector.open(
+                        ParsedProxyRequest.ConnectTunnel(
+                            host = "example.com",
+                            port = 443,
+                        ),
+                    )
+                }
+
+            try {
+                assertTrue(provider.awaitStarted())
+                workerThread.get().interrupt()
+                assertEquals(
+                    OutboundConnectTunnelOpenResult.Failed(OutboundConnectTunnelOpenFailure.OutboundConnectionFailed),
+                    future.get(1, TimeUnit.SECONDS),
+                )
 
                 provider.resumeWith(BoundSocketConnectResult.Connected(socketPair.client, wifiRoute()))
 
@@ -247,11 +285,10 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
             host: String,
             port: Int,
             timeoutMillis: Long,
-        ): BoundSocketConnectResult =
-            suspendCoroutine { continuation ->
-                this.continuation.set(continuation)
-                started.countDown()
-            }
+        ): BoundSocketConnectResult = suspendCoroutine { continuation ->
+            this.continuation.set(continuation)
+            started.countDown()
+        }
 
         fun awaitStarted(): Boolean = started.await(1, TimeUnit.SECONDS)
 
@@ -292,19 +329,17 @@ class ProxyRuntimeOutboundConnectorFactoryTest {
         }
     }
 
-    private fun wifiRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "wifi",
-            category = NetworkCategory.WiFi,
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-        )
+    private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "wifi",
+        category = NetworkCategory.WiFi,
+        displayName = "Home Wi-Fi",
+        isAvailable = true,
+    )
 
-    private fun vpnRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "vpn",
-            category = NetworkCategory.Vpn,
-            displayName = "Tailscale",
-            isAvailable = true,
-        )
+    private fun vpnRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "vpn",
+        category = NetworkCategory.Vpn,
+        displayName = "Tailscale",
+        isAvailable = true,
+    )
 }

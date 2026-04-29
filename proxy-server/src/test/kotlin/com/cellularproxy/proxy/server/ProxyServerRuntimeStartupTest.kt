@@ -136,13 +136,12 @@ class ProxyServerRuntimeStartupTest {
         }
     }
 
-    private fun wifiRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "wifi",
-            category = NetworkCategory.WiFi,
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-        )
+    private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "wifi",
+        category = NetworkCategory.WiFi,
+        displayName = "Home Wi-Fi",
+        isAvailable = true,
+    )
 }
 
 private const val LOOPBACK_HOST = "127.0.0.1"

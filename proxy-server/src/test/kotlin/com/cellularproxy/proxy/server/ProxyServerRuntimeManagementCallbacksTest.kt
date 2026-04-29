@@ -595,67 +595,62 @@ class ProxyServerRuntimeManagementCallbacksTest {
         acceptLoopExecutor: java.util.concurrent.ExecutorService,
         workerExecutor: java.util.concurrent.ExecutorService,
         queuedClientTimeoutExecutor: ScheduledThreadPoolExecutor,
-    ): RunningProxyServerRuntime =
-        assertIs<ProxyServerRuntimeResult.Running>(
-            ProxyServerRuntime.start(
-                config =
-                    AppConfig.default().copy(
-                        proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+    ): RunningProxyServerRuntime = assertIs<ProxyServerRuntimeResult.Running>(
+        ProxyServerRuntime.start(
+            config =
+                AppConfig.default().copy(
+                    proxy = AppConfig.default().proxy.copy(listenHost = LOOPBACK_HOST, listenPort = 8081),
+                ),
+            managementApiTokenPresent = true,
+            observedNetworks = listOf(wifiRoute()),
+            ingressConfig = ingressConfig(),
+            connectionHandler = connectionHandler(),
+            workerExecutor = workerExecutor,
+            queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+            acceptLoopExecutor = acceptLoopExecutor,
+            bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
+        ),
+    ).runtime
+
+    private fun ingressConfig(): ProxyIngressPreflightConfig = ProxyIngressPreflightConfig(
+        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
+        requestAdmission =
+            ProxyRequestAdmissionConfig(
+                proxyAuthentication =
+                    ProxyAuthenticationConfig(
+                        authEnabled = false,
+                        credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
                     ),
-                managementApiTokenPresent = true,
-                observedNetworks = listOf(wifiRoute()),
-                ingressConfig = ingressConfig(),
-                connectionHandler = connectionHandler(),
-                workerExecutor = workerExecutor,
-                queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
-                acceptLoopExecutor = acceptLoopExecutor,
-                bindListener = { _, _, _ -> ProxyServerSocketBindResult.Bound(listener) },
+                managementApiToken = "management-token",
             ),
-        ).runtime
+    )
 
-    private fun ingressConfig(): ProxyIngressPreflightConfig =
-        ProxyIngressPreflightConfig(
-            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
-            requestAdmission =
-                ProxyRequestAdmissionConfig(
-                    proxyAuthentication =
-                        ProxyAuthenticationConfig(
-                            authEnabled = false,
-                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-                        ),
-                    managementApiToken = "management-token",
-                ),
-        )
-
-    private fun connectionHandler(): ProxyBoundClientConnectionHandler =
-        ProxyBoundClientConnectionHandler(
-            exchangeHandler =
-                ProxyClientStreamExchangeHandler(
-                    httpConnector = {
-                        OutboundHttpOriginOpenResult.Failed(
-                            OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
-                        )
+    private fun connectionHandler(): ProxyBoundClientConnectionHandler = ProxyBoundClientConnectionHandler(
+        exchangeHandler =
+            ProxyClientStreamExchangeHandler(
+                httpConnector = {
+                    OutboundHttpOriginOpenResult.Failed(
+                        OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
+                    )
+                },
+                connectConnector = {
+                    OutboundConnectTunnelOpenResult.Failed(
+                        OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
+                    )
+                },
+                managementHandler =
+                    object : ManagementApiHandler {
+                        override fun handle(operation: ManagementApiOperation): ManagementApiResponse = ManagementApiResponse.json(statusCode = 200, body = "{}")
                     },
-                    connectConnector = {
-                        OutboundConnectTunnelOpenResult.Failed(
-                            OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
-                        )
-                    },
-                    managementHandler =
-                        object : ManagementApiHandler {
-                            override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-                                ManagementApiResponse.json(statusCode = 200, body = "{}")
-                        },
-                ),
-        )
+            ),
+    )
 
-    private fun wifiRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "wifi",
-            category = NetworkCategory.WiFi,
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-        )
+    private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "wifi",
+        category = NetworkCategory.WiFi,
+        displayName = "Home Wi-Fi",
+        isAvailable = true,
+    )
 }
 
 private const val LOOPBACK_HOST = "127.0.0.1"

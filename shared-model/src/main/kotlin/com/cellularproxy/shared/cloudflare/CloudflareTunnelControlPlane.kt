@@ -44,11 +44,10 @@ class CloudflareTunnelControlPlane(
         )
     }
 
-    private fun snapshotLocked(): CloudflareTunnelControlPlaneSnapshot =
-        CloudflareTunnelControlPlaneSnapshot(
-            status = status,
-            transitionGeneration = transitionGeneration,
-        )
+    private fun snapshotLocked(): CloudflareTunnelControlPlaneSnapshot = CloudflareTunnelControlPlaneSnapshot(
+        status = status,
+        transitionGeneration = transitionGeneration,
+    )
 }
 
 data class CloudflareTunnelControlPlaneTransitionResult(

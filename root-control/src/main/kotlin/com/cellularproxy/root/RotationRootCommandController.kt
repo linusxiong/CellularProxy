@@ -113,9 +113,8 @@ data class RotationRootCommandResult(
         }
     }
 
-    fun toRotationEvent(): RotationEvent =
-        execution?.let { RotationEvent.RootCommandCompleted(it.result) }
-            ?: RotationEvent.RootCommandFailedToStart(expectedCategory)
+    fun toRotationEvent(): RotationEvent = execution?.let { RotationEvent.RootCommandCompleted(it.result) }
+        ?: RotationEvent.RootCommandFailedToStart(expectedCategory)
 
     private val expectedCategory: RootCommandCategory
         get() =
@@ -147,33 +146,31 @@ enum class RotationRootCommandFailure {
 private fun MobileDataRootCommandResult.toRotationRootCommandResult(
     operation: RotationOperation,
     phase: RotationRootCommandPhase,
-): RotationRootCommandResult =
-    RotationRootCommandResult(
-        operation = operation,
-        phase = phase,
-        execution = execution,
-        failureReason =
-            when (failureReason) {
-                null -> null
-                MobileDataRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
-                MobileDataRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
-                MobileDataRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
-            },
-    )
+): RotationRootCommandResult = RotationRootCommandResult(
+    operation = operation,
+    phase = phase,
+    execution = execution,
+    failureReason =
+        when (failureReason) {
+            null -> null
+            MobileDataRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
+            MobileDataRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
+            MobileDataRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
+        },
+)
 
 private fun AirplaneModeRootCommandResult.toRotationRootCommandResult(
     operation: RotationOperation,
     phase: RotationRootCommandPhase,
-): RotationRootCommandResult =
-    RotationRootCommandResult(
-        operation = operation,
-        phase = phase,
-        execution = execution,
-        failureReason =
-            when (failureReason) {
-                null -> null
-                AirplaneModeRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
-                AirplaneModeRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
-                AirplaneModeRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
-            },
-    )
+): RotationRootCommandResult = RotationRootCommandResult(
+    operation = operation,
+    phase = phase,
+    execution = execution,
+    failureReason =
+        when (failureReason) {
+            null -> null
+            AirplaneModeRootCommandFailure.CommandFailed -> RotationRootCommandFailure.CommandFailed
+            AirplaneModeRootCommandFailure.CommandTimedOut -> RotationRootCommandFailure.CommandTimedOut
+            AirplaneModeRootCommandFailure.ProcessExecutionFailed -> RotationRootCommandFailure.ProcessExecutionFailed
+        },
+)

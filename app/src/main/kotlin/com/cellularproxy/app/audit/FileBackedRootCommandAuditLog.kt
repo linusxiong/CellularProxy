@@ -53,10 +53,9 @@ class FileBackedRootCommandAuditLog(
         }
     }
 
-    fun readAll(): List<PersistedRootCommandAuditRecord> =
-        synchronized(lock) {
-            readRecordsLocked()
-        }
+    fun readAll(): List<PersistedRootCommandAuditRecord> = synchronized(lock) {
+        readRecordsLocked()
+    }
 
     private fun readRecordsLocked(): List<PersistedRootCommandAuditRecord> = readLinesLocked().mapNotNull(::parseLineOrNull)
 
@@ -74,30 +73,27 @@ class FileBackedRootCommandAuditLog(
 }
 
 object CellularProxyRootAuditStore {
-    fun rootCommandAuditLog(context: Context): FileBackedRootCommandAuditLog =
-        FileBackedRootCommandAuditLog(
-            file = File(context.applicationContext.filesDir, "audit/root-commands.audit"),
-        )
+    fun rootCommandAuditLog(context: Context): FileBackedRootCommandAuditLog = FileBackedRootCommandAuditLog(
+        file = File(context.applicationContext.filesDir, "audit/root-commands.audit"),
+    )
 }
 
-private fun PersistedRootCommandAuditRecord.toLine(): String =
-    listOf(
-        AUDIT_FORMAT_VERSION,
-        occurredAtEpochMillis.toString(),
-        phase.name,
-        category.name,
-        outcome?.name ?: NULL_FIELD,
-        exitCode?.toString() ?: NULL_FIELD,
-        stdout.encodeNullable(),
-        stderr.encodeNullable(),
-    ).joinToString(separator = "\t")
+private fun PersistedRootCommandAuditRecord.toLine(): String = listOf(
+    AUDIT_FORMAT_VERSION,
+    occurredAtEpochMillis.toString(),
+    phase.name,
+    category.name,
+    outcome?.name ?: NULL_FIELD,
+    exitCode?.toString() ?: NULL_FIELD,
+    stdout.encodeNullable(),
+    stderr.encodeNullable(),
+).joinToString(separator = "\t")
 
-private fun parseLineOrNull(line: String): PersistedRootCommandAuditRecord? =
-    try {
-        parseLine(line)
-    } catch (_: Exception) {
-        null
-    }
+private fun parseLineOrNull(line: String): PersistedRootCommandAuditRecord? = try {
+    parseLine(line)
+} catch (_: Exception) {
+    null
+}
 
 private fun parseLine(line: String): PersistedRootCommandAuditRecord {
     val fields = line.split('\t')
@@ -115,22 +111,20 @@ private fun parseLine(line: String): PersistedRootCommandAuditRecord {
     )
 }
 
-private fun String?.encodeNullable(): String =
-    if (this == null) {
-        NULL_FIELD
-    } else {
-        Base64
-            .getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(toByteArray(Charsets.UTF_8))
-    }
+private fun String?.encodeNullable(): String = if (this == null) {
+    NULL_FIELD
+} else {
+    Base64
+        .getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(toByteArray(Charsets.UTF_8))
+}
 
-private fun String.decodeNullable(): String? =
-    if (this == NULL_FIELD) {
-        null
-    } else {
-        Base64.getUrlDecoder().decode(this).toString(Charsets.UTF_8)
-    }
+private fun String.decodeNullable(): String? = if (this == NULL_FIELD) {
+    null
+} else {
+    Base64.getUrlDecoder().decode(this).toString(Charsets.UTF_8)
+}
 
 private fun replaceFileAtomically(
     destination: File,

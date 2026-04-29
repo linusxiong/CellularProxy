@@ -73,12 +73,11 @@ class RotationControlPlane(
     }
 
     @Synchronized
-    fun snapshot(): RotationControlPlaneSnapshot =
-        RotationControlPlaneSnapshot(
-            status = sessionController.currentStatus,
-            lastTerminalElapsedMillis = terminalTimestampTracker.lastTerminalElapsedMillis,
-            transitionGeneration = transitionGeneration,
-        )
+    fun snapshot(): RotationControlPlaneSnapshot = RotationControlPlaneSnapshot(
+        status = sessionController.currentStatus,
+        lastTerminalElapsedMillis = terminalTimestampTracker.lastTerminalElapsedMillis,
+        transitionGeneration = transitionGeneration,
+    )
 }
 
 data class RotationControlPlaneSnapshot(
@@ -99,21 +98,20 @@ data class RotationControlPlaneSnapshot(
     }
 }
 
-private fun RotationStatus.requiresRecordedTerminalTimestamp(): Boolean =
-    when (state) {
-        RotationState.Completed -> true
-        RotationState.Failed -> failureReason != RotationFailureReason.CooldownActive
-        RotationState.Idle,
-        RotationState.CheckingCooldown,
-        RotationState.CheckingRoot,
-        RotationState.ProbingOldPublicIp,
-        RotationState.PausingNewRequests,
-        RotationState.DrainingConnections,
-        RotationState.RunningDisableCommand,
-        RotationState.WaitingForToggleDelay,
-        RotationState.RunningEnableCommand,
-        RotationState.WaitingForNetworkReturn,
-        RotationState.ProbingNewPublicIp,
-        RotationState.ResumingProxyRequests,
-        -> false
-    }
+private fun RotationStatus.requiresRecordedTerminalTimestamp(): Boolean = when (state) {
+    RotationState.Completed -> true
+    RotationState.Failed -> failureReason != RotationFailureReason.CooldownActive
+    RotationState.Idle,
+    RotationState.CheckingCooldown,
+    RotationState.CheckingRoot,
+    RotationState.ProbingOldPublicIp,
+    RotationState.PausingNewRequests,
+    RotationState.DrainingConnections,
+    RotationState.RunningDisableCommand,
+    RotationState.WaitingForToggleDelay,
+    RotationState.RunningEnableCommand,
+    RotationState.WaitingForNetworkReturn,
+    RotationState.ProbingNewPublicIp,
+    RotationState.ResumingProxyRequests,
+    -> false
+}

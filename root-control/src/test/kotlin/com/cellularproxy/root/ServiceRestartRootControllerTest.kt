@@ -300,22 +300,20 @@ class ServiceRestartRootControllerTest {
         }
     }
 
-    private fun serviceRestartExecutor(result: (ServiceRestartCommandCall) -> RootCommandProcessResult): RootCommandExecutor =
-        serviceRestartExecutor(mutableListOf(), result)
+    private fun serviceRestartExecutor(result: (ServiceRestartCommandCall) -> RootCommandProcessResult): RootCommandExecutor = serviceRestartExecutor(mutableListOf(), result)
 
     private fun serviceRestartExecutor(
         calls: MutableList<ServiceRestartCommandCall>,
         result: (ServiceRestartCommandCall) -> RootCommandProcessResult,
-    ): RootCommandExecutor =
-        RootCommandExecutor(
-            processExecutor =
-                RootCommandProcessExecutor { command, timeoutMillis ->
-                    assertEquals(RootCommandCategory.ServiceRestart, command.category)
-                    val call = ServiceRestartCommandCall(command, timeoutMillis)
-                    calls += call
-                    result(call)
-                },
-        )
+    ): RootCommandExecutor = RootCommandExecutor(
+        processExecutor =
+            RootCommandProcessExecutor { command, timeoutMillis ->
+                assertEquals(RootCommandCategory.ServiceRestart, command.category)
+                val call = ServiceRestartCommandCall(command, timeoutMillis)
+                calls += call
+                result(call)
+            },
+    )
 
     private fun serviceRestartExecution(
         category: RootCommandCategory = RootCommandCategory.ServiceRestart,

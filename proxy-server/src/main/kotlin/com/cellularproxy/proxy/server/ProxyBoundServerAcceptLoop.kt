@@ -51,18 +51,17 @@ class ProxyBoundServerAcceptLoop(
         maxResponseTrailerBytes: Int = DEFAULT_ACCEPT_LOOP_RESPONSE_TRAILER_BYTES,
         connectRelayBufferSize: Int = DEFAULT_ACCEPT_LOOP_CONNECT_RELAY_BUFFER_BYTES,
         recordMetricEvent: (ProxyTrafficMetricsEvent) -> Unit = {},
-    ): ProxyBoundServerAcceptLoopResult =
-        run(
-            listener = listener,
-            configProvider = { config },
-            clientHeaderReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis,
-            httpBufferSize = httpBufferSize,
-            maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-            maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-            maxResponseTrailerBytes = maxResponseTrailerBytes,
-            connectRelayBufferSize = connectRelayBufferSize,
-            recordMetricEvent = recordMetricEvent,
-        )
+    ): ProxyBoundServerAcceptLoopResult = run(
+        listener = listener,
+        configProvider = { config },
+        clientHeaderReadIdleTimeoutMillis = clientHeaderReadIdleTimeoutMillis,
+        httpBufferSize = httpBufferSize,
+        maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+        maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+        maxResponseTrailerBytes = maxResponseTrailerBytes,
+        connectRelayBufferSize = connectRelayBufferSize,
+        recordMetricEvent = recordMetricEvent,
+    )
 
     fun run(
         listener: BoundProxyServerSocket,

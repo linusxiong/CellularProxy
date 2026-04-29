@@ -47,19 +47,18 @@ class RuntimeManagementApiHandlerReference : ManagementApiHandler {
     }
 
     private companion object {
-        fun unavailableResponse(): ManagementApiResponse =
-            ManagementApiResponse(
-                statusCode = 503,
-                reasonPhrase = "Service Unavailable",
-                headers =
-                    linkedMapOf(
-                        "Content-Type" to "application/json; charset=utf-8",
-                        "Content-Length" to UNAVAILABLE_BODY.toByteArray(Charsets.UTF_8).size.toString(),
-                        "Cache-Control" to "no-store",
-                        "Connection" to "close",
-                    ),
-                body = UNAVAILABLE_BODY,
-            )
+        fun unavailableResponse(): ManagementApiResponse = ManagementApiResponse(
+            statusCode = 503,
+            reasonPhrase = "Service Unavailable",
+            headers =
+                linkedMapOf(
+                    "Content-Type" to "application/json; charset=utf-8",
+                    "Content-Length" to UNAVAILABLE_BODY.toByteArray(Charsets.UTF_8).size.toString(),
+                    "Cache-Control" to "no-store",
+                    "Connection" to "close",
+                ),
+            body = UNAVAILABLE_BODY,
+        )
     }
 }
 

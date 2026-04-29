@@ -6,6 +6,7 @@ import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.LocalManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
+import com.cellularproxy.network.PublicIpProbeResult
 import com.cellularproxy.shared.config.AppConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -61,6 +62,13 @@ internal fun publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(
     SensitiveConfigLoadResult.MissingRequiredSecrets,
     is SensitiveConfigLoadResult.Invalid,
     -> PublicIpDiagnosticsProbeResult.Unavailable
+}
+
+internal fun publicIpDiagnosticsProbeResultFromPublicIpProbeResult(
+    result: PublicIpProbeResult,
+): PublicIpDiagnosticsProbeResult = when (result) {
+    is PublicIpProbeResult.Success -> PublicIpDiagnosticsProbeResult.Observed(result.publicIp)
+    is PublicIpProbeResult.Failed -> PublicIpDiagnosticsProbeResult.Unavailable
 }
 
 internal fun cloudflareManagementApiProbeResultFrom(

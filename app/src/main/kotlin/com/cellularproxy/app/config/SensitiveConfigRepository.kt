@@ -14,9 +14,8 @@ data class SensitiveConfig(
         }
     }
 
-    override fun toString(): String =
-        "SensitiveConfig(proxyCredential=[REDACTED], managementApiToken=[REDACTED], " +
-            "cloudflareTunnelToken=${if (cloudflareTunnelToken == null) "absent" else "[REDACTED]"})"
+    override fun toString(): String = "SensitiveConfig(proxyCredential=[REDACTED], managementApiToken=[REDACTED], " +
+        "cloudflareTunnelToken=${if (cloudflareTunnelToken == null) "absent" else "[REDACTED]"})"
 }
 
 object SensitiveConfigSecretKeys {

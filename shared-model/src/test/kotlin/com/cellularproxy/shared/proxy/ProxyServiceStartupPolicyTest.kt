@@ -178,12 +178,11 @@ class ProxyServiceStartupPolicyTest {
         routeCandidates: List<NetworkDescriptor> =
             listOf(NetworkDescriptor("wifi", NetworkCategory.WiFi, "Home Wi-Fi", true)),
         hasHighSecurityRisk: Boolean = false,
-    ): ProxyServiceStartupDecision.Ready =
-        ProxyServiceStartupDecision.Ready(
-            listenHost = listenHost,
-            listenPort = 8080,
-            configuredRoute = configuredRoute,
-            routeCandidates = routeCandidates,
-            hasHighSecurityRisk = hasHighSecurityRisk,
-        )
+    ): ProxyServiceStartupDecision.Ready = ProxyServiceStartupDecision.Ready(
+        listenHost = listenHost,
+        listenPort = 8080,
+        configuredRoute = configuredRoute,
+        routeCandidates = routeCandidates,
+        hasHighSecurityRisk = hasHighSecurityRisk,
+    )
 }

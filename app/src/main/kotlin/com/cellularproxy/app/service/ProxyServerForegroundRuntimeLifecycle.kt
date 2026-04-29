@@ -66,10 +66,32 @@ class ProxyServerForegroundRuntimeLifecycle(
     }
 
     override fun startProxyRuntime() {
+        val pendingStop =
+            synchronized(lock) {
+                if (stopInProgress) {
+                    stopCompletionLatch
+                } else {
+                    null
+                }
+            }
+        if (pendingStop != null) {
+            val completed =
+                try {
+                    pendingStop.await(stopTimeoutMillis, TimeUnit.MILLISECONDS)
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw IllegalStateException("Interrupted while waiting for proxy runtime stop to finish", interrupted)
+                }
+            check(completed) { "Proxy runtime stop is still in progress" }
+        }
+
         synchronized(lock) {
             check(!closed) { "Proxy foreground runtime lifecycle is closed" }
             check(!stopInProgress) { "Proxy runtime stop is still in progress" }
             if (runningRuntime != null) {
+                check(lastStopFailure == null && lastStopWorkerFailure == null) {
+                    "Proxy runtime from a failed stop is still retained"
+                }
                 return
             }
 
@@ -145,12 +167,11 @@ class ProxyServerForegroundRuntimeLifecycle(
             startRuntime: () -> ProxyServerRuntimeResult,
             stopTimeoutMillis: Long = DEFAULT_STOP_TIMEOUT_MILLIS,
             stopExecutor: java.util.concurrent.Executor,
-        ): ProxyServerForegroundRuntimeLifecycle =
-            ProxyServerForegroundRuntimeLifecycle(
-                startRuntime = startRuntime,
-                stopTimeoutMillis = stopTimeoutMillis,
-                stopExecutor = stopExecutor,
-            )
+        ): ProxyServerForegroundRuntimeLifecycle = ProxyServerForegroundRuntimeLifecycle(
+            startRuntime = startRuntime,
+            stopTimeoutMillis = stopTimeoutMillis,
+            stopExecutor = stopExecutor,
+        )
     }
 
     private fun completeStopRequest(
@@ -243,30 +264,28 @@ class ProxyServerForegroundRuntimeLifecycle(
         return latch.await(timeoutMillis, TimeUnit.MILLISECONDS)
     }
 
-    private fun RunningProxyServerRuntime.awaitStopFailure(): ProxyServerForegroundRuntimeStopException? =
-        when (val result = awaitStopped(stopTimeoutMillis)) {
-            is ProxyServerRuntimeStopResult.Finished ->
-                when (result.result) {
-                    is ProxyBoundServerAcceptLoopResult.Stopped -> null
-                    is ProxyBoundServerAcceptLoopResult.Failed ->
-                        ProxyServerForegroundRuntimeStopException(result)
-                }
-            ProxyServerRuntimeStopResult.Interrupted,
-            is ProxyServerRuntimeStopResult.Failed,
-            ProxyServerRuntimeStopResult.TimedOut,
-            -> ProxyServerForegroundRuntimeStopException(result)
-        }
+    private fun RunningProxyServerRuntime.awaitStopFailure(): ProxyServerForegroundRuntimeStopException? = when (val result = awaitStopped(stopTimeoutMillis)) {
+        is ProxyServerRuntimeStopResult.Finished ->
+            when (result.result) {
+                is ProxyBoundServerAcceptLoopResult.Stopped -> null
+                is ProxyBoundServerAcceptLoopResult.Failed ->
+                    ProxyServerForegroundRuntimeStopException(result)
+            }
+        ProxyServerRuntimeStopResult.Interrupted,
+        is ProxyServerRuntimeStopResult.Failed,
+        ProxyServerRuntimeStopResult.TimedOut,
+        -> ProxyServerForegroundRuntimeStopException(result)
+    }
 }
 
-private fun ProxyServerRuntimeStopResult.isTerminal(): Boolean =
-    when (this) {
-        is ProxyServerRuntimeStopResult.Finished,
-        is ProxyServerRuntimeStopResult.Failed,
-        -> true
-        ProxyServerRuntimeStopResult.Interrupted,
-        ProxyServerRuntimeStopResult.TimedOut,
-        -> false
-    }
+private fun ProxyServerRuntimeStopResult.isTerminal(): Boolean = when (this) {
+    is ProxyServerRuntimeStopResult.Finished,
+    is ProxyServerRuntimeStopResult.Failed,
+    -> true
+    ProxyServerRuntimeStopResult.Interrupted,
+    ProxyServerRuntimeStopResult.TimedOut,
+    -> false
+}
 
 private data class StopRequest(
     val runtime: RunningProxyServerRuntime,

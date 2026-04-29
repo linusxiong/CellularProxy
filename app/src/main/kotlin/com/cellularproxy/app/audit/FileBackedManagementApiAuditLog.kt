@@ -105,10 +105,9 @@ class FileBackedManagementApiAuditLog(
         }
     }
 
-    fun readAll(): List<PersistedManagementApiAuditRecord> =
-        synchronized(lock) {
-            readRecordsLocked()
-        }
+    fun readAll(): List<PersistedManagementApiAuditRecord> = synchronized(lock) {
+        readRecordsLocked()
+    }
 
     private fun readRecordsLocked(): List<PersistedManagementApiAuditRecord> = readLinesLocked().mapNotNull(::parseLineOrNull)
 
@@ -126,28 +125,25 @@ class FileBackedManagementApiAuditLog(
 }
 
 object CellularProxyManagementAuditStore {
-    fun managementApiAuditLog(context: Context): FileBackedManagementApiAuditLog =
-        FileBackedManagementApiAuditLog(
-            file = File(context.applicationContext.filesDir, "audit/management-api.audit"),
-        )
+    fun managementApiAuditLog(context: Context): FileBackedManagementApiAuditLog = FileBackedManagementApiAuditLog(
+        file = File(context.applicationContext.filesDir, "audit/management-api.audit"),
+    )
 }
 
-private fun PersistedManagementApiAuditRecord.toLine(): String =
-    listOf(
-        AUDIT_FORMAT_VERSION,
-        occurredAtEpochMillis.toString(),
-        operation?.name ?: NULL_FIELD,
-        outcome.name,
-        statusCode?.toString() ?: NULL_FIELD,
-        disposition?.name ?: NULL_FIELD,
-    ).joinToString(separator = "\t")
+private fun PersistedManagementApiAuditRecord.toLine(): String = listOf(
+    AUDIT_FORMAT_VERSION,
+    occurredAtEpochMillis.toString(),
+    operation?.name ?: NULL_FIELD,
+    outcome.name,
+    statusCode?.toString() ?: NULL_FIELD,
+    disposition?.name ?: NULL_FIELD,
+).joinToString(separator = "\t")
 
-private fun parseLineOrNull(line: String): PersistedManagementApiAuditRecord? =
-    try {
-        parseLine(line)
-    } catch (_: Exception) {
-        null
-    }
+private fun parseLineOrNull(line: String): PersistedManagementApiAuditRecord? = try {
+    parseLine(line)
+} catch (_: Exception) {
+    null
+}
 
 private fun parseLine(line: String): PersistedManagementApiAuditRecord {
     val fields = line.split('\t')

@@ -35,6 +35,7 @@ class BoundProxyServerSocket internal constructor(
         require(headerReadIdleTimeoutMillis > 0) { "Client header-read idle timeout must be positive" }
         val socket = serverSocket.accept()
         return try {
+            socket.applyProxyThroughputOptions()
             socket.soTimeout = headerReadIdleTimeoutMillis
             ProxyClientStreamConnection(
                 input = socket.getInputStream(),
@@ -90,6 +91,7 @@ object ProxyServerSocketBinder {
     ): ProxyServerSocketBindResult {
         val socket = ServerSocket()
         return try {
+            socket.setReceiveBufferSizeQuietly(PROXY_SOCKET_BUFFER_BYTES)
             socket.bind(InetSocketAddress(listenHost.toInetAddress(), listenPort), backlog)
             ProxyServerSocketBindResult.Bound(
                 BoundProxyServerSocket(
@@ -114,6 +116,29 @@ private val TCP_PORT_RANGE = 1..65_535
 private const val DEFAULT_SERVER_SOCKET_BACKLOG = 50
 private const val DEFAULT_CLIENT_HEADER_READ_IDLE_TIMEOUT_MILLIS = 60_000
 private const val BROAD_LISTEN_HOST = "0.0.0.0"
+private const val PROXY_SOCKET_BUFFER_BYTES = 1024 * 1024
+
+private fun Socket.applyProxyThroughputOptions() {
+    setSocketOptionQuietly { tcpNoDelay = true }
+    setSocketOptionQuietly { receiveBufferSize = PROXY_SOCKET_BUFFER_BYTES }
+    setSocketOptionQuietly { sendBufferSize = PROXY_SOCKET_BUFFER_BYTES }
+}
+
+private fun ServerSocket.setReceiveBufferSizeQuietly(size: Int) {
+    try {
+        receiveBufferSize = size
+    } catch (_: SocketException) {
+        // Socket buffer hints are best-effort and should not block binding.
+    }
+}
+
+private inline fun setSocketOptionQuietly(setOption: () -> Unit) {
+    try {
+        setOption()
+    } catch (_: SocketException) {
+        // Socket buffer hints are best-effort and should not block accept.
+    }
+}
 
 private fun String.isSupportedNumericIpv4Address(): Boolean {
     if (isEmpty() || this != trim()) {
@@ -134,12 +159,11 @@ private fun String.toInetAddress(): InetAddress {
     return InetAddress.getByAddress(this, bytes)
 }
 
-private fun String.bindExceptionStartupError(): ProxyStartupError =
-    if (this == BROAD_LISTEN_HOST || toInetAddress().isAssignedToLocalInterface()) {
-        ProxyStartupError.PortAlreadyInUse
-    } else {
-        ProxyStartupError.InvalidListenAddress
-    }
+private fun String.bindExceptionStartupError(): ProxyStartupError = if (this == BROAD_LISTEN_HOST || toInetAddress().isAssignedToLocalInterface()) {
+    ProxyStartupError.PortAlreadyInUse
+} else {
+    ProxyStartupError.InvalidListenAddress
+}
 
 private fun InetAddress.isAssignedToLocalInterface(): Boolean {
     val interfaces = NetworkInterface.getNetworkInterfaces()

@@ -193,42 +193,38 @@ class CloudflareTunnelStartAndConnectCoordinatorTest {
         val expectedStatus: CloudflareTunnelStatus,
     )
 
-    private fun validToken(): String =
-        encodedToken(
-            """{"a":"account-tag","s":"${ByteArray(
-                32,
-            ) { index -> (index + 1).toByte() }.base64()}","t":"123e4567-e89b-12d3-a456-426614174000","e":"edge.example.com"}""",
-        )
+    private fun validToken(): String = encodedToken(
+        """{"a":"account-tag","s":"${ByteArray(
+            32,
+        ) { index -> (index + 1).toByte() }.base64()}","t":"123e4567-e89b-12d3-a456-426614174000","e":"edge.example.com"}""",
+    )
 
     private fun encodedToken(json: String): String = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
 
     private fun ByteArray.base64(): String = Base64.getEncoder().encodeToString(this)
 
-    private fun activeControlPlane(status: CloudflareTunnelStatus): CloudflareTunnelControlPlane =
-        CloudflareTunnelControlPlane().also { controlPlane ->
-            controlPlane.apply(CloudflareTunnelEvent.StartRequested)
-            if (status == CloudflareTunnelStatus.connected() || status == CloudflareTunnelStatus.degraded()) {
-                controlPlane.apply(CloudflareTunnelEvent.Connected)
-            }
-            if (status == CloudflareTunnelStatus.degraded()) {
-                controlPlane.apply(CloudflareTunnelEvent.Degraded)
-            }
+    private fun activeControlPlane(status: CloudflareTunnelStatus): CloudflareTunnelControlPlane = CloudflareTunnelControlPlane().also { controlPlane ->
+        controlPlane.apply(CloudflareTunnelEvent.StartRequested)
+        if (status == CloudflareTunnelStatus.connected() || status == CloudflareTunnelStatus.degraded()) {
+            controlPlane.apply(CloudflareTunnelEvent.Connected)
         }
-
-    private fun credentials(): CloudflareTunnelCredentials =
-        CloudflareTunnelCredentials(
-            accountTag = "account-tag",
-            tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-            tunnelSecret = ByteArray(32) { index -> (index + 1).toByte() },
-            endpoint = null,
-        )
-
-    private fun CloudflareTunnelStartCoordinatorResult.statusOrNull(): CloudflareTunnelStatus? =
-        when (this) {
-            is CloudflareTunnelStartCoordinatorResult.Ready -> transition.status
-            is CloudflareTunnelStartCoordinatorResult.Disabled -> snapshot.status
-            is CloudflareTunnelStartCoordinatorResult.FailedStartup -> null
+        if (status == CloudflareTunnelStatus.degraded()) {
+            controlPlane.apply(CloudflareTunnelEvent.Degraded)
         }
+    }
+
+    private fun credentials(): CloudflareTunnelCredentials = CloudflareTunnelCredentials(
+        accountTag = "account-tag",
+        tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+        tunnelSecret = ByteArray(32) { index -> (index + 1).toByte() },
+        endpoint = null,
+    )
+
+    private fun CloudflareTunnelStartCoordinatorResult.statusOrNull(): CloudflareTunnelStatus? = when (this) {
+        is CloudflareTunnelStartCoordinatorResult.Ready -> transition.status
+        is CloudflareTunnelStartCoordinatorResult.Disabled -> snapshot.status
+        is CloudflareTunnelStartCoordinatorResult.FailedStartup -> null
+    }
 
     private class TrackableEdgeConnection : CloudflareTunnelEdgeConnection {
         override fun close() = Unit

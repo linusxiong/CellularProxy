@@ -116,11 +116,10 @@ private data class RotationRootAvailabilityCall(
 private fun recordingProbe(
     calls: MutableList<RotationRootAvailabilityCall>,
     result: RootAvailabilityCheckResult,
-): RotationRootAvailabilityProbe =
-    RotationRootAvailabilityProbe { timeoutMillis, secrets ->
-        calls += RotationRootAvailabilityCall(timeoutMillis, secrets)
-        result
-    }
+): RotationRootAvailabilityProbe = RotationRootAvailabilityProbe { timeoutMillis, secrets ->
+    calls += RotationRootAvailabilityCall(timeoutMillis, secrets)
+    result
+}
 
 private data class RootAvailabilityCommandCall(
     val command: RootShellCommand,
@@ -130,51 +129,47 @@ private data class RootAvailabilityCommandCall(
 private fun recordingRootAvailabilityExecutor(
     calls: MutableList<RootAvailabilityCommandCall>,
     result: (RootAvailabilityCommandCall) -> RootCommandProcessResult,
-): RootCommandExecutor =
-    RootCommandExecutor(
-        processExecutor =
-            RootCommandProcessExecutor { command, timeoutMillis ->
-                val call = RootAvailabilityCommandCall(command, timeoutMillis)
-                calls += call
-                result(call)
-            },
-    )
+): RootCommandExecutor = RootCommandExecutor(
+    processExecutor =
+        RootCommandProcessExecutor { command, timeoutMillis ->
+            val call = RootAvailabilityCommandCall(command, timeoutMillis)
+            calls += call
+            result(call)
+        },
+)
 
-private fun rootAvailableCheckResult(rawStdout: String): RootAvailabilityCheckResult =
-    RootAvailabilityCheckResult(
-        status = RootAvailabilityStatus.Available,
-        execution =
-            rootAvailabilityExecution(
-                result =
-                    RootCommandResult.completed(
-                        category = RootCommandCategory.RootAvailabilityCheck,
-                        exitCode = 0,
-                        stdout = rawStdout,
-                        stderr = "",
-                    ),
-                rawStdout = rawStdout,
-            ),
-    )
+private fun rootAvailableCheckResult(rawStdout: String): RootAvailabilityCheckResult = RootAvailabilityCheckResult(
+    status = RootAvailabilityStatus.Available,
+    execution =
+        rootAvailabilityExecution(
+            result =
+                RootCommandResult.completed(
+                    category = RootCommandCategory.RootAvailabilityCheck,
+                    exitCode = 0,
+                    stdout = rawStdout,
+                    stderr = "",
+                ),
+            rawStdout = rawStdout,
+        ),
+)
 
-private fun rootCommandFailureExecution(): RootCommandExecution =
-    rootAvailabilityExecution(
-        result =
-            RootCommandResult.completed(
-                category = RootCommandCategory.RootAvailabilityCheck,
-                exitCode = 1,
-                stdout = "",
-                stderr = "permission denied",
-            ),
-        rawStdout = "",
-    )
+private fun rootCommandFailureExecution(): RootCommandExecution = rootAvailabilityExecution(
+    result =
+        RootCommandResult.completed(
+            category = RootCommandCategory.RootAvailabilityCheck,
+            exitCode = 1,
+            stdout = "",
+            stderr = "permission denied",
+        ),
+    rawStdout = "",
+)
 
 private fun rootAvailabilityExecution(
     result: RootCommandResult,
     rawStdout: String,
-): RootCommandExecution =
-    RootCommandExecution.completed(
-        result = result,
-        started = RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck),
-        completed = RootCommandAuditRecord.completed(result),
-        rawStdout = rawStdout,
-    )
+): RootCommandExecution = RootCommandExecution.completed(
+    result = result,
+    started = RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck),
+    completed = RootCommandAuditRecord.completed(result),
+    rawStdout = rawStdout,
+)

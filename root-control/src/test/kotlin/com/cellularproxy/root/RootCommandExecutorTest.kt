@@ -245,12 +245,11 @@ class RootCommandExecutorTest {
     private fun recordingProcessExecutor(
         calls: MutableList<RootCommandProcessCall>,
         result: (RootCommandProcessCall) -> RootCommandProcessResult,
-    ): RootCommandProcessExecutor =
-        RootCommandProcessExecutor { command, timeoutMillis ->
-            val call = RootCommandProcessCall(command, timeoutMillis)
-            calls += call
-            result(call)
-        }
+    ): RootCommandProcessExecutor = RootCommandProcessExecutor { command, timeoutMillis ->
+        val call = RootCommandProcessCall(command, timeoutMillis)
+        calls += call
+        result(call)
+    }
 
     private fun assertFailsWithMessage(
         message: String,

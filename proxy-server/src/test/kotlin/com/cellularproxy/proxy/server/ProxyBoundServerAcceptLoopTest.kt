@@ -583,20 +583,18 @@ class ProxyBoundServerAcceptLoopTest {
         }
     }
 
-    private fun exchangeHandler(managementHandler: ManagementApiHandler): ProxyClientStreamExchangeHandler =
-        ProxyClientStreamExchangeHandler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = managementHandler,
-        )
+    private fun exchangeHandler(managementHandler: ManagementApiHandler): ProxyClientStreamExchangeHandler = ProxyClientStreamExchangeHandler(
+        httpConnector = ThrowingHttpConnector(),
+        connectConnector = ThrowingConnectConnector(),
+        managementHandler = managementHandler,
+    )
 
-    private fun managementRequestBytes(): ByteArray =
-        (
-            "POST /api/service/stop HTTP/1.1\r\n" +
-                "Host: phone.local\r\n" +
-                "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
-                "\r\n"
-        ).toByteArray(Charsets.US_ASCII)
+    private fun managementRequestBytes(): ByteArray = (
+        "POST /api/service/stop HTTP/1.1\r\n" +
+            "Host: phone.local\r\n" +
+            "Authorization: Bearer $MANAGEMENT_TOKEN\r\n" +
+            "\r\n"
+    ).toByteArray(Charsets.US_ASCII)
 
     private class BlockingManagementHandler : ManagementApiHandler {
         private val started = CountDownLatch(1)
@@ -656,12 +654,11 @@ class ProxyBoundServerAcceptLoopTest {
         return false
     }
 
-    private fun Socket.readFailsOrEnds(): Boolean =
-        try {
-            getInputStream().read() == -1
-        } catch (_: SocketException) {
-            true
-        }
+    private fun Socket.readFailsOrEnds(): Boolean = try {
+        getInputStream().read() == -1
+    } catch (_: SocketException) {
+        true
+    }
 
     private companion object {
         const val LOOPBACK_HOST = "127.0.0.1"

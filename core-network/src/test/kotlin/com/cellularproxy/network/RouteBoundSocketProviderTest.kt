@@ -245,23 +245,21 @@ class RouteBoundSocketProviderTest {
         id: String,
         category: NetworkCategory,
         isAvailable: Boolean = true,
-    ): NetworkDescriptor =
-        NetworkDescriptor(
-            id = id,
-            category = category,
-            displayName = id,
-            isAvailable = isAvailable,
-        )
+    ): NetworkDescriptor = NetworkDescriptor(
+        id = id,
+        category = category,
+        displayName = id,
+        isAvailable = isAvailable,
+    )
 
     private fun recordingConnector(
         calls: MutableList<ConnectCall>,
         result: (ConnectCall) -> BoundSocketConnectResult,
-    ): BoundNetworkSocketConnector =
-        BoundNetworkSocketConnector { network, host, port, timeoutMillis ->
-            val call = ConnectCall(network, host, port, timeoutMillis)
-            calls += call
-            result(call)
-        }
+    ): BoundNetworkSocketConnector = BoundNetworkSocketConnector { network, host, port, timeoutMillis ->
+        val call = ConnectCall(network, host, port, timeoutMillis)
+        calls += call
+        result(call)
+    }
 
     private fun assertFailsWithMessage(
         message: String,

@@ -11,24 +11,22 @@ class MobileDataRootController(
     fun disable(
         timeoutMillis: Long,
         secrets: LogRedactionSecrets = LogRedactionSecrets(),
-    ): MobileDataRootCommandResult =
-        run(
-            action = MobileDataRootAction.Disable,
-            command = RootShellCommands.mobileDataDisable(),
-            timeoutMillis = timeoutMillis,
-            secrets = secrets,
-        )
+    ): MobileDataRootCommandResult = run(
+        action = MobileDataRootAction.Disable,
+        command = RootShellCommands.mobileDataDisable(),
+        timeoutMillis = timeoutMillis,
+        secrets = secrets,
+    )
 
     fun enable(
         timeoutMillis: Long,
         secrets: LogRedactionSecrets = LogRedactionSecrets(),
-    ): MobileDataRootCommandResult =
-        run(
-            action = MobileDataRootAction.Enable,
-            command = RootShellCommands.mobileDataEnable(),
-            timeoutMillis = timeoutMillis,
-            secrets = secrets,
-        )
+    ): MobileDataRootCommandResult = run(
+        action = MobileDataRootAction.Enable,
+        command = RootShellCommands.mobileDataEnable(),
+        timeoutMillis = timeoutMillis,
+        secrets = secrets,
+    )
 
     private fun run(
         action: MobileDataRootAction,

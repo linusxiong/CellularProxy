@@ -72,13 +72,12 @@ enum class OutboundConnectTunnelOpenFailure {
     OutboundConnectionTimeout,
 }
 
-fun OutboundConnectTunnelOpenFailure.toProxyServerFailure(): ProxyServerFailure =
-    when (this) {
-        OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable -> ProxyServerFailure.SelectedRouteUnavailable
-        OutboundConnectTunnelOpenFailure.DnsResolutionFailed -> ProxyServerFailure.DnsResolutionFailed
-        OutboundConnectTunnelOpenFailure.OutboundConnectionFailed -> ProxyServerFailure.OutboundConnectionFailed
-        OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout -> ProxyServerFailure.OutboundConnectionTimeout
-    }
+fun OutboundConnectTunnelOpenFailure.toProxyServerFailure(): ProxyServerFailure = when (this) {
+    OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable -> ProxyServerFailure.SelectedRouteUnavailable
+    OutboundConnectTunnelOpenFailure.DnsResolutionFailed -> ProxyServerFailure.DnsResolutionFailed
+    OutboundConnectTunnelOpenFailure.OutboundConnectionFailed -> ProxyServerFailure.OutboundConnectionFailed
+    OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout -> ProxyServerFailure.OutboundConnectionTimeout
+}
 
 sealed interface ConnectTunnelOutboundExchangeHandlingResult {
     data class Established(

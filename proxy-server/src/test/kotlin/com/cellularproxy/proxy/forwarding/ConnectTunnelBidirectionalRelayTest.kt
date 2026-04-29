@@ -7,6 +7,7 @@ import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -244,6 +245,68 @@ class ConnectTunnelBidirectionalRelayTest {
     }
 
     @Test
+    fun `returns failed relay result when coordinator thread is interrupted during shutdown`() {
+        val clientInputBlocked = CountDownLatch(1)
+        val originInputBlocked = CountDownLatch(1)
+        val clientInput = BlockingUntilClosedInputStream(clientInputBlocked)
+        val clientOutput = CloseTrackingOutputStream()
+        val originInput = BlockingUntilClosedInputStream(originInputBlocked)
+        val originOutput = CloseTrackingOutputStream()
+        val result = AtomicReference<ConnectTunnelBidirectionalRelayResult?>()
+        val thrown = AtomicReference<Throwable?>()
+        val relayThread =
+            Thread {
+                try {
+                    result.set(
+                        ConnectTunnelBidirectionalRelay.relay(
+                            client =
+                                ConnectTunnelClientConnection(
+                                    input = clientInput,
+                                    output = clientOutput,
+                                ),
+                            origin =
+                                OutboundConnectTunnelConnection(
+                                    input = originInput,
+                                    output = originOutput,
+                                    host = "origin.example",
+                                    port = 443,
+                                ),
+                            bufferSize = 8,
+                        ),
+                    )
+                } catch (throwable: Throwable) {
+                    thrown.set(throwable)
+                }
+            }
+
+        relayThread.start()
+        assertTrue(clientInputBlocked.await(1, TimeUnit.SECONDS))
+        assertTrue(originInputBlocked.await(1, TimeUnit.SECONDS))
+
+        relayThread.interrupt()
+        relayThread.join(1_000)
+
+        assertFalse(relayThread.isAlive)
+        assertEquals(null, thrown.get())
+        val failed = assertIs<ConnectTunnelBidirectionalRelayResult.Failed>(result.get())
+        assertEquals(
+            ConnectTunnelStreamRelayFailure.CoordinatorInterrupted,
+            assertIs<ConnectTunnelStreamRelayResult.Failed>(failed.clientToOrigin).reason,
+        )
+        assertEquals(
+            ConnectTunnelStreamRelayFailure.CoordinatorInterrupted,
+            assertIs<ConnectTunnelStreamRelayResult.Failed>(failed.originToClient).reason,
+        )
+        assertTrue(clientInput.awaitClosed(1, TimeUnit.SECONDS))
+        assertTrue(originInput.awaitClosed(1, TimeUnit.SECONDS))
+        assertTrue(clientOutput.wasClosed)
+        assertTrue(originOutput.wasClosed)
+        if (Thread.interrupted()) {
+            // Clear any leaked interrupted flag so the test runner is not affected.
+        }
+    }
+
+    @Test
     fun `does not swallow fatal relay task errors`() {
         assertFailsWith<OutOfMemoryError> {
             ConnectTunnelBidirectionalRelay.relay(
@@ -298,6 +361,35 @@ class ConnectTunnelBidirectionalRelayTest {
                     ),
             )
         }
+    }
+
+    private class BlockingUntilClosedInputStream(
+        private val blocked: CountDownLatch,
+    ) : InputStream() {
+        private val closed = CountDownLatch(1)
+
+        override fun read(): Int {
+            blocked.countDown()
+            while (!closed.await(10, TimeUnit.MILLISECONDS)) {
+                // Wait until relay cleanup closes the stream.
+            }
+            throw IOException("socket closed")
+        }
+
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = read()
+
+        override fun close() {
+            closed.countDown()
+        }
+
+        fun awaitClosed(
+            timeout: Long,
+            unit: TimeUnit,
+        ): Boolean = closed.await(timeout, unit)
     }
 
     private open class CloseTrackingInputStream(

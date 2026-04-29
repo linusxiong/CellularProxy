@@ -34,10 +34,9 @@ object PlainConfigPreferenceKeys {
 }
 
 object PlainConfigPreferencesMapper {
-    fun toPreferences(config: AppConfig): Preferences =
-        mutablePreferencesOf().also { preferences ->
-            replacePreferences(preferences, config)
-        }
+    fun toPreferences(config: AppConfig): Preferences = mutablePreferencesOf().also { preferences ->
+        replacePreferences(preferences, config)
+    }
 
     fun replacePreferences(
         preferences: MutablePreferences,
@@ -79,7 +78,7 @@ object PlainConfigPreferencesMapper {
                             ?: defaults.proxy.listenPort,
                     authEnabled =
                         preferences[PlainConfigPreferenceKeys.proxyAuthEnabled]
-                            ?: defaults.proxy.authEnabled,
+                            ?: DEFAULT_PROXY_AUTH_ENABLED,
                     maxConcurrentConnections =
                         preferences[PlainConfigPreferenceKeys.proxyMaxConcurrentConnections]
                             ?.takeIf { it > 0 }
@@ -131,11 +130,10 @@ object PlainConfigPreferencesMapper {
 
 private fun String.toRouteTargetOrNull(): RouteTarget? = RouteTarget.entries.firstOrNull { it.name == this }
 
-private fun Long?.toPositiveDurationOrDefault(default: Duration): Duration =
-    this
-        ?.takeIf { it > 0L }
-        ?.milliseconds
-        ?: default
+private fun Long?.toPositiveDurationOrDefault(default: Duration): Duration = this
+    ?.takeIf { it > 0L }
+    ?.milliseconds
+    ?: default
 
 private fun String.isSupportedListenHost(): Boolean {
     if (isEmpty() || this != trim()) {
@@ -155,3 +153,4 @@ private fun String.isSupportedListenHost(): Boolean {
 }
 
 private val TCP_PORT_RANGE = 1..65_535
+private const val DEFAULT_PROXY_AUTH_ENABLED = false

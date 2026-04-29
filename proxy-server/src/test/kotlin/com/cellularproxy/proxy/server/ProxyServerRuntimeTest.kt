@@ -392,52 +392,48 @@ class ProxyServerRuntimeTest {
         }
     }
 
-    private fun ingressConfig(): ProxyIngressPreflightConfig =
-        ProxyIngressPreflightConfig(
-            connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
-            requestAdmission =
-                ProxyRequestAdmissionConfig(
-                    proxyAuthentication =
-                        ProxyAuthenticationConfig(
-                            authEnabled = false,
-                            credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-                        ),
-                    managementApiToken = "management-token",
-                ),
-        )
+    private fun ingressConfig(): ProxyIngressPreflightConfig = ProxyIngressPreflightConfig(
+        connectionLimit = ConnectionLimitAdmissionConfig(maxConcurrentConnections = 1),
+        requestAdmission =
+            ProxyRequestAdmissionConfig(
+                proxyAuthentication =
+                    ProxyAuthenticationConfig(
+                        authEnabled = false,
+                        credential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+                    ),
+                managementApiToken = "management-token",
+            ),
+    )
 
     private fun connectionHandler(
         proxyActivityTracker: ProxyTrafficActivityTracker = ProxyTrafficActivityTracker(),
-    ): ProxyBoundClientConnectionHandler =
-        ProxyBoundClientConnectionHandler(
-            exchangeHandler =
-                ProxyClientStreamExchangeHandler(
-                    httpConnector = {
-                        OutboundHttpOriginOpenResult.Failed(
-                            OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
-                        )
+    ): ProxyBoundClientConnectionHandler = ProxyBoundClientConnectionHandler(
+        exchangeHandler =
+            ProxyClientStreamExchangeHandler(
+                httpConnector = {
+                    OutboundHttpOriginOpenResult.Failed(
+                        OutboundHttpOriginOpenFailure.SelectedRouteUnavailable,
+                    )
+                },
+                connectConnector = {
+                    OutboundConnectTunnelOpenResult.Failed(
+                        OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
+                    )
+                },
+                managementHandler =
+                    object : ManagementApiHandler {
+                        override fun handle(operation: ManagementApiOperation): ManagementApiResponse = ManagementApiResponse.json(statusCode = 200, body = "{}")
                     },
-                    connectConnector = {
-                        OutboundConnectTunnelOpenResult.Failed(
-                            OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable,
-                        )
-                    },
-                    managementHandler =
-                        object : ManagementApiHandler {
-                            override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-                                ManagementApiResponse.json(statusCode = 200, body = "{}")
-                        },
-                    proxyActivityTracker = proxyActivityTracker,
-                ),
-        )
+                proxyActivityTracker = proxyActivityTracker,
+            ),
+    )
 
-    private fun wifiRoute(): NetworkDescriptor =
-        NetworkDescriptor(
-            id = "wifi",
-            category = NetworkCategory.WiFi,
-            displayName = "Home Wi-Fi",
-            isAvailable = true,
-        )
+    private fun wifiRoute(): NetworkDescriptor = NetworkDescriptor(
+        id = "wifi",
+        category = NetworkCategory.WiFi,
+        displayName = "Home Wi-Fi",
+        isAvailable = true,
+    )
 }
 
 private class RecordingExecutorService : AbstractExecutorService() {

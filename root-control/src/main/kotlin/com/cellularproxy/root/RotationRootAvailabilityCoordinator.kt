@@ -38,45 +38,43 @@ class RotationRootAvailabilityCoordinator(
         )
     }
 
-    private fun preflight(expectedSnapshot: RotationControlPlaneSnapshot): RotationRootAvailabilityAdvanceResult? =
-        synchronized(controlPlane) {
-            val actualSnapshot = controlPlane.snapshot()
-            when {
-                actualSnapshot != expectedSnapshot ->
-                    RotationRootAvailabilityAdvanceResult.Stale(
-                        expectedSnapshot = expectedSnapshot,
-                        actualSnapshot = actualSnapshot,
-                    )
-                actualSnapshot.status.state != RotationState.CheckingRoot ->
-                    RotationRootAvailabilityAdvanceResult.NoAction(actualSnapshot)
-                else -> null
-            }
+    private fun preflight(expectedSnapshot: RotationControlPlaneSnapshot): RotationRootAvailabilityAdvanceResult? = synchronized(controlPlane) {
+        val actualSnapshot = controlPlane.snapshot()
+        when {
+            actualSnapshot != expectedSnapshot ->
+                RotationRootAvailabilityAdvanceResult.Stale(
+                    expectedSnapshot = expectedSnapshot,
+                    actualSnapshot = actualSnapshot,
+                )
+            actualSnapshot.status.state != RotationState.CheckingRoot ->
+                RotationRootAvailabilityAdvanceResult.NoAction(actualSnapshot)
+            else -> null
         }
+    }
 
     private fun applyIfCurrent(
         expectedSnapshot: RotationControlPlaneSnapshot,
         decision: RotationRootAvailabilityDecision,
         nowElapsedMillis: Long,
-    ): RotationRootAvailabilityAdvanceResult =
-        synchronized(controlPlane) {
-            val actualSnapshot = controlPlane.snapshot()
-            if (actualSnapshot != expectedSnapshot) {
-                return RotationRootAvailabilityAdvanceResult.Stale(
-                    expectedSnapshot = expectedSnapshot,
-                    actualSnapshot = actualSnapshot,
-                    decision = decision,
-                )
-            }
-
-            RotationRootAvailabilityAdvanceResult.Applied(
+    ): RotationRootAvailabilityAdvanceResult = synchronized(controlPlane) {
+        val actualSnapshot = controlPlane.snapshot()
+        if (actualSnapshot != expectedSnapshot) {
+            return RotationRootAvailabilityAdvanceResult.Stale(
+                expectedSnapshot = expectedSnapshot,
+                actualSnapshot = actualSnapshot,
                 decision = decision,
-                progress =
-                    controlPlane.applyProgress(
-                        event = decision.event,
-                        nowElapsedMillis = nowElapsedMillis,
-                    ),
             )
         }
+
+        RotationRootAvailabilityAdvanceResult.Applied(
+            decision = decision,
+            progress =
+                controlPlane.applyProgress(
+                    event = decision.event,
+                    nowElapsedMillis = nowElapsedMillis,
+                ),
+        )
+    }
 }
 
 sealed interface RotationRootAvailabilityAdvanceResult {

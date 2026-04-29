@@ -139,36 +139,33 @@ class ForwardedHttpResponse(
 }
 
 object HttpProxyForwardResponseRenderer {
-    fun renderHead(response: ParsedHttpResponse): ForwardedHttpResponseHead =
-        renderHead(
-            statusCode = response.statusCode,
-            reasonPhrase = response.reasonPhrase,
-            headers = response.headers,
-        )
+    fun renderHead(response: ParsedHttpResponse): ForwardedHttpResponseHead = renderHead(
+        statusCode = response.statusCode,
+        reasonPhrase = response.reasonPhrase,
+        headers = response.headers,
+    )
 
     fun renderHead(
         statusCode: Int,
         reasonPhrase: String,
         headers: Map<String, List<String>>,
-    ): ForwardedHttpResponseHead =
-        ForwardedHttpResponseHead(
-            statusCode = statusCode,
-            reasonPhrase = reasonPhrase,
-            headers = sanitizeResponseHeaders(statusCode, headers),
-        )
+    ): ForwardedHttpResponseHead = ForwardedHttpResponseHead(
+        statusCode = statusCode,
+        reasonPhrase = reasonPhrase,
+        headers = sanitizeResponseHeaders(statusCode, headers),
+    )
 
     fun render(
         statusCode: Int,
         reasonPhrase: String,
         headers: Map<String, List<String>>,
         body: ByteArray = EMPTY_BODY,
-    ): ForwardedHttpResponse =
-        ForwardedHttpResponse(
-            statusCode = statusCode,
-            reasonPhrase = reasonPhrase,
-            headers = sanitizeResponseHeaders(statusCode, headers),
-            body = body,
-        )
+    ): ForwardedHttpResponse = ForwardedHttpResponse(
+        statusCode = statusCode,
+        reasonPhrase = reasonPhrase,
+        headers = sanitizeResponseHeaders(statusCode, headers),
+        body = body,
+    )
 
     private fun sanitizeResponseHeaders(
         statusCode: Int,
@@ -206,26 +203,24 @@ object HttpProxyForwardResponseRenderer {
         return outboundHeaders
     }
 
-    private fun Map<String, List<String>>.connectionNominatedHeaderNames(): Set<String> =
-        filterKeys { headerName -> headerName.lowercase(Locale.US) == CONNECTION_HEADER }
-            .values
-            .flatten()
-            .flatMap { value -> value.split(',') }
-            .map { option -> option.trim().lowercase(Locale.US) }
-            .filter { option -> option.isHttpToken() }
-            .toSet()
+    private fun Map<String, List<String>>.connectionNominatedHeaderNames(): Set<String> = filterKeys { headerName -> headerName.lowercase(Locale.US) == CONNECTION_HEADER }
+        .values
+        .flatten()
+        .flatMap { value -> value.split(',') }
+        .map { option -> option.trim().lowercase(Locale.US) }
+        .filter { option -> option.isHttpToken() }
+        .toSet()
 }
 
-private fun String.canonicalizedResponseHeaderValues(values: List<String>): List<String> =
-    if (lowercase(Locale.US) == CONTENT_LENGTH_HEADER) {
-        val uniqueContentLengths = values.toSet()
-        require(uniqueContentLengths.size == 1) {
-            "Forwarded response heads must not contain ambiguous Content-Length values"
-        }
-        listOf(uniqueContentLengths.single())
-    } else {
-        values
+private fun String.canonicalizedResponseHeaderValues(values: List<String>): List<String> = if (lowercase(Locale.US) == CONTENT_LENGTH_HEADER) {
+    val uniqueContentLengths = values.toSet()
+    require(uniqueContentLengths.size == 1) {
+        "Forwarded response heads must not contain ambiguous Content-Length values"
     }
+    listOf(uniqueContentLengths.single())
+} else {
+    values
+}
 
 private fun Map<String, List<String>>.validatedHeaderSnapshot(): Map<String, List<String>> {
     val copiedHeaders = linkedMapOf<String, List<String>>()
@@ -255,20 +250,19 @@ private fun renderHttpResponseHead(
     statusCode: Int,
     reasonPhrase: String,
     headers: Map<String, List<String>>,
-): String =
-    buildString {
-        append("HTTP/1.1 ")
-        append(statusCode)
-        append(' ')
-        append(reasonPhrase)
-        append(CRLF)
-        headers.forEach { (name, values) ->
-            values.forEach { value ->
-                append(name).append(": ").append(value).append(CRLF)
-            }
+): String = buildString {
+    append("HTTP/1.1 ")
+    append(statusCode)
+    append(' ')
+    append(reasonPhrase)
+    append(CRLF)
+    headers.forEach { (name, values) ->
+        values.forEach { value ->
+            append(name).append(": ").append(value).append(CRLF)
         }
-        append(CRLF)
     }
+    append(CRLF)
+}
 
 private fun String.isSafeSingleLine(): Boolean = none(Char::isISOControl)
 
@@ -285,8 +279,7 @@ private fun Map<String, List<String>>.caseInsensitiveHeaderValues(name: String):
         .flatMap { (_, values) -> values }
 }
 
-private fun Int.forbidsResponseBody(): Boolean =
-    this in INFORMATIONAL_STATUS_RANGE || this == NO_CONTENT_STATUS || this == NOT_MODIFIED_STATUS
+private fun Int.forbidsResponseBody(): Boolean = this in INFORMATIONAL_STATUS_RANGE || this == NO_CONTENT_STATUS || this == NOT_MODIFIED_STATUS
 
 private fun List<String>.isSupportedChunkedTransferEncoding(): Boolean {
     val codings =
@@ -363,8 +356,7 @@ private fun ByteArray.indexOfCrlf(startIndex: Int): Int {
     return -1
 }
 
-private fun ByteArray.hasCrlfAt(index: Int): Boolean =
-    index >= 0 && index < size - 1 && this[index] == CR_BYTE && this[index + 1] == LF_BYTE
+private fun ByteArray.hasCrlfAt(index: Int): Boolean = index >= 0 && index < size - 1 && this[index] == CR_BYTE && this[index + 1] == LF_BYTE
 
 private fun ByteArray.toAsciiStringOrNull(): String? {
     if (any { byte -> byte.toInt() !in ASCII_BYTE_RANGE }) {
@@ -375,17 +367,16 @@ private fun ByteArray.toAsciiStringOrNull(): String? {
 
 private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
-private fun ByteArray.decodeStrictUtf8(): String =
-    try {
-        Charsets.UTF_8
-            .newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-            .decode(ByteBuffer.wrap(this))
-            .toString()
-    } catch (_: CharacterCodingException) {
-        throw IllegalStateException("Forwarded response body is not valid UTF-8; use toByteArray() for byte-accurate rendering")
-    }
+private fun ByteArray.decodeStrictUtf8(): String = try {
+    Charsets.UTF_8
+        .newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(ByteBuffer.wrap(this))
+        .toString()
+} catch (_: CharacterCodingException) {
+    throw IllegalStateException("Forwarded response body is not valid UTF-8; use toByteArray() for byte-accurate rendering")
+}
 
 private const val CRLF = "\r\n"
 private const val CR_BYTE = '\r'.code.toByte()

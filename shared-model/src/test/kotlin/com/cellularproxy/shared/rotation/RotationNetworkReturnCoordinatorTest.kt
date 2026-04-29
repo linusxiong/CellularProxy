@@ -247,25 +247,22 @@ class RotationNetworkReturnCoordinatorTest {
         }
     }
 
-    private fun waitingForNetworkReturnControlPlane(): RotationControlPlane =
-        RotationControlPlane(initialStatus = waitingForNetworkReturnStatus())
+    private fun waitingForNetworkReturnControlPlane(): RotationControlPlane = RotationControlPlane(initialStatus = waitingForNetworkReturnStatus())
 
-    private fun waitingForNetworkReturnStatus(): RotationStatus =
-        RotationStatus(
-            state = RotationState.WaitingForNetworkReturn,
-            operation = RotationOperation.MobileData,
-            oldPublicIp = "198.51.100.10",
-        )
+    private fun waitingForNetworkReturnStatus(): RotationStatus = RotationStatus(
+        state = RotationState.WaitingForNetworkReturn,
+        operation = RotationOperation.MobileData,
+        oldPublicIp = "198.51.100.10",
+    )
 
     private fun network(
         id: String,
         category: NetworkCategory,
         isAvailable: Boolean,
-    ): NetworkDescriptor =
-        NetworkDescriptor(
-            id = id,
-            category = category,
-            displayName = id,
-            isAvailable = isAvailable,
-        )
+    ): NetworkDescriptor = NetworkDescriptor(
+        id = id,
+        category = category,
+        displayName = id,
+        isAvailable = isAvailable,
+    )
 }

@@ -264,12 +264,11 @@ class SensitiveConfigRepositoryTest {
         assertFalse("cloudflare-token" in rendered)
     }
 
-    private fun sensitiveConfig(cloudflareTunnelToken: String?) =
-        SensitiveConfig(
-            proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
-            managementApiToken = "management-token",
-            cloudflareTunnelToken = cloudflareTunnelToken,
-        )
+    private fun sensitiveConfig(cloudflareTunnelToken: String?) = SensitiveConfig(
+        proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+        managementApiToken = "management-token",
+        cloudflareTunnelToken = cloudflareTunnelToken,
+    )
 }
 
 private class InMemorySensitiveKeyValueStore(
@@ -304,9 +303,8 @@ private class InMemorySensitiveKeyValueStore(
 private object ReversibleTestCipher : SensitiveValueCipher {
     override fun encrypt(plainText: String): String = "encrypted:" + plainText.reversed()
 
-    override fun decrypt(encryptedValue: String): String? =
-        encryptedValue
-            .takeIf { it.startsWith("encrypted:") }
-            ?.removePrefix("encrypted:")
-            ?.reversed()
+    override fun decrypt(encryptedValue: String): String? = encryptedValue
+        .takeIf { it.startsWith("encrypted:") }
+        ?.removePrefix("encrypted:")
+        ?.reversed()
 }

@@ -133,10 +133,9 @@ class RotationSessionControllerTest {
         assertEquals(result.status, controller.currentStatus)
     }
 
-    private fun statusAfter(vararg events: RotationEvent): RotationStatus =
-        events.fold(RotationStatus.idle()) { status, event ->
-            val result = RotationStateMachine.transition(status, event)
-            assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
-            result.status
-        }
+    private fun statusAfter(vararg events: RotationEvent): RotationStatus = events.fold(RotationStatus.idle()) { status, event ->
+        val result = RotationStateMachine.transition(status, event)
+        assertEquals(RotationTransitionDisposition.Accepted, result.disposition)
+        result.status
+    }
 }

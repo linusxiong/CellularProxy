@@ -35,10 +35,9 @@ sealed interface ProxyIngressPreflightDecision {
         val request: ParsedProxyRequest
             get() = httpRequest.request
 
-        override fun toString(): String =
-            "Accepted(request=$request, " +
-                "activeConnectionsAfterAdmission=$activeConnectionsAfterAdmission, " +
-                "requiresAuditLog=$requiresAuditLog)"
+        override fun toString(): String = "Accepted(request=$request, " +
+            "activeConnectionsAfterAdmission=$activeConnectionsAfterAdmission, " +
+            "requiresAuditLog=$requiresAuditLog)"
     }
 
     data class Rejected(
@@ -190,20 +189,18 @@ object ProxyIngressPreflight {
     private fun rejected(
         failure: ProxyServerFailure,
         requiresAuditLog: Boolean,
-    ): ProxyIngressPreflightDecision.Rejected =
-        ProxyIngressPreflightDecision.Rejected(
-            failure = failure,
-            response = ProxyErrorResponseMapper.map(failure),
-            requiresAuditLog = requiresAuditLog,
-        )
+    ): ProxyIngressPreflightDecision.Rejected = ProxyIngressPreflightDecision.Rejected(
+        failure = failure,
+        response = ProxyErrorResponseMapper.map(failure),
+        requiresAuditLog = requiresAuditLog,
+    )
 }
 
-private fun ParsedProxyRequest.isProxyTraffic(): Boolean =
-    when (this) {
-        is ParsedProxyRequest.HttpProxy,
-        is ParsedProxyRequest.ConnectTunnel,
-        -> true
-        is ParsedProxyRequest.Management -> false
-    }
+private fun ParsedProxyRequest.isProxyTraffic(): Boolean = when (this) {
+    is ParsedProxyRequest.HttpProxy,
+    is ParsedProxyRequest.ConnectTunnel,
+    -> true
+    is ParsedProxyRequest.Management -> false
+}
 
 private const val DEFAULT_MAX_HEADER_BYTES = 16 * 1024

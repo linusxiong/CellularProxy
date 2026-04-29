@@ -33,7 +33,7 @@ class ConnectTunnelStreamRelayTest {
             result,
         )
         assertEquals("hello tunnel", originOutput.toString(Charsets.UTF_8))
-        assertEquals(3, originOutput.flushCalls)
+        assertEquals(1, originOutput.flushCalls)
         assertFalse(clientInput.wasClosed)
         assertFalse(originOutput.wasClosed)
     }

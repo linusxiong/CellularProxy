@@ -132,7 +132,13 @@ class DashboardScreenControllerTest {
         controller.handle(DashboardScreenEvent.Refresh)
         controller.handle(DashboardScreenEvent.StartProxy)
 
-        assertEquals(listOf(DashboardScreenAction.StartProxy), actions)
+        assertEquals(
+            listOf(
+                DashboardScreenAction.StartProxy,
+                DashboardScreenAction.StartProxy,
+            ),
+            actions,
+        )
 
         proxyStatus = ProxyServiceStatus(ProxyServiceState.Starting)
         controller.handle(DashboardScreenEvent.Refresh)
@@ -142,6 +148,7 @@ class DashboardScreenControllerTest {
 
         assertEquals(
             listOf(
+                DashboardScreenAction.StartProxy,
                 DashboardScreenAction.StartProxy,
                 DashboardScreenAction.StartProxy,
             ),
@@ -180,6 +187,38 @@ class DashboardScreenControllerTest {
         controller.handle(DashboardScreenEvent.Refresh)
 
         assertEquals("None", controller.state.pendingOperation)
+    }
+
+    @Test
+    fun `controller clears pending service lifecycle action after explicit refresh without status change`() {
+        val actions = mutableListOf<DashboardScreenAction>()
+        val controller =
+            DashboardScreenController(
+                statusProvider = {
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                    )
+                },
+                actionHandler = { action -> actions += action },
+            )
+
+        controller.handle(DashboardScreenEvent.StartProxy)
+        controller.handle(DashboardScreenEvent.StartProxy)
+
+        assertEquals(listOf(DashboardScreenAction.StartProxy), actions)
+        assertEquals("In progress: Start proxy", controller.state.pendingOperation)
+
+        controller.handle(DashboardScreenEvent.Refresh)
+        controller.handle(DashboardScreenEvent.StartProxy)
+
+        assertEquals(
+            listOf(
+                DashboardScreenAction.StartProxy,
+                DashboardScreenAction.StartProxy,
+            ),
+            actions,
+        )
     }
 
     @Test

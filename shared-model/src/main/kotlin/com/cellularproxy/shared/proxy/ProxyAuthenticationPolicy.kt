@@ -40,8 +40,7 @@ data class ProxyAuthenticationDecision(
     companion object {
         val Accepted = ProxyAuthenticationDecision(accepted = true, rejectionReason = null)
 
-        fun rejected(reason: ProxyAuthenticationRejectionReason): ProxyAuthenticationDecision =
-            ProxyAuthenticationDecision(accepted = false, rejectionReason = reason)
+        fun rejected(reason: ProxyAuthenticationRejectionReason): ProxyAuthenticationDecision = ProxyAuthenticationDecision(accepted = false, rejectionReason = reason)
     }
 }
 

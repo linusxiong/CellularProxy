@@ -3,6 +3,9 @@ package com.cellularproxy.app.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -71,12 +74,20 @@ class CellularProxyLogsAuditRouteSmokeTest {
                 .isNotEmpty()
         }
         composeRule
-            .onNodeWithText("Management call failed for [REDACTED]")
-            .performScrollTo()
+            .onNode(
+                hasTestTag("logs-audit-row-management-secret"),
+                useUnmergedTree = true,
+            ).performScrollTo()
             .assertIsDisplayed()
+        composeRule
+            .onNode(
+                hasText("Management call failed for [REDACTED]") and
+                    hasAnyAncestor(hasTestTag("logs-audit-row-management-secret")),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Search logs")
+            .onNode(hasSetTextAction() and hasText("Search logs"))
             .performScrollTo()
             .performTextInput("secret-token")
         composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -86,9 +97,17 @@ class CellularProxyLogsAuditRouteSmokeTest {
                 .isNotEmpty()
         }
         composeRule
-            .onNodeWithText("Management call failed for [REDACTED]")
-            .performScrollTo()
+            .onNode(
+                hasTestTag("logs-audit-row-management-secret"),
+                useUnmergedTree = true,
+            ).performScrollTo()
             .assertIsDisplayed()
+        composeRule
+            .onNode(
+                hasText("Management call failed for [REDACTED]") and
+                    hasAnyAncestor(hasTestTag("logs-audit-row-management-secret")),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
 
         composeRule
             .onNodeWithText("Copy filtered summary")

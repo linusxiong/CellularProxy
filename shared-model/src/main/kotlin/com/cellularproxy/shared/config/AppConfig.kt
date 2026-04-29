@@ -31,14 +31,13 @@ data class AppConfig(
     }
 
     companion object {
-        fun default(): AppConfig =
-            AppConfig(
-                proxy = ProxyConfig(),
-                network = NetworkConfig(),
-                rotation = RotationConfig(),
-                cloudflare = CloudflareConfig(),
-                root = RootConfig(),
-            )
+        fun default(): AppConfig = AppConfig(
+            proxy = ProxyConfig(),
+            network = NetworkConfig(),
+            rotation = RotationConfig(),
+            cloudflare = CloudflareConfig(),
+            root = RootConfig(),
+        )
     }
 }
 

@@ -21,11 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.R
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
 import com.cellularproxy.app.diagnostics.DiagnosticCheckType
@@ -172,10 +174,6 @@ internal fun CellularProxyDiagnosticsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Diagnostics",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
             text = state.overallStatus,
             style = MaterialTheme.typography.titleMedium,
         )
@@ -321,14 +319,14 @@ private fun DiagnosticsActionRow(
             enabled = actionsEnabled && DiagnosticsScreenAction.RunAllChecks in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Run non-Cloudflare checks")
+            Text(stringResource(R.string.diagnostics_run_non_cloudflare))
         }
         OutlinedButton(
             onClick = onCopySummary,
             enabled = actionsEnabled && DiagnosticsScreenAction.CopySummary in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy summary")
+            Text(stringResource(R.string.diagnostics_copy_summary))
         }
     }
 }
@@ -357,22 +355,22 @@ private fun DiagnosticsCheckRow(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        DiagnosticsField("Duration", item.duration)
-        DiagnosticsField("Error category", item.errorCategory)
-        DiagnosticsField("Details", item.details)
+        DiagnosticsField(stringResource(R.string.diagnostics_duration), item.duration)
+        DiagnosticsField(stringResource(R.string.diagnostics_error_category), item.errorCategory)
+        DiagnosticsField(stringResource(R.string.diagnostics_details), item.details)
         OutlinedButton(
             onClick = { onRunCheck(item.type) },
             enabled = actionsEnabled && DiagnosticsScreenAction.RunCheck in item.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Run ${item.label}")
+            Text(stringResource(R.string.diagnostics_run_check, item.label))
         }
         OutlinedButton(
             onClick = { onCopyCheck(item.type) },
             enabled = actionsEnabled && DiagnosticsScreenAction.CopyCheck in item.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy ${item.label}")
+            Text(stringResource(R.string.diagnostics_copy_check, item.label))
         }
     }
 }

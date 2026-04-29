@@ -25,15 +25,14 @@ interface SensitiveConfigGenerator {
 class SecureRandomSensitiveConfigGenerator(
     private val secureRandom: SecureRandom = SecureRandom(),
 ) : SensitiveConfigGenerator {
-    override fun generateDefaultSensitiveConfig(): SensitiveConfig =
-        SensitiveConfig(
-            proxyCredential =
-                ProxyCredential(
-                    username = "proxy-" + generateToken(byteCount = 9),
-                    password = generateToken(byteCount = 24),
-                ),
-            managementApiToken = generateToken(byteCount = 32),
-        )
+    override fun generateDefaultSensitiveConfig(): SensitiveConfig = SensitiveConfig(
+        proxyCredential =
+            ProxyCredential(
+                username = "proxy-" + generateToken(byteCount = 9),
+                password = generateToken(byteCount = 24),
+            ),
+        managementApiToken = generateToken(byteCount = 32),
+    )
 
     private fun generateToken(byteCount: Int): String {
         val bytes = ByteArray(byteCount)
@@ -65,9 +64,15 @@ class AppConfigBootstrapper(
                 is SensitiveConfigLoadResult.Loaded -> sensitiveLoadResult.config to false
             }
 
-        val (reconciledPlainConfig, reconciled) =
-            reconcileCloudflareTokenPresence(
+        val (proxyReconciledConfig, proxyReconciled) =
+            reconcileGeneratedDefaultProxyAuthentication(
                 plainConfig = plainConfig,
+                sensitiveConfig = sensitiveConfig,
+                generatedDefaultSecrets = createdDefaultSecrets,
+            )
+        val (reconciledPlainConfig, cloudflareReconciled) =
+            reconcileCloudflareTokenPresence(
+                plainConfig = proxyReconciledConfig,
                 sensitiveConfig = sensitiveConfig,
             )
 
@@ -75,8 +80,25 @@ class AppConfigBootstrapper(
             plainConfig = reconciledPlainConfig,
             sensitiveConfig = sensitiveConfig,
             createdDefaultSecrets = createdDefaultSecrets,
-            reconciledPlainConfig = reconciled,
+            reconciledPlainConfig = proxyReconciled || cloudflareReconciled,
         )
+    }
+
+    private suspend fun reconcileGeneratedDefaultProxyAuthentication(
+        plainConfig: AppConfig,
+        sensitiveConfig: SensitiveConfig,
+        generatedDefaultSecrets: Boolean,
+    ): Pair<AppConfig, Boolean> {
+        if (!plainConfig.isDefaultProxyAuthenticationConfiguration()) {
+            return plainConfig to false
+        }
+        if (!generatedDefaultSecrets && !sensitiveConfig.proxyCredential.looksGenerated()) {
+            return plainConfig to false
+        }
+
+        val reconciledConfig = plainConfig.copy(proxy = plainConfig.proxy.copy(authEnabled = false))
+        plainRepository.save(reconciledConfig)
+        return reconciledConfig to true
     }
 
     private suspend fun reconcileCloudflareTokenPresence(
@@ -99,3 +121,15 @@ class AppConfigBootstrapper(
         return reconciledConfig to true
     }
 }
+
+private fun AppConfig.isDefaultProxyAuthenticationConfiguration(): Boolean {
+    val defaultProxy = AppConfig.default().proxy
+    return proxy.authEnabled &&
+        proxy.listenHost == defaultProxy.listenHost &&
+        proxy.listenPort == defaultProxy.listenPort &&
+        proxy.maxConcurrentConnections == defaultProxy.maxConcurrentConnections
+}
+
+private fun ProxyCredential.looksGenerated(): Boolean = username.startsWith(GENERATED_PROXY_USERNAME_PREFIX)
+
+private const val GENERATED_PROXY_USERNAME_PREFIX = "proxy-"

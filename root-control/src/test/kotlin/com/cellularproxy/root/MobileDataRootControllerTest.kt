@@ -285,22 +285,20 @@ class MobileDataRootControllerTest {
         }
     }
 
-    private fun mobileDataExecutor(result: (MobileDataCommandCall) -> RootCommandProcessResult): RootCommandExecutor =
-        mobileDataExecutor(mutableListOf(), result)
+    private fun mobileDataExecutor(result: (MobileDataCommandCall) -> RootCommandProcessResult): RootCommandExecutor = mobileDataExecutor(mutableListOf(), result)
 
     private fun mobileDataExecutor(
         calls: MutableList<MobileDataCommandCall>,
         result: (MobileDataCommandCall) -> RootCommandProcessResult,
-    ): RootCommandExecutor =
-        RootCommandExecutor(
-            processExecutor =
-                RootCommandProcessExecutor { command, timeoutMillis ->
-                    assertTrue(command.category in MOBILE_DATA_CATEGORIES)
-                    val call = MobileDataCommandCall(command, timeoutMillis)
-                    calls += call
-                    result(call)
-                },
-        )
+    ): RootCommandExecutor = RootCommandExecutor(
+        processExecutor =
+            RootCommandProcessExecutor { command, timeoutMillis ->
+                assertTrue(command.category in MOBILE_DATA_CATEGORIES)
+                val call = MobileDataCommandCall(command, timeoutMillis)
+                calls += call
+                result(call)
+            },
+    )
 
     private fun mobileDataExecution(
         category: RootCommandCategory,

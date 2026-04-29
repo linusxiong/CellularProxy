@@ -293,23 +293,21 @@ class HttpProxyRequestStreamForwarderTest {
         method: String = "POST",
         originTarget: String = "/submit",
         headers: Map<String, List<String>> = emptyMap(),
-    ): ParsedHttpRequest =
-        ParsedHttpRequest(
-            request =
-                ParsedProxyRequest.HttpProxy(
-                    method = method,
-                    host = "origin.example",
-                    port = 80,
-                    originTarget = originTarget,
-                ),
-            headers = headers,
-        )
+    ): ParsedHttpRequest = ParsedHttpRequest(
+        request =
+            ParsedProxyRequest.HttpProxy(
+                method = method,
+                host = "origin.example",
+                port = 80,
+                originTarget = originTarget,
+            ),
+        headers = headers,
+    )
 
-    private fun accepted(request: ParsedHttpRequest): ProxyIngressStreamPreflightDecision.Accepted =
-        ProxyIngressStreamPreflightDecision.Accepted(
-            httpRequest = request,
-            activeConnectionsAfterAdmission = 1,
-            requiresAuditLog = false,
-            headerBytesRead = 128,
-        )
+    private fun accepted(request: ParsedHttpRequest): ProxyIngressStreamPreflightDecision.Accepted = ProxyIngressStreamPreflightDecision.Accepted(
+        httpRequest = request,
+        activeConnectionsAfterAdmission = 1,
+        requiresAuditLog = false,
+        headerBytesRead = 128,
+    )
 }

@@ -252,13 +252,12 @@ class FileBackedManagementApiAuditLogTest {
         }
     }
 
-    private fun record(operation: ManagementApiOperation): ManagementApiAuditRecord =
-        ManagementApiAuditRecord(
-            operation = operation,
-            outcome = ManagementApiAuditOutcome.Responded,
-            statusCode = 202,
-            disposition = ManagementApiStreamExchangeDisposition.Routed,
-        )
+    private fun record(operation: ManagementApiOperation): ManagementApiAuditRecord = ManagementApiAuditRecord(
+        operation = operation,
+        outcome = ManagementApiAuditOutcome.Responded,
+        statusCode = 202,
+        disposition = ManagementApiStreamExchangeDisposition.Routed,
+    )
 
     private fun withLogFile(block: (File) -> Unit) {
         val directory = createTempDirectory(prefix = "cellularproxy-management-audit")

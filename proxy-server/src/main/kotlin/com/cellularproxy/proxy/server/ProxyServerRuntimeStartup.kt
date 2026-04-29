@@ -76,39 +76,38 @@ object ProxyServerRuntimeStartup {
         startup: ProxyServiceStartupDecision.Ready,
         backlog: Int,
         bindListener: (listenHost: String, listenPort: Int, backlog: Int) -> ProxyServerSocketBindResult,
-    ): ProxyServerRuntimeStartupResult =
-        when (
-            val bindResult =
-                bindListener(
-                    startup.listenHost,
-                    startup.listenPort,
-                    backlog,
-                )
-        ) {
-            is ProxyServerSocketBindResult.Failed ->
-                ProxyServerRuntimeStartupResult.Failed(
-                    startupError = bindResult.startupError,
-                    status =
-                        ProxyServiceStatus.failed(
-                            startupError = bindResult.startupError,
-                            configuredRoute = startup.configuredRoute,
-                        ),
-                )
+    ): ProxyServerRuntimeStartupResult = when (
+        val bindResult =
+            bindListener(
+                startup.listenHost,
+                startup.listenPort,
+                backlog,
+            )
+    ) {
+        is ProxyServerSocketBindResult.Failed ->
+            ProxyServerRuntimeStartupResult.Failed(
+                startupError = bindResult.startupError,
+                status =
+                    ProxyServiceStatus.failed(
+                        startupError = bindResult.startupError,
+                        configuredRoute = startup.configuredRoute,
+                    ),
+            )
 
-            is ProxyServerSocketBindResult.Bound ->
-                ProxyServerRuntimeStartupResult.Started(
-                    listener = bindResult.listener,
-                    status =
-                        ProxyServiceStatus.running(
-                            listenHost = bindResult.listener.listenHost,
-                            listenPort = bindResult.listener.listenPort,
-                            configuredRoute = startup.configuredRoute,
-                            boundRoute = startup.routeCandidates.first(),
-                            publicIp = null,
-                            hasHighSecurityRisk = startup.hasHighSecurityRisk,
-                        ),
-                )
-        }
+        is ProxyServerSocketBindResult.Bound ->
+            ProxyServerRuntimeStartupResult.Started(
+                listener = bindResult.listener,
+                status =
+                    ProxyServiceStatus.running(
+                        listenHost = bindResult.listener.listenHost,
+                        listenPort = bindResult.listener.listenPort,
+                        configuredRoute = startup.configuredRoute,
+                        boundRoute = startup.routeCandidates.first(),
+                        publicIp = null,
+                        hasHighSecurityRisk = startup.hasHighSecurityRisk,
+                    ),
+            )
+    }
 }
 
 private const val DEFAULT_RUNTIME_STARTUP_BACKLOG = 50

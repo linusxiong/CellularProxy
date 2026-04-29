@@ -73,51 +73,50 @@ class CloudflareManagementApiBridge(
 
     override fun toString(): String = "CloudflareManagementApiBridge(admissionConfig=[REDACTED], managementHandler=[REDACTED])"
 
-    private fun dispatch(request: ParsedProxyRequest.Management): CloudflareTunnelResponse =
-        try {
-            when (val decision = ManagementApiDispatcher.dispatch(request = request, handler = managementHandler)) {
-                is ManagementApiDispatchDecision.Respond ->
-                    decision.response.toCloudflareResponse().also { response ->
-                        if (decision.requiresAuditLog) {
-                            recordManagementAudit(
-                                ManagementApiAuditRecord(
-                                    operation = decision.operation,
-                                    outcome = ManagementApiAuditOutcome.Responded,
-                                    statusCode = response.statusCode,
-                                    disposition = ManagementApiStreamExchangeDisposition.Routed,
-                                ),
-                            )
-                        }
-                        decision.response.notifyResponseSent()
+    private fun dispatch(request: ParsedProxyRequest.Management): CloudflareTunnelResponse = try {
+        when (val decision = ManagementApiDispatcher.dispatch(request = request, handler = managementHandler)) {
+            is ManagementApiDispatchDecision.Respond ->
+                decision.response.toCloudflareResponse().also { response ->
+                    if (decision.requiresAuditLog) {
+                        recordManagementAudit(
+                            ManagementApiAuditRecord(
+                                operation = decision.operation,
+                                outcome = ManagementApiAuditOutcome.Responded,
+                                statusCode = response.statusCode,
+                                disposition = ManagementApiStreamExchangeDisposition.Routed,
+                            ),
+                        )
                     }
-                is ManagementApiDispatchDecision.Reject ->
-                    decision.response.toCloudflareResponse().also { response ->
-                        if (decision.requiresAuditLog) {
-                            recordManagementAudit(
-                                ManagementApiAuditRecord(
-                                    operation = request.toAttemptedHighImpactOperationOrNull(),
-                                    outcome = ManagementApiAuditOutcome.RouteRejected,
-                                    statusCode = response.statusCode,
-                                    disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
-                                ),
-                            )
-                        }
-                        decision.response.notifyResponseSent()
+                    decision.response.notifyResponseSent()
+                }
+            is ManagementApiDispatchDecision.Reject ->
+                decision.response.toCloudflareResponse().also { response ->
+                    if (decision.requiresAuditLog) {
+                        recordManagementAudit(
+                            ManagementApiAuditRecord(
+                                operation = request.toAttemptedHighImpactOperationOrNull(),
+                                outcome = ManagementApiAuditOutcome.RouteRejected,
+                                statusCode = response.statusCode,
+                                disposition = ManagementApiStreamExchangeDisposition.RouteRejected,
+                            ),
+                        )
                     }
-            }
-        } catch (failure: ManagementApiHandlerException) {
-            if (failure.requiresAuditLog) {
-                recordManagementAudit(
-                    ManagementApiAuditRecord(
-                        operation = failure.operation,
-                        outcome = ManagementApiAuditOutcome.HandlerFailed,
-                        statusCode = null,
-                        disposition = null,
-                    ),
-                )
-            }
-            throw failure
+                    decision.response.notifyResponseSent()
+                }
         }
+    } catch (failure: ManagementApiHandlerException) {
+        if (failure.requiresAuditLog) {
+            recordManagementAudit(
+                ManagementApiAuditRecord(
+                    operation = failure.operation,
+                    outcome = ManagementApiAuditOutcome.HandlerFailed,
+                    statusCode = null,
+                    disposition = null,
+                ),
+            )
+        }
+        throw failure
+    }
 
     private fun ProxyRequestAdmissionDecision.Rejected.toCloudflareResponse(): CloudflareTunnelResponse = when (
         val decision =

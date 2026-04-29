@@ -8,6 +8,8 @@ import com.cellularproxy.cloudflare.CloudflareTunnelEdgeConnector
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.BoundSocketConnectFailure
 import com.cellularproxy.network.BoundSocketConnectResult
+import com.cellularproxy.network.PublicIpProbeResponseFormat
+import com.cellularproxy.network.PublicIpProbeScheme
 import com.cellularproxy.proxy.management.ManagementApiOperation
 import com.cellularproxy.proxy.server.ProxyServerSocketBinder
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
@@ -131,6 +133,17 @@ class CellularProxyRuntimeCompositionInstallerTest {
         assertTerminates(executors.workerExecutor)
         assertTerminates(executors.queuedClientTimeoutExecutor)
         assertTerminates(executors.acceptLoopExecutor)
+    }
+
+    @Test
+    fun `default public IP probe uses ipify HTTPS endpoint`() {
+        val endpoint = defaultPublicIpProbeEndpoint()
+
+        assertEquals("api.ipify.org", endpoint.host)
+        assertEquals(PublicIpProbeScheme.Https, endpoint.scheme)
+        assertEquals(443, endpoint.port)
+        assertEquals("/", endpoint.path)
+        assertEquals(PublicIpProbeResponseFormat.PlainText, endpoint.responseFormat)
     }
 
     @Test

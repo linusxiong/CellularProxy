@@ -42,31 +42,30 @@ data class ForegroundServiceNotificationDescriptor(
         const val CHANNEL_ID: String = "cellularproxy_proxy_service"
         const val NOTIFICATION_ID: Int = 10_001
 
-        fun from(status: NotificationStatusModel): ForegroundServiceNotificationDescriptor =
-            ForegroundServiceNotificationDescriptor(
-                channelId = CHANNEL_ID,
-                channelNameResId = R.string.notification_channel_proxy_service,
-                channelDescriptionResId = R.string.notification_channel_proxy_service_description,
-                channelImportance = NotificationChannelImportance.Low,
-                notificationId = NOTIFICATION_ID,
-                smallIconResId = R.drawable.ic_stat_cellularproxy,
-                title = status.title,
-                contentText = status.contentText,
-                detailText = status.detailText,
-                warningText = status.warningText,
-                priority = status.priority,
-                isOngoing = status.isOngoing,
-                stopAction =
-                    if (status.stopActionEnabled) {
-                        ForegroundServiceNotificationAction(
-                            label = STOP_ACTION_LABEL,
-                            action = ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION,
-                            source = ForegroundServiceCommandSource.Notification,
-                        )
-                    } else {
-                        null
-                    },
-            )
+        fun from(status: NotificationStatusModel): ForegroundServiceNotificationDescriptor = ForegroundServiceNotificationDescriptor(
+            channelId = CHANNEL_ID,
+            channelNameResId = R.string.notification_channel_proxy_service,
+            channelDescriptionResId = R.string.notification_channel_proxy_service_description,
+            channelImportance = NotificationChannelImportance.Low,
+            notificationId = NOTIFICATION_ID,
+            smallIconResId = R.drawable.ic_stat_cellularproxy,
+            title = status.title,
+            contentText = status.contentText,
+            detailText = status.detailText,
+            warningText = status.warningText,
+            priority = status.priority,
+            isOngoing = status.isOngoing,
+            stopAction =
+                if (status.stopActionEnabled) {
+                    ForegroundServiceNotificationAction(
+                        label = STOP_ACTION_LABEL,
+                        action = ForegroundServiceActions.STOP_PROXY_FROM_NOTIFICATION,
+                        source = ForegroundServiceCommandSource.Notification,
+                    )
+                } else {
+                    null
+                },
+        )
     }
 }
 

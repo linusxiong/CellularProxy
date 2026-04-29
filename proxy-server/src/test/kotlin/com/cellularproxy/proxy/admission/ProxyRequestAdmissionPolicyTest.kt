@@ -293,17 +293,16 @@ class ProxyRequestAdmissionPolicyTest {
         assertTrue(rendered.contains("[REDACTED]"))
     }
 
-    private fun authenticatedManagementRequest(headers: Map<String, List<String>>): ParsedHttpRequest =
-        ParsedHttpRequest(
-            request =
-                ParsedProxyRequest.Management(
-                    method = HttpMethod.Get,
-                    originTarget = "/api/status",
-                    requiresToken = true,
-                    requiresAuditLog = false,
-                ),
-            headers = headers,
-        )
+    private fun authenticatedManagementRequest(headers: Map<String, List<String>>): ParsedHttpRequest = ParsedHttpRequest(
+        request =
+            ParsedProxyRequest.Management(
+                method = HttpMethod.Get,
+                originTarget = "/api/status",
+                requiresToken = true,
+                requiresAuditLog = false,
+            ),
+        headers = headers,
+    )
 
     private fun validProxyAuthorization(): String {
         val payload = credential.canonicalBasicPayload().toByteArray(Charsets.UTF_8)

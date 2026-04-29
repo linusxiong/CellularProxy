@@ -54,14 +54,13 @@ object ProxyRequestAdmissionPolicy {
     fun evaluate(
         config: ProxyRequestAdmissionConfig,
         request: ParsedHttpRequest,
-    ): ProxyRequestAdmissionDecision =
-        when (val parsedRequest = request.request) {
-            is ParsedProxyRequest.HttpProxy,
-            is ParsedProxyRequest.ConnectTunnel,
-            -> evaluateProxyRequest(config, request)
-            is ParsedProxyRequest.Management ->
-                evaluateManagementRequest(config, parsedRequest, request.headers)
-        }
+    ): ProxyRequestAdmissionDecision = when (val parsedRequest = request.request) {
+        is ParsedProxyRequest.HttpProxy,
+        is ParsedProxyRequest.ConnectTunnel,
+        -> evaluateProxyRequest(config, request)
+        is ParsedProxyRequest.Management ->
+            evaluateManagementRequest(config, parsedRequest, request.headers)
+    }
 
     private fun evaluateProxyRequest(
         config: ProxyRequestAdmissionConfig,
@@ -151,19 +150,17 @@ object ProxyRequestAdmissionPolicy {
         }
     }
 
-    private fun rejectedManagement(reason: ManagementAuthorizationRejectionReason): ProxyRequestAdmissionDecision.Rejected =
-        ProxyRequestAdmissionDecision.Rejected(
-            ProxyRequestAdmissionRejectionReason.ManagementAuthorization(reason),
-        )
+    private fun rejectedManagement(reason: ManagementAuthorizationRejectionReason): ProxyRequestAdmissionDecision.Rejected = ProxyRequestAdmissionDecision.Rejected(
+        ProxyRequestAdmissionRejectionReason.ManagementAuthorization(reason),
+    )
 
     private fun accepted(
         request: ParsedProxyRequest,
         requiresAuditLog: Boolean,
-    ): ProxyRequestAdmissionDecision.Accepted =
-        AcceptedProxyRequestAdmissionDecision(
-            request = request,
-            requiresAuditLog = requiresAuditLog,
-        )
+    ): ProxyRequestAdmissionDecision.Accepted = AcceptedProxyRequestAdmissionDecision(
+        request = request,
+        requiresAuditLog = requiresAuditLog,
+    )
 }
 
 private data class AcceptedProxyRequestAdmissionDecision(

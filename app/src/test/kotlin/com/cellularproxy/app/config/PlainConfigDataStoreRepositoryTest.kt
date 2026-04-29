@@ -23,59 +23,59 @@ import kotlin.time.Duration.Companion.seconds
 
 class PlainConfigDataStoreRepositoryTest {
     @Test
-    fun `loads defaults from empty DataStore`() =
-        withRepository { repository, _ ->
-            assertEquals(AppConfig.default(), repository.configFlow.first())
-            assertEquals(AppConfig.default(), repository.load())
-        }
+    fun `loads defaults from empty DataStore`() = withRepository { repository, _ ->
+        val expected = AppConfig.default().copy(proxy = AppConfig.default().proxy.copy(authEnabled = false))
+
+        assertEquals(expected, repository.configFlow.first())
+        assertEquals(expected, repository.load())
+    }
 
     @Test
-    fun `saves config and replaces stale nullable values`() =
-        withRepository { repository, dataStore ->
-            val configWithHostname =
-                AppConfig(
-                    proxy =
-                        ProxyConfig(
-                            listenHost = "127.0.0.1",
-                            listenPort = 8_888,
-                            authEnabled = false,
-                        ),
-                    network = NetworkConfig(defaultRoutePolicy = RouteTarget.Vpn),
-                    rotation =
-                        RotationConfig(
-                            strictIpChangeRequired = true,
-                            mobileDataOffDelay = 5.seconds,
-                            networkReturnTimeout = 90.seconds,
-                            cooldown = 240.seconds,
-                        ),
-                    cloudflare =
-                        CloudflareConfig(
-                            enabled = true,
-                            tunnelTokenPresent = true,
-                            managementHostnameLabel = "manage.example.com",
-                        ),
-                )
-            repository.save(configWithHostname)
-            assertEquals(configWithHostname, repository.load())
-
-            val configWithoutHostname =
-                AppConfig.default().copy(
-                    cloudflare =
-                        AppConfig.default().cloudflare.copy(
-                            tunnelTokenPresent = true,
-                        ),
-                )
-            repository.save(configWithoutHostname)
-
-            assertEquals(configWithoutHostname, repository.load())
-            assertFalse(
-                PlainConfigPreferenceKeys.cloudflareManagementHostnameLabel in
-                    dataStore.data
-                        .first()
-                        .asMap()
-                        .keys,
+    fun `saves config and replaces stale nullable values`() = withRepository { repository, dataStore ->
+        val configWithHostname =
+            AppConfig(
+                proxy =
+                    ProxyConfig(
+                        listenHost = "127.0.0.1",
+                        listenPort = 8_888,
+                        authEnabled = false,
+                    ),
+                network = NetworkConfig(defaultRoutePolicy = RouteTarget.Vpn),
+                rotation =
+                    RotationConfig(
+                        strictIpChangeRequired = true,
+                        mobileDataOffDelay = 5.seconds,
+                        networkReturnTimeout = 90.seconds,
+                        cooldown = 240.seconds,
+                    ),
+                cloudflare =
+                    CloudflareConfig(
+                        enabled = true,
+                        tunnelTokenPresent = true,
+                        managementHostnameLabel = "manage.example.com",
+                    ),
             )
-        }
+        repository.save(configWithHostname)
+        assertEquals(configWithHostname, repository.load())
+
+        val configWithoutHostname =
+            AppConfig.default().copy(
+                cloudflare =
+                    AppConfig.default().cloudflare.copy(
+                        tunnelTokenPresent = true,
+                    ),
+            )
+        repository.save(configWithoutHostname)
+
+        assertEquals(configWithoutHostname, repository.load())
+        assertFalse(
+            PlainConfigPreferenceKeys.cloudflareManagementHostnameLabel in
+                dataStore.data
+                    .first()
+                    .asMap()
+                    .keys,
+        )
+    }
 }
 
 private fun withRepository(block: suspend (PlainConfigDataStoreRepository, DataStore<Preferences>) -> Unit) {

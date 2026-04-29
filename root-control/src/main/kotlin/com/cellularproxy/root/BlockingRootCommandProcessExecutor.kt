@@ -3,9 +3,7 @@ package com.cellularproxy.root
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.charset.Charset
-import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 class BlockingRootCommandProcessExecutor(
     private val charset: Charset = Charsets.UTF_8,
@@ -48,11 +46,8 @@ class BlockingRootCommandProcessExecutor(
                 throw exception
             }
         } else {
-            val descendants = process.descendants().toList()
-            descendants.forEach { it.destroyForcibly() }
             process.destroyForcibly()
             closeProcessStreams(process, stdout, stderr)
-            descendants.forEach { waitForDestroyedProcess(it, streamCleanupTimeoutMillis) }
             waitForDestroyedProcess(process, streamCleanupTimeoutMillis)
             RootCommandProcessResult.TimedOut(
                 stdout = stdout.await(streamCleanupTimeoutMillis),
@@ -66,38 +61,9 @@ class BlockingRootCommandProcessExecutor(
         stdout: StreamCapture,
         stderr: StreamCapture,
     ) {
-        val descendants = process.descendants().toList()
-        descendants.forEach { it.destroyForcibly() }
         process.destroyForcibly()
         closeProcessStreams(process, stdout, stderr)
-        descendants.forEach { waitForDestroyedProcessIgnoringInterruption(it, streamCleanupTimeoutMillis) }
         waitForDestroyedProcessIgnoringInterruption(process, streamCleanupTimeoutMillis)
-    }
-
-    private fun waitForDestroyedProcess(
-        process: ProcessHandle,
-        timeoutMillis: Long,
-    ) {
-        try {
-            process.onExit().get(timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (exception: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw exception
-        } catch (_: TimeoutException) {
-        } catch (_: ExecutionException) {
-        }
-    }
-
-    private fun waitForDestroyedProcessIgnoringInterruption(
-        process: ProcessHandle,
-        timeoutMillis: Long,
-    ) {
-        try {
-            process.onExit().get(timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-        } catch (_: TimeoutException) {
-        } catch (_: ExecutionException) {
-        }
     }
 
     private fun waitForDestroyedProcessIgnoringInterruption(

@@ -35,25 +35,24 @@ data class ForegroundServiceCommandEffectPlan(
 }
 
 object ForegroundServiceCommandEffectPlanner {
-    fun plan(result: ForegroundServiceCommandResult): ForegroundServiceCommandEffectPlan =
-        when (result) {
-            ForegroundServiceCommandResult.Ignored ->
-                ForegroundServiceCommandEffectPlan(
-                    runtimeEffect = ForegroundServiceRuntimeEffect.None,
-                    serviceEffect = ForegroundServiceCommandEffect.StopSelf,
-                )
-            is ForegroundServiceCommandResult.Accepted ->
-                when (result.decision.command) {
-                    ForegroundServiceCommand.Start ->
-                        ForegroundServiceCommandEffectPlan(
-                            runtimeEffect = ForegroundServiceRuntimeEffect.StartProxyRuntime,
-                            serviceEffect = ForegroundServiceCommandEffect.PromoteToForeground,
-                        )
-                    ForegroundServiceCommand.Stop ->
-                        ForegroundServiceCommandEffectPlan(
-                            runtimeEffect = ForegroundServiceRuntimeEffect.StopProxyRuntime,
-                            serviceEffect = ForegroundServiceCommandEffect.StopForegroundAndSelf,
-                        )
-                }
-        }
+    fun plan(result: ForegroundServiceCommandResult): ForegroundServiceCommandEffectPlan = when (result) {
+        ForegroundServiceCommandResult.Ignored ->
+            ForegroundServiceCommandEffectPlan(
+                runtimeEffect = ForegroundServiceRuntimeEffect.None,
+                serviceEffect = ForegroundServiceCommandEffect.StopSelf,
+            )
+        is ForegroundServiceCommandResult.Accepted ->
+            when (result.decision.command) {
+                ForegroundServiceCommand.Start ->
+                    ForegroundServiceCommandEffectPlan(
+                        runtimeEffect = ForegroundServiceRuntimeEffect.StartProxyRuntime,
+                        serviceEffect = ForegroundServiceCommandEffect.PromoteToForeground,
+                    )
+                ForegroundServiceCommand.Stop ->
+                    ForegroundServiceCommandEffectPlan(
+                        runtimeEffect = ForegroundServiceRuntimeEffect.StopProxyRuntime,
+                        serviceEffect = ForegroundServiceCommandEffect.StopForegroundAndSelf,
+                    )
+            }
+    }
 }

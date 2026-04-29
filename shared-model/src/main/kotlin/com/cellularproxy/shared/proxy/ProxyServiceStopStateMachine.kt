@@ -22,28 +22,23 @@ object ProxyServiceStopStateMachine {
     fun transition(
         current: ProxyServiceStatus,
         event: ProxyServiceStopEvent,
-    ): ProxyServiceStopTransitionResult =
-        when (event) {
-            ProxyServiceStopEvent.StopRequested -> stop(current)
-        }
+    ): ProxyServiceStopTransitionResult = when (event) {
+        ProxyServiceStopEvent.StopRequested -> stop(current)
+    }
 
-    private fun stop(current: ProxyServiceStatus): ProxyServiceStopTransitionResult =
-        when (current.state) {
-            ProxyServiceState.Starting,
-            ProxyServiceState.Running,
-            -> accepted(current.copy(state = ProxyServiceState.Stopping))
-            ProxyServiceState.Stopping -> duplicate(current)
-            ProxyServiceState.Stopped,
-            ProxyServiceState.Failed,
-            -> ignored(current)
-        }
+    private fun stop(current: ProxyServiceStatus): ProxyServiceStopTransitionResult = when (current.state) {
+        ProxyServiceState.Starting,
+        ProxyServiceState.Running,
+        -> accepted(current.copy(state = ProxyServiceState.Stopping))
+        ProxyServiceState.Stopping -> duplicate(current)
+        ProxyServiceState.Stopped,
+        ProxyServiceState.Failed,
+        -> ignored(current)
+    }
 
-    private fun accepted(status: ProxyServiceStatus): ProxyServiceStopTransitionResult =
-        ProxyServiceStopTransitionResult(ProxyServiceStopTransitionDisposition.Accepted, status)
+    private fun accepted(status: ProxyServiceStatus): ProxyServiceStopTransitionResult = ProxyServiceStopTransitionResult(ProxyServiceStopTransitionDisposition.Accepted, status)
 
-    private fun duplicate(status: ProxyServiceStatus): ProxyServiceStopTransitionResult =
-        ProxyServiceStopTransitionResult(ProxyServiceStopTransitionDisposition.Duplicate, status)
+    private fun duplicate(status: ProxyServiceStatus): ProxyServiceStopTransitionResult = ProxyServiceStopTransitionResult(ProxyServiceStopTransitionDisposition.Duplicate, status)
 
-    private fun ignored(status: ProxyServiceStatus): ProxyServiceStopTransitionResult =
-        ProxyServiceStopTransitionResult(ProxyServiceStopTransitionDisposition.Ignored, status)
+    private fun ignored(status: ProxyServiceStatus): ProxyServiceStopTransitionResult = ProxyServiceStopTransitionResult(ProxyServiceStopTransitionDisposition.Ignored, status)
 }

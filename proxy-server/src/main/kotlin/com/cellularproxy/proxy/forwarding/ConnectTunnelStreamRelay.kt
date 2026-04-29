@@ -15,6 +15,7 @@ enum class ConnectTunnelStreamRelayFailure {
     DestinationFlushFailed,
     UnexpectedRelayFailure,
     StoppedAfterPeerFailure,
+    CoordinatorInterrupted,
 }
 
 sealed interface ConnectTunnelStreamRelayResult {
@@ -58,6 +59,11 @@ object ConnectTunnelStreamRelay {
                 try {
                     input.read(buffer)
                 } catch (_: IOException) {
+                    flushOutput(
+                        output = output,
+                        direction = direction,
+                        bytesRelayed = bytesRelayed,
+                    )?.let { return it }
                     return ConnectTunnelStreamRelayResult.Failed(
                         direction = direction,
                         bytesRelayed = bytesRelayed,
@@ -66,6 +72,11 @@ object ConnectTunnelStreamRelay {
                 }
 
             if (readBytes == END_OF_STREAM) {
+                flushOutput(
+                    output = output,
+                    direction = direction,
+                    bytesRelayed = bytesRelayed,
+                )?.let { return it }
                 return ConnectTunnelStreamRelayResult.Completed(
                     direction = direction,
                     bytesRelayed = bytesRelayed,
@@ -75,6 +86,11 @@ object ConnectTunnelStreamRelay {
             try {
                 output.write(buffer, 0, readBytes)
             } catch (_: IOException) {
+                flushOutput(
+                    output = output,
+                    direction = direction,
+                    bytesRelayed = bytesRelayed,
+                )?.let { return it }
                 return ConnectTunnelStreamRelayResult.Failed(
                     direction = direction,
                     bytesRelayed = bytesRelayed,
@@ -82,19 +98,26 @@ object ConnectTunnelStreamRelay {
                 )
             }
             bytesRelayed += readBytes.toLong()
-
-            try {
-                output.flush()
-            } catch (_: IOException) {
-                return ConnectTunnelStreamRelayResult.Failed(
-                    direction = direction,
-                    bytesRelayed = bytesRelayed,
-                    reason = ConnectTunnelStreamRelayFailure.DestinationFlushFailed,
-                )
-            }
         }
+    }
+
+    private fun flushOutput(
+        output: OutputStream,
+        direction: ConnectTunnelRelayDirection,
+        bytesRelayed: Long,
+    ): ConnectTunnelStreamRelayResult.Failed? {
+        try {
+            output.flush()
+        } catch (_: IOException) {
+            return ConnectTunnelStreamRelayResult.Failed(
+                direction = direction,
+                bytesRelayed = bytesRelayed,
+                reason = ConnectTunnelStreamRelayFailure.DestinationFlushFailed,
+            )
+        }
+        return null
     }
 }
 
-internal const val DEFAULT_TUNNEL_RELAY_BUFFER_BYTES = 8 * 1024
+internal const val DEFAULT_TUNNEL_RELAY_BUFFER_BYTES = 256 * 1024
 private const val END_OF_STREAM = -1

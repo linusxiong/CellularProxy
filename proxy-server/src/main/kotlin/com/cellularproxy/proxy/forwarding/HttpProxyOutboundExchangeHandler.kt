@@ -62,13 +62,12 @@ enum class OutboundHttpOriginOpenFailure {
     OutboundConnectionTimeout,
 }
 
-fun OutboundHttpOriginOpenFailure.toProxyServerFailure(): ProxyServerFailure =
-    when (this) {
-        OutboundHttpOriginOpenFailure.SelectedRouteUnavailable -> ProxyServerFailure.SelectedRouteUnavailable
-        OutboundHttpOriginOpenFailure.DnsResolutionFailed -> ProxyServerFailure.DnsResolutionFailed
-        OutboundHttpOriginOpenFailure.OutboundConnectionFailed -> ProxyServerFailure.OutboundConnectionFailed
-        OutboundHttpOriginOpenFailure.OutboundConnectionTimeout -> ProxyServerFailure.OutboundConnectionTimeout
-    }
+fun OutboundHttpOriginOpenFailure.toProxyServerFailure(): ProxyServerFailure = when (this) {
+    OutboundHttpOriginOpenFailure.SelectedRouteUnavailable -> ProxyServerFailure.SelectedRouteUnavailable
+    OutboundHttpOriginOpenFailure.DnsResolutionFailed -> ProxyServerFailure.DnsResolutionFailed
+    OutboundHttpOriginOpenFailure.OutboundConnectionFailed -> ProxyServerFailure.OutboundConnectionFailed
+    OutboundHttpOriginOpenFailure.OutboundConnectionTimeout -> ProxyServerFailure.OutboundConnectionTimeout
+}
 
 sealed interface HttpProxyOutboundExchangeHandlingResult {
     data class Forwarded(
@@ -151,24 +150,23 @@ class HttpProxyOutboundExchangeHandler(
         maxOriginResponseHeaderBytes: Int,
         maxResponseChunkHeaderBytes: Int,
         maxResponseTrailerBytes: Int,
-    ): HttpProxyOutboundExchangeHandlingResult.Forwarded =
-        try {
-            HttpProxyOutboundExchangeHandlingResult.Forwarded(
-                HttpProxyStreamExchangeForwarder.forward(
-                    accepted = accepted,
-                    clientInput = clientInput,
-                    originInput = connection.input,
-                    originOutput = connection.output,
-                    clientOutput = clientOutput,
-                    bufferSize = bufferSize,
-                    maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
-                    maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
-                    maxResponseTrailerBytes = maxResponseTrailerBytes,
-                ),
-            )
-        } finally {
-            connection.closeAfterExchange()
-        }
+    ): HttpProxyOutboundExchangeHandlingResult.Forwarded = try {
+        HttpProxyOutboundExchangeHandlingResult.Forwarded(
+            HttpProxyStreamExchangeForwarder.forward(
+                accepted = accepted,
+                clientInput = clientInput,
+                originInput = connection.input,
+                originOutput = connection.output,
+                clientOutput = clientOutput,
+                bufferSize = bufferSize,
+                maxOriginResponseHeaderBytes = maxOriginResponseHeaderBytes,
+                maxResponseChunkHeaderBytes = maxResponseChunkHeaderBytes,
+                maxResponseTrailerBytes = maxResponseTrailerBytes,
+            ),
+        )
+    } finally {
+        connection.closeAfterExchange()
+    }
 
     private fun writeMappedFailure(
         failure: ProxyServerFailure,

@@ -5,12 +5,11 @@ import android.content.SharedPreferences
 class SharedPreferencesSensitiveKeyValueStore(
     private val sharedPreferences: SharedPreferences,
 ) : SensitiveKeyValueStore {
-    override fun read(key: String): String? =
-        try {
-            sharedPreferences.getString(key, null)
-        } catch (_: ClassCastException) {
-            null
-        }
+    override fun read(key: String): String? = try {
+        sharedPreferences.getString(key, null)
+    } catch (_: ClassCastException) {
+        null
+    }
 
     override fun replace(
         encryptedValues: Map<String, String>,

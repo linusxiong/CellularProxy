@@ -88,24 +88,22 @@ object ProxyServiceStartupPolicy {
     private fun failed(
         startupError: ProxyStartupError,
         configuredRoute: RouteTarget,
-    ): ProxyServiceStartupDecision.Failed =
-        ProxyServiceStartupDecision.Failed(
-            startupError = startupError,
-            status =
-                ProxyServiceStatus.failed(
-                    startupError = startupError,
-                    configuredRoute = configuredRoute,
-                ),
-        )
+    ): ProxyServiceStartupDecision.Failed = ProxyServiceStartupDecision.Failed(
+        startupError = startupError,
+        status =
+            ProxyServiceStatus.failed(
+                startupError = startupError,
+                configuredRoute = configuredRoute,
+            ),
+    )
 }
 
-private fun ConfigValidationError.toStartupError(): ProxyStartupError =
-    when (this) {
-        ConfigValidationError.InvalidListenHost -> ProxyStartupError.InvalidListenAddress
-        ConfigValidationError.InvalidListenPort -> ProxyStartupError.InvalidListenPort
-        ConfigValidationError.InvalidMaxConcurrentConnections -> ProxyStartupError.InvalidMaxConcurrentConnections
-        ConfigValidationError.MissingCloudflareTunnelToken -> ProxyStartupError.MissingCloudflareTunnelToken
-    }
+private fun ConfigValidationError.toStartupError(): ProxyStartupError = when (this) {
+    ConfigValidationError.InvalidListenHost -> ProxyStartupError.InvalidListenAddress
+    ConfigValidationError.InvalidListenPort -> ProxyStartupError.InvalidListenPort
+    ConfigValidationError.InvalidMaxConcurrentConnections -> ProxyStartupError.InvalidMaxConcurrentConnections
+    ConfigValidationError.MissingCloudflareTunnelToken -> ProxyStartupError.MissingCloudflareTunnelToken
+}
 
 private fun String.isSupportedNumericIpv4Address(): Boolean {
     if (isEmpty() || this != trim()) {

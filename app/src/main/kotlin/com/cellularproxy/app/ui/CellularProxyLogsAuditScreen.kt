@@ -25,11 +25,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.R
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
@@ -135,10 +138,6 @@ internal fun CellularProxyLogsAuditScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Logs/Audit",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
             text = state.resultSummary,
             style = MaterialTheme.typography.titleMedium,
         )
@@ -173,7 +172,7 @@ internal fun CellularProxyLogsAuditScreen(
         )
         if (state.rows.isEmpty()) {
             Text(
-                text = "No log or audit records match the current filters.",
+                text = stringResource(R.string.logs_empty),
                 style = MaterialTheme.typography.bodyMedium,
             )
         } else {
@@ -345,7 +344,7 @@ internal data class LogsAuditScreenFilter(
     }
 
     fun matches(row: LogsAuditScreenRow): Boolean {
-        val normalizedSearch = search.normalizedLogsAuditSearchText()
+        val searchQuery = LogsAuditSearchQuery.parse(search)
         val searchableText =
             "${row.category.label} ${row.severity.label} ${row.title} ${row.detail}"
                 .normalizedLogsAuditSearchText()
@@ -353,7 +352,77 @@ internal data class LogsAuditScreenFilter(
             (severity == null || row.severity == severity) &&
             (fromEpochMillis == null || row.occurredAtEpochMillis >= fromEpochMillis) &&
             (toEpochMillis == null || row.occurredAtEpochMillis <= toEpochMillis) &&
-            (normalizedSearch.isBlank() || searchableText.contains(normalizedSearch))
+            searchQuery.matches(searchableText)
+    }
+}
+
+private data class LogsAuditSearchQuery(
+    val requiredTerms: List<String>,
+    val excludedTerms: List<String>,
+) {
+    fun matches(normalizedSearchableText: String): Boolean = requiredTerms.all(normalizedSearchableText::contains) &&
+        excludedTerms.none(normalizedSearchableText::contains)
+
+    companion object {
+        fun parse(search: String): LogsAuditSearchQuery {
+            val requiredTerms = mutableListOf<String>()
+            val excludedTerms = mutableListOf<String>()
+            var index = 0
+
+            fun skipWhitespace() {
+                while (index < search.length && search[index].isWhitespace()) {
+                    index += 1
+                }
+            }
+
+            fun readToken(): String {
+                if (index >= search.length) {
+                    return ""
+                }
+                if (search[index] == '"') {
+                    index += 1
+                    val start = index
+                    while (index < search.length && search[index] != '"') {
+                        index += 1
+                    }
+                    val token = search.substring(start, index)
+                    if (index < search.length && search[index] == '"') {
+                        index += 1
+                    }
+                    return token
+                }
+
+                val start = index
+                while (index < search.length && !search[index].isWhitespace()) {
+                    index += 1
+                }
+                return search.substring(start, index)
+            }
+
+            while (index < search.length) {
+                skipWhitespace()
+                if (index >= search.length) {
+                    break
+                }
+                val excluded = search[index] == '-'
+                if (excluded) {
+                    index += 1
+                }
+                val normalizedToken = readToken().normalizedLogsAuditSearchText()
+                if (normalizedToken.isNotBlank()) {
+                    if (excluded) {
+                        excludedTerms += normalizedToken
+                    } else {
+                        requiredTerms += normalizedToken
+                    }
+                }
+            }
+
+            return LogsAuditSearchQuery(
+                requiredTerms = requiredTerms,
+                excludedTerms = excludedTerms,
+            )
+        }
     }
 }
 
@@ -564,16 +633,16 @@ private fun LogsAuditSelectedRecord(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Selected record",
+            text = stringResource(R.string.logs_selected_record),
             style = MaterialTheme.typography.titleMedium,
         )
-        LogsAuditField("Selected", "${selectedRow.category.label} | ${selectedRow.title}")
+        LogsAuditField(stringResource(R.string.logs_selected), "${selectedRow.category.label} | ${selectedRow.title}")
         OutlinedButton(
             onClick = onClearSelection,
             enabled = actionsEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Clear selection")
+            Text(stringResource(R.string.logs_clear_selection))
         }
     }
 }
@@ -585,10 +654,18 @@ private fun LogsAuditFilterSummary(state: LogsAuditScreenState) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        LogsAuditField("Category", filter.category?.label ?: "All")
-        LogsAuditField("Severity", filter.severity?.label ?: "All")
-        LogsAuditField("Time window", filter.timeWindowText())
-        LogsAuditField("Search", state.searchDisplayText.ifBlank { "None" })
+        val timeWindowText =
+            when {
+                filter.fromEpochMillis == null && filter.toEpochMillis == null -> stringResource(R.string.logs_all_time)
+                filter.fromEpochMillis != null && filter.toEpochMillis != null ->
+                    "${filter.fromEpochMillis} to ${filter.toEpochMillis}"
+                filter.fromEpochMillis != null -> "${stringResource(R.string.logs_from_timestamp)} ${filter.fromEpochMillis}"
+                else -> "${stringResource(R.string.logs_to_timestamp)} ${filter.toEpochMillis}"
+            }
+        LogsAuditField(stringResource(R.string.logs_category), filter.category?.label ?: stringResource(R.string.label_all))
+        LogsAuditField(stringResource(R.string.logs_severity), filter.severity?.label ?: stringResource(R.string.label_all))
+        LogsAuditField(stringResource(R.string.logs_time_window), timeWindowText)
+        LogsAuditField(stringResource(R.string.logs_search), state.searchDisplayText.ifBlank { stringResource(R.string.label_none) })
     }
 }
 
@@ -603,7 +680,7 @@ private fun LogsAuditCategoryFilter(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Category",
+            text = stringResource(R.string.logs_category),
             style = MaterialTheme.typography.labelMedium,
         )
         FlowRow(
@@ -614,7 +691,7 @@ private fun LogsAuditCategoryFilter(
             FilterChip(
                 selected = state.filter.category == null,
                 onClick = { onUpdateFilter(state.filter.copy(category = null)) },
-                label = { Text("All categories") },
+                label = { Text(stringResource(R.string.logs_all_categories)) },
             )
             LogsAuditScreenCategory.entries.forEach { category ->
                 FilterChip(
@@ -638,7 +715,7 @@ private fun LogsAuditSeverityFilter(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Severity",
+            text = stringResource(R.string.logs_severity),
             style = MaterialTheme.typography.labelMedium,
         )
         FlowRow(
@@ -649,7 +726,7 @@ private fun LogsAuditSeverityFilter(
             FilterChip(
                 selected = state.filter.severity == null,
                 onClick = { onUpdateFilter(state.filter.copy(severity = null)) },
-                label = { Text("All severities") },
+                label = { Text(stringResource(R.string.logs_all_severities)) },
             )
             LogsAuditScreenSeverity.entries.forEach { severity ->
                 FilterChip(
@@ -672,7 +749,7 @@ private fun LogsAuditTimeWindowFilter(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Time window",
+            text = stringResource(R.string.logs_time_window),
             style = MaterialTheme.typography.labelMedium,
         )
         Row(
@@ -695,7 +772,7 @@ private fun LogsAuditTimeWindowFilter(
                         onUpdateFilter(state.filter.copy(fromEpochMillis = fromEpochMillis))
                     }
                 },
-                label = { Text("From timestamp") },
+                label = { Text(stringResource(R.string.logs_from_timestamp)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -715,7 +792,7 @@ private fun LogsAuditTimeWindowFilter(
                         onUpdateFilter(state.filter.copy(toEpochMillis = toEpochMillis))
                     }
                 },
-                label = { Text("To timestamp") },
+                label = { Text(stringResource(R.string.logs_to_timestamp)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -724,7 +801,7 @@ private fun LogsAuditTimeWindowFilter(
             onClick = { onUpdateFilter(state.filter.copy(fromEpochMillis = null, toEpochMillis = null)) },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("All time")
+            Text(stringResource(R.string.logs_all_time))
         }
     }
 }
@@ -737,7 +814,7 @@ private fun LogsAuditSearchFilter(
     OutlinedTextField(
         value = state.searchDisplayText,
         onValueChange = { search -> onUpdateFilter(state.filter.copy(search = search)) },
-        label = { Text("Search logs") },
+        label = { Text(stringResource(R.string.logs_search)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -760,21 +837,21 @@ private fun LogsAuditActionRow(
             enabled = actionsEnabled && LogsAuditScreenAction.CopySelectedRecord in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy selected record")
+            Text(stringResource(R.string.logs_copy_selected))
         }
         OutlinedButton(
             onClick = { onCopyFilteredSummary(state.copyableFilteredSummary) },
             enabled = actionsEnabled && LogsAuditScreenAction.CopyFilteredSummary in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy filtered summary")
+            Text(stringResource(R.string.logs_copy_filtered_summary))
         }
         OutlinedButton(
             onClick = { state.exportBundle?.let(onExportRedactedBundle) },
             enabled = actionsEnabled && LogsAuditScreenAction.ExportRedactedBundle in state.availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Export redacted bundle")
+            Text(stringResource(R.string.logs_export_redacted_bundle))
         }
     }
 }
@@ -789,6 +866,7 @@ private fun LogsAuditRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .testTag("logs-audit-row-${row.id}")
                 .clickable(
                     enabled = actionsEnabled,
                     onClick = { onSelectRecord(row.id) },
@@ -808,9 +886,9 @@ private fun LogsAuditRow(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        LogsAuditField("Occurred", row.occurredAtEpochMillis.toString())
-        LogsAuditField("Title", row.title)
-        LogsAuditField("Details", row.detail)
+        LogsAuditField(stringResource(R.string.logs_occurred), row.occurredAtEpochMillis.toString())
+        LogsAuditField(stringResource(R.string.logs_title), row.title)
+        LogsAuditField(stringResource(R.string.logs_details), row.detail)
     }
 }
 

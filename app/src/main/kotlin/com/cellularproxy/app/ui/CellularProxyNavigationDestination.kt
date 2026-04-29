@@ -12,36 +12,43 @@ import androidx.compose.ui.graphics.vector.ImageVector
 enum class CellularProxyNavigationDestination(
     val route: String,
     val label: String,
+    val shortLabel: String,
     val icon: ImageVector,
 ) {
     Dashboard(
         route = "dashboard",
         label = "Dashboard",
+        shortLabel = "Home",
         icon = Icons.Filled.Dashboard,
     ),
     Settings(
         route = "settings",
         label = "Settings",
+        shortLabel = "Set",
         icon = Icons.Filled.Settings,
     ),
     Cloudflare(
         route = "cloudflare",
         label = "Cloudflare",
+        shortLabel = "CF",
         icon = Icons.Filled.Cloud,
     ),
     Rotation(
         route = "rotation",
         label = "Rotation",
+        shortLabel = "Rotate",
         icon = Icons.AutoMirrored.Filled.RotateRight,
     ),
     Diagnostics(
         route = "diagnostics",
         label = "Diagnostics",
+        shortLabel = "Diag",
         icon = Icons.Filled.BugReport,
     ),
     LogsAudit(
         route = "logs-audit",
         label = "Logs/Audit",
+        shortLabel = "Logs",
         icon = Icons.AutoMirrored.Filled.Article,
     ),
 }

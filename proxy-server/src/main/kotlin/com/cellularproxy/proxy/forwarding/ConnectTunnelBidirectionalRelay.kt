@@ -134,7 +134,9 @@ object ConnectTunnelBidirectionalRelay {
             buildResult(first, second)
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
-            throw interrupted
+            closeQuietly(client)
+            closeQuietly(origin)
+            return interruptedRelayResult()
         } finally {
             closeQuietly(client)
             closeQuietly(origin)
@@ -145,18 +147,17 @@ object ConnectTunnelBidirectionalRelay {
     private fun relayTask(
         direction: ConnectTunnelRelayDirection,
         block: () -> ConnectTunnelStreamRelayResult,
-    ): Callable<ConnectTunnelStreamRelayResult> =
-        Callable {
-            try {
-                block()
-            } catch (_: Exception) {
-                ConnectTunnelStreamRelayResult.Failed(
-                    direction = direction,
-                    bytesRelayed = 0,
-                    reason = ConnectTunnelStreamRelayFailure.UnexpectedRelayFailure,
-                )
-            }
+    ): Callable<ConnectTunnelStreamRelayResult> = Callable {
+        try {
+            block()
+        } catch (_: Exception) {
+            ConnectTunnelStreamRelayResult.Failed(
+                direction = direction,
+                bytesRelayed = 0,
+                reason = ConnectTunnelStreamRelayFailure.UnexpectedRelayFailure,
+            )
         }
+    }
 
     private fun buildResult(
         first: ConnectTunnelStreamRelayResult,
@@ -195,32 +196,44 @@ object ConnectTunnelBidirectionalRelay {
         direction: ConnectTunnelRelayDirection,
         first: ConnectTunnelStreamRelayResult,
         second: ConnectTunnelStreamRelayResult,
-    ): ConnectTunnelStreamRelayResult =
-        when {
-            first.direction == direction -> first
-            second.direction == direction -> second
-            else -> error("Missing relay result for $direction")
-        }
+    ): ConnectTunnelStreamRelayResult = when {
+        first.direction == direction -> first
+        second.direction == direction -> second
+        else -> error("Missing relay result for $direction")
+    }
 
-    private fun Future<ConnectTunnelStreamRelayResult>.getRelayResult(): ConnectTunnelStreamRelayResult =
-        try {
-            get()
-        } catch (execution: ExecutionException) {
-            throw execution.cause ?: execution
-        }
+    private fun interruptedRelayResult(): ConnectTunnelBidirectionalRelayResult.Failed = ConnectTunnelBidirectionalRelayResult.Failed(
+        clientToOrigin =
+            ConnectTunnelStreamRelayResult.Failed(
+                direction = ConnectTunnelRelayDirection.ClientToOrigin,
+                bytesRelayed = 0,
+                reason = ConnectTunnelStreamRelayFailure.CoordinatorInterrupted,
+            ),
+        originToClient =
+            ConnectTunnelStreamRelayResult.Failed(
+                direction = ConnectTunnelRelayDirection.OriginToClient,
+                bytesRelayed = 0,
+                reason = ConnectTunnelStreamRelayFailure.CoordinatorInterrupted,
+            ),
+    )
+
+    private fun Future<ConnectTunnelStreamRelayResult>.getRelayResult(): ConnectTunnelStreamRelayResult = try {
+        get()
+    } catch (execution: ExecutionException) {
+        throw execution.cause ?: execution
+    }
 
     private fun ConnectTunnelStreamRelayResult.normalizeIfCoordinatorClosed(
         tunnelClosedByCoordinator: Boolean,
-    ): ConnectTunnelStreamRelayResult =
-        if (tunnelClosedByCoordinator && this is ConnectTunnelStreamRelayResult.Failed) {
-            ConnectTunnelStreamRelayResult.Failed(
-                direction = direction,
-                bytesRelayed = bytesRelayed,
-                reason = ConnectTunnelStreamRelayFailure.StoppedAfterPeerFailure,
-            )
-        } else {
-            this
-        }
+    ): ConnectTunnelStreamRelayResult = if (tunnelClosedByCoordinator && this is ConnectTunnelStreamRelayResult.Failed) {
+        ConnectTunnelStreamRelayResult.Failed(
+            direction = direction,
+            bytesRelayed = bytesRelayed,
+            reason = ConnectTunnelStreamRelayFailure.StoppedAfterPeerFailure,
+        )
+    } else {
+        this
+    }
 
     private fun closeQuietly(closeable: Closeable) {
         try {

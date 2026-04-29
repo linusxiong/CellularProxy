@@ -120,33 +120,29 @@ enum class CloudflareTunnelTokenInvalidReason {
     InvalidTunnelId,
 }
 
-private fun JsonObject.stringField(name: String): String? =
-    (this[name] as? JsonPrimitive)
-        ?.takeIf { it.isString }
-        ?.jsonPrimitive
-        ?.content
+private fun JsonObject.stringField(name: String): String? = (this[name] as? JsonPrimitive)
+    ?.takeIf { it.isString }
+    ?.jsonPrimitive
+    ?.content
 
-private fun ByteArray.decodeStrictUtf8(): String? =
-    try {
-        Charsets.UTF_8
-            .newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-            .decode(ByteBuffer.wrap(this))
-            .toString()
-    } catch (_: CharacterCodingException) {
-        null
-    }
+private fun ByteArray.decodeStrictUtf8(): String? = try {
+    Charsets.UTF_8
+        .newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(ByteBuffer.wrap(this))
+        .toString()
+} catch (_: CharacterCodingException) {
+    null
+}
 
-private fun String.decodeBase64Flexible(): ByteArray? =
-    decodeBase64OrNull(Base64.getDecoder())
-        ?: decodeBase64OrNull(Base64.getUrlDecoder())
+private fun String.decodeBase64Flexible(): ByteArray? = decodeBase64OrNull(Base64.getDecoder())
+    ?: decodeBase64OrNull(Base64.getUrlDecoder())
 
-private fun String.decodeBase64OrNull(decoder: Base64.Decoder): ByteArray? =
-    try {
-        decoder.decode(this)
-    } catch (_: IllegalArgumentException) {
-        null
-    }
+private fun String.decodeBase64OrNull(decoder: Base64.Decoder): ByteArray? = try {
+    decoder.decode(this)
+} catch (_: IllegalArgumentException) {
+    null
+}
 
 private const val MIN_TUNNEL_SECRET_BYTES = 32

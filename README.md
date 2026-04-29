@@ -1,10 +1,20 @@
 # CellularProxy
 
-CellularProxy 是一个 Android 应用项目：在手机上常驻运行一个用户可见的 HTTP 服务/代理服务，允许外部设备连接，并由用户选择代理流量的出口网络，例如移动数据、Wi-Fi 或 VPN。
+[简体中文](README.zh-CN.md)
 
-项目原则：网络选择、HTTP 服务、前台服务、配置存储、UI、构建发布全部使用 Android 标准能力；root 只作为可选能力，用于 root 常驻辅助，以及控制移动数据和飞行模式开关。
+CellularProxy is an Android app project that keeps a user-visible HTTP service/proxy running on the phone. External devices can connect to it, and the user can choose which network route proxy traffic should use, such as cellular data, Wi-Fi, or VPN.
 
-技术方案见：[docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md)。
+Project principles: network selection, HTTP serving, foreground service lifecycle, configuration storage, UI, builds, and releases use standard Android capabilities. Root is optional and is used only for persistent root assistance plus mobile-data and airplane-mode controls.
+
+## Features
+
+- Material Design 3 UI with content laid out to avoid system bars and navigation bars.
+- HTTP proxy support for regular HTTP requests and HTTPS `CONNECT` tunnels.
+- Default route shows only currently available egress types, preventing unavailable Wi-Fi/VPN/cellular settings from being saved.
+- The dashboard automatically probes the current public IP when the app starts.
+- Rotation public-IP probing always uses the cellular route because mobile-data rotation success must be judged through cellular egress.
+- In-app language switching supports system language, English, and Simplified Chinese.
+- The Management API token is used only by the app's internal local control API. It is not the password for external proxy clients.
 
 ## Development
 
@@ -12,4 +22,18 @@ The Gradle wrapper requires JDK 17 or newer to launch. On this machine, use an e
 
 ```sh
 JAVA_HOME=$(/usr/libexec/java_home -v 25) ./gradlew test --no-daemon
+```
+
+Common verification commands:
+
+```sh
+./gradlew ktlintCheck test :app:assembleDebug --no-daemon
+ANDROID_SERIAL=<device-serial> ./gradlew :app:connectedDebugAndroidTest --no-daemon
+```
+
+GitHub Actions runs ktlint as part of CI. If CI reports a ktlint line-wrap failure, run:
+
+```sh
+./gradlew :app:ktlintFormat --no-daemon
+./gradlew :app:ktlintMainSourceSetCheck --no-daemon
 ```

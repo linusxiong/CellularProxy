@@ -126,7 +126,7 @@ private fun BoundSocketProvider.connectBlocking(
         abandoned.set(true)
         resultRef.get()?.closeConnectedSocketQuietly()
         Thread.currentThread().interrupt()
-        throw interrupted
+        return BoundSocketConnectResult.Failed(BoundSocketConnectFailure.ConnectionFailed)
     }
     return resultRef.get().getOrThrow()
 }
@@ -139,29 +139,27 @@ private fun Result<BoundSocketConnectResult>.closeConnectedSocketQuietly() {
     }
 }
 
-private fun BoundSocketConnectFailure.toHttpOriginFailure(): OutboundHttpOriginOpenFailure =
-    when (this) {
-        BoundSocketConnectFailure.SelectedRouteUnavailable ->
-            OutboundHttpOriginOpenFailure.SelectedRouteUnavailable
-        BoundSocketConnectFailure.DnsResolutionFailed ->
-            OutboundHttpOriginOpenFailure.DnsResolutionFailed
-        BoundSocketConnectFailure.ConnectionFailed ->
-            OutboundHttpOriginOpenFailure.OutboundConnectionFailed
-        BoundSocketConnectFailure.ConnectionTimedOut ->
-            OutboundHttpOriginOpenFailure.OutboundConnectionTimeout
-    }
+private fun BoundSocketConnectFailure.toHttpOriginFailure(): OutboundHttpOriginOpenFailure = when (this) {
+    BoundSocketConnectFailure.SelectedRouteUnavailable ->
+        OutboundHttpOriginOpenFailure.SelectedRouteUnavailable
+    BoundSocketConnectFailure.DnsResolutionFailed ->
+        OutboundHttpOriginOpenFailure.DnsResolutionFailed
+    BoundSocketConnectFailure.ConnectionFailed ->
+        OutboundHttpOriginOpenFailure.OutboundConnectionFailed
+    BoundSocketConnectFailure.ConnectionTimedOut ->
+        OutboundHttpOriginOpenFailure.OutboundConnectionTimeout
+}
 
-private fun BoundSocketConnectFailure.toConnectTunnelFailure(): OutboundConnectTunnelOpenFailure =
-    when (this) {
-        BoundSocketConnectFailure.SelectedRouteUnavailable ->
-            OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable
-        BoundSocketConnectFailure.DnsResolutionFailed ->
-            OutboundConnectTunnelOpenFailure.DnsResolutionFailed
-        BoundSocketConnectFailure.ConnectionFailed ->
-            OutboundConnectTunnelOpenFailure.OutboundConnectionFailed
-        BoundSocketConnectFailure.ConnectionTimedOut ->
-            OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout
-    }
+private fun BoundSocketConnectFailure.toConnectTunnelFailure(): OutboundConnectTunnelOpenFailure = when (this) {
+    BoundSocketConnectFailure.SelectedRouteUnavailable ->
+        OutboundConnectTunnelOpenFailure.SelectedRouteUnavailable
+    BoundSocketConnectFailure.DnsResolutionFailed ->
+        OutboundConnectTunnelOpenFailure.DnsResolutionFailed
+    BoundSocketConnectFailure.ConnectionFailed ->
+        OutboundConnectTunnelOpenFailure.OutboundConnectionFailed
+    BoundSocketConnectFailure.ConnectionTimedOut ->
+        OutboundConnectTunnelOpenFailure.OutboundConnectionTimeout
+}
 
 private fun Socket.shutdownInputQuietly() {
     try {

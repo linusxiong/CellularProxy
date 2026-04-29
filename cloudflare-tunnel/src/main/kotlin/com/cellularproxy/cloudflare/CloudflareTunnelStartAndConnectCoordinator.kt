@@ -21,25 +21,24 @@ class CloudflareTunnelStartAndConnectCoordinator(
     fun startAndConnectIfEnabled(
         enabled: Boolean,
         rawTunnelToken: String?,
-    ): CloudflareTunnelStartAndConnectCoordinatorResult =
-        when (val startResult = startCoordinator.startIfEnabled(enabled, rawTunnelToken)) {
-            is CloudflareTunnelStartCoordinatorResult.Ready ->
-                if (startResult.transition.isAcceptedStarting()) {
-                    CloudflareTunnelStartAndConnectCoordinatorResult.ConnectionAttempted(
-                        startTransition = startResult.transition,
-                        connectionResult =
-                            connectionCoordinator.connectIfStarting(
-                                expectedSnapshot = startResult.transition.snapshot,
-                                credentials = startResult.credentials,
-                            ),
-                    )
-                } else {
-                    CloudflareTunnelStartAndConnectCoordinatorResult.NoConnectionAttempt(startResult)
-                }
-            is CloudflareTunnelStartCoordinatorResult.Disabled,
-            is CloudflareTunnelStartCoordinatorResult.FailedStartup,
-            -> CloudflareTunnelStartAndConnectCoordinatorResult.NoConnectionAttempt(startResult)
-        }
+    ): CloudflareTunnelStartAndConnectCoordinatorResult = when (val startResult = startCoordinator.startIfEnabled(enabled, rawTunnelToken)) {
+        is CloudflareTunnelStartCoordinatorResult.Ready ->
+            if (startResult.transition.isAcceptedStarting()) {
+                CloudflareTunnelStartAndConnectCoordinatorResult.ConnectionAttempted(
+                    startTransition = startResult.transition,
+                    connectionResult =
+                        connectionCoordinator.connectIfStarting(
+                            expectedSnapshot = startResult.transition.snapshot,
+                            credentials = startResult.credentials,
+                        ),
+                )
+            } else {
+                CloudflareTunnelStartAndConnectCoordinatorResult.NoConnectionAttempt(startResult)
+            }
+        is CloudflareTunnelStartCoordinatorResult.Disabled,
+        is CloudflareTunnelStartCoordinatorResult.FailedStartup,
+        -> CloudflareTunnelStartAndConnectCoordinatorResult.NoConnectionAttempt(startResult)
+    }
 }
 
 sealed interface CloudflareTunnelStartAndConnectCoordinatorResult {
@@ -68,6 +67,5 @@ sealed interface CloudflareTunnelStartAndConnectCoordinatorResult {
     }
 }
 
-private fun CloudflareTunnelControlPlaneTransitionResult.isAcceptedStarting(): Boolean =
-    disposition == CloudflareTunnelTransitionDisposition.Accepted &&
-        status.state == CloudflareTunnelState.Starting
+private fun CloudflareTunnelControlPlaneTransitionResult.isAcceptedStarting(): Boolean = disposition == CloudflareTunnelTransitionDisposition.Accepted &&
+    status.state == CloudflareTunnelState.Starting

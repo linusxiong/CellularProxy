@@ -13,18 +13,17 @@ class CloudflareTunnelStartCoordinator(
     fun startIfEnabled(
         enabled: Boolean,
         rawTunnelToken: String?,
-    ): CloudflareTunnelStartCoordinatorResult =
-        when (val decision = CloudflareTunnelStartupPolicy.evaluate(enabled, rawTunnelToken)) {
-            CloudflareTunnelStartupDecision.Disabled ->
-                CloudflareTunnelStartCoordinatorResult.Disabled(controlPlane.snapshot())
-            is CloudflareTunnelStartupDecision.Failed ->
-                CloudflareTunnelStartCoordinatorResult.FailedStartup(decision.failure)
-            is CloudflareTunnelStartupDecision.Ready ->
-                CloudflareTunnelStartCoordinatorResult.Ready(
-                    credentials = decision.credentials,
-                    transition = controlPlane.apply(CloudflareTunnelEvent.StartRequested),
-                )
-        }
+    ): CloudflareTunnelStartCoordinatorResult = when (val decision = CloudflareTunnelStartupPolicy.evaluate(enabled, rawTunnelToken)) {
+        CloudflareTunnelStartupDecision.Disabled ->
+            CloudflareTunnelStartCoordinatorResult.Disabled(controlPlane.snapshot())
+        is CloudflareTunnelStartupDecision.Failed ->
+            CloudflareTunnelStartCoordinatorResult.FailedStartup(decision.failure)
+        is CloudflareTunnelStartupDecision.Ready ->
+            CloudflareTunnelStartCoordinatorResult.Ready(
+                credentials = decision.credentials,
+                transition = controlPlane.apply(CloudflareTunnelEvent.StartRequested),
+            )
+    }
 }
 
 sealed interface CloudflareTunnelStartCoordinatorResult {
@@ -38,11 +37,10 @@ sealed interface CloudflareTunnelStartCoordinatorResult {
             }
         }
 
-        override fun toString(): String =
-            "CloudflareTunnelStartCoordinatorResult.Ready(" +
-                "credentials=<redacted>, " +
-                "transition=${transition.disposition}" +
-                ")"
+        override fun toString(): String = "CloudflareTunnelStartCoordinatorResult.Ready(" +
+            "credentials=<redacted>, " +
+            "transition=${transition.disposition}" +
+            ")"
     }
 
     data class FailedStartup(
@@ -54,15 +52,14 @@ sealed interface CloudflareTunnelStartCoordinatorResult {
     ) : CloudflareTunnelStartCoordinatorResult
 }
 
-private fun CloudflareTunnelControlPlaneTransitionResult.isStartRequestResult(): Boolean =
-    when (disposition) {
-        CloudflareTunnelTransitionDisposition.Accepted ->
-            status.state == CloudflareTunnelState.Starting
-        CloudflareTunnelTransitionDisposition.Duplicate ->
-            status.state in ACTIVE_TUNNEL_STATES
-        CloudflareTunnelTransitionDisposition.Ignored ->
-            false
-    }
+private fun CloudflareTunnelControlPlaneTransitionResult.isStartRequestResult(): Boolean = when (disposition) {
+    CloudflareTunnelTransitionDisposition.Accepted ->
+        status.state == CloudflareTunnelState.Starting
+    CloudflareTunnelTransitionDisposition.Duplicate ->
+        status.state in ACTIVE_TUNNEL_STATES
+    CloudflareTunnelTransitionDisposition.Ignored ->
+        false
+}
 
 private val ACTIVE_TUNNEL_STATES =
     setOf(

@@ -198,6 +198,85 @@ class CellularProxyRotationRouteSmokeTest {
             auditRecords,
         )
     }
+
+    @Test
+    fun routeReEnablesRootProbeAndRotateActionsWhenActionCompletesWithoutVisibleStateChange() {
+        val actionCompletionVersion = mutableStateOf(0L)
+        var rootChecks = 0
+        var publicIpProbes = 0
+        var mobileDataRotationRequests = 0
+
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxyRotationRoute(
+                    configProvider = ::rootEnabledConfig,
+                    rotationStatusProvider = { RotationStatus.idle() },
+                    currentPublicIpProvider = { null },
+                    rootAvailabilityProvider = { RootAvailabilityStatus.Available },
+                    actionCompletionVersionProvider = { actionCompletionVersion.value },
+                    onCheckRoot = {
+                        rootChecks += 1
+                        actionCompletionVersion.value += 1L
+                    },
+                    onProbeCurrentPublicIp = {
+                        publicIpProbes += 1
+                        actionCompletionVersion.value += 1L
+                    },
+                    onRotateMobileData = {
+                        mobileDataRotationRequests += 1
+                        actionCompletionVersion.value += 1L
+                    },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText("Check root")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            rootChecks == 1
+        }
+        composeRule
+            .onNodeWithText("Check root")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            rootChecks == 2
+        }
+
+        composeRule
+            .onNodeWithText("Probe current public IP")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            publicIpProbes == 1
+        }
+        composeRule
+            .onNodeWithText("Probe current public IP")
+            .performScrollTo()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText("Rotate mobile data")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule
+            .onNodeWithText("Confirm")
+            .assertIsEnabled()
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            mobileDataRotationRequests == 1
+        }
+        composeRule
+            .onNodeWithText("Rotate mobile data")
+            .performScrollTo()
+            .assertIsEnabled()
+    }
 }
 
 private fun rootEnabledConfig(): AppConfig {

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -110,5 +111,160 @@ class CellularProxyCloudflareRouteSmokeTest {
             listOf("Cloudflare test_management_tunnel", "Cloudflare copy_diagnostics"),
             auditRecords.map(PersistedLogsAuditRecord::title),
         )
+    }
+
+    @Test
+    fun routeDispatchesCloudflareTunnelLifecycleActions() {
+        val tunnelStatus = mutableStateOf(CloudflareTunnelStatus.stopped())
+        val auditRecords = mutableListOf<PersistedLogsAuditRecord>()
+        var startCalls = 0
+        var stopCalls = 0
+        var reconnectCalls = 0
+
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxyCloudflareRoute(
+                    configProvider = {
+                        AppConfig.default().copy(
+                            cloudflare =
+                                CloudflareConfig(
+                                    enabled = true,
+                                    tunnelTokenPresent = true,
+                                    managementHostnameLabel = "https://management.example.test",
+                                ),
+                        )
+                    },
+                    tunnelStatusProvider = { tunnelStatus.value },
+                    onStartTunnel = {
+                        startCalls += 1
+                        tunnelStatus.value = CloudflareTunnelStatus.starting()
+                    },
+                    onStopTunnel = {
+                        stopCalls += 1
+                        tunnelStatus.value = CloudflareTunnelStatus.stopped()
+                    },
+                    onReconnectTunnel = {
+                        reconnectCalls += 1
+                        tunnelStatus.value = CloudflareTunnelStatus.starting()
+                    },
+                    onRecordCloudflareAuditAction = auditRecords::add,
+                    auditOccurredAtEpochMillisProvider = { 456L },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText("Start tunnel")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule
+            .onNodeWithText("Confirm Cloudflare tunnel start")
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Confirm")
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { startCalls == 1 }
+
+        tunnelStatus.value = CloudflareTunnelStatus.connected()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodes(hasText("Connected"))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        composeRule
+            .onNodeWithText("Stop tunnel")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule
+            .onNodeWithText("Confirm Cloudflare tunnel stop")
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Confirm")
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { stopCalls == 1 }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodes(hasText("Start tunnel") and isEnabled())
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        tunnelStatus.value = CloudflareTunnelStatus.connected()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodes(hasText("Reconnect tunnel") and isEnabled())
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule
+            .onNodeWithText("Reconnect tunnel")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule
+            .onNodeWithText("Confirm Cloudflare tunnel reconnect")
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Confirm")
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { reconnectCalls == 1 }
+
+        assertEquals(
+            listOf(
+                "Cloudflare start_tunnel",
+                "Cloudflare stop_tunnel",
+                "Cloudflare reconnect_tunnel",
+            ),
+            auditRecords.map(PersistedLogsAuditRecord::title),
+        )
+    }
+
+    @Test
+    fun routeReEnablesCloudflareLifecycleActionWhenActionCompletesWithoutTunnelStateChange() {
+        val actionCompletionVersion = mutableLongStateOf(0L)
+        var startCalls = 0
+
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxyCloudflareRoute(
+                    configProvider = {
+                        AppConfig.default().copy(
+                            cloudflare =
+                                CloudflareConfig(
+                                    enabled = true,
+                                    tunnelTokenPresent = true,
+                                ),
+                        )
+                    },
+                    tunnelStatusProvider = { CloudflareTunnelStatus.stopped() },
+                    actionCompletionVersionProvider = { actionCompletionVersion.longValue },
+                    onStartTunnel = {
+                        startCalls += 1
+                        actionCompletionVersion.longValue += 1L
+                    },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText("Start tunnel")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+        composeRule
+            .onNodeWithText("Confirm")
+            .assertIsEnabled()
+            .performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            startCalls == 1
+        }
+        composeRule
+            .onNodeWithText("Start tunnel")
+            .performScrollTo()
+            .assertIsEnabled()
     }
 }

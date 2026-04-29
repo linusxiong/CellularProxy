@@ -124,12 +124,11 @@ private class FakeSharedPreferences(
     override fun getString(
         key: String?,
         defValue: String?,
-    ): String? =
-        if (throwOnGetString) {
-            throw ClassCastException("Stored value is not a string")
-        } else {
-            values[key] ?: defValue
-        }
+    ): String? = if (throwOnGetString) {
+        throw ClassCastException("Stored value is not a string")
+    } else {
+        values[key] ?: defValue
+    }
 
     override fun edit(): SharedPreferences.Editor = FakeEditor()
 

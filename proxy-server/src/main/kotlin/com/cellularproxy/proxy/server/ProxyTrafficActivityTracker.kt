@@ -10,13 +10,12 @@ class ProxyTrafficActivityTracker {
     val activeProxyExchanges: Long
         get() = activeProxyExchangeCount.get()
 
-    fun begin(request: ParsedProxyRequest): ProxyTrafficActivityReservation =
-        when (request) {
-            is ParsedProxyRequest.HttpProxy,
-            is ParsedProxyRequest.ConnectTunnel,
-            -> beginProxyTraffic()
-            is ParsedProxyRequest.Management -> ProxyTrafficActivityReservation.Noop
-        }
+    fun begin(request: ParsedProxyRequest): ProxyTrafficActivityReservation = when (request) {
+        is ParsedProxyRequest.HttpProxy,
+        is ParsedProxyRequest.ConnectTunnel,
+        -> beginProxyTraffic()
+        is ParsedProxyRequest.Management -> ProxyTrafficActivityReservation.Noop
+    }
 
     private fun beginProxyTraffic(): ProxyTrafficActivityReservation {
         activeProxyExchangeCount.incrementAndGet()

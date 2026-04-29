@@ -294,70 +294,65 @@ class RotationRootAvailabilityCoordinatorTest {
     private fun rotationRootAvailabilityController(
         calls: MutableList<RotationRootAvailabilityCall> = mutableListOf(),
         result: () -> RootAvailabilityCheckResult,
-    ): RotationRootAvailabilityController =
-        RotationRootAvailabilityController(
-            probe =
-                RotationRootAvailabilityProbe { timeoutMillis, secrets ->
-                    calls += RotationRootAvailabilityCall(timeoutMillis, secrets)
-                    result()
-                },
-        )
+    ): RotationRootAvailabilityController = RotationRootAvailabilityController(
+        probe =
+            RotationRootAvailabilityProbe { timeoutMillis, secrets ->
+                calls += RotationRootAvailabilityCall(timeoutMillis, secrets)
+                result()
+            },
+    )
 
     private fun rotationRootAvailabilityController(
         calls: MutableList<RotationRootAvailabilityCall> = mutableListOf(),
         result: RootAvailabilityCheckResult,
     ): RotationRootAvailabilityController = rotationRootAvailabilityController(calls = calls) { result }
 
-    private fun checkingRootControlPlane(): RotationControlPlane =
-        RotationControlPlane(
-            initialStatus =
-                RotationStatus(
-                    state = RotationState.CheckingRoot,
-                    operation = RotationOperation.MobileData,
-                ),
-        )
+    private fun checkingRootControlPlane(): RotationControlPlane = RotationControlPlane(
+        initialStatus =
+            RotationStatus(
+                state = RotationState.CheckingRoot,
+                operation = RotationOperation.MobileData,
+            ),
+    )
 
-    private fun rootAvailableCheckResult(rawStdout: String): RootAvailabilityCheckResult =
-        RootAvailabilityCheckResult(
-            status = RootAvailabilityStatus.Available,
-            execution =
-                rootAvailabilityExecution(
-                    result =
-                        RootCommandResult.completed(
-                            category = RootCommandCategory.RootAvailabilityCheck,
-                            exitCode = 0,
-                            stdout = rawStdout,
-                            stderr = "",
-                        ),
-                    rawStdout = rawStdout,
-                ),
-        )
+    private fun rootAvailableCheckResult(rawStdout: String): RootAvailabilityCheckResult = RootAvailabilityCheckResult(
+        status = RootAvailabilityStatus.Available,
+        execution =
+            rootAvailabilityExecution(
+                result =
+                    RootCommandResult.completed(
+                        category = RootCommandCategory.RootAvailabilityCheck,
+                        exitCode = 0,
+                        stdout = rawStdout,
+                        stderr = "",
+                    ),
+                rawStdout = rawStdout,
+            ),
+    )
 
-    private fun rootUnavailableCheckResult(): RootAvailabilityCheckResult =
-        RootAvailabilityCheckResult(
-            status = RootAvailabilityStatus.Unavailable,
-            execution =
-                rootAvailabilityExecution(
-                    result =
-                        RootCommandResult.completed(
-                            category = RootCommandCategory.RootAvailabilityCheck,
-                            exitCode = 1,
-                            stdout = "",
-                            stderr = "permission denied",
-                        ),
-                    rawStdout = "",
-                ),
-            failureReason = RootAvailabilityCheckFailure.CommandFailed,
-        )
+    private fun rootUnavailableCheckResult(): RootAvailabilityCheckResult = RootAvailabilityCheckResult(
+        status = RootAvailabilityStatus.Unavailable,
+        execution =
+            rootAvailabilityExecution(
+                result =
+                    RootCommandResult.completed(
+                        category = RootCommandCategory.RootAvailabilityCheck,
+                        exitCode = 1,
+                        stdout = "",
+                        stderr = "permission denied",
+                    ),
+                rawStdout = "",
+            ),
+        failureReason = RootAvailabilityCheckFailure.CommandFailed,
+    )
 
     private fun rootAvailabilityExecution(
         result: RootCommandResult,
         rawStdout: String,
-    ): RootCommandExecution =
-        RootCommandExecution.completed(
-            result = result,
-            started = RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck),
-            completed = RootCommandAuditRecord.completed(result),
-            rawStdout = rawStdout,
-        )
+    ): RootCommandExecution = RootCommandExecution.completed(
+        result = result,
+        started = RootCommandAuditRecord.started(RootCommandCategory.RootAvailabilityCheck),
+        completed = RootCommandAuditRecord.completed(result),
+        rawStdout = rawStdout,
+    )
 }

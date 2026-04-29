@@ -58,9 +58,8 @@ sealed interface CloudflareTunnelDisableCoordinatorResult {
     ) : CloudflareTunnelDisableCoordinatorResult
 }
 
-private fun CloudflareTunnelControlPlaneTransitionResult.isDisableRequestResult(): Boolean =
-    status == CloudflareTunnelStatus.disabled() &&
-        disposition in DISABLE_REQUEST_DISPOSITIONS
+private fun CloudflareTunnelControlPlaneTransitionResult.isDisableRequestResult(): Boolean = status == CloudflareTunnelStatus.disabled() &&
+    disposition in DISABLE_REQUEST_DISPOSITIONS
 
 private val DISABLE_REQUEST_DISPOSITIONS =
     setOf(

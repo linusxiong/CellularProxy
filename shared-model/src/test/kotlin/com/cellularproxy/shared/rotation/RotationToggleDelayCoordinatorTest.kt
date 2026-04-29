@@ -170,13 +170,12 @@ class RotationToggleDelayCoordinatorTest {
         assertEquals(RotationState.WaitingForToggleDelay, controlPlane.currentStatus.state)
     }
 
-    private fun waitingForToggleDelayControlPlane(): RotationControlPlane =
-        RotationControlPlane(
-            initialStatus =
-                RotationStatus(
-                    state = RotationState.WaitingForToggleDelay,
-                    operation = RotationOperation.MobileData,
-                    oldPublicIp = "198.51.100.10",
-                ),
-        )
+    private fun waitingForToggleDelayControlPlane(): RotationControlPlane = RotationControlPlane(
+        initialStatus =
+            RotationStatus(
+                state = RotationState.WaitingForToggleDelay,
+                operation = RotationOperation.MobileData,
+                oldPublicIp = "198.51.100.10",
+            ),
+    )
 }

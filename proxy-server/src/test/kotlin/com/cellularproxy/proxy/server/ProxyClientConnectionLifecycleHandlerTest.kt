@@ -214,12 +214,11 @@ class ProxyClientStreamExchangeLifecycleTest {
         assertTrue(output.wasClosed)
     }
 
-    private fun handler(managementHandler: ManagementApiHandler): ProxyClientStreamExchangeHandler =
-        ProxyClientStreamExchangeHandler(
-            httpConnector = ThrowingHttpConnector(),
-            connectConnector = ThrowingConnectConnector(),
-            managementHandler = managementHandler,
-        )
+    private fun handler(managementHandler: ManagementApiHandler): ProxyClientStreamExchangeHandler = ProxyClientStreamExchangeHandler(
+        httpConnector = ThrowingHttpConnector(),
+        connectConnector = ThrowingConnectConnector(),
+        managementHandler = managementHandler,
+    )
 
     private class StaticManagementHandler(
         private val response: ManagementApiResponse,

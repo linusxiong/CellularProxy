@@ -111,6 +111,37 @@ class DiagnosticsViewModelTest {
     }
 
     @Test
+    fun `view model clears optimistic running state when matching check completes`() {
+        val viewModel =
+            DiagnosticsViewModel(
+                suiteController =
+                    DiagnosticsSuiteController(
+                        checks =
+                            mapOf(
+                                DiagnosticCheckType.RootAvailability to
+                                    DiagnosticCheck {
+                                        DiagnosticCheckResult(status = DiagnosticResultStatus.Passed)
+                                    },
+                            ),
+                        nanoTime = { 0L },
+                    ),
+            )
+
+        viewModel.markRunning(setOf(DiagnosticCheckType.RootAvailability))
+        viewModel.handle(DiagnosticsScreenEvent.RunCheck(DiagnosticCheckType.RootAvailability))
+
+        assertEquals(
+            DiagnosticResultStatus.Passed.label,
+            viewModel
+                .state
+                .value
+                .items
+                .single { item -> item.type == DiagnosticCheckType.RootAvailability }
+                .status,
+        )
+    }
+
+    @Test
     fun `view model exposes one-shot controller effects without retaining them`() {
         val viewModel =
             DiagnosticsViewModel(

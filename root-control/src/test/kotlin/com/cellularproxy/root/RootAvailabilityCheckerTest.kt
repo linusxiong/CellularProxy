@@ -271,23 +271,21 @@ class RootAvailabilityCheckerTest {
         }
     }
 
-    private fun rootAvailabilityExecutor(result: (RootAvailabilityCommandCall) -> RootCommandProcessResult): RootCommandExecutor =
-        rootAvailabilityExecutor(mutableListOf(), result)
+    private fun rootAvailabilityExecutor(result: (RootAvailabilityCommandCall) -> RootCommandProcessResult): RootCommandExecutor = rootAvailabilityExecutor(mutableListOf(), result)
 
     private fun rootAvailabilityExecutor(
         calls: MutableList<RootAvailabilityCommandCall>,
         result: (RootAvailabilityCommandCall) -> RootCommandProcessResult,
-    ): RootCommandExecutor =
-        RootCommandExecutor(
-            processExecutor =
-                RootCommandProcessExecutor { command, timeoutMillis ->
-                    assertEquals(RootCommandCategory.RootAvailabilityCheck, command.category)
-                    assertFalse(command.argv.joinToString(" ").contains("svc data"))
-                    val call = RootAvailabilityCommandCall(command, timeoutMillis)
-                    calls += call
-                    result(call)
-                },
-        )
+    ): RootCommandExecutor = RootCommandExecutor(
+        processExecutor =
+            RootCommandProcessExecutor { command, timeoutMillis ->
+                assertEquals(RootCommandCategory.RootAvailabilityCheck, command.category)
+                assertFalse(command.argv.joinToString(" ").contains("svc data"))
+                val call = RootAvailabilityCommandCall(command, timeoutMillis)
+                calls += call
+                result(call)
+            },
+    )
 
     private data class RootAvailabilityCommandCall(
         val command: RootShellCommand,

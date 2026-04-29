@@ -174,19 +174,17 @@ class ProxyRuntimeIngressConfigFactoryTest {
             managementApiToken = "management-secret",
         )
 
-    private fun proxyRequest(proxyAuthorization: String?): String =
-        buildString {
-            append("GET http://example.com/resource HTTP/1.1\r\n")
-            append("Host: example.com\r\n")
-            proxyAuthorization?.let { append("Proxy-Authorization: $it\r\n") }
-            append("\r\n")
-        }
+    private fun proxyRequest(proxyAuthorization: String?): String = buildString {
+        append("GET http://example.com/resource HTTP/1.1\r\n")
+        append("Host: example.com\r\n")
+        proxyAuthorization?.let { append("Proxy-Authorization: $it\r\n") }
+        append("\r\n")
+    }
 
-    private fun managementRequest(authorization: String): String =
-        "GET /api/status HTTP/1.1\r\n" +
-            "Host: local.cellularproxy\r\n" +
-            "Authorization: $authorization\r\n" +
-            "\r\n"
+    private fun managementRequest(authorization: String): String = "GET /api/status HTTP/1.1\r\n" +
+        "Host: local.cellularproxy\r\n" +
+        "Authorization: $authorization\r\n" +
+        "\r\n"
 
     private fun basicProxyAuthorization(
         username: String,

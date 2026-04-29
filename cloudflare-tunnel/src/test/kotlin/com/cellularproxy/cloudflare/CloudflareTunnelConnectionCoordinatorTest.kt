@@ -408,13 +408,12 @@ class CloudflareTunnelConnectionCoordinatorTest {
         assertTrue(failure.isFailure)
     }
 
-    private fun credentials(): CloudflareTunnelCredentials =
-        CloudflareTunnelCredentials(
-            accountTag = "account-tag",
-            tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-            tunnelSecret = byteArrayOf(1, 2, 3),
-            endpoint = "edge.example.com",
-        )
+    private fun credentials(): CloudflareTunnelCredentials = CloudflareTunnelCredentials(
+        accountTag = "account-tag",
+        tunnelId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+        tunnelSecret = byteArrayOf(1, 2, 3),
+        endpoint = "edge.example.com",
+    )
 
     private class TrackableEdgeConnection : CloudflareTunnelEdgeConnection {
         var closed: Boolean = false

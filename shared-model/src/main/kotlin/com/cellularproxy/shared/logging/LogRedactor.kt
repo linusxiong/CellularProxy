@@ -50,21 +50,19 @@ object LogRedactor {
             .fold(structurallyRedacted) { current, secret -> current.replace(secret, REDACTED_VALUE) }
     }
 
-    private fun String.redactQueryStrings(regex: Regex): String =
-        replace(regex) { match ->
-            val pathWithoutQuery = match.groupValues[1]
-            val fragment = match.groupValues.getOrElse(2) { "" }
-            "$pathWithoutQuery?$REDACTED_VALUE$fragment"
-        }
+    private fun String.redactQueryStrings(regex: Regex): String = replace(regex) { match ->
+        val pathWithoutQuery = match.groupValues[1]
+        val fragment = match.groupValues.getOrElse(2) { "" }
+        "$pathWithoutQuery?$REDACTED_VALUE$fragment"
+    }
 
-    private fun LogRedactionSecrets.nonBlankValues(): List<String> =
-        listOfNotNull(
-            managementApiToken,
-            proxyCredential,
-            cloudflareTunnelToken,
-        ).filter(String::isNotBlank)
-            .distinct()
-            .sortedByDescending(String::length)
+    private fun LogRedactionSecrets.nonBlankValues(): List<String> = listOfNotNull(
+        managementApiToken,
+        proxyCredential,
+        cloudflareTunnelToken,
+    ).filter(String::isNotBlank)
+        .distinct()
+        .sortedByDescending(String::length)
 
     private const val REDACTED_VALUE = "[REDACTED]"
 }

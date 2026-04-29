@@ -31,12 +31,11 @@ class ExecutorForegroundProxyRuntimeLifecycle private constructor(
         internal fun forTesting(
             delegate: ForegroundProxyRuntimeLifecycle,
             executor: Executor,
-        ): ExecutorForegroundProxyRuntimeLifecycle =
-            ExecutorForegroundProxyRuntimeLifecycle(
-                delegate = delegate,
-                executor = executor,
-                closeAction = {},
-            )
+        ): ExecutorForegroundProxyRuntimeLifecycle = ExecutorForegroundProxyRuntimeLifecycle(
+            delegate = delegate,
+            executor = executor,
+            closeAction = {},
+        )
     }
 
     override fun startProxyRuntime() {

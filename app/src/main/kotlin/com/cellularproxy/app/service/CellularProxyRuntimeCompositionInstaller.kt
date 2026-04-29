@@ -26,6 +26,8 @@ import com.cellularproxy.cloudflare.CloudflareTunnelStopCoordinator
 import com.cellularproxy.cloudflare.CloudflareTunnelStopCoordinatorResult
 import com.cellularproxy.network.BoundNetworkSocketConnector
 import com.cellularproxy.network.PublicIpProbeEndpoint
+import com.cellularproxy.network.PublicIpProbeResponseFormat
+import com.cellularproxy.network.PublicIpProbeScheme
 import com.cellularproxy.network.RouteBoundPublicIpProbe
 import com.cellularproxy.network.RouteBoundSocketProvider
 import com.cellularproxy.proxy.management.ManagementApiServiceRestartFailureReason
@@ -471,7 +473,7 @@ internal fun createProductionRuntimeRotationRequestHandlerFactory(
     recordRootAudit: (RootCommandAuditRecord) -> Unit,
     continuationExecutor: ScheduledExecutorService,
     nowElapsedMillis: () -> Long = SystemClock::elapsedRealtime,
-    publicIpProbeEndpoint: PublicIpProbeEndpoint = PublicIpProbeEndpoint(DEFAULT_PUBLIC_IP_PROBE_HOST),
+    publicIpProbeEndpoint: PublicIpProbeEndpoint = defaultPublicIpProbeEndpoint(),
 ): (RunningProxyServerRuntime) -> RuntimeRotationRequestHandler {
     val rootCommandExecutor =
         RootCommandExecutor(
@@ -661,6 +663,13 @@ internal fun nonFatalRootAuditRecorder(
 
 private fun unknownRootAvailability(): RootAvailabilityStatus = RootAvailabilityStatus.Unknown
 
+internal fun defaultPublicIpProbeEndpoint(): PublicIpProbeEndpoint = PublicIpProbeEndpoint(
+    host = "api.ipify.org",
+    scheme = PublicIpProbeScheme.Https,
+    path = "/",
+    responseFormat = PublicIpProbeResponseFormat.PlainText,
+)
+
 private fun logRootAuditFailure(exception: Exception) {
     Log.w(ROOT_AUDIT_LOG_TAG, "Failed to persist root command audit record", exception)
 }
@@ -671,5 +680,4 @@ private const val ROOT_ROTATION_COMMAND_TIMEOUT_MILLIS = 10_000L
 private const val ROOT_SERVICE_RESTART_COMMAND_TIMEOUT_MILLIS = 10_000L
 private const val ROOT_AUDIT_LOG_TAG = "CellularProxyAudit"
 private const val DEFAULT_SERVICE_RESTART_PACKAGE_NAME = "com.cellularproxy"
-private const val DEFAULT_PUBLIC_IP_PROBE_HOST = "api.ipify.org"
 private val DEFAULT_ROTATION_CONNECTION_DRAIN_TIME = 15.seconds

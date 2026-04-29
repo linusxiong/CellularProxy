@@ -24,11 +24,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cellularproxy.app.R
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
@@ -56,6 +58,7 @@ internal fun CellularProxyCloudflareRoute(
     edgeSessionSummaryProvider: () -> String? = { null },
     managementApiRoundTripProvider: () -> String? = { null },
     managementApiRoundTripVersionProvider: () -> Long = { 0L },
+    actionCompletionVersionProvider: () -> Long = { 0L },
     redactionSecretsProvider: () -> LogRedactionSecrets = { LogRedactionSecrets() },
     onStartTunnel: () -> Unit = {},
     onStopTunnel: () -> Unit = {},
@@ -71,6 +74,7 @@ internal fun CellularProxyCloudflareRoute(
     val currentEdgeSessionSummaryProvider by rememberUpdatedState(edgeSessionSummaryProvider)
     val currentManagementApiRoundTripProvider by rememberUpdatedState(managementApiRoundTripProvider)
     val currentManagementApiRoundTripVersionProvider by rememberUpdatedState(managementApiRoundTripVersionProvider)
+    val currentActionCompletionVersionProvider by rememberUpdatedState(actionCompletionVersionProvider)
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val currentOnStartTunnel by rememberUpdatedState(onStartTunnel)
     val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
@@ -83,6 +87,7 @@ internal fun CellularProxyCloudflareRoute(
     val observedEdgeSessionSummary = edgeSessionSummaryProvider()
     val observedManagementApiRoundTrip = managementApiRoundTripProvider()
     val observedManagementApiRoundTripVersion = managementApiRoundTripVersionProvider()
+    val observedActionCompletionVersion = actionCompletionVersionProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
     val cloudflareViewModel =
         viewModel<CloudflareViewModel>(
@@ -95,6 +100,7 @@ internal fun CellularProxyCloudflareRoute(
                         edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() },
                         managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() },
                         managementApiRoundTripVersionProvider = { currentManagementApiRoundTripVersionProvider() },
+                        actionCompletionVersionProvider = { currentActionCompletionVersionProvider() },
                         redactionSecretsProvider = { currentRedactionSecretsProvider() },
                         auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
                         actionHandler = { action ->
@@ -117,6 +123,7 @@ internal fun CellularProxyCloudflareRoute(
         observedEdgeSessionSummary,
         observedManagementApiRoundTrip,
         observedManagementApiRoundTripVersion,
+        observedActionCompletionVersion,
         observedRedactionSecrets,
     ) {
         cloudflareViewModel.handle(CloudflareScreenEvent.Refresh)
@@ -149,6 +156,7 @@ private class CloudflareViewModelFactory(
     private val edgeSessionSummaryProvider: () -> String?,
     private val managementApiRoundTripProvider: () -> String?,
     private val managementApiRoundTripVersionProvider: () -> Long,
+    private val actionCompletionVersionProvider: () -> Long,
     private val redactionSecretsProvider: () -> LogRedactionSecrets,
     private val auditOccurredAtEpochMillisProvider: () -> Long,
     private val actionHandler: (CloudflareScreenAction) -> Unit,
@@ -161,6 +169,7 @@ private class CloudflareViewModelFactory(
         edgeSessionSummaryProvider = edgeSessionSummaryProvider,
         managementApiRoundTripProvider = managementApiRoundTripProvider,
         managementApiRoundTripVersionProvider = managementApiRoundTripVersionProvider,
+        actionCompletionVersionProvider = actionCompletionVersionProvider,
         secretsProvider = redactionSecretsProvider,
         auditActionsEnabled = true,
         auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
@@ -213,10 +222,10 @@ internal fun CellularProxyCloudflareScreen(
                 pendingConfirmationAction = null
             },
             title = {
-                Text(action.confirmationTitle ?: "Confirm Cloudflare action")
+                Text(action.confirmationTitle ?: stringResource(R.string.cloudflare_confirm_action_title))
             },
             text = {
-                Text("Confirm this high-impact Cloudflare tunnel action.")
+                Text(stringResource(R.string.cloudflare_confirm_action_text))
             },
             confirmButton = {
                 TextButton(
@@ -228,7 +237,7 @@ internal fun CellularProxyCloudflareScreen(
                     },
                     enabled = canConfirm,
                 ) {
-                    Text("Confirm")
+                    Text(stringResource(R.string.action_confirm))
                 }
             },
             dismissButton = {
@@ -237,7 +246,7 @@ internal fun CellularProxyCloudflareScreen(
                         pendingConfirmationAction = null
                     },
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -251,41 +260,36 @@ internal fun CellularProxyCloudflareScreen(
                 .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "Cloudflare",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-
         CloudflareActionRow(
             actionsEnabled = actionsEnabled,
             availableActions = state.availableActions,
             onAction = ::requestAction,
         )
 
-        CloudflareSection("Tunnel") {
-            CloudflareField("Tunnel enabled", state.tunnelEnabled)
-            CloudflareField("Tunnel token", state.tokenStatus)
-            CloudflareField("Tunnel lifecycle", state.lifecycleState)
-            CloudflareField("Management hostname", state.managementHostname)
+        CloudflareSection(stringResource(R.string.cloudflare_section_tunnel)) {
+            CloudflareField(stringResource(R.string.cloudflare_tunnel_enabled), state.tunnelEnabled)
+            CloudflareField(stringResource(R.string.cloudflare_tunnel_token), state.tokenStatus)
+            CloudflareField(stringResource(R.string.cloudflare_tunnel_lifecycle), state.lifecycleState)
+            CloudflareField(stringResource(R.string.cloudflare_management_hostname), state.managementHostname)
         }
 
-        CloudflareSection("Health") {
-            CloudflareField("Last connection error", state.lastConnectionError)
-            CloudflareField("Local proxy impact", state.localProxyImpact)
-            CloudflareField("Recovery action", state.recoveryAction)
-            CloudflareField("Edge sessions", state.edgeSessionSummary)
-            CloudflareField("Management API round trip", state.managementApiRoundTrip)
-            CloudflareField("Pending operation", state.pendingOperation)
-            CloudflareField("Last action failure", state.lastActionFailure)
-            CloudflareField("Last action recovery", state.lastActionRecovery)
+        CloudflareSection(stringResource(R.string.cloudflare_section_health)) {
+            CloudflareField(stringResource(R.string.cloudflare_last_connection_error), state.lastConnectionError)
+            CloudflareField(stringResource(R.string.cloudflare_local_proxy_impact), state.localProxyImpact)
+            CloudflareField(stringResource(R.string.cloudflare_recovery_action), state.recoveryAction)
+            CloudflareField(stringResource(R.string.cloudflare_edge_sessions), state.edgeSessionSummary)
+            CloudflareField(stringResource(R.string.cloudflare_management_api_round_trip), state.managementApiRoundTrip)
+            CloudflareField(stringResource(R.string.cloudflare_pending_operation), state.pendingOperation)
+            CloudflareField(stringResource(R.string.cloudflare_last_action_failure), state.lastActionFailure)
+            CloudflareField(stringResource(R.string.cloudflare_last_action_recovery), state.lastActionRecovery)
         }
 
-        CloudflareSection("Warnings") {
+        CloudflareSection(stringResource(R.string.cloudflare_section_warnings)) {
             if (state.warnings.isEmpty()) {
-                CloudflareField("Current warnings", "None")
+                CloudflareField(stringResource(R.string.cloudflare_current_warnings), stringResource(R.string.label_none))
             } else {
                 state.warnings.forEach { warning ->
-                    CloudflareField("Current warning", warning.label)
+                    CloudflareField(stringResource(R.string.cloudflare_current_warning), warning.label)
                 }
             }
         }
@@ -451,6 +455,7 @@ internal class CloudflareScreenController(
     private val edgeSessionSummaryProvider: () -> String? = { null },
     private val managementApiRoundTripProvider: () -> String? = { null },
     private val managementApiRoundTripVersionProvider: () -> Long = { 0L },
+    private val actionCompletionVersionProvider: () -> Long = { 0L },
     private val secrets: LogRedactionSecrets = LogRedactionSecrets(),
     private val secretsProvider: () -> LogRedactionSecrets = { secrets },
     private val actionHandler: (CloudflareScreenAction) -> Unit = {},
@@ -497,6 +502,7 @@ internal class CloudflareScreenController(
                     tunnelStatus = tunnelStatusProvider(),
                     managementApiRoundTrip = managementApiRoundTripProvider(),
                     managementApiRoundTripVersion = managementApiRoundTripVersionProvider(),
+                    actionCompletionVersion = actionCompletionVersionProvider(),
                 )
             recordAuditAction(action, auditLifecycleState)?.let(pendingEffects::add)
             try {
@@ -521,6 +527,7 @@ internal class CloudflareScreenController(
         val currentEdgeSessionSummary = edgeSessionSummaryProvider()
         val currentManagementApiRoundTrip = managementApiRoundTripProvider()
         val currentManagementApiRoundTripVersion = managementApiRoundTripVersionProvider()
+        val currentActionCompletionVersion = actionCompletionVersionProvider()
         val currentState =
             CloudflareScreenState.from(
                 config = configProvider(),
@@ -540,6 +547,7 @@ internal class CloudflareScreenController(
                         currentTunnelStatus = currentTunnelStatus,
                         currentManagementApiRoundTrip = currentManagementApiRoundTrip,
                         currentManagementApiRoundTripVersion = currentManagementApiRoundTripVersion,
+                        currentActionCompletionVersion = currentActionCompletionVersion,
                     )
                 }.keys
         resolvedActions.forEach(pendingOperations::remove)
@@ -613,12 +621,14 @@ private data class PendingCloudflareOperation(
     val tunnelStatus: CloudflareTunnelStatus,
     val managementApiRoundTrip: String?,
     val managementApiRoundTripVersion: Long,
+    val actionCompletionVersion: Long,
 ) {
     fun isResolvedBy(
         action: CloudflareScreenAction,
         currentTunnelStatus: CloudflareTunnelStatus,
         currentManagementApiRoundTrip: String?,
         currentManagementApiRoundTripVersion: Long,
+        currentActionCompletionVersion: Long,
     ): Boolean = when (action) {
         CloudflareScreenAction.TestManagementTunnel ->
             managementApiRoundTrip != currentManagementApiRoundTrip ||
@@ -626,7 +636,9 @@ private data class PendingCloudflareOperation(
         CloudflareScreenAction.StartTunnel,
         CloudflareScreenAction.StopTunnel,
         CloudflareScreenAction.ReconnectTunnel,
-        -> tunnelStatus != currentTunnelStatus
+        ->
+            tunnelStatus != currentTunnelStatus ||
+                actionCompletionVersion != currentActionCompletionVersion
         CloudflareScreenAction.CopyDiagnostics -> true
     }
 }
@@ -733,7 +745,7 @@ private fun CloudflareActionRow(
             enabled = actionsEnabled && CloudflareScreenAction.StartTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Start tunnel")
+            Text(stringResource(R.string.cloudflare_start_tunnel))
         }
         OutlinedButton(
             onClick = {
@@ -742,7 +754,7 @@ private fun CloudflareActionRow(
             enabled = actionsEnabled && CloudflareScreenAction.StopTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Stop tunnel")
+            Text(stringResource(R.string.cloudflare_stop_tunnel))
         }
         OutlinedButton(
             onClick = {
@@ -751,7 +763,7 @@ private fun CloudflareActionRow(
             enabled = actionsEnabled && CloudflareScreenAction.ReconnectTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Reconnect tunnel")
+            Text(stringResource(R.string.cloudflare_reconnect_tunnel))
         }
         OutlinedButton(
             onClick = {
@@ -760,7 +772,7 @@ private fun CloudflareActionRow(
             enabled = actionsEnabled && CloudflareScreenAction.TestManagementTunnel in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Test management tunnel")
+            Text(stringResource(R.string.cloudflare_test_management_tunnel))
         }
         OutlinedButton(
             onClick = {
@@ -769,7 +781,7 @@ private fun CloudflareActionRow(
             enabled = actionsEnabled && CloudflareScreenAction.CopyDiagnostics in availableActions,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Copy diagnostics")
+            Text(stringResource(R.string.action_copy_diagnostics))
         }
     }
 }

@@ -8,6 +8,7 @@ import com.cellularproxy.app.diagnostics.DiagnosticResultItem
 import com.cellularproxy.app.diagnostics.DiagnosticResultStatus
 import com.cellularproxy.app.diagnostics.DiagnosticRunRecord
 import com.cellularproxy.app.diagnostics.DiagnosticsResultModel
+import com.cellularproxy.app.diagnostics.PublicIpDiagnosticsProbeResult
 import com.cellularproxy.app.service.LocalManagementApiAction
 import com.cellularproxy.app.service.LocalManagementApiActionResponse
 import com.cellularproxy.app.status.DashboardCloudflareManagementApiCheck
@@ -15,9 +16,14 @@ import com.cellularproxy.app.status.DashboardLogSeverity
 import com.cellularproxy.app.status.DashboardLogSummary
 import com.cellularproxy.app.status.DashboardStatusModel
 import com.cellularproxy.app.status.DashboardWarning
+import com.cellularproxy.network.PublicIpProbeFailure
+import com.cellularproxy.network.PublicIpProbeResult
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelStatus
 import com.cellularproxy.shared.config.AppConfig
+import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.logging.LogRedactionSecrets
+import com.cellularproxy.shared.network.NetworkCategory
+import com.cellularproxy.shared.network.NetworkDescriptor
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.root.RootAvailabilityStatus
@@ -72,6 +78,10 @@ class ComposeAppShellContractTest {
 
     @Test
     fun `launcher activity hosts the Compose app shell`() {
+        val manifestSource =
+            repoRoot()
+                .resolve("app/src/main/AndroidManifest.xml")
+                .readText()
         val activitySource =
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyActivity.kt")
@@ -90,6 +100,10 @@ class ComposeAppShellContractTest {
             activitySource.contains("CellularProxyApp()"),
             "Launcher activity must delegate UI composition to the app shell.",
         )
+        assertTrue(
+            manifestSource.contains("""android:theme="@style/Theme.CellularProxy""""),
+            "Production application must use the no-title Compose theme so the system title bar cannot overlap content.",
+        )
         assertTrue(shellSource.contains("Scaffold"), "Compose app shell must provide the operator console scaffold.")
         assertTrue(shellSource.contains("CellularProxy"), "Compose app shell must render the product name.")
         assertFalse(
@@ -107,7 +121,7 @@ class ComposeAppShellContractTest {
     }
 
     @Test
-    fun `compose smoke tests use an android test only host activity`() {
+    fun `compose smoke tests use a debug only host activity in the target app process`() {
         val smokeTestSources =
             repoRoot()
                 .resolve("app/src/androidTest/kotlin")
@@ -117,11 +131,15 @@ class ComposeAppShellContractTest {
                 .associate { file -> file.relativeTo(repoRoot().resolve("app/src/androidTest/kotlin").toFile()).path to file.readText() }
         val hostActivitySource =
             repoRoot()
-                .resolve("app/src/androidTest/kotlin/com/cellularproxy/app/ui/CellularProxyComposeTestActivity.kt")
+                .resolve("app/src/debug/kotlin/com/cellularproxy/app/ui/CellularProxyComposeTestActivity.kt")
                 .readText()
         val androidTestManifest =
             repoRoot()
                 .resolve("app/src/androidTest/AndroidManifest.xml")
+                .readText()
+        val debugManifest =
+            repoRoot()
+                .resolve("app/src/debug/AndroidManifest.xml")
                 .readText()
 
         assertTrue(
@@ -140,11 +158,15 @@ class ComposeAppShellContractTest {
         }
         assertTrue(
             hostActivitySource.contains("class CellularProxyComposeTestActivity : ComponentActivity()"),
-            "The Compose test host must be a minimal ComponentActivity in androidTest sources.",
+            "The Compose test host must be a minimal ComponentActivity in debug sources.",
         )
         assertTrue(
+            debugManifest.contains("com.cellularproxy.app.ui.CellularProxyComposeTestActivity"),
+            "The Compose test host must be declared in the debug manifest so ActivityScenario launches it in the target app process.",
+        )
+        assertFalse(
             androidTestManifest.contains("com.cellularproxy.app.ui.CellularProxyComposeTestActivity"),
-            "The Compose test host must be declared only in the androidTest manifest.",
+            "The Compose test host must not be declared in the androidTest manifest because that installs it into the instrumentation process.",
         )
         assertFalse(
             repoRoot()
@@ -199,14 +221,19 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            shellSource.contains(
-                "internal val cellularProxyPrimaryNavigationDestinations = listOf(\n" +
-                    "    Dashboard,\n" +
-                    "    Settings,\n" +
-                    "    LogsAudit,\n" +
-                    ")",
+            Regex(
+                """internal val cellularProxyPrimaryNavigationDestinations\s*=\s*listOf\(\s*Dashboard,\s*Settings,\s*LogsAudit,\s*\)""",
+            ).containsMatchIn(shellSource),
+            "Primary navigation chrome should keep Dashboard, Settings, and Logs/Audit directly reachable while Rotation lives inside Dashboard.",
+        )
+        assertEquals(
+            listOf(
+                CellularProxyNavigationDestination.Dashboard,
+                CellularProxyNavigationDestination.Settings,
+                CellularProxyNavigationDestination.LogsAudit,
             ),
-            "Primary navigation chrome should keep only the high-frequency app entry points.",
+            cellularProxyPrimaryNavigationDestinations,
+            "Rotation must not be rendered as a standalone bottom-tab or rail destination.",
         )
         assertTrue(
             shellSource.contains("NavigationBar"),
@@ -232,13 +259,19 @@ class ComposeAppShellContractTest {
             shellSource.contains("Icon(destination.icon, contentDescription = destination.label)"),
             "Top-level navigation items must render a recognizable destination icon.",
         )
-        assertFalse(
-            shellSource.contains("label = {\n                    Text(destination.label)\n                }"),
-            "Phone bottom navigation must not render visible English destination labels.",
+        assertTrue(
+            shellSource.contains("label = {") &&
+                shellSource.contains("Text(destination.shortLabel)"),
+            "Phone bottom navigation must render a short English label below each icon.",
         )
         assertFalse(
-            shellSource.contains("label = {\n                    Text(destination.label)\n                },\n                icon"),
-            "Navigation rail items must not render visible English destination labels.",
+            shellSource.contains("TopAppBar(") ||
+                shellSource.contains("topBar ="),
+            "App shell must not render a top app bar because it can overlap the first interactive controls on Android devices.",
+        )
+        assertTrue(
+            shellSource.contains("statusBarsPadding()"),
+            "App shell content must apply status bar padding so the system app/title bar does not cover controls.",
         )
         assertFalse(
             shellSource.contains("icon = {}"),
@@ -343,27 +376,23 @@ class ComposeAppShellContractTest {
         )
 
         listOf(
-            "Service state",
-            "Proxy endpoint",
-            "Selected route",
-            "Proxy authentication",
-            "Management API",
-            "Cloudflare tunnel",
-            "Root availability",
-            "Public IP",
-            "Active connections",
-            "Recent traffic",
-            "Total traffic",
-            "Recent high-severity errors",
-            "Start proxy",
-            "Stop proxy",
-            "Refresh status",
-            "Copy proxy endpoint",
-            "Open risk details",
-            "Open Cloudflare",
-            "Open rotation",
-            "Open logs",
-            "Open diagnostics",
+            "DashboardStatusCard",
+            "ElevatedCard",
+            "R.string.dashboard_section_service",
+            "R.string.dashboard_section_route",
+            "R.string.dashboard_proxy_authentication",
+            "R.string.dashboard_local_control",
+            "R.string.dashboard_cloudflare_tunnel",
+            "R.string.dashboard_root_availability",
+            "R.string.dashboard_public_ip_unknown",
+            "R.string.dashboard_active_connections",
+            "R.string.dashboard_recent_traffic",
+            "R.string.dashboard_total_traffic",
+            "R.string.dashboard_section_recent_errors",
+            "R.string.dashboard_start_proxy",
+            "R.string.dashboard_stop_proxy",
+            "R.string.dashboard_refresh_status",
+            "R.string.dashboard_copy_proxy_endpoint",
         ).forEach { label ->
             assertTrue(
                 dashboardSource.contains(label),
@@ -387,16 +416,16 @@ class ComposeAppShellContractTest {
             "Dashboard route controller must be backed by the injected status provider.",
         )
         assertTrue(
-            dashboardSource.contains("DashboardField(\"Recent traffic\", recentTrafficSummary(status))"),
+            dashboardSource.contains("DashboardField(stringResource(R.string.dashboard_recent_traffic), recentTrafficSummary(status))"),
             "Dashboard must render recent traffic from the explicit recent-traffic summary.",
         )
         assertTrue(
-            dashboardSource.contains("DashboardField(\"Total traffic\", totalTrafficSummary(status))"),
+            dashboardSource.contains("DashboardField(stringResource(R.string.dashboard_total_traffic), totalTrafficSummary(status))"),
             "Dashboard must keep cumulative traffic counters under a total-traffic label.",
         )
         assertTrue(
             dashboardSource.contains(
-                "DashboardField(\"Cloudflare management API\", cloudflareManagementApiCheckSummary(status))",
+                "DashboardField(stringResource(R.string.dashboard_cloudflare_management_api), cloudflareManagementApiCheckSummary(status))",
             ),
             "Dashboard must render the explicit Cloudflare management API check separately from tunnel availability.",
         )
@@ -425,9 +454,10 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             dashboardSource.contains("val observedStatus = statusProvider()") &&
-                dashboardSource.contains("LaunchedEffect(observedStatus)") &&
+                dashboardSource.contains("val observedActionCompletionVersion = actionCompletionVersionProvider()") &&
+                dashboardSource.contains("LaunchedEffect(observedStatus, observedActionCompletionVersion)") &&
                 dashboardSource.contains("DashboardScreenEvent.Refresh"),
-            "Dashboard route must refresh remembered controller state when provider-backed status changes.",
+            "Dashboard route must refresh remembered controller state when provider-backed status or action completion changes.",
         )
         assertTrue(
             dashboardSource.contains("DashboardScreenController("),
@@ -467,6 +497,11 @@ class ComposeAppShellContractTest {
             "Dashboard route must consume one-shot ViewModel effects after dispatch.",
         )
         assertTrue(
+            dashboardSource.contains("LocalFocusManager.current") &&
+                dashboardSource.contains("clearFocus(force = true)"),
+            "Dashboard actions must clear text-field focus before dispatch so service buttons do not reopen the IME and jump the layout.",
+        )
+        assertTrue(
             shellSource.contains("LocalClipboardManager.current"),
             "App shell must provide a real clipboard sink for dashboard copy effects.",
         )
@@ -483,16 +518,28 @@ class ComposeAppShellContractTest {
             "Dashboard start actions must use the existing foreground service start command.",
         )
         assertTrue(
-            Regex("""onStopProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceStop[\s\S]*?afterResponse = \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""")
+            Regex("""onStartProxyService = \{[\s\S]*?proxyStatusState = proxyStatusState\.copy\(state = ProxyServiceState\.Starting\)[\s\S]*?ForegroundServiceActions\.START_PROXY""")
                 .findAll(shellSource)
                 .count() == 2,
-            "Both Dashboard stop handlers must use the authenticated local Management API service stop action and schedule delayed live-status refresh after its response.",
+            "Both Dashboard start handlers must optimistically publish Starting before dispatching the foreground-service command.",
         )
         assertTrue(
-            Regex("""onRestartProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceRestart[\s\S]*?afterResponse = \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""")
+            Regex("""onStopProxyService = \{[\s\S]*?proxyStatusState = proxyStatusState\.copy\(state = ProxyServiceState\.Stopping\)[\s\S]*?ForegroundServiceActions\.STOP_PROXY""")
                 .findAll(shellSource)
                 .count() == 2,
-            "Both Dashboard restart handlers must use the local Management API service restart action and schedule delayed live-status refresh after its response.",
+            "Both Dashboard stop handlers must optimistically publish Stopping before dispatching the foreground-service command.",
+        )
+        assertTrue(
+            Regex("""onStopProxyService = \{[\s\S]*?dispatchForegroundServiceCommandThenRefresh\([\s\S]*?ForegroundServiceActions\.STOP_PROXY[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""")
+                .findAll(shellSource)
+                .count() == 2,
+            "Both Dashboard stop handlers must use the Android foreground-service stop command and schedule delayed live-status refresh.",
+        )
+        assertTrue(
+            Regex("""onRestartProxyService = \{[\s\S]*?dispatchForegroundServiceCommandThenRefresh\([\s\S]*?ForegroundServiceActions\.STOP_PROXY[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_RESTART_DELAY_MILLIS\)[\s\S]*?dispatchForegroundServiceCommand\(ForegroundServiceActions\.START_PROXY\)[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""")
+                .findAll(shellSource)
+                .count() == 2,
+            "Both Dashboard restart handlers must stop then start the Android foreground service without requiring root-backed Management API restart.",
         )
         assertTrue(
             shellSource.contains("afterResponse.invoke()"),
@@ -526,7 +573,7 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("onOpenRotation = { navController.navigateToCellularProxyDestination(Rotation) }"),
-            "Dashboard rotation action must navigate to the Rotation screen.",
+            "Dashboard rotation action must navigate to the Rotation screen now that Rotation is not a standalone tab.",
         )
         assertTrue(
             shellSource.contains("onOpenLogs = { navController.navigateToCellularProxyDestination(LogsAudit) }"),
@@ -535,6 +582,72 @@ class ComposeAppShellContractTest {
         assertTrue(
             shellSource.contains("onOpenDiagnostics = { navController.navigateToCellularProxyDestination(Diagnostics) }"),
             "Dashboard diagnostics action must navigate to the Diagnostics screen.",
+        )
+    }
+
+    @Test
+    fun `dashboard exposes rotation as a dashboard action`() {
+        val dashboardSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDashboardScreen.kt")
+                .readText()
+
+        assertTrue(
+            dashboardSource.contains("R.string.dashboard_open_rotation"),
+            "Dashboard must render a fixed Rotation entry because Rotation is no longer a standalone tab.",
+        )
+        assertTrue(
+            DashboardScreenAction.OpenRotation in DashboardScreenState.from(
+                DashboardStatusModel.from(
+                    config = AppConfig.default(),
+                    status = ProxyServiceStatus.stopped(),
+                ),
+            ).availableActions,
+            "Dashboard screen state must keep the Rotation navigation action available.",
+        )
+    }
+
+    @Test
+    fun `app declares branded launcher icon resources`() {
+        val manifestSource =
+            repoRoot()
+                .resolve("app/src/main/AndroidManifest.xml")
+                .readText()
+        val stylesSource =
+            repoRoot()
+                .resolve("app/src/main/res/values/styles.xml")
+                .readText()
+        val adaptiveIconSource =
+            repoRoot()
+                .resolve("app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml")
+                .readText()
+        val foregroundIconSource =
+            repoRoot()
+                .resolve("app/src/main/res/drawable/ic_launcher_foreground.xml")
+                .readText()
+
+        assertTrue(
+            manifestSource.contains("""android:icon="@mipmap/ic_launcher""""),
+            "Production app must declare the branded launcher icon.",
+        )
+        assertTrue(
+            manifestSource.contains("""android:roundIcon="@mipmap/ic_launcher_round""""),
+            "Production app must declare the branded round launcher icon.",
+        )
+        assertTrue(
+            stylesSource.contains("<item name=\"android:windowNoTitle\">true</item>") &&
+                stylesSource.contains("<item name=\"android:windowActionBar\">false</item>"),
+            "The app theme must remove the platform title/action bar.",
+        )
+        assertTrue(
+            adaptiveIconSource.contains("@color/ic_launcher_background") &&
+                adaptiveIconSource.contains("@drawable/ic_launcher_foreground"),
+            "Adaptive launcher icon must compose the CellularProxy background and foreground artwork.",
+        )
+        assertTrue(
+            foregroundIconSource.contains("cell tower") ||
+                foregroundIconSource.contains("CellularProxy launcher mark"),
+            "Launcher foreground artwork must document the proxy/cellular concept it represents.",
         )
     }
 
@@ -833,6 +946,10 @@ class ComposeAppShellContractTest {
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxySettingsScreen.kt")
                 .readText()
+        val stringsSource =
+            repoRoot()
+                .resolve("app/src/main/res/values/strings.xml")
+                .readText()
 
         assertTrue(
             shellSource.contains("CellularProxySettingsRoute("),
@@ -858,30 +975,37 @@ class ComposeAppShellContractTest {
         )
 
         listOf(
-            "Listen host",
-            "Listen port",
-            "Proxy authentication",
-            "Max concurrent connections",
+            "R.string.settings_listen_host",
+            "R.string.settings_listen_port",
+            "R.string.settings_proxy_auth_enabled",
+            "R.string.settings_max_concurrent_connections",
+            "R.string.settings_route_policy",
+            "R.string.settings_strict_ip_change_required",
+            "R.string.settings_mobile_data_off_delay_seconds",
+            "R.string.settings_network_return_timeout_seconds",
+            "R.string.settings_rotation_cooldown_seconds",
+            "R.string.settings_root_operations_enabled",
+            "R.string.settings_proxy_username",
+            "R.string.settings_proxy_password",
+            "R.string.settings_proxy_credential_status",
+            "R.string.settings_management_api_token",
+            "R.string.settings_management_api_token_status",
+            "R.string.settings_cloudflare_enabled",
+            "R.string.settings_cloudflare_tunnel_token",
+            "R.string.settings_tunnel_token_status",
+            "R.string.settings_cloudflare_hostname_label",
+            "R.string.settings_secret_blank_hint",
+            "R.string.settings_save",
+            "R.string.settings_discard_changes",
+        ).forEach { label ->
+            assertTrue(
+                settingsSource.contains(label),
+                "Settings screen must expose `$label`.",
+            )
+        }
+        listOf(
             "Default route",
-            "Strict IP change",
-            "Mobile data off delay",
-            "Network return timeout",
-            "Rotation cooldown",
-            "Root operations",
-            "Proxy username",
-            "Proxy password",
-            "Proxy credential status",
-            "Management API token",
-            "Management API token status",
-            "Cloudflare enabled",
-            "Cloudflare tunnel token",
-            "Tunnel token status",
-            "Settings warnings",
             "Cloudflare is enabled but the tunnel token is missing.",
-            "Cloudflare hostname",
-            "Leave secret fields blank to keep current values.",
-            "Save settings",
-            "Discard changes",
             "Listen host must be a valid bind address.",
             "Listen port must be between 1 and 65535.",
             "Max concurrent connections must be greater than zero.",
@@ -891,14 +1015,20 @@ class ComposeAppShellContractTest {
             "Cloudflare tunnel token is missing or invalid.",
         ).forEach { label ->
             assertTrue(
-                settingsSource.contains(label),
-                "Settings screen must expose `$label`.",
+                stringsSource.contains(label) || settingsSource.contains(label),
+                "Settings resources must expose `$label`.",
             )
         }
         assertTrue(
             settingsSource.contains("viewModel<SettingsViewModel>") &&
                 settingsSource.contains("collectAsStateWithLifecycle()"),
             "Settings route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
+        )
+        assertTrue(
+            settingsSource.contains("if (currentForm.authEnabled)") &&
+                settingsSource.indexOf("R.string.settings_proxy_credential_status") >
+                settingsSource.indexOf("if (currentForm.authEnabled)"),
+            "Settings screen must show proxy credential status and fields only while proxy authentication is enabled.",
         )
         assertTrue(
             settingsSource.contains("initialConfigProvider: () -> AppConfig = AppConfig::default") &&
@@ -1062,7 +1192,9 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("cloudflareEdgeSessionSummaryProvider: () -> String? = { null }") &&
-                shellSource.contains("cloudflareEdgeSessionSummaryProvider = { cloudflareEdgeSessionSummaryState }") &&
+                Regex(
+                    """cloudflareEdgeSessionSummaryProvider = \{\s*cloudflareEdgeSessionSummaryState\s*}""",
+                ).containsMatchIn(shellSource) &&
                 shellSource.contains("edgeSessionSummaryProvider = cloudflareEdgeSessionSummaryProvider"),
             "Cloudflare app-shell route must pass the refreshed edge/session summary into the Cloudflare route.",
         )
@@ -1077,6 +1209,7 @@ class ComposeAppShellContractTest {
                         "        observedEdgeSessionSummary,\n" +
                         "        observedManagementApiRoundTrip,\n" +
                         "        observedManagementApiRoundTripVersion,\n" +
+                        "        observedActionCompletionVersion,\n" +
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ),
@@ -1094,6 +1227,7 @@ class ComposeAppShellContractTest {
                         "        observedEdgeSessionSummary,\n" +
                         "        observedManagementApiRoundTrip,\n" +
                         "        observedManagementApiRoundTripVersion,\n" +
+                        "        observedActionCompletionVersion,\n" +
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ),
@@ -1144,22 +1278,22 @@ class ComposeAppShellContractTest {
         )
 
         listOf(
-            "Tunnel enabled",
-            "Tunnel token",
-            "Tunnel lifecycle",
-            "Management hostname",
-            "Last connection error",
-            "Local proxy impact",
-            "Edge sessions",
-            "Management API round trip",
-            "Pending operation",
-            "Warnings",
-            "Current warning",
-            "Start tunnel",
-            "Stop tunnel",
-            "Reconnect tunnel",
-            "Test management tunnel",
-            "Copy diagnostics",
+            "R.string.cloudflare_tunnel_enabled",
+            "R.string.cloudflare_tunnel_token",
+            "R.string.cloudflare_tunnel_lifecycle",
+            "R.string.cloudflare_management_hostname",
+            "R.string.cloudflare_last_connection_error",
+            "R.string.cloudflare_local_proxy_impact",
+            "R.string.cloudflare_edge_sessions",
+            "R.string.cloudflare_management_api_round_trip",
+            "R.string.cloudflare_pending_operation",
+            "R.string.cloudflare_section_warnings",
+            "R.string.cloudflare_current_warning",
+            "R.string.cloudflare_start_tunnel",
+            "R.string.cloudflare_stop_tunnel",
+            "R.string.cloudflare_reconnect_tunnel",
+            "R.string.cloudflare_test_management_tunnel",
+            "R.string.action_copy_diagnostics",
         ).forEach { label ->
             assertTrue(
                 cloudflareSource.contains(label),
@@ -1528,11 +1662,13 @@ class ComposeAppShellContractTest {
             "Rotation route must bridge controller-dispatched actions to app-level callbacks.",
         )
         assertTrue(
-            shellSource.contains("onCheckRoot = {"),
+            shellSource.contains("onCheckRoot = ::dispatchRootAvailabilityCheck") ||
+                shellSource.contains("onCheckRoot = onCheckRoot"),
             "App shell must explicitly wire the Rotation root-check callback, even before runtime dispatch exists.",
         )
         assertTrue(
-            shellSource.contains("onProbeCurrentPublicIp = {"),
+            shellSource.contains("onProbeCurrentPublicIp = ::dispatchPublicIpProbe") ||
+                shellSource.contains("onProbeCurrentPublicIp = onProbeCurrentPublicIp"),
             "App shell must explicitly wire the Rotation public-IP probe callback, even before runtime dispatch exists.",
         )
         assertTrue(
@@ -1549,9 +1685,15 @@ class ComposeAppShellContractTest {
             "App shell must dispatch high-impact rotation callbacks through the local Management API action dispatcher.",
         )
         assertTrue(
-            shellSource.contains("LocalManagementApiAction.RootStatus") &&
-                shellSource.contains("LocalManagementApiAction.PublicIp"),
-            "App shell must dispatch Rotation root and current-IP probes through the local Management API action dispatcher.",
+            shellSource.contains("fun dispatchRootAvailabilityCheck()") &&
+                shellSource.contains("rootAvailabilityChecker.check(ROOT_AVAILABILITY_ACTION_TIMEOUT_MILLIS)") &&
+                shellSource.contains("fun dispatchPublicIpProbe()") &&
+                shellSource.contains("publicIpProbe.probe(") &&
+                shellSource.contains("route = publicIpProbeRouteForRotation()") &&
+                shellSource.contains("LaunchedEffect(publicIpProbe)") &&
+                shellSource.contains("dispatchPublicIpProbe()") &&
+                shellSource.contains("defaultPublicIpProbeEndpoint()"),
+            "App shell must dispatch Rotation root checks and cellular current-IP probes directly, including an initial startup probe.",
         )
 
         listOf(
@@ -1688,6 +1830,30 @@ class ComposeAppShellContractTest {
     }
 
     @Test
+    fun `route bound public ip probe result maps to rotation and diagnostics state`() {
+        val network =
+            NetworkDescriptor(
+                id = "cell",
+                category = NetworkCategory.Cellular,
+                displayName = "cell",
+                isAvailable = true,
+            )
+        val success = PublicIpProbeResult.Success(publicIp = "203.0.113.44", network = network)
+        val failure = PublicIpProbeResult.Failed(PublicIpProbeFailure.ConnectionFailed)
+
+        assertEquals(PublicIpProbeActionResult.Observed("203.0.113.44"), publicIpProbeActionResultFrom(success))
+        assertEquals(PublicIpProbeActionResult.Unavailable, publicIpProbeActionResultFrom(failure))
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Observed("203.0.113.44"),
+            publicIpDiagnosticsProbeResultFromPublicIpProbeResult(success),
+        )
+        assertEquals(
+            PublicIpDiagnosticsProbeResult.Unavailable,
+            publicIpDiagnosticsProbeResultFromPublicIpProbeResult(failure),
+        )
+    }
+
+    @Test
     fun `current public ip display prefers latest status after refresh and explicit null probe clears cache`() {
         assertEquals(
             "198.51.100.10",
@@ -1717,6 +1883,36 @@ class ComposeAppShellContractTest {
                 statusPublicIp = "198.51.100.99",
             ),
         )
+    }
+
+    @Test
+    fun `dashboard public ip display uses startup probe before runtime status has public ip`() {
+        assertEquals(
+            "203.0.113.44",
+            currentPublicIpForDashboard(
+                probedPublicIp = PublicIpProbeActionResult.Observed("203.0.113.44"),
+                statusPublicIp = null,
+            ),
+        )
+        assertEquals(
+            "198.51.100.10",
+            currentPublicIpForDashboard(
+                probedPublicIp = PublicIpProbeActionResult.NotPublicIpAction,
+                statusPublicIp = "198.51.100.10",
+            ),
+        )
+        assertEquals(
+            null,
+            currentPublicIpForDashboard(
+                probedPublicIp = PublicIpProbeActionResult.Unavailable,
+                statusPublicIp = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `rotation public ip probes always use cellular route`() {
+        assertEquals(RouteTarget.Cellular, publicIpProbeRouteForRotation())
     }
 
     @Test
@@ -1998,11 +2194,11 @@ class ComposeAppShellContractTest {
         )
         assertTrue(
             shellSource.contains("localManagementApiProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
-                shellSource.contains("publicIpDiagnosticsProbeResultFromSensitiveConfigLoadResult(loadSensitiveConfigResult())") &&
-                shellSource.contains("action = LocalManagementApiAction.PublicIp") &&
+                shellSource.contains("publicIpDiagnosticsProbeResultFromPublicIpProbeResult(") &&
+                shellSource.contains("defaultPublicIpProbeEndpoint()") &&
                 shellSource.contains("cloudflareManagementApiProbeResultFromSensitiveConfigLoadResult(") &&
                 shellSource.contains("result = sensitiveConfigResult"),
-            "Diagnostics management probes must use safe sensitive-config load results before dispatching runtime probes.",
+            "Diagnostics management probes must use safe sensitive-config load results, while public-IP probes must run directly so they work before runtime startup.",
         )
         assertTrue(
             !diagnosticsSource.contains("DiagnosticsSuiteController(checks = emptyMap())"),
@@ -2060,12 +2256,11 @@ class ComposeAppShellContractTest {
         )
 
         listOf(
-            "Diagnostics",
-            "Run non-Cloudflare checks",
-            "Copy summary",
-            "Duration",
-            "Error category",
-            "Details",
+            "R.string.diagnostics_run_non_cloudflare",
+            "R.string.diagnostics_copy_summary",
+            "R.string.diagnostics_duration",
+            "R.string.diagnostics_error_category",
+            "R.string.diagnostics_details",
         ).forEach { label ->
             assertTrue(
                 diagnosticsSource.contains(label),
@@ -2358,15 +2553,14 @@ class ComposeAppShellContractTest {
         )
 
         listOf(
-            "Logs/Audit",
-            "Category",
-            "Severity",
-            "Time window",
-            "Search",
-            "Copy selected record",
-            "Copy filtered summary",
-            "Export redacted bundle",
-            "No log or audit records match the current filters.",
+            "R.string.logs_category",
+            "R.string.logs_severity",
+            "R.string.logs_time_window",
+            "R.string.logs_search",
+            "R.string.logs_copy_selected",
+            "R.string.logs_copy_filtered_summary",
+            "R.string.logs_export_redacted_bundle",
+            "R.string.logs_empty",
         ).forEach { label ->
             assertTrue(
                 logsAuditSource.contains(label),
@@ -2558,7 +2752,7 @@ class ComposeAppShellContractTest {
             "Logs/Audit screen must render the currently selected record.",
         )
         assertTrue(
-            logsAuditSource.contains("Selected record"),
+            logsAuditSource.contains("R.string.logs_selected_record"),
             "Logs/Audit selected-record feedback must have an operator-facing label.",
         )
         assertTrue(
@@ -2570,7 +2764,7 @@ class ComposeAppShellContractTest {
             "Logs/Audit selected-record feedback must provide a clear-selection control.",
         )
         assertTrue(
-            logsAuditSource.contains("Clear selection"),
+            logsAuditSource.contains("R.string.logs_clear_selection"),
             "Logs/Audit selected-record feedback must expose a clear-selection action.",
         )
     }
@@ -2620,7 +2814,7 @@ class ComposeAppShellContractTest {
             "Logs/Audit screen must expose a filter-update callback for runtime/controller wiring.",
         )
         assertTrue(
-            logsAuditSource.contains("label = { Text(\"Search logs\") }"),
+            logsAuditSource.contains("label = { Text(stringResource(R.string.logs_search)) }"),
             "Logs/Audit screen must render an editable search filter control.",
         )
         assertTrue(
@@ -2661,11 +2855,11 @@ class ComposeAppShellContractTest {
             "Logs/Audit category and severity filters should use selectable filter chips.",
         )
         assertTrue(
-            logsAuditSource.contains("Text(\"All categories\")"),
+            logsAuditSource.contains("Text(stringResource(R.string.logs_all_categories))"),
             "Category filtering must include an all-categories reset control.",
         )
         assertTrue(
-            logsAuditSource.contains("Text(\"All severities\")"),
+            logsAuditSource.contains("Text(stringResource(R.string.logs_all_severities))"),
             "Severity filtering must include an all-severities reset control.",
         )
         assertTrue(
@@ -2703,11 +2897,11 @@ class ComposeAppShellContractTest {
             "Logs/Audit screen must render editable time-window filter controls.",
         )
         assertTrue(
-            logsAuditSource.contains("label = { Text(\"From timestamp\") }"),
+            logsAuditSource.contains("label = { Text(stringResource(R.string.logs_from_timestamp)) }"),
             "Logs/Audit screen must expose a lower-bound timestamp field.",
         )
         assertTrue(
-            logsAuditSource.contains("label = { Text(\"To timestamp\") }"),
+            logsAuditSource.contains("label = { Text(stringResource(R.string.logs_to_timestamp)) }"),
             "Logs/Audit screen must expose an upper-bound timestamp field.",
         )
         assertTrue(

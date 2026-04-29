@@ -16,6 +16,7 @@ import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.proxy.ProxyCredential
 import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
+import com.cellularproxy.shared.root.RootAvailabilityStatus
 import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
@@ -149,6 +150,57 @@ class ProxyStatusProviderTest {
     }
 
     @Test
+    fun `explicit root availability check is preserved while proxy is stopped`() {
+        val status =
+            proxyStatusWithExplicitRootAvailability(
+                refreshedStatus = ProxyServiceStatus.stopped(rootAvailability = RootAvailabilityStatus.Unknown),
+                explicitRootAvailability = RootAvailabilityStatus.Available,
+            )
+
+        assertEquals(RootAvailabilityStatus.Available, status.rootAvailability)
+    }
+
+    @Test
+    fun `running runtime root availability is authoritative over explicit check`() {
+        val status =
+            proxyStatusWithExplicitRootAvailability(
+                refreshedStatus =
+                    ProxyServiceStatus.running(
+                        listenHost = "127.0.0.1",
+                        listenPort = 1082,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = null,
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                        rootAvailability = RootAvailabilityStatus.Unavailable,
+                    ),
+                explicitRootAvailability = RootAvailabilityStatus.Available,
+            )
+
+        assertEquals(RootAvailabilityStatus.Unavailable, status.rootAvailability)
+    }
+
+    @Test
+    fun `explicit root availability is preserved when running runtime root is unknown`() {
+        val status =
+            proxyStatusWithExplicitRootAvailability(
+                refreshedStatus =
+                    ProxyServiceStatus.running(
+                        listenHost = "127.0.0.1",
+                        listenPort = 1082,
+                        configuredRoute = RouteTarget.Automatic,
+                        boundRoute = null,
+                        publicIp = null,
+                        hasHighSecurityRisk = false,
+                        rootAvailability = RootAvailabilityStatus.Unknown,
+                    ),
+                explicitRootAvailability = RootAvailabilityStatus.Available,
+            )
+
+        assertEquals(RootAvailabilityStatus.Available, status.rootAvailability)
+    }
+
+    @Test
     fun `app shell refreshes cached live status after management api actions`() {
         val shellSource =
             repoRoot()
@@ -225,22 +277,25 @@ class ProxyStatusProviderTest {
     }
 
     @Test
-    fun `dashboard service stop schedules delayed cached live status refresh after management api response`() {
-        val shellSource =
-            repoRoot()
-                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
-                .readText()
-
+    fun `settings save restarts running proxy so updated route takes effect immediately`() {
+        assertFalse(shouldRestartProxyAfterSettingsSave(ProxyServiceStatus.stopped()))
+        assertFalse(shouldRestartProxyAfterSettingsSave(ProxyServiceStatus(state = ProxyServiceState.Starting)))
         assertTrue(
-            Regex(
-                """onStopProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceStop[\s\S]*?afterResponse = \{[\s\S]*?coroutineScope\.launch \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""",
-            ).findAll(shellSource).count() == 2,
-            "Both Dashboard service stop handlers must schedule a delayed live-status refresh after the Management API stop response.",
+            shouldRestartProxyAfterSettingsSave(
+                ProxyServiceStatus.running(
+                    listenHost = "0.0.0.0",
+                    listenPort = 1082,
+                    configuredRoute = RouteTarget.WiFi,
+                    boundRoute = null,
+                    publicIp = null,
+                    hasHighSecurityRisk = false,
+                ),
+            ),
         )
     }
 
     @Test
-    fun `dashboard service restart schedules delayed cached live status refresh after management api response`() {
+    fun `dashboard service stop schedules delayed cached live status refresh after foreground service command`() {
         val shellSource =
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
@@ -248,9 +303,39 @@ class ProxyStatusProviderTest {
 
         assertTrue(
             Regex(
-                """onRestartProxyService = \{[\s\S]*?dispatchLocalManagementApiAction\([\s\S]*?LocalManagementApiAction\.ServiceRestart[\s\S]*?afterResponse = \{[\s\S]*?coroutineScope\.launch \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""",
+                """onStopProxyService = \{[\s\S]*?dispatchForegroundServiceCommandThenRefresh\([\s\S]*?ForegroundServiceActions\.STOP_PROXY[\s\S]*?coroutineScope\.launch \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""",
             ).findAll(shellSource).count() == 2,
-            "Both Dashboard service restart handlers must schedule a delayed live-status refresh because the root restart runs after the Management API response is sent.",
+            "Both Dashboard service stop handlers must schedule a delayed live-status refresh after the foreground-service stop command.",
+        )
+    }
+
+    @Test
+    fun `dashboard service restart stops then starts the foreground service and refreshes cached live status`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            Regex(
+                """onRestartProxyService = \{[\s\S]*?dispatchForegroundServiceCommandThenRefresh\([\s\S]*?ForegroundServiceActions\.STOP_PROXY[\s\S]*?coroutineScope\.launch \{[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_RESTART_DELAY_MILLIS\)[\s\S]*?dispatchForegroundServiceCommand\(ForegroundServiceActions\.START_PROXY\)[\s\S]*?delay\(DASHBOARD_SERVICE_COMMAND_STATUS_REFRESH_DELAY_MILLIS\)[\s\S]*?refreshProxyStatus\(\)""",
+            ).findAll(shellSource).count() == 2,
+            "Both Dashboard service restart handlers must avoid the root-backed Management API restart path.",
+        )
+    }
+
+    @Test
+    fun `settings save handler restarts the foreground service when proxy is already running`() {
+        val shellSource =
+            repoRoot()
+                .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyApp.kt")
+                .readText()
+
+        assertTrue(
+            Regex(
+                """val saveSettingsConfig: \(AppConfig\) -> Unit = \{ config ->[\s\S]*?shouldRestartProxyAfterSettingsSave\(proxyStatusState\)[\s\S]*?plainConfigRepository\.save\(config\)[\s\S]*?ForegroundServiceActions\.STOP_PROXY[\s\S]*?ForegroundServiceActions\.START_PROXY[\s\S]*?refreshProxyStatus\(\)""",
+            ).containsMatchIn(shellSource),
+            "Saving Settings while the proxy is running must restart the foreground service so route and port changes affect the live runtime immediately.",
         )
     }
 
@@ -301,7 +386,9 @@ class ProxyStatusProviderTest {
             "App shell must update the Cloudflare round-trip result for both HTTP responses and request failures.",
         )
         assertTrue(
-            shellSource.contains("cloudflareManagementRoundTripProvider = { cloudflareManagementRoundTripState }") &&
+            Regex(
+                """cloudflareManagementRoundTripProvider = \{\s*cloudflareManagementRoundTripState\s*}""",
+            ).containsMatchIn(shellSource) &&
                 shellSource.contains("managementApiRoundTripProvider = cloudflareManagementRoundTripProvider"),
             "Launched Cloudflare route must display the cached management tunnel test result.",
         )
@@ -315,6 +402,7 @@ class ProxyStatusProviderTest {
                         "        observedEdgeSessionSummary,\n" +
                         "        observedManagementApiRoundTrip,\n" +
                         "        observedManagementApiRoundTripVersion,\n" +
+                        "        observedActionCompletionVersion,\n" +
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ) &&

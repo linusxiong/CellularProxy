@@ -184,10 +184,9 @@ class ConnectTunnelEstablishmentRendererTest {
         }
     }
 
-    private fun admitted(request: ParsedHttpRequest): ProxyRequestAdmissionDecision.Accepted =
-        assertIs<ProxyRequestAdmissionDecision.Accepted>(
-            ProxyRequestAdmissionPolicy.evaluate(admissionConfig, request),
-        )
+    private fun admitted(request: ParsedHttpRequest): ProxyRequestAdmissionDecision.Accepted = assertIs<ProxyRequestAdmissionDecision.Accepted>(
+        ProxyRequestAdmissionPolicy.evaluate(admissionConfig, request),
+    )
 
     private fun validProxyAuthorization(): String {
         val payload = credential.canonicalBasicPayload().toByteArray(Charsets.UTF_8)

@@ -218,6 +218,5 @@ class ProxyErrorResponseMapperTest {
         }
     }
 
-    private fun assertEmitted(decision: ProxyErrorResponseDecision): ProxyErrorResponse =
-        assertIs<ProxyErrorResponseDecision.Emit>(decision).response
+    private fun assertEmitted(decision: ProxyErrorResponseDecision): ProxyErrorResponse = assertIs<ProxyErrorResponseDecision.Emit>(decision).response
 }

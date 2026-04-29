@@ -206,11 +206,10 @@ class RuntimeManagementApiHandlerReferenceTest {
     }
 
     private object SecretBearingManagementApiHandler : ManagementApiHandler {
-        override fun handle(operation: ManagementApiOperation): ManagementApiResponse =
-            ManagementApiResponse.json(
-                statusCode = 200,
-                body = """{"secret":"redacted"}""",
-            )
+        override fun handle(operation: ManagementApiOperation): ManagementApiResponse = ManagementApiResponse.json(
+            statusCode = 200,
+            body = """{"secret":"redacted"}""",
+        )
 
         override fun toString(): String = "SecretBearingManagementApiHandler(handler-secret)"
     }

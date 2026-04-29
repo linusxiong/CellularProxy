@@ -172,15 +172,11 @@ class CloudflareTunnelTokenTest {
         assertTrue(rendered.contains("CloudflareTunnelToken"), "Diagnostics should still identify token objects")
     }
 
-    private fun encodedToken(json: String): String =
-        Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
+    private fun encodedToken(json: String): String = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
 
-    private fun urlSafeEncodedToken(json: String): String =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
+    private fun urlSafeEncodedToken(json: String): String = Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
 
-    private fun ByteArray.base64(): String =
-        Base64.getEncoder().encodeToString(this)
+    private fun ByteArray.base64(): String = Base64.getEncoder().encodeToString(this)
 
-    private fun ByteArray.base64UrlNoPadding(): String =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(this)
+    private fun ByteArray.base64UrlNoPadding(): String = Base64.getUrlEncoder().withoutPadding().encodeToString(this)
 }

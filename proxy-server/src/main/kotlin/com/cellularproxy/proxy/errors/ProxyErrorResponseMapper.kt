@@ -87,70 +87,67 @@ class ProxyErrorResponse(
         this.headers = Collections.unmodifiableMap(LinkedHashMap(headers))
     }
 
-    fun toHttpString(): String =
-        buildString {
-            append("HTTP/1.1 ")
-            append(statusCode)
-            append(' ')
-            append(reasonPhrase)
+    fun toHttpString(): String = buildString {
+        append("HTTP/1.1 ")
+        append(statusCode)
+        append(' ')
+        append(reasonPhrase)
+        append(CRLF)
+        headers.forEach { (name, value) ->
+            append(name)
+            append(": ")
+            append(value)
             append(CRLF)
-            headers.forEach { (name, value) ->
-                append(name)
-                append(": ")
-                append(value)
-                append(CRLF)
-            }
-            append(CRLF)
-            append(body)
         }
+        append(CRLF)
+        append(body)
+    }
 
     fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
 }
 
 object ProxyErrorResponseMapper {
-    fun map(failure: ProxyServerFailure): ProxyErrorResponseDecision =
-        when (failure) {
-            is ProxyServerFailure.HeaderBlockParse ->
-                emit(statusCode = 400, reasonPhrase = "Bad Request", body = "Bad request\n")
-            is ProxyServerFailure.Admission ->
-                mapAdmission(failure.reason)
-            is ProxyServerFailure.ConnectionLimit ->
-                emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
-            ProxyServerFailure.SelectedRouteUnavailable ->
-                emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
-            ProxyServerFailure.ProxyRequestsPaused ->
-                emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
-            ProxyServerFailure.DnsResolutionFailed ->
-                emit(statusCode = 502, reasonPhrase = "Bad Gateway", body = "Bad gateway\n")
-            ProxyServerFailure.OutboundConnectionFailed ->
-                emit(statusCode = 502, reasonPhrase = "Bad Gateway", body = "Bad gateway\n")
-            ProxyServerFailure.OutboundConnectionTimeout ->
-                emit(statusCode = 504, reasonPhrase = "Gateway Timeout", body = "Gateway timeout\n")
-            ProxyServerFailure.IdleTimeout ->
-                emit(statusCode = 408, reasonPhrase = "Request Timeout", body = "Request timeout\n")
-            ProxyServerFailure.ClientDisconnected ->
-                ProxyErrorResponseDecision.Suppress
-        }
+    fun map(failure: ProxyServerFailure): ProxyErrorResponseDecision = when (failure) {
+        is ProxyServerFailure.HeaderBlockParse ->
+            emit(statusCode = 400, reasonPhrase = "Bad Request", body = "Bad request\n")
+        is ProxyServerFailure.Admission ->
+            mapAdmission(failure.reason)
+        is ProxyServerFailure.ConnectionLimit ->
+            emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
+        ProxyServerFailure.SelectedRouteUnavailable ->
+            emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
+        ProxyServerFailure.ProxyRequestsPaused ->
+            emit(statusCode = 503, reasonPhrase = "Service Unavailable", body = "Service unavailable\n")
+        ProxyServerFailure.DnsResolutionFailed ->
+            emit(statusCode = 502, reasonPhrase = "Bad Gateway", body = "Bad gateway\n")
+        ProxyServerFailure.OutboundConnectionFailed ->
+            emit(statusCode = 502, reasonPhrase = "Bad Gateway", body = "Bad gateway\n")
+        ProxyServerFailure.OutboundConnectionTimeout ->
+            emit(statusCode = 504, reasonPhrase = "Gateway Timeout", body = "Gateway timeout\n")
+        ProxyServerFailure.IdleTimeout ->
+            emit(statusCode = 408, reasonPhrase = "Request Timeout", body = "Request timeout\n")
+        ProxyServerFailure.ClientDisconnected ->
+            ProxyErrorResponseDecision.Suppress
+    }
 
-    private fun mapAdmission(reason: ProxyRequestAdmissionRejectionReason): ProxyErrorResponseDecision =
-        when (reason) {
-            ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
-            is ProxyRequestAdmissionRejectionReason.ProxyAuthentication,
-            ->
-                emit(
-                    statusCode = 407,
-                    reasonPhrase = "Proxy Authentication Required",
-                    body = "Proxy authentication required\n",
-                    extraHeaders = linkedMapOf("Proxy-Authenticate" to "Basic realm=\"CellularProxy\""),
-                )
-            is ProxyRequestAdmissionRejectionReason.ManagementAuthorization ->
-                emit(
-                    statusCode = 401,
-                    reasonPhrase = "Unauthorized",
-                    body = "Unauthorized\n",
-                    extraHeaders = linkedMapOf("WWW-Authenticate" to "Bearer"),
-                )
-        }
+    private fun mapAdmission(reason: ProxyRequestAdmissionRejectionReason): ProxyErrorResponseDecision = when (reason) {
+        ProxyRequestAdmissionRejectionReason.DuplicateProxyAuthorizationHeader,
+        is ProxyRequestAdmissionRejectionReason.ProxyAuthentication,
+        ->
+            emit(
+                statusCode = 407,
+                reasonPhrase = "Proxy Authentication Required",
+                body = "Proxy authentication required\n",
+                extraHeaders = linkedMapOf("Proxy-Authenticate" to "Basic realm=\"CellularProxy\""),
+            )
+        is ProxyRequestAdmissionRejectionReason.ManagementAuthorization ->
+            emit(
+                statusCode = 401,
+                reasonPhrase = "Unauthorized",
+                body = "Unauthorized\n",
+                extraHeaders = linkedMapOf("WWW-Authenticate" to "Bearer"),
+            )
+    }
 
     private fun emit(
         statusCode: Int,

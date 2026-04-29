@@ -707,6 +707,85 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
     }
 
     @Test
+    fun `created lifecycle relays browser style connect tunnel traffic after proxy connection headers`() {
+        val acceptLoopExecutor = Executors.newSingleThreadExecutor()
+        val workerExecutor = Executors.newCachedThreadPool()
+        val queuedClientTimeoutExecutor = ScheduledThreadPoolExecutor(1)
+        FakeTunnelOriginServer().use { origin ->
+            val provider = RecordingBoundSocketProvider(origin.port)
+            var boundListener: BoundProxyServerSocket? = null
+            val lifecycle =
+                ProxyServerForegroundRuntimeLifecycleFactory.create(
+                    plainConfig =
+                        loopbackAppConfig().copy(
+                            network =
+                                AppConfig.default().network.copy(
+                                    defaultRoutePolicy = RouteTarget.Cellular,
+                                ),
+                        ),
+                    sensitiveConfig = sensitiveConfig,
+                    observedNetworks = { listOf(cellularRoute()) },
+                    socketProvider = provider,
+                    managementHandler = {
+                        ManagementApiResponse.json(statusCode = 200, body = "{}")
+                    },
+                    workerExecutor = workerExecutor,
+                    queuedClientTimeoutExecutor = queuedClientTimeoutExecutor,
+                    acceptLoopExecutor = acceptLoopExecutor,
+                    bindListener = { listenHost: String, _: Int, backlog: Int ->
+                        ProxyServerSocketBinder.bindEphemeral(listenHost, backlog).also { result ->
+                            if (result is ProxyServerSocketBindResult.Bound) {
+                                boundListener = result.listener
+                            }
+                        }
+                    },
+                )
+
+            try {
+                lifecycle.startProxyRuntime()
+
+                val listener = assertNotNull(boundListener)
+                Socket(TEST_LOOPBACK_HOST, listener.listenPort).use { socket ->
+                    socket.soTimeout = CLIENT_READ_TIMEOUT_MILLIS
+                    socket.getOutputStream().write(authenticatedBrowserConnectRequestBytes())
+                    socket.getOutputStream().flush()
+
+                    assertEquals(
+                        "HTTP/1.1 200 Connection Established",
+                        socket.getInputStream().readAsciiLine(),
+                    )
+                    assertEquals("", socket.getInputStream().readAsciiLine())
+
+                    socket.getOutputStream().write("client tunnel ".toByteArray(Charsets.US_ASCII))
+                    socket.getOutputStream().flush()
+                    socket.getOutputStream().write("bytes".toByteArray(Charsets.US_ASCII))
+                    socket.getOutputStream().flush()
+
+                    assertEquals(
+                        "origin tunnel bytes",
+                        socket.getInputStream().readRemainingAscii(),
+                    )
+                }
+
+                assertEquals(
+                    BoundConnectCall(RouteTarget.Cellular, "origin.example.test", 443, 30_000),
+                    provider.awaitCall(),
+                )
+                assertEquals("client tunnel bytes", origin.awaitReceivedBytes())
+                assertNull(origin.failure.get())
+            } finally {
+                lifecycle.close()
+                acceptLoopExecutor.shutdownNow()
+                workerExecutor.shutdownNow()
+                queuedClientTimeoutExecutor.shutdownNow()
+                assertTrue(acceptLoopExecutor.awaitTermination(1, TimeUnit.SECONDS))
+                assertTrue(workerExecutor.awaitTermination(1, TimeUnit.SECONDS))
+                assertTrue(queuedClientTimeoutExecutor.awaitTermination(1, TimeUnit.SECONDS))
+            }
+        }
+    }
+
+    @Test
     fun `created lifecycle can compose real route-bound socket provider from observed networks`() {
         val acceptLoopExecutor = Executors.newSingleThreadExecutor()
         val workerExecutor = Executors.newCachedThreadPool()
@@ -1724,6 +1803,21 @@ class ProxyServerForegroundRuntimeLifecycleFactoryTest {
         return (
             "CONNECT origin.example.test:18443 HTTP/1.1\r\n" +
                 "Host: origin.example.test:18443\r\n" +
+                "Proxy-Authorization: Basic $credentials\r\n" +
+                "\r\n"
+        ).toByteArray(Charsets.US_ASCII)
+    }
+
+    private fun authenticatedBrowserConnectRequestBytes(): ByteArray {
+        val credentials =
+            Base64
+                .getEncoder()
+                .encodeToString("proxy-user:proxy-password".toByteArray(Charsets.UTF_8))
+        return (
+            "CONNECT origin.example.test:443 HTTP/1.1\r\n" +
+                "Host: origin.example.test:443\r\n" +
+                "User-Agent: BrowserProxyProbe/1.0\r\n" +
+                "Proxy-Connection: keep-alive\r\n" +
                 "Proxy-Authorization: Basic $credentials\r\n" +
                 "\r\n"
         ).toByteArray(Charsets.US_ASCII)

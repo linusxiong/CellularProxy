@@ -166,15 +166,14 @@ class ProxyRotationConnectionDrainCoordinatorTest {
         assertEquals(RotationState.DrainingConnections, controlPlane.currentStatus.state)
     }
 
-    private fun drainingControlPlane(): RotationControlPlane =
-        RotationControlPlane(
-            initialStatus =
-                RotationStatus(
-                    state = RotationState.DrainingConnections,
-                    operation = RotationOperation.MobileData,
-                    oldPublicIp = "198.51.100.10",
-                ),
-        )
+    private fun drainingControlPlane(): RotationControlPlane = RotationControlPlane(
+        initialStatus =
+            RotationStatus(
+                state = RotationState.DrainingConnections,
+                operation = RotationOperation.MobileData,
+                oldPublicIp = "198.51.100.10",
+            ),
+    )
 
     private class LockRecordingActiveProxyExchanges(
         private val controlPlane: RotationControlPlane,

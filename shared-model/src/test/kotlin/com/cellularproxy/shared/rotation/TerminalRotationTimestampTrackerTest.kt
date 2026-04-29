@@ -201,29 +201,26 @@ class TerminalRotationTimestampTrackerTest {
         }
     }
 
-    private fun acceptedCompletedTransition(): RotationTransitionResult =
-        RotationTransitionResult(
-            disposition = RotationTransitionDisposition.Accepted,
-            status = completedStatus(),
-        )
+    private fun acceptedCompletedTransition(): RotationTransitionResult = RotationTransitionResult(
+        disposition = RotationTransitionDisposition.Accepted,
+        status = completedStatus(),
+    )
 
-    private fun acceptedFailedTransition(reason: RotationFailureReason): RotationTransitionResult =
-        RotationTransitionResult(
-            disposition = RotationTransitionDisposition.Accepted,
-            status =
-                RotationStatus(
-                    state = RotationState.Failed,
-                    operation = RotationOperation.MobileData,
-                    failureReason = reason,
-                ),
-        )
+    private fun acceptedFailedTransition(reason: RotationFailureReason): RotationTransitionResult = RotationTransitionResult(
+        disposition = RotationTransitionDisposition.Accepted,
+        status =
+            RotationStatus(
+                state = RotationState.Failed,
+                operation = RotationOperation.MobileData,
+                failureReason = reason,
+            ),
+    )
 
-    private fun completedStatus(): RotationStatus =
-        RotationStatus(
-            state = RotationState.Completed,
-            operation = RotationOperation.MobileData,
-            oldPublicIp = "198.51.100.10",
-            newPublicIp = "198.51.100.11",
-            publicIpChanged = true,
-        )
+    private fun completedStatus(): RotationStatus = RotationStatus(
+        state = RotationState.Completed,
+        operation = RotationOperation.MobileData,
+        oldPublicIp = "198.51.100.10",
+        newPublicIp = "198.51.100.11",
+        publicIpChanged = true,
+    )
 }
