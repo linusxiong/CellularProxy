@@ -22,12 +22,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.ManagementApiAuditOutcome
@@ -36,6 +38,7 @@ import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.audit.PersistedManagementApiAuditRecord
 import com.cellularproxy.app.audit.PersistedRootCommandAuditRecord
 import com.cellularproxy.app.service.ForegroundServiceAuditOutcome
+import com.cellularproxy.app.viewmodel.LogsAuditViewModel
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.logging.LogRedactor
 import com.cellularproxy.shared.root.RootCommandAuditPhase
@@ -53,37 +56,32 @@ internal fun CellularProxyLogsAuditRoute(
     val currentRedactionSecretsProvider by rememberUpdatedState(redactionSecretsProvider)
     val observedRows = logsAuditRowsProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
-    val controller =
-        remember {
-            LogsAuditScreenController(
-                rowsProvider = { currentRowsProvider() },
-                secretsProvider = { currentRedactionSecretsProvider() },
-                exportSupported = true,
-                exportGeneratedAtEpochMillisProvider = System::currentTimeMillis,
-                auditOccurredAtEpochMillisProvider = System::currentTimeMillis,
-                auditActionsEnabled = true,
-                maxRows = LOGS_AUDIT_VISIBLE_ROW_LIMIT,
-                loadInitialState = false,
-            )
-        }
-    var screenState by remember { mutableStateOf(controller.state) }
+    val logsAuditViewModel =
+        viewModel<LogsAuditViewModel>(
+            factory =
+                remember {
+                    LogsAuditViewModelFactory(
+                        rowsProvider = { currentRowsProvider() },
+                        secretsProvider = { currentRedactionSecretsProvider() },
+                    )
+                },
+        )
+    val screenState by logsAuditViewModel.state.collectAsStateWithLifecycle()
     val dispatchEvent: (LogsAuditScreenEvent) -> Unit = { event ->
-        controller.handle(event)
-        controller.consumeEffects().forEach { effect ->
+        logsAuditViewModel.handle(event)
+        logsAuditViewModel.consumeEffects().forEach { effect ->
             when (effect) {
                 is LogsAuditScreenEffect.CopyText -> onCopyLogsAuditText(effect.text)
                 is LogsAuditScreenEffect.ExportBundle -> onExportLogsAuditBundle(effect.bundle)
                 is LogsAuditScreenEffect.RecordAuditAction -> onRecordLogsAuditAction(effect.record)
             }
         }
-        screenState = controller.state
     }
     LaunchedEffect(
         observedRows,
         observedRedactionSecrets,
     ) {
-        controller.handle(LogsAuditScreenEvent.Refresh)
-        screenState = controller.state
+        logsAuditViewModel.handle(LogsAuditScreenEvent.Refresh)
     }
 
     CellularProxyLogsAuditScreen(
@@ -99,6 +97,23 @@ internal fun CellularProxyLogsAuditRoute(
 }
 
 private const val LOGS_AUDIT_VISIBLE_ROW_LIMIT = 200
+
+private class LogsAuditViewModelFactory(
+    private val rowsProvider: () -> List<LogsAuditScreenInputRow>,
+    private val secretsProvider: () -> LogRedactionSecrets,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = LogsAuditViewModel(
+        rowsProvider = rowsProvider,
+        secretsProvider = secretsProvider,
+        exportSupported = true,
+        exportGeneratedAtEpochMillisProvider = System::currentTimeMillis,
+        auditOccurredAtEpochMillisProvider = System::currentTimeMillis,
+        auditActionsEnabled = true,
+        maxRows = LOGS_AUDIT_VISIBLE_ROW_LIMIT,
+        loadInitialState = false,
+    ) as T
+}
 
 @Composable
 internal fun CellularProxyLogsAuditScreen(

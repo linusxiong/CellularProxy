@@ -2336,6 +2336,11 @@ class ComposeAppShellContractTest {
             "Logs/Audit route must own the tested screen controller.",
         )
         assertTrue(
+            logsAuditSource.contains("viewModel<LogsAuditViewModel>") &&
+                logsAuditSource.contains("collectAsStateWithLifecycle()"),
+            "Logs/Audit route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
+        )
+        assertTrue(
             logsAuditSource.contains("val observedRows = logsAuditRowsProvider()") &&
                 logsAuditSource.contains("val observedRedactionSecrets = redactionSecretsProvider()") &&
                 logsAuditSource.contains("LaunchedEffect(") &&
