@@ -11,9 +11,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import com.cellularproxy.app.config.SensitiveConfig
+import com.cellularproxy.app.config.SensitiveConfigLoadResult
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.ProxyConfig
+import com.cellularproxy.shared.proxy.ProxyCredential
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -106,4 +110,63 @@ class CellularProxySettingsRouteSmokeTest {
             .assertIsNotEnabled()
         assertEquals(8080, configState.value.proxy.listenPort)
     }
+
+    @Test
+    fun routeSavesSensitiveCloudflareTokenAndReloadsPresenceState() {
+        val tunnelToken = validCloudflareTunnelToken()
+        val configState = mutableStateOf(AppConfig.default())
+        val sensitiveConfigState = mutableStateOf(sensitiveConfig())
+
+        composeRule.setContent {
+            MaterialTheme {
+                CellularProxySettingsRoute(
+                    initialConfigProvider = { configState.value },
+                    saveConfig = { config -> configState.value = config },
+                    loadSensitiveConfigResult = { SensitiveConfigLoadResult.Loaded(sensitiveConfigState.value) },
+                    saveSensitiveConfig = { config -> sensitiveConfigState.value = config },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText("Tunnel token status: Missing")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeRule
+            .onNode(hasText("Cloudflare tunnel token") and hasSetTextAction())
+            .performScrollTo()
+            .performTextReplacement(tunnelToken)
+        composeRule
+            .onNodeWithText("Tunnel token status: Edited")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Save settings")
+            .performScrollTo()
+            .performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            sensitiveConfigState.value.cloudflareTunnelToken == tunnelToken &&
+                configState.value.cloudflare.tunnelTokenPresent
+        }
+
+        assertEquals(tunnelToken, sensitiveConfigState.value.cloudflareTunnelToken)
+        assertTrue(configState.value.cloudflare.tunnelTokenPresent)
+        composeRule
+            .onNodeWithText("Tunnel token status: Present")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText("Save settings")
+            .performScrollTo()
+            .assertIsNotEnabled()
+    }
 }
+
+private fun sensitiveConfig(): SensitiveConfig = SensitiveConfig(
+    proxyCredential = ProxyCredential(username = "proxy-user", password = "proxy-pass"),
+    managementApiToken = "management-token",
+)
+
+private fun validCloudflareTunnelToken(): String = "eyJhIjoiYWNjb3VudC10YWciLCJzIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QT0iLCJ0IjoiMTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAwIn0="
