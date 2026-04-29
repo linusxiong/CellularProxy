@@ -238,41 +238,44 @@ class ProxySettingsFormControllerTest {
     }
 
     @Test
-    fun `complete required sensitive edits repair invalid sensitive storage`() {
-        val savedConfigs = mutableListOf<AppConfig>()
-        val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
-        val controller =
-            ProxySettingsFormController(
-                loadConfig = AppConfig::default,
-                saveConfig = savedConfigs::add,
-                loadSensitiveConfigResult = {
-                    SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
-                },
-                saveSensitiveConfig = savedSensitiveConfigs::add,
-            )
+    fun `complete required sensitive edits repair invalid or missing sensitive storage`() {
+        listOf(
+            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret),
+            SensitiveConfigLoadResult.MissingRequiredSecrets,
+        ).forEach { loadResult ->
+            val savedConfigs = mutableListOf<AppConfig>()
+            val savedSensitiveConfigs = mutableListOf<SensitiveConfig>()
+            val controller =
+                ProxySettingsFormController(
+                    loadConfig = AppConfig::default,
+                    saveConfig = savedConfigs::add,
+                    loadSensitiveConfigResult = { loadResult },
+                    saveSensitiveConfig = savedSensitiveConfigs::add,
+                )
 
-        val result =
-            controller.save(
-                ProxySettingsFormState
-                    .from(
-                        config = AppConfig.default(),
-                        sensitiveConfigInvalid = true,
-                    ).copy(
-                        proxyUsername = "replacement-user",
-                        proxyPassword = "replacement-pass",
-                        managementApiToken = "replacement-management-token",
-                    ),
-            )
+            val result =
+                controller.save(
+                    ProxySettingsFormState
+                        .from(
+                            config = AppConfig.default(),
+                            sensitiveConfigInvalid = loadResult is SensitiveConfigLoadResult.Invalid,
+                        ).copy(
+                            proxyUsername = "replacement-user",
+                            proxyPassword = "replacement-pass",
+                            managementApiToken = "replacement-management-token",
+                        ),
+                )
 
-        val saved = result as ProxySettingsSaveResult.Saved
-        assertEquals(
-            ProxyCredential(username = "replacement-user", password = "replacement-pass"),
-            saved.sensitiveConfig?.proxyCredential,
-        )
-        assertEquals("replacement-management-token", saved.sensitiveConfig?.managementApiToken)
-        assertEquals(null, saved.sensitiveConfig?.cloudflareTunnelToken)
-        assertEquals(listOf(saved.config), savedConfigs)
-        assertEquals(listOf(saved.sensitiveConfig), savedSensitiveConfigs)
+            val saved = result as ProxySettingsSaveResult.Saved
+            assertEquals(
+                ProxyCredential(username = "replacement-user", password = "replacement-pass"),
+                saved.sensitiveConfig?.proxyCredential,
+            )
+            assertEquals("replacement-management-token", saved.sensitiveConfig?.managementApiToken)
+            assertEquals(null, saved.sensitiveConfig?.cloudflareTunnelToken)
+            assertEquals(listOf(saved.config), savedConfigs)
+            assertEquals(listOf(saved.sensitiveConfig), savedSensitiveConfigs)
+        }
     }
 
     private fun assertSensitiveEditSaveReportsInvalidSensitiveStorage(loadResult: SensitiveConfigLoadResult) {
