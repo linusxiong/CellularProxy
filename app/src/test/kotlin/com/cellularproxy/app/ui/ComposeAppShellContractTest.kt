@@ -591,18 +591,21 @@ class ComposeAppShellContractTest {
             repoRoot()
                 .resolve("app/src/main/kotlin/com/cellularproxy/app/ui/CellularProxyDashboardScreen.kt")
                 .readText()
+        val availableActions =
+            DashboardScreenState
+                .from(
+                    DashboardStatusModel.from(
+                        config = AppConfig.default(),
+                        status = ProxyServiceStatus.stopped(),
+                    ),
+                ).availableActions
 
         assertTrue(
             dashboardSource.contains("R.string.dashboard_open_rotation"),
             "Dashboard must render a fixed Rotation entry because Rotation is no longer a standalone tab.",
         )
         assertTrue(
-            DashboardScreenAction.OpenRotation in DashboardScreenState.from(
-                DashboardStatusModel.from(
-                    config = AppConfig.default(),
-                    status = ProxyServiceStatus.stopped(),
-                ),
-            ).availableActions,
+            DashboardScreenAction.OpenRotation in availableActions,
             "Dashboard screen state must keep the Rotation navigation action available.",
         )
     }
