@@ -79,7 +79,7 @@ class CloudflareE2eValidationEvidence private constructor(
             durationMillis = durationMillis,
             edgeSessionCategory = edgeSessionCategory,
             httpStatusCode = httpStatusCode,
-            errorClass = throwable.javaClass.simpleName.ifBlank { throwable.javaClass.name },
+            errorClass = CloudflareE2eErrorClass.Unknown.summaryLabel,
         )
     }
 }

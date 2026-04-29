@@ -106,7 +106,7 @@ class CloudflareE2eValidationControllerTest {
     }
 
     @Test
-    fun `validator exceptions become throwable-class failure evidence without details`() {
+    fun `validator exceptions become bounded unknown failure evidence without details`() {
         val controller =
             CloudflareE2eValidationController(
                 elapsedRealtimeMillis = { 0L },
@@ -126,11 +126,12 @@ class CloudflareE2eValidationControllerTest {
 
         assertEquals(
             "Cloudflare e2e validation failed: durationMs=0, edgeSession=not recorded, " +
-                "httpStatus=not recorded, errorClass=IllegalStateException",
+                "httpStatus=not recorded, errorClass=unknown",
             evidence.safeSummary,
         )
         assertFalse(evidence.safeSummary.contains("management-secret"))
         assertFalse(evidence.safeSummary.contains("Authorization"))
+        assertFalse(evidence.safeSummary.contains("IllegalStateException"))
         assertFalse(evidence.safeSummary.contains(validTunnelToken))
     }
 

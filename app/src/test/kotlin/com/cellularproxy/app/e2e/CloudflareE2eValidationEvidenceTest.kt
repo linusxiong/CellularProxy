@@ -42,7 +42,7 @@ class CloudflareE2eValidationEvidenceTest {
     }
 
     @Test
-    fun `failure from throwable records only throwable class name`() {
+    fun `failure from throwable records bounded unknown error class`() {
         val evidence =
             CloudflareE2eValidationEvidence.failure(
                 durationMillis = 10,
@@ -52,11 +52,12 @@ class CloudflareE2eValidationEvidenceTest {
             )
 
         assertEquals(
-            "Cloudflare e2e validation failed: durationMs=10, edgeSession=not recorded, httpStatus=not recorded, errorClass=IllegalStateException",
+            "Cloudflare e2e validation failed: durationMs=10, edgeSession=not recorded, httpStatus=not recorded, errorClass=unknown",
             evidence.safeSummary,
         )
         assertFalse(evidence.safeSummary.contains("management-secret"))
         assertFalse(evidence.safeSummary.contains("Authorization"))
+        assertFalse(evidence.safeSummary.contains("IllegalStateException"))
     }
 
     @Test
