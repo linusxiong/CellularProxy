@@ -464,15 +464,17 @@ class ProxySettingsFormController(
                         when (val loadResult = loadSensitiveConfigForSave()) {
                             is SensitiveConfigLoadResult.Loaded -> loadResult.config
                             SensitiveConfigLoadResult.MissingRequiredSecrets ->
-                                return ProxySettingsSaveResult.Invalid(
-                                    errors = emptyList(),
-                                    invalidSensitiveConfiguration = true,
-                                )
+                                form.replacementSensitiveConfigOrNull()
+                                    ?: return ProxySettingsSaveResult.Invalid(
+                                        errors = emptyList(),
+                                        invalidSensitiveConfiguration = true,
+                                    )
                             is SensitiveConfigLoadResult.Invalid ->
-                                return ProxySettingsSaveResult.Invalid(
-                                    errors = emptyList(),
-                                    invalidSensitiveConfiguration = true,
-                                )
+                                form.replacementSensitiveConfigOrNull()
+                                    ?: return ProxySettingsSaveResult.Invalid(
+                                        errors = emptyList(),
+                                        invalidSensitiveConfiguration = true,
+                                    )
                             null -> null
                         }
                     } else {
@@ -802,6 +804,25 @@ private fun ProxySettingsFormState.hasInvalidManagementApiTokenEdit(): Boolean =
 
 private fun ProxySettingsFormState.hasInvalidCloudflareTunnelTokenEdit(): Boolean = cloudflareTunnelToken.isNotEmpty() &&
     cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit()
+
+private fun ProxySettingsFormState.replacementSensitiveConfigOrNull(): SensitiveConfig? {
+    if (proxyUsername.isEmpty() || proxyPassword.isEmpty() || managementApiToken.isEmpty()) {
+        return null
+    }
+    if (hasInvalidProxyCredentialEdit() || hasInvalidManagementApiTokenEdit() || hasInvalidCloudflareTunnelTokenEdit()) {
+        return null
+    }
+
+    return SensitiveConfig(
+        proxyCredential =
+            ProxyCredential(
+                username = proxyUsername,
+                password = proxyPassword,
+            ),
+        managementApiToken = managementApiToken,
+        cloudflareTunnelToken = cloudflareTunnelToken.ifBlank { null },
+    )
+}
 
 private fun ProxySettingsFormState.validationErrors(): Set<ProxySettingsValidationError> = buildSet {
     if (
