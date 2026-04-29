@@ -141,6 +141,119 @@ class ProxySettingsFormModelTest {
     }
 
     @Test
+    fun `settings screen state exposes safe proxy credential and management token statuses`() {
+        val missingForm = ProxySettingsFormState.from(AppConfig.default())
+        val presentForm =
+            ProxySettingsFormState.from(
+                AppConfig.default(),
+                sensitiveConfig = sensitiveConfig("management-token"),
+            )
+        val editedForm =
+            missingForm.copy(
+                proxyUsername = "new-user",
+                proxyPassword = "new-password",
+                managementApiToken = "new-management-token",
+            )
+        val invalidCredentialForm =
+            missingForm.copy(
+                proxyUsername = "new-user",
+            )
+        val invalidManagementTokenForm =
+            missingForm.copy(
+                managementApiToken = " new-management-token ",
+            )
+
+        assertEquals(
+            ProxySettingsSecretStatus.Missing,
+            ProxySettingsScreenState
+                .from(form = missingForm, persistedForm = missingForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Missing,
+            ProxySettingsScreenState
+                .from(form = missingForm, persistedForm = missingForm)
+                .managementApiTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Present,
+            ProxySettingsScreenState
+                .from(form = presentForm, persistedForm = presentForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Present,
+            ProxySettingsScreenState
+                .from(form = presentForm, persistedForm = presentForm)
+                .managementApiTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Edited,
+            ProxySettingsScreenState
+                .from(form = editedForm, persistedForm = missingForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Edited,
+            ProxySettingsScreenState
+                .from(form = editedForm, persistedForm = missingForm)
+                .managementApiTokenStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Invalid,
+            ProxySettingsScreenState
+                .from(form = invalidCredentialForm, persistedForm = missingForm)
+                .proxyCredentialStatus,
+        )
+        assertEquals(
+            ProxySettingsSecretStatus.Invalid,
+            ProxySettingsScreenState
+                .from(form = invalidManagementTokenForm, persistedForm = missingForm)
+                .managementApiTokenStatus,
+        )
+    }
+
+    @Test
+    fun `settings controller exposes invalid secret statuses when sensitive storage is invalid`() {
+        val controller =
+            ProxySettingsScreenController(
+                initialConfigProvider = AppConfig::default,
+                formController =
+                    ProxySettingsFormController(
+                        loadConfig = AppConfig::default,
+                        saveConfig = {},
+                        loadSensitiveConfigResult = {
+                            SensitiveConfigLoadResult.Invalid(SensitiveConfigInvalidReason.UndecryptableSecret)
+                        },
+                    ),
+            )
+
+        assertEquals(ProxySettingsSecretStatus.Invalid, controller.state.proxyCredentialStatus)
+        assertEquals(ProxySettingsSecretStatus.Invalid, controller.state.managementApiTokenStatus)
+        assertEquals(ProxySettingsCloudflareTokenStatus.Invalid, controller.state.cloudflareTokenStatus)
+    }
+
+    @Test
+    fun `settings controller does not load legacy save-time sensitive callback for display status`() {
+        var loadSensitiveConfigCalled = false
+
+        ProxySettingsScreenController(
+            initialConfigProvider = AppConfig::default,
+            formController =
+                ProxySettingsFormController(
+                    loadConfig = AppConfig::default,
+                    saveConfig = {},
+                    loadSensitiveConfig = {
+                        loadSensitiveConfigCalled = true
+                        sensitiveConfig("management-token")
+                    },
+                ),
+        )
+
+        assertFalse(loadSensitiveConfigCalled)
+    }
+
+    @Test
     fun `settings screen state exposes visible warnings for risky current form`() {
         val persisted = ProxySettingsFormState.from(AppConfig.default())
         val cloudflareMissingTokenForm =

@@ -186,6 +186,10 @@ internal fun CellularProxySettingsScreen(
                 text = "Leave secret fields blank to keep current values.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Text(
+                text = "Proxy credential status: ${state.proxyCredentialStatus.label}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
             SettingsTextField(
                 label = "Proxy username",
                 value = currentForm.proxyUsername,
@@ -197,6 +201,10 @@ internal fun CellularProxySettingsScreen(
                 keyboardType = KeyboardType.Password,
                 visualTransformation = PasswordVisualTransformation(),
                 onValueChange = { value -> onFormChange(currentForm.copy(proxyPassword = value)) },
+            )
+            Text(
+                text = "Management API token status: ${state.managementApiTokenStatus.label}",
+                style = MaterialTheme.typography.bodyMedium,
             )
             SettingsTextField(
                 label = "Management API token",

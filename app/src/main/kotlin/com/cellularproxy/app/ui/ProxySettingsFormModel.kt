@@ -32,7 +32,10 @@ data class ProxySettingsFormState(
     val cloudflareEnabled: Boolean = false,
     val cloudflareTunnelToken: String = "",
     val cloudflareHostnameLabel: String = "",
+    val proxyCredentialPresent: Boolean = false,
+    val managementApiTokenPresent: Boolean = false,
     val cloudflareTunnelTokenPresent: Boolean = false,
+    val sensitiveConfigInvalid: Boolean = false,
 ) {
     fun toAppConfig(base: AppConfig): ProxySettingsFormResult = toSettings(
         base = base,
@@ -186,7 +189,11 @@ data class ProxySettingsFormState(
     )
 
     companion object {
-        fun from(config: AppConfig): ProxySettingsFormState = ProxySettingsFormState(
+        fun from(
+            config: AppConfig,
+            sensitiveConfig: SensitiveConfig? = null,
+            sensitiveConfigInvalid: Boolean = false,
+        ): ProxySettingsFormState = ProxySettingsFormState(
             listenHost = config.proxy.listenHost,
             listenPort = config.proxy.listenPort.toString(),
             authEnabled = config.proxy.authEnabled,
@@ -205,7 +212,12 @@ data class ProxySettingsFormState(
             rootOperationsEnabled = config.root.operationsEnabled,
             cloudflareEnabled = config.cloudflare.enabled,
             cloudflareHostnameLabel = config.cloudflare.managementHostnameLabel.orEmpty(),
-            cloudflareTunnelTokenPresent = config.cloudflare.tunnelTokenPresent,
+            proxyCredentialPresent = sensitiveConfig?.proxyCredential != null,
+            managementApiTokenPresent = sensitiveConfig?.managementApiToken?.isNotBlank() == true,
+            cloudflareTunnelTokenPresent =
+                sensitiveConfig?.cloudflareTunnelToken?.isNotBlank() == true ||
+                    config.cloudflare.tunnelTokenPresent,
+            sensitiveConfigInvalid = sensitiveConfigInvalid,
         )
     }
 }
@@ -215,6 +227,8 @@ data class ProxySettingsScreenState(
     val persistedForm: ProxySettingsFormState,
     val validationErrors: Set<ProxySettingsValidationError>,
     val availableActions: List<ProxySettingsScreenAction>,
+    val proxyCredentialStatus: ProxySettingsSecretStatus,
+    val managementApiTokenStatus: ProxySettingsSecretStatus,
     val cloudflareTokenStatus: ProxySettingsCloudflareTokenStatus,
     val warnings: Set<ProxySettingsFormWarning>,
 ) {
@@ -238,6 +252,8 @@ data class ProxySettingsScreenState(
                             add(ProxySettingsScreenAction.DiscardChanges)
                         }
                     },
+                proxyCredentialStatus = form.proxyCredentialStatus(),
+                managementApiTokenStatus = form.managementApiTokenStatus(),
                 cloudflareTokenStatus = form.cloudflareTokenStatus(),
                 warnings = form.warnings(),
             )
@@ -246,6 +262,15 @@ data class ProxySettingsScreenState(
 }
 
 enum class ProxySettingsCloudflareTokenStatus(
+    val label: String,
+) {
+    Missing("Missing"),
+    Present("Present"),
+    Edited("Edited"),
+    Invalid("Invalid"),
+}
+
+enum class ProxySettingsSecretStatus(
     val label: String,
 ) {
     Missing("Missing"),
@@ -326,6 +351,14 @@ private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
 ): ProxySettingsFormState = copy(
     cloudflareEnabled = editedForm.cloudflareEnabled,
     cloudflareHostnameLabel = editedForm.cloudflareHostnameLabel,
+    proxyCredentialPresent =
+        proxyCredentialPresent ||
+            savedSensitiveConfig?.proxyCredential != null ||
+            editedForm.proxyCredentialPresent,
+    managementApiTokenPresent =
+        managementApiTokenPresent ||
+            savedSensitiveConfig?.managementApiToken?.isNotBlank() == true ||
+            editedForm.managementApiTokenPresent,
     cloudflareTunnelTokenPresent =
         cloudflareTunnelTokenPresent ||
             savedSensitiveConfig
@@ -333,7 +366,24 @@ private fun ProxySettingsFormState.withEditedCloudflareFieldsFrom(
                 ?.isNotBlank() == true,
 )
 
+private fun ProxySettingsFormState.proxyCredentialStatus(): ProxySettingsSecretStatus = when {
+    sensitiveConfigInvalid -> ProxySettingsSecretStatus.Invalid
+    hasInvalidProxyCredentialEdit() -> ProxySettingsSecretStatus.Invalid
+    proxyUsername.isNotEmpty() || proxyPassword.isNotEmpty() -> ProxySettingsSecretStatus.Edited
+    proxyCredentialPresent -> ProxySettingsSecretStatus.Present
+    else -> ProxySettingsSecretStatus.Missing
+}
+
+private fun ProxySettingsFormState.managementApiTokenStatus(): ProxySettingsSecretStatus = when {
+    sensitiveConfigInvalid -> ProxySettingsSecretStatus.Invalid
+    hasInvalidManagementApiTokenEdit() -> ProxySettingsSecretStatus.Invalid
+    managementApiToken.isNotEmpty() -> ProxySettingsSecretStatus.Edited
+    managementApiTokenPresent -> ProxySettingsSecretStatus.Present
+    else -> ProxySettingsSecretStatus.Missing
+}
+
 private fun ProxySettingsFormState.cloudflareTokenStatus(): ProxySettingsCloudflareTokenStatus = when {
+    sensitiveConfigInvalid -> ProxySettingsCloudflareTokenStatus.Invalid
     cloudflareTunnelToken.isNotEmpty() && cloudflareTunnelToken.isInvalidCloudflareTunnelTokenEdit() ->
         ProxySettingsCloudflareTokenStatus.Invalid
     cloudflareTunnelToken.isNotEmpty() -> ProxySettingsCloudflareTokenStatus.Edited
@@ -348,6 +398,11 @@ private fun ProxySettingsFormState.requiresSensitiveConfig(base: AppConfig): Boo
     cloudflareEnabled != base.cloudflare.enabled ||
     cloudflareHostnameLabel.trim() != base.cloudflare.managementHostnameLabel.orEmpty()
 
+data class SensitiveConfigDisplayState(
+    val sensitiveConfig: SensitiveConfig? = null,
+    val sensitiveConfigInvalid: Boolean = false,
+)
+
 class ProxySettingsFormController(
     private val loadConfig: () -> AppConfig,
     private val saveConfig: (AppConfig) -> Unit,
@@ -359,6 +414,13 @@ class ProxySettingsFormController(
     private val saveSensitiveConfigProvider: () -> ((SensitiveConfig) -> Unit)? = { saveSensitiveConfig },
 ) {
     fun loadCurrentConfig(): AppConfig = loadConfig()
+
+    fun loadCurrentSensitiveConfigForDisplay(): SensitiveConfigDisplayState = when (val result = loadSensitiveConfigResultProvider()?.invoke()) {
+        is SensitiveConfigLoadResult.Loaded -> SensitiveConfigDisplayState(sensitiveConfig = result.config)
+        is SensitiveConfigLoadResult.Invalid -> SensitiveConfigDisplayState(sensitiveConfigInvalid = true)
+        SensitiveConfigLoadResult.MissingRequiredSecrets -> SensitiveConfigDisplayState()
+        null -> SensitiveConfigDisplayState()
+    }
 
     fun save(form: ProxySettingsFormState): ProxySettingsSaveResult {
         val baseConfig = loadConfig()
@@ -454,8 +516,7 @@ class ProxySettingsScreenController(
 ) {
     private val pendingEffects = mutableListOf<ProxySettingsScreenEffect>()
     var state: ProxySettingsScreenState =
-        ProxySettingsFormState
-            .from(initialConfigProvider())
+        initialForm(initialConfigProvider())
             .let { form ->
                 ProxySettingsScreenState.from(
                     form = form,
@@ -488,7 +549,7 @@ class ProxySettingsScreenController(
     }
 
     private fun refreshFromProvider() {
-        val form = ProxySettingsFormState.from(formController.loadCurrentConfig())
+        val form = initialForm(formController.loadCurrentConfig())
         if (state.form != state.persistedForm) {
             state =
                 ProxySettingsScreenState.from(
@@ -502,6 +563,15 @@ class ProxySettingsScreenController(
                 form = form,
                 persistedForm = form,
             )
+    }
+
+    private fun initialForm(config: AppConfig): ProxySettingsFormState {
+        val sensitiveConfigDisplay = formController.loadCurrentSensitiveConfigForDisplay()
+        return ProxySettingsFormState.from(
+            config = config,
+            sensitiveConfig = sensitiveConfigDisplay.sensitiveConfig,
+            sensitiveConfigInvalid = sensitiveConfigDisplay.sensitiveConfigInvalid,
+        )
     }
 
     private fun saveChanges() {
