@@ -6,11 +6,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.compose.rememberNavController
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.diagnostics.CloudflareManagementApiProbeResult
@@ -31,6 +33,7 @@ import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
 import com.cellularproxy.shared.root.RootAvailabilityStatus
 import com.cellularproxy.shared.rotation.RotationStatus
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -205,6 +208,80 @@ class CellularProxyAppNavigationSmokeTest {
         composeRule.onNodeWithText("Connected").assertIsDisplayed()
         composeRule.onNodeWithText("Remote management available").assertIsDisplayed()
         composeRule.onNodeWithText("Carrier LTE (Cellular, available)").assertIsDisplayed()
+    }
+
+    @Test
+    fun rotationCheckRootDispatchesRootStatusThroughNavigationHost() {
+        val dispatchedActions = mutableListOf<LocalManagementApiAction>()
+        val rootEnabledConfig =
+            AppConfig.default().copy(
+                root = RootConfig(operationsEnabled = true),
+            )
+
+        composeRule.setContent {
+            MaterialTheme {
+                val navController = rememberNavController()
+                Scaffold(
+                    bottomBar = {
+                        CellularProxyNavigationBar(navController)
+                    },
+                ) { contentPadding ->
+                    CellularProxyNavigationHost(
+                        navController = navController,
+                        onStartProxyService = {},
+                        onStopProxyService = {},
+                        onRestartProxyService = {},
+                        settingsInitialConfigProvider = { rootEnabledConfig },
+                        settingsSaveConfig = {},
+                        settingsLoadSensitiveConfig = ::sensitiveConfig,
+                        settingsSaveSensitiveConfig = {},
+                        logsAuditRowsProvider = { emptyList() },
+                        logsAuditRedactionSecretsProvider = {
+                            LogRedactionSecrets(
+                                managementApiToken = sensitiveConfig().managementApiToken,
+                                proxyCredential = sensitiveConfig().proxyCredential.canonicalBasicPayload(),
+                            )
+                        },
+                        proxyStatusProvider = {
+                            ProxyServiceStatus.stopped(
+                                configuredRoute = rootEnabledConfig.network.defaultRoutePolicy,
+                                rootAvailability = RootAvailabilityStatus.Available,
+                            )
+                        },
+                        recentTrafficProvider = { null },
+                        observedNetworksProvider = { emptyList() },
+                        cloudflareManagementRoundTripProvider = { null },
+                        latestCloudflareManagementApiCheck = DashboardCloudflareManagementApiCheck.NotRun,
+                        localManagementApiProbeResultProvider = { LocalManagementApiProbeResult.Unavailable },
+                        cloudflareManagementApiProbeResultProvider = { CloudflareManagementApiProbeResult.NotConfigured },
+                        onRefreshProxyStatus = {},
+                        dispatchLocalManagementApiAction = dispatchedActions::add,
+                        rotationStatusProvider = { RotationStatus.idle() },
+                        rotationCooldownRemainingSecondsProvider = { null },
+                        currentPublicIpProvider = { null },
+                        onCopyText = {},
+                        onExportLogsAuditBundle = {},
+                        onRecordLogsAuditAction = {},
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(contentPadding),
+                    )
+                }
+            }
+        }
+
+        composeRule.onNode(hasText("Rotation") and hasClickAction()).performClick()
+        composeRule
+            .onNodeWithText("Check root")
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            dispatchedActions.isNotEmpty()
+        }
+        assertEquals(listOf(LocalManagementApiAction.RootStatus), dispatchedActions)
     }
 
     private fun assertDestinationRenders(
