@@ -868,8 +868,9 @@ class ComposeAppShellContractTest {
             )
         }
         assertTrue(
-            settingsSource.contains("ProxySettingsScreenController("),
-            "Settings route must use the tested screen controller boundary.",
+            settingsSource.contains("viewModel<SettingsViewModel>") &&
+                settingsSource.contains("collectAsStateWithLifecycle()"),
+            "Settings route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
         )
         assertTrue(
             settingsSource.contains("initialConfigProvider: () -> AppConfig = AppConfig::default") &&
@@ -884,8 +885,8 @@ class ComposeAppShellContractTest {
             "Settings route controller must use the injected sensitive config callbacks.",
         )
         assertTrue(
-            settingsSource.contains("var screenState by remember { mutableStateOf(controller.state) }"),
-            "Settings route must mirror controller state into Compose state for recomposition.",
+            settingsSource.contains("SettingsViewModel("),
+            "Settings route ViewModel must preserve the tested screen controller boundary.",
         )
         assertTrue(
             settingsSource.contains("rememberUpdatedState(initialConfigProvider)") &&
@@ -907,8 +908,8 @@ class ComposeAppShellContractTest {
             "Settings route must send discard actions through the settings controller.",
         )
         assertTrue(
-            settingsSource.contains("controller.consumeEffects()"),
-            "Settings route must consume one-shot controller effects after dispatch.",
+            settingsSource.contains("settingsViewModel.consumeEffects()"),
+            "Settings route must consume one-shot ViewModel effects after dispatch.",
         )
         assertTrue(
             settingsSource.contains("ProxySettingsScreenEffect.RecordAuditAction") &&

@@ -21,17 +21,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfig
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
+import com.cellularproxy.app.viewmodel.SettingsViewModel
 import com.cellularproxy.shared.config.AppConfig
 import com.cellularproxy.shared.config.RouteTarget
 
@@ -51,25 +54,28 @@ internal fun CellularProxySettingsRoute(
     val currentSaveSensitiveConfig by rememberUpdatedState(saveSensitiveConfig)
     val currentOnRecordSettingsAuditAction by rememberUpdatedState(onRecordSettingsAuditAction)
     val observedConfig = initialConfigProvider()
-    val controller =
-        remember {
-            ProxySettingsScreenController(
-                initialConfigProvider = { currentInitialConfigProvider() },
-                formController =
-                    ProxySettingsFormController(
-                        loadConfig = { currentInitialConfigProvider() },
-                        saveConfig = { config -> currentSaveConfig(config) },
-                        loadSensitiveConfigProvider = { currentLoadSensitiveConfig },
-                        loadSensitiveConfigResultProvider = { currentLoadSensitiveConfigResult },
-                        saveSensitiveConfigProvider = { currentSaveSensitiveConfig },
-                    ),
-                auditActionsEnabled = true,
-            )
-        }
-    var screenState by remember { mutableStateOf(controller.state) }
+    val settingsViewModel =
+        viewModel<SettingsViewModel>(
+            factory =
+                remember {
+                    SettingsViewModelFactory(
+                        initialConfigProvider = { currentInitialConfigProvider() },
+                        formController =
+                            ProxySettingsFormController(
+                                loadConfig = { currentInitialConfigProvider() },
+                                saveConfig = { config -> currentSaveConfig(config) },
+                                loadSensitiveConfigProvider = { currentLoadSensitiveConfig },
+                                loadSensitiveConfigResultProvider = { currentLoadSensitiveConfigResult },
+                                saveSensitiveConfigProvider = { currentSaveSensitiveConfig },
+                            ),
+                        auditActionsEnabled = true,
+                    )
+                },
+        )
+    val screenState by settingsViewModel.state.collectAsStateWithLifecycle()
     val dispatchEvent: (ProxySettingsScreenEvent) -> Unit = { event ->
-        controller.handle(event)
-        controller.consumeEffects().forEach { effect ->
+        settingsViewModel.handle(event)
+        settingsViewModel.consumeEffects().forEach { effect ->
             when (effect) {
                 is ProxySettingsScreenEffect.RecordAuditAction -> currentOnRecordSettingsAuditAction(effect.record)
                 is ProxySettingsScreenEffect.SaveInvalid,
@@ -77,7 +83,6 @@ internal fun CellularProxySettingsRoute(
                 -> Unit
             }
         }
-        screenState = controller.state
     }
     LaunchedEffect(observedConfig) {
         dispatchEvent(ProxySettingsScreenEvent.Refresh)
@@ -90,6 +95,19 @@ internal fun CellularProxySettingsRoute(
         onSaveSettings = { dispatchEvent(ProxySettingsScreenEvent.SaveChanges) },
         onDiscardChanges = { dispatchEvent(ProxySettingsScreenEvent.DiscardChanges) },
     )
+}
+
+private class SettingsViewModelFactory(
+    private val initialConfigProvider: () -> AppConfig,
+    private val formController: ProxySettingsFormController,
+    private val auditActionsEnabled: Boolean,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = SettingsViewModel(
+        initialConfigProvider = initialConfigProvider,
+        formController = formController,
+        auditActionsEnabled = auditActionsEnabled,
+    ) as T
 }
 
 @Composable
