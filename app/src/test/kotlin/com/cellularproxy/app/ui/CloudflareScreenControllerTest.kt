@@ -342,6 +342,53 @@ class CloudflareScreenControllerTest {
     }
 
     @Test
+    fun `controller reports redacted action dispatch failure and keeps retry available`() {
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.stopped() },
+                tokenStatusProvider = { CloudflareTokenStatus.Present },
+                secrets = LogRedactionSecrets(cloudflareTunnelToken = "tunnel-secret"),
+                actionHandler = {
+                    throw IllegalStateException("edge rejected tunnel-secret")
+                },
+            )
+
+        controller.handle(CloudflareScreenEvent.StartTunnel)
+
+        assertEquals("None", controller.state.pendingOperation)
+        assertEquals("Start tunnel failed: edge rejected [REDACTED]", controller.state.lastActionFailure)
+        assertEquals("Try start tunnel again", controller.state.lastActionRecovery)
+        assertTrue(CloudflareScreenAction.StartTunnel in controller.state.availableActions)
+        assertTrue(controller.state.copyableDiagnostics.contains("Last action failure: Start tunnel failed"))
+        assertTrue(controller.state.copyableDiagnostics.contains("Last action recovery: Try start tunnel again"))
+        assertFalse(controller.state.copyableDiagnostics.contains("tunnel-secret"))
+    }
+
+    @Test
+    fun `controller refreshes redaction secrets before rendering action dispatch failure`() {
+        var secrets = LogRedactionSecrets()
+        val controller =
+            CloudflareScreenController(
+                configProvider = { enabledCloudflareConfig(tokenPresent = true) },
+                tunnelStatusProvider = { CloudflareTunnelStatus.stopped() },
+                tokenStatusProvider = { CloudflareTokenStatus.Present },
+                secretsProvider = { secrets },
+                actionHandler = {
+                    throw IllegalStateException("edge rejected fresh-secret")
+                },
+            )
+
+        controller.handle(CloudflareScreenEvent.StartTunnel)
+        secrets = LogRedactionSecrets(cloudflareTunnelToken = "fresh-secret")
+        controller.handle(CloudflareScreenEvent.CopyDiagnostics)
+
+        val copyText = (controller.consumeEffects().single() as CloudflareScreenEffect.CopyText).text
+        assertTrue(copyText.contains("Start tunnel failed: edge rejected [REDACTED]"))
+        assertFalse(copyText.contains("fresh-secret"))
+    }
+
+    @Test
     fun `controller emits redacted diagnostics copy effect once`() {
         val controller =
             CloudflareScreenController(
@@ -450,9 +497,26 @@ class CloudflareScreenControllerTest {
 
         assertEquals("edge-session-timeout", state.lastConnectionError)
         assertEquals("Local proxy remains usable", state.localProxyImpact)
+        assertEquals("Try starting the Cloudflare tunnel again", state.recoveryAction)
         assertTrue(state.copyableDiagnostics.contains("Last connection error: edge-session-timeout"))
         assertTrue(state.copyableDiagnostics.contains("Local proxy impact: Local proxy remains usable"))
+        assertTrue(state.copyableDiagnostics.contains("Recovery action: Try starting the Cloudflare tunnel again"))
         assertFalse(state.copyableDiagnostics.contains("tunnel-secret"))
+    }
+
+    @Test
+    fun `degraded tunnel exposes remote management impact and reconnect recovery action`() {
+        val state =
+            CloudflareScreenState.from(
+                config = enabledCloudflareConfig(tokenPresent = true),
+                tunnelStatus = CloudflareTunnelStatus.degraded(),
+                tokenStatus = CloudflareTokenStatus.Present,
+            )
+
+        assertEquals("Remote management may be unreliable", state.localProxyImpact)
+        assertEquals("Try reconnecting the Cloudflare tunnel", state.recoveryAction)
+        assertTrue(state.copyableDiagnostics.contains("Local proxy impact: Remote management may be unreliable"))
+        assertTrue(state.copyableDiagnostics.contains("Recovery action: Try reconnecting the Cloudflare tunnel"))
     }
 
     @Test

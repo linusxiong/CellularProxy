@@ -103,7 +103,8 @@ object DiagnosticChecks {
     }
 
     fun cloudflareTunnel(status: () -> CloudflareTunnelStatus): DiagnosticCheck = DiagnosticCheck {
-        when (status().state) {
+        val currentStatus = status()
+        when (currentStatus.state) {
             CloudflareTunnelState.Disabled ->
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Warning,
@@ -137,7 +138,7 @@ object DiagnosticChecks {
                 DiagnosticCheckResult(
                     status = DiagnosticResultStatus.Failed,
                     errorCategory = "cloudflare-failed",
-                    details = "Cloudflare tunnel failed",
+                    details = currentStatus.failureDetails(),
                 )
         }
     }
@@ -313,6 +314,11 @@ private fun ProxyStartupError?.toProxyBindStartupBlockedResult(): DiagnosticChec
     errorCategory = "proxy-startup-blocked",
     details = "Proxy startup blocked before bind: $this",
 )
+
+private fun CloudflareTunnelStatus.failureDetails(): String = failureReason
+    ?.takeIf(String::isNotBlank)
+    ?.let { reason -> "Cloudflare tunnel failed: $reason" }
+    ?: "Cloudflare tunnel failed"
 
 private val RouteTarget.label: String
     get() =

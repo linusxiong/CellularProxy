@@ -25,6 +25,38 @@ class CloudflareLocalManagementRequest(
     val body: ByteArray
         get() = bodyBytes.copyOf()
 
+    init {
+        require(
+            CloudflareManagementIngressPolicy.evaluate(
+                ManagementIngressRequest.OriginForm(method = method, path = originTarget),
+            ) == CloudflareIngressDecision.Forward,
+        ) {
+            "Cloudflare forwarded management requests must target allowed management paths"
+        }
+        require(originTarget.isOriginFormTarget()) {
+            "Cloudflare forwarded management request targets must be valid origin-form paths"
+        }
+        require(!this.headers.containsRequestHeader(TRANSFER_ENCODING_HEADER)) {
+            "Transfer-Encoding is not supported for Cloudflare forwarded management requests"
+        }
+        val contentLengthValues = this.headers.requestHeaderValues(CONTENT_LENGTH_HEADER)
+        require(bodyBytes.isEmpty() || contentLengthValues != null) {
+            "Non-empty Cloudflare forwarded management requests must include Content-Length"
+        }
+        contentLengthValues?.let { values ->
+            require(values.size == 1) {
+                "Cloudflare forwarded management requests must have one Content-Length"
+            }
+            val contentLength = values.single().parseUnsignedDecimalContentLength()
+            require(contentLength != null) {
+                "Content-Length must be a non-negative decimal value"
+            }
+            require(contentLength == bodyBytes.size.toLong()) {
+                "Content-Length must match the forwarded management request body length"
+            }
+        }
+    }
+
     override fun toString(): String = "CloudflareLocalManagementRequest(method=$method, originTarget=<redacted>)"
 }
 
@@ -58,25 +90,29 @@ class CloudflareTunnelResponse(
         require(reasonPhrase.none { it.isUnsafeHttpHeaderCharacter() }) {
             "HTTP reason phrase must not contain control characters"
         }
-        headers.forEach { (name, value) ->
+        this.headers.forEach { (name, value) ->
             require(name.isHttpToken()) { "HTTP header names must be valid tokens" }
             require(value.none { it.isUnsafeHttpHeaderCharacter() }) {
                 "HTTP header values must not contain control characters"
             }
         }
-        val normalizedHeaderNames = headers.keys.map { it.lowercase(Locale.US) }
+        val normalizedHeaderNames = this.headers.keys.map { it.lowercase(Locale.US) }
         require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
             "HTTP header names must not contain case-variant duplicates"
         }
-        require(!headers.containsHeader(TRANSFER_ENCODING_HEADER)) {
+        require(!this.headers.containsHeader(TRANSFER_ENCODING_HEADER)) {
             "Transfer-Encoding is not supported for Cloudflare tunnel responses"
         }
-        val contentLengthHeader = headers.headerValue(CONTENT_LENGTH_HEADER)
+        val contentLengthHeader = this.headers.headerValue(CONTENT_LENGTH_HEADER)
         require(body.isEmpty() || contentLengthHeader != null) {
             "Non-empty Cloudflare tunnel responses must include Content-Length"
         }
         contentLengthHeader?.let { contentLength ->
-            require(contentLength == body.toByteArray(Charsets.UTF_8).size.toString()) {
+            val contentLengthBytes = contentLength.parseUnsignedDecimalContentLength()
+            require(contentLengthBytes != null) {
+                "Content-Length must be a non-negative decimal value"
+            }
+            require(contentLengthBytes == body.toByteArray(Charsets.UTF_8).size.toLong()) {
                 "Content-Length must match the UTF-8 response body length"
             }
         }
@@ -84,22 +120,21 @@ class CloudflareTunnelResponse(
 
     override fun toString(): String = "CloudflareTunnelResponse(statusCode=$statusCode)"
 
-    fun toHttpString(): String =
-        buildString {
-            append("HTTP/1.1 ")
-            append(statusCode)
-            append(' ')
-            append(reasonPhrase)
+    fun toHttpString(): String = buildString {
+        append("HTTP/1.1 ")
+        append(statusCode)
+        append(' ')
+        append(reasonPhrase)
+        append(CRLF)
+        headers.forEach { (name, value) ->
+            append(name)
+            append(": ")
+            append(value)
             append(CRLF)
-            headers.forEach { (name, value) ->
-                append(name)
-                append(": ")
-                append(value)
-                append(CRLF)
-            }
-            append(CRLF)
-            append(body)
         }
+        append(CRLF)
+        append(body)
+    }
 
     fun toByteArray(): ByteArray = toHttpString().toByteArray(Charsets.UTF_8)
 
@@ -123,17 +158,16 @@ class CloudflareTunnelResponse(
             )
         }
 
-        fun empty(statusCode: Int): CloudflareTunnelResponse =
-            CloudflareTunnelResponse(
-                statusCode = statusCode,
-                reasonPhrase = reasonPhraseFor(statusCode),
-                headers =
-                    linkedMapOf(
-                        "Content-Length" to "0",
-                        "Cache-Control" to "no-store",
-                    ),
-                body = "",
-            )
+        fun empty(statusCode: Int): CloudflareTunnelResponse = CloudflareTunnelResponse(
+            statusCode = statusCode,
+            reasonPhrase = reasonPhraseFor(statusCode),
+            headers =
+                linkedMapOf(
+                    "Content-Length" to "0",
+                    "Cache-Control" to "no-store",
+                ),
+            body = "",
+        )
     }
 }
 
@@ -142,14 +176,13 @@ object CloudflareTunnelIngressExchangeHandler {
         method: HttpMethod,
         target: String,
         localManagementHandler: CloudflareLocalManagementHandler,
-    ): CloudflareTunnelIngressResult =
-        handle(
-            method = method,
-            target = target,
-            requestHeaders = emptyMap(),
-            requestBody = byteArrayOf(),
-            localManagementHandler = localManagementHandler,
-        )
+    ): CloudflareTunnelIngressResult = handle(
+        method = method,
+        target = target,
+        requestHeaders = emptyMap(),
+        requestBody = byteArrayOf(),
+        localManagementHandler = localManagementHandler,
+    )
 
     fun handle(
         method: HttpMethod,
@@ -163,15 +196,19 @@ object CloudflareTunnelIngressExchangeHandler {
         return when (CloudflareManagementIngressPolicy.evaluate(ingressRequest)) {
             CloudflareIngressDecision.Forward -> {
                 val originForm = ingressRequest as ManagementIngressRequest.OriginForm
-                CloudflareTunnelIngressResult.Forwarded(
-                    localManagementHandler.handle(
+                val request =
+                    try {
                         CloudflareLocalManagementRequest(
                             method = originForm.method,
                             originTarget = originForm.path,
                             headers = requestHeaders,
                             body = requestBody,
-                        ),
-                    ),
+                        )
+                    } catch (_: IllegalArgumentException) {
+                        return CloudflareTunnelIngressResult.Rejected(forbiddenResponse())
+                    }
+                CloudflareTunnelIngressResult.Forwarded(
+                    localManagementHandler.handle(request),
                 )
             }
             CloudflareIngressDecision.Reject ->
@@ -180,61 +217,78 @@ object CloudflareTunnelIngressExchangeHandler {
     }
 }
 
-private fun forbiddenResponse(): CloudflareTunnelResponse =
-    CloudflareTunnelResponse.json(
-        statusCode = 403,
-        body = """{"error":"forbidden"}""",
-    )
+private fun forbiddenResponse(): CloudflareTunnelResponse = CloudflareTunnelResponse.json(
+    statusCode = 403,
+    body = """{"error":"forbidden"}""",
+)
 
-private fun String.toManagementIngressRequest(method: HttpMethod): ManagementIngressRequest =
-    when {
-        method == HttpMethod.Connect -> ManagementIngressRequest.ConnectAuthority(this)
-        isExplicitProxyForm() -> ManagementIngressRequest.ExplicitProxyForm(this)
-        !isOriginFormTarget() -> ManagementIngressRequest.MalformedTarget
-        else -> ManagementIngressRequest.OriginForm(method = method, path = this)
-    }
+private fun String.toManagementIngressRequest(method: HttpMethod): ManagementIngressRequest = when {
+    method == HttpMethod.Connect -> ManagementIngressRequest.ConnectAuthority(this)
+    isExplicitProxyForm() -> ManagementIngressRequest.ExplicitProxyForm(this)
+    !isOriginFormTarget() -> ManagementIngressRequest.MalformedTarget
+    else -> ManagementIngressRequest.OriginForm(method = method, path = this)
+}
 
 private fun String.isExplicitProxyForm(): Boolean = contains("://")
 
-private fun String.isOriginFormTarget(): Boolean =
-    startsWith("/") &&
-        none { it.isUnsafeOriginTargetCharacter() } &&
-        !contains('#')
+private fun String.isOriginFormTarget(): Boolean = startsWith("/") &&
+    none { it.isUnsafeOriginTargetCharacter() } &&
+    !contains('#')
 
 private fun Char.isUnsafeOriginTargetCharacter(): Boolean = isWhitespace() || isUnsafeHttpHeaderCharacter()
 
-private fun Map<String, List<String>>.toDefensiveHeaders(): Map<String, List<String>> =
-    Collections.unmodifiableMap(
-        LinkedHashMap<String, List<String>>().also { copiedHeaders ->
-            forEach { (name, values) ->
-                copiedHeaders[name] = Collections.unmodifiableList(values.toList())
+private fun Map<String, List<String>>.toDefensiveHeaders(): Map<String, List<String>> = Collections.unmodifiableMap(
+    LinkedHashMap<String, List<String>>().also { copiedHeaders ->
+        forEach { (name, values) ->
+            require(name.isHttpToken()) { "HTTP header names must be valid tokens" }
+            val copiedValues = values.toList()
+            copiedValues.forEach { value ->
+                require(value.none { it.isUnsafeHttpHeaderCharacter() }) {
+                    "HTTP header values must not contain control characters"
+                }
             }
-        },
-    )
+            copiedHeaders[name] = Collections.unmodifiableList(copiedValues)
+        }
+        val normalizedHeaderNames = copiedHeaders.keys.map { it.lowercase(Locale.US) }
+        require(normalizedHeaderNames.size == normalizedHeaderNames.toSet().size) {
+            "HTTP header names must not contain case-variant duplicates"
+        }
+    },
+)
 
 private fun String.isHttpToken(): Boolean = isNotEmpty() && all { it in HTTP_TOKEN_CHARS }
 
 private fun Map<String, String>.containsHeader(name: String): Boolean = headerValue(name) != null
+
+private fun Map<String, List<String>>.containsRequestHeader(name: String): Boolean = requestHeaderValues(name) != null
 
 private fun Map<String, String>.headerValue(name: String): String? {
     val normalizedName = name.lowercase(Locale.US)
     return entries.singleOrNull { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }?.value
 }
 
+private fun Map<String, List<String>>.requestHeaderValues(name: String): List<String>? {
+    val normalizedName = name.lowercase(Locale.US)
+    return entries.singleOrNull { (headerName, _) -> headerName.lowercase(Locale.US) == normalizedName }?.value
+}
+
 private fun Char.isUnsafeHttpHeaderCharacter(): Boolean = code in CONTROL_CHAR_RANGE || code == DELETE_CONTROL_CHAR
 
-private fun reasonPhraseFor(statusCode: Int): String =
-    when (statusCode) {
-        200 -> "OK"
-        202 -> "Accepted"
-        204 -> "No Content"
-        400 -> "Bad Request"
-        403 -> "Forbidden"
-        404 -> "Not Found"
-        405 -> "Method Not Allowed"
-        500 -> "Internal Server Error"
-        else -> "Status"
-    }
+private fun String.parseUnsignedDecimalContentLength(): Long? = takeIf {
+    it.isNotEmpty() && it.all { character -> character in '0'..'9' }
+}?.toLongOrNull()
+
+private fun reasonPhraseFor(statusCode: Int): String = when (statusCode) {
+    200 -> "OK"
+    202 -> "Accepted"
+    204 -> "No Content"
+    400 -> "Bad Request"
+    403 -> "Forbidden"
+    404 -> "Not Found"
+    405 -> "Method Not Allowed"
+    500 -> "Internal Server Error"
+    else -> "Status"
+}
 
 private const val CONTENT_LENGTH_HEADER = "Content-Length"
 private const val TRANSFER_ENCODING_HEADER = "Transfer-Encoding"

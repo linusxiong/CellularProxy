@@ -272,9 +272,12 @@ internal fun CellularProxyCloudflareScreen(
         CloudflareSection("Health") {
             CloudflareField("Last connection error", state.lastConnectionError)
             CloudflareField("Local proxy impact", state.localProxyImpact)
+            CloudflareField("Recovery action", state.recoveryAction)
             CloudflareField("Edge sessions", state.edgeSessionSummary)
             CloudflareField("Management API round trip", state.managementApiRoundTrip)
             CloudflareField("Pending operation", state.pendingOperation)
+            CloudflareField("Last action failure", state.lastActionFailure)
+            CloudflareField("Last action recovery", state.lastActionRecovery)
         }
 
         CloudflareSection("Warnings") {
@@ -296,9 +299,12 @@ internal data class CloudflareScreenState(
     val managementHostname: String,
     val lastConnectionError: String,
     val localProxyImpact: String,
+    val recoveryAction: String,
     val edgeSessionSummary: String,
     val managementApiRoundTrip: String,
     val pendingOperation: String,
+    val lastActionFailure: String,
+    val lastActionRecovery: String,
     val warnings: Set<CloudflareScreenWarning>,
     val copyableDiagnostics: String,
     val availableActions: List<CloudflareScreenAction>,
@@ -315,6 +321,8 @@ internal data class CloudflareScreenState(
                 },
             edgeSessionSummary: String? = null,
             managementApiRoundTrip: String? = null,
+            lastActionFailure: String = "None",
+            lastActionRecovery: String = "None",
             secrets: LogRedactionSecrets = LogRedactionSecrets(),
         ): CloudflareScreenState {
             val tunnelEnabled = if (config.cloudflare.enabled) "Enabled" else "Disabled"
@@ -325,6 +333,7 @@ internal data class CloudflareScreenState(
                     ?: "Not configured"
             val lastConnectionError = tunnelStatus.lastConnectionErrorCategory(secrets)
             val localProxyImpact = tunnelStatus.localProxyImpact()
+            val recoveryAction = tunnelStatus.recoveryAction()
             val redactedEdgeSessionSummary = edgeSessionSummary?.let { LogRedactor.redact(it, secrets) } ?: "Unavailable"
             val redactedManagementApiRoundTrip = managementApiRoundTrip?.let { LogRedactor.redact(it, secrets) } ?: "Not run"
             val warnings =
@@ -342,9 +351,12 @@ internal data class CloudflareScreenState(
                 managementHostname = managementHostname,
                 lastConnectionError = lastConnectionError,
                 localProxyImpact = localProxyImpact,
+                recoveryAction = recoveryAction,
                 edgeSessionSummary = redactedEdgeSessionSummary,
                 managementApiRoundTrip = redactedManagementApiRoundTrip,
                 pendingOperation = "None",
+                lastActionFailure = lastActionFailure,
+                lastActionRecovery = lastActionRecovery,
                 warnings = warnings,
                 copyableDiagnostics =
                     listOf(
@@ -354,9 +366,12 @@ internal data class CloudflareScreenState(
                         "Management hostname: $managementHostname",
                         "Last connection error: $lastConnectionError",
                         "Local proxy impact: $localProxyImpact",
+                        "Recovery action: $recoveryAction",
                         "Edge sessions: $redactedEdgeSessionSummary",
                         "Management API round trip: $redactedManagementApiRoundTrip",
                         "Pending operation: None",
+                        "Last action failure: $lastActionFailure",
+                        "Last action recovery: $lastActionRecovery",
                         "Warnings: $warningsText",
                     ).joinToString(separator = "\n"),
                 availableActions =
@@ -444,6 +459,8 @@ internal class CloudflareScreenController(
 ) {
     private val pendingOperations = mutableMapOf<CloudflareScreenAction, PendingCloudflareOperation>()
     private val pendingEffects = mutableListOf<CloudflareScreenEffect>()
+    private var lastActionFailure: LastCloudflareActionFailure? = null
+    private var lastActionRecovery = "None"
     var state: CloudflareScreenState = buildState()
         private set
 
@@ -482,7 +499,19 @@ internal class CloudflareScreenController(
                     managementApiRoundTripVersion = managementApiRoundTripVersionProvider(),
                 )
             recordAuditAction(action, auditLifecycleState)?.let(pendingEffects::add)
-            actionHandler(action)
+            try {
+                actionHandler(action)
+                lastActionFailure = null
+                lastActionRecovery = "None"
+            } catch (exception: RuntimeException) {
+                pendingOperations.remove(action)
+                lastActionFailure =
+                    LastCloudflareActionFailure(
+                        action = action,
+                        message = exception.message.orEmpty(),
+                    )
+                lastActionRecovery = action.retryRecoveryLabel()
+            }
             state = buildState()
         }
     }
@@ -499,6 +528,8 @@ internal class CloudflareScreenController(
                 tokenStatus = tokenStatusProvider(),
                 edgeSessionSummary = currentEdgeSessionSummary,
                 managementApiRoundTrip = currentManagementApiRoundTrip,
+                lastActionFailure = lastActionFailure.toDisplayText(secretsProvider()),
+                lastActionRecovery = lastActionRecovery,
                 secrets = secretsProvider(),
             )
         val resolvedActions =
@@ -566,9 +597,12 @@ private fun CloudflareScreenState.withPendingOperation(
                 "Management hostname: $managementHostname",
                 "Last connection error: $lastConnectionError",
                 "Local proxy impact: $localProxyImpact",
+                "Recovery action: $recoveryAction",
                 "Edge sessions: $edgeSessionSummary",
                 "Management API round trip: $managementApiRoundTrip",
                 "Pending operation: $pendingOperation",
+                "Last action failure: $lastActionFailure",
+                "Last action recovery: $lastActionRecovery",
                 "Warnings: ${currentWarnings.toWarningsText()}",
             ).joinToString(separator = "\n"),
         availableActions = availableActions,
@@ -596,6 +630,15 @@ private data class PendingCloudflareOperation(
         CloudflareScreenAction.CopyDiagnostics -> true
     }
 }
+
+private data class LastCloudflareActionFailure(
+    val action: CloudflareScreenAction,
+    val message: String,
+)
+
+private fun LastCloudflareActionFailure?.toDisplayText(secrets: LogRedactionSecrets): String = this?.let { failure ->
+    "${failure.action.label} failed: ${failure.message.safeActionFailureDetail(secrets)}"
+} ?: "None"
 
 internal enum class CloudflareScreenEvent {
     StartTunnel,
@@ -652,6 +695,16 @@ private val CloudflareScreenAction.auditName: String
             CloudflareScreenAction.TestManagementTunnel -> "test_management_tunnel"
             CloudflareScreenAction.CopyDiagnostics -> "copy_diagnostics"
         }
+
+private fun CloudflareScreenAction.retryRecoveryLabel(): String = "Try ${label.replaceFirstChar(Char::lowercase)} again"
+
+private fun String.safeActionFailureDetail(secrets: LogRedactionSecrets): String = LogRedactor
+    .redact(this, secrets)
+    .trim()
+    .ifBlank { "Unknown error" }
+    .take(MAX_ACTION_FAILURE_DETAIL_LENGTH)
+
+private const val MAX_ACTION_FAILURE_DETAIL_LENGTH = 240
 
 private fun CloudflareScreenAction.isTunnelLifecycleAction(): Boolean = when (this) {
     CloudflareScreenAction.StartTunnel,
@@ -835,10 +888,16 @@ private fun CloudflareTunnelStatus.lastConnectionErrorCategory(secrets: LogRedac
     }
 }
 
-private fun CloudflareTunnelStatus.localProxyImpact(): String = if (state == CloudflareTunnelState.Failed) {
-    "Local proxy remains usable"
-} else {
-    "No local proxy impact"
+private fun CloudflareTunnelStatus.localProxyImpact(): String = when (state) {
+    CloudflareTunnelState.Failed -> "Local proxy remains usable"
+    CloudflareTunnelState.Degraded -> "Remote management may be unreliable"
+    else -> "No local proxy impact"
+}
+
+private fun CloudflareTunnelStatus.recoveryAction(): String = when (state) {
+    CloudflareTunnelState.Failed -> "Try starting the Cloudflare tunnel again"
+    CloudflareTunnelState.Degraded -> "Try reconnecting the Cloudflare tunnel"
+    else -> "None"
 }
 
 private fun String.safeCloudflareErrorCategory(secrets: LogRedactionSecrets): String {

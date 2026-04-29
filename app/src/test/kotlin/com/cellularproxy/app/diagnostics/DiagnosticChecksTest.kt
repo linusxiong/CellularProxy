@@ -163,7 +163,7 @@ class DiagnosticChecksTest {
             DiagnosticCheckResult(
                 status = DiagnosticResultStatus.Failed,
                 errorCategory = "cloudflare-failed",
-                details = "Cloudflare tunnel failed",
+                details = "Cloudflare tunnel failed: edge rejected secret-token",
             ),
             DiagnosticChecks.cloudflareTunnel(status = { CloudflareTunnelStatus.failed("edge rejected secret-token") }).run(),
         )

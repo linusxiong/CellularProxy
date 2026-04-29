@@ -10,6 +10,7 @@ import com.cellularproxy.shared.config.RouteTarget
 import com.cellularproxy.shared.logging.LogRedactionSecrets
 import com.cellularproxy.shared.network.NetworkCategory
 import com.cellularproxy.shared.network.NetworkDescriptor
+import com.cellularproxy.shared.proxy.ProxyServiceState
 import com.cellularproxy.shared.proxy.ProxyServiceStatus
 import com.cellularproxy.shared.proxy.ProxyStartupError
 import com.cellularproxy.shared.proxy.ProxyTrafficMetrics
@@ -400,21 +401,26 @@ class DashboardStatusModelTest {
     }
 
     @Test
-    fun `model warns when Cloudflare is enabled but tunnel token is missing before startup fails`() {
-        val model =
-            DashboardStatusModel.from(
-                config =
-                    AppConfig.default().copy(
-                        cloudflare =
-                            CloudflareConfig(
-                                enabled = true,
-                                tunnelTokenPresent = false,
-                            ),
-                    ),
-                status = ProxyServiceStatus.stopped(),
-            )
+    fun `model warns when Cloudflare is enabled but tunnel token is missing before or during startup`() {
+        listOf(
+            ProxyServiceStatus.stopped(),
+            ProxyServiceStatus(state = ProxyServiceState.Starting),
+        ).forEach { status ->
+            val model =
+                DashboardStatusModel.from(
+                    config =
+                        AppConfig.default().copy(
+                            cloudflare =
+                                CloudflareConfig(
+                                    enabled = true,
+                                    tunnelTokenPresent = false,
+                                ),
+                        ),
+                    status = status,
+                )
 
-        assertEquals(setOf(DashboardWarning.CloudflareTokenMissing), model.warnings)
+            assertEquals(setOf(DashboardWarning.CloudflareTokenMissing), model.warnings, "status=${status.state}")
+        }
     }
 
     @Test

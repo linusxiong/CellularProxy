@@ -1360,9 +1360,12 @@ class ComposeAppShellContractTest {
                 "Management hostname: https://proxy.example.test",
                 "Last connection error: Cloudflare tunnel failed",
                 "Local proxy impact: Local proxy remains usable",
+                "Recovery action: Try starting the Cloudflare tunnel again",
                 "Edge sessions: 2 sessions",
                 "Management API round trip: HTTP 503 for token=[REDACTED]",
                 "Pending operation: None",
+                "Last action failure: None",
+                "Last action recovery: None",
                 "Warnings: None",
             ).joinToString(separator = "\n")
 
