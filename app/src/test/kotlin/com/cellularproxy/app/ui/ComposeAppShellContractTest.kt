@@ -100,10 +100,13 @@ class ComposeAppShellContractTest {
 
     @Test
     fun `compose smoke tests use an android test only host activity`() {
-        val smokeTestSource =
+        val smokeTestSources =
             repoRoot()
-                .resolve("app/src/androidTest/kotlin/com/cellularproxy/app/ui/CellularProxyAppNavigationSmokeTest.kt")
-                .readText()
+                .resolve("app/src/androidTest/kotlin")
+                .toFile()
+                .walkTopDown()
+                .filter { file -> file.name.endsWith("SmokeTest.kt") }
+                .associate { file -> file.relativeTo(repoRoot().resolve("app/src/androidTest/kotlin").toFile()).path to file.readText() }
         val hostActivitySource =
             repoRoot()
                 .resolve("app/src/androidTest/kotlin/com/cellularproxy/app/ui/CellularProxyComposeTestActivity.kt")
@@ -114,13 +117,19 @@ class ComposeAppShellContractTest {
                 .readText()
 
         assertTrue(
-            smokeTestSource.contains("createAndroidComposeRule<CellularProxyComposeTestActivity>()"),
-            "Compose smoke tests must launch a stable androidTest-only ComponentActivity host.",
+            smokeTestSources.isNotEmpty(),
+            "Compose smoke tests must exist for app navigation and destination smoke coverage.",
         )
-        assertFalse(
-            smokeTestSource.contains("createComposeRule()"),
-            "Compose smoke tests must not rely on the generic compose rule for app navigation lifecycle coverage.",
-        )
+        smokeTestSources.forEach { (fileName, source) ->
+            assertTrue(
+                androidComposeHostRuleRegex.containsMatchIn(source),
+                "$fileName must launch the stable androidTest-only ComponentActivity host.",
+            )
+            assertFalse(
+                genericComposeRuleRegex.containsMatchIn(source),
+                "$fileName must not rely on the generic compose rule for app navigation lifecycle coverage.",
+            )
+        }
         assertTrue(
             hostActivitySource.contains("class CellularProxyComposeTestActivity : ComponentActivity()"),
             "The Compose test host must be a minimal ComponentActivity in androidTest sources.",
@@ -2786,6 +2795,11 @@ class ComposeAppShellContractTest {
             assertNotNull(workingDirectory.parent)
         }
     }
+
+    private val androidComposeHostRuleRegex =
+        Regex("""\bcreateAndroidComposeRule\s*<\s*CellularProxyComposeTestActivity\s*>\s*\(""")
+
+    private val genericComposeRuleRegex = Regex("""\bcreateComposeRule\s*\(""")
 
     private fun cloudflareActions(
         config: AppConfig,
