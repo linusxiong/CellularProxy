@@ -25,7 +25,7 @@ sealed interface CloudflareE2eValidationConfig {
             require(CloudflareTunnelToken.parse(tunnelToken) is CloudflareTunnelTokenParseResult.Valid) {
                 "tunnelToken must be valid"
             }
-            require(managementApiToken == null || managementApiToken.trimmedOrNull() == managementApiToken) {
+            require(managementApiToken == null || managementApiToken.safeManagementApiTokenOrNull() == managementApiToken) {
                 "managementApiToken must be normalized or null"
             }
             require(managementHostname == null || managementHostname.safeManagementHostnameOrNull() == managementHostname) {
@@ -86,7 +86,7 @@ sealed interface CloudflareE2eValidationConfig {
                 managementApiToken =
                     values
                         .localValueFor(CloudflareE2eValidationConfigKeys.managementApiToken)
-                        .trimmedOrNull(),
+                        .safeManagementApiTokenOrNull(),
                 managementHostname =
                     values
                         .localValueFor(CloudflareE2eValidationConfigKeys.managementHostname)
@@ -138,6 +138,10 @@ private fun Map<String, String?>.localValueFor(key: String): String? {
 private fun String?.trimmedOrNull(): String? = this
     ?.trim()
     ?.takeIf(String::isNotEmpty)
+
+private fun String?.safeManagementApiTokenOrNull(): String? = this
+    ?.summaryLine()
+    .trimmedOrNull()
 
 private fun String?.presenceLabel(): String = if (this == null) {
     "missing"

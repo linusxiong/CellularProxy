@@ -200,6 +200,13 @@ class CloudflareE2eValidationConfigTest {
         }
         assertFailsWith<IllegalArgumentException> {
             CloudflareE2eValidationConfig.Ready(
+                tunnelToken = validTunnelToken,
+                managementApiToken = "management-secret\r\nAuthorization: Bearer injected-secret",
+                managementHostname = null,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            CloudflareE2eValidationConfig.Ready(
                 tunnelToken = "token",
                 managementApiToken = null,
                 managementHostname = "https://operator:hostname-secret@management.example.test/private?token=query-secret",
@@ -313,6 +320,27 @@ class CloudflareE2eValidationConfigTest {
         assertFalse(ready.safeSummary.contains("hostname-secret"))
         assertFalse(ready.toString().contains("Authorization"))
         assertFalse(ready.toString().contains("hostname-secret"))
+    }
+
+    @Test
+    fun `ready config strips injected header lines from management api token before validation`() {
+        val ready =
+            assertIs<CloudflareE2eValidationConfig.Ready>(
+                CloudflareE2eValidationConfig.fromLocalValues(
+                    mapOf(
+                        CloudflareE2eValidationConfigKeys.tunnelToken to validTunnelToken,
+                        CloudflareE2eValidationConfigKeys.managementApiToken to
+                            "management-secret\r\nAuthorization: Bearer injected-secret",
+                    ),
+                ),
+            )
+
+        assertEquals("management-secret", ready.managementApiToken)
+        assertTrue(ready.safeSummary.contains("managementApiToken=present"))
+        assertFalse(ready.safeSummary.contains("Authorization"))
+        assertFalse(ready.safeSummary.contains("injected-secret"))
+        assertFalse(ready.toString().contains("Authorization"))
+        assertFalse(ready.toString().contains("injected-secret"))
     }
 
     @Test
