@@ -912,6 +912,8 @@ private fun LogsAuditRecordCategory.toScreenCategory(): LogsAuditScreenCategory 
     LogsAuditRecordCategory.CloudflareTunnel -> LogsAuditScreenCategory.CloudflareTunnel
     LogsAuditRecordCategory.Rotation -> LogsAuditScreenCategory.Rotation
     LogsAuditRecordCategory.Audit -> LogsAuditScreenCategory.Audit
+    LogsAuditRecordCategory.ManagementApi -> LogsAuditScreenCategory.ManagementApi
+    LogsAuditRecordCategory.RootCommands -> LogsAuditScreenCategory.RootCommands
 }
 
 private fun LogsAuditRecordSeverity.toScreenSeverity(): LogsAuditScreenSeverity = when (this) {

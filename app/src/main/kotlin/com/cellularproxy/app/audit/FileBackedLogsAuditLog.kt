@@ -15,6 +15,8 @@ enum class LogsAuditRecordCategory {
     CloudflareTunnel,
     Rotation,
     Audit,
+    ManagementApi,
+    RootCommands,
 }
 
 enum class LogsAuditRecordSeverity {

@@ -208,6 +208,54 @@ class LogsAuditScreenStateTest {
     }
 
     @Test
+    fun `persisted generic management and root log records map to screen input rows`() {
+        val rows =
+            logsAuditScreenRowsFromPersistedAuditRecords(
+                managementRecords = emptyList(),
+                rootRecords = emptyList(),
+                genericRecords =
+                    listOf(
+                        PersistedLogsAuditRecord(
+                            occurredAtEpochMillis = 230,
+                            category = LogsAuditRecordCategory.ManagementApi,
+                            severity = LogsAuditRecordSeverity.Warning,
+                            title = "Management request rejected",
+                            detail = "status=401",
+                        ),
+                        PersistedLogsAuditRecord(
+                            occurredAtEpochMillis = 240,
+                            category = LogsAuditRecordCategory.RootCommands,
+                            severity = LogsAuditRecordSeverity.Failed,
+                            title = "Root command failed",
+                            detail = "exitCode=1",
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                LogsAuditScreenInputRow(
+                    id = "generic-log-0-230-ManagementApi-Warning",
+                    category = LogsAuditScreenCategory.ManagementApi,
+                    severity = LogsAuditScreenSeverity.Warning,
+                    occurredAtEpochMillis = 230,
+                    title = "Management request rejected",
+                    detail = "status=401",
+                ),
+                LogsAuditScreenInputRow(
+                    id = "generic-log-1-240-RootCommands-Failed",
+                    category = LogsAuditScreenCategory.RootCommands,
+                    severity = LogsAuditScreenSeverity.Failed,
+                    occurredAtEpochMillis = 240,
+                    title = "Root command failed",
+                    detail = "exitCode=1",
+                ),
+            ),
+            rows,
+        )
+    }
+
+    @Test
     fun `controller selection updates state and copy selected emits redacted payload`() {
         val controller =
             LogsAuditScreenController(
