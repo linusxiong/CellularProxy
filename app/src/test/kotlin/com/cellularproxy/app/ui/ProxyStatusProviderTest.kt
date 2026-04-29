@@ -318,7 +318,7 @@ class ProxyStatusProviderTest {
                         "        observedRedactionSecrets,\n" +
                         "    )",
                 ) &&
-                cloudflareSource.contains("controller.handle(CloudflareScreenEvent.Refresh)"),
+                cloudflareSource.contains("cloudflareViewModel.handle(CloudflareScreenEvent.Refresh)"),
             "Cloudflare route must refresh its remembered screen state when the management round-trip provider changes.",
         )
     }

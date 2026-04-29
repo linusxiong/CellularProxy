@@ -25,10 +25,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cellularproxy.app.audit.LogsAuditRecordCategory
 import com.cellularproxy.app.audit.LogsAuditRecordSeverity
 import com.cellularproxy.app.audit.PersistedLogsAuditRecord
 import com.cellularproxy.app.config.SensitiveConfigLoadResult
+import com.cellularproxy.app.viewmodel.CloudflareViewModel
 import com.cellularproxy.cloudflare.CloudflareTunnelToken
 import com.cellularproxy.cloudflare.CloudflareTunnelTokenParseResult
 import com.cellularproxy.shared.cloudflare.CloudflareTunnelState
@@ -71,6 +76,7 @@ internal fun CellularProxyCloudflareRoute(
     val currentOnStopTunnel by rememberUpdatedState(onStopTunnel)
     val currentOnReconnectTunnel by rememberUpdatedState(onReconnectTunnel)
     val currentOnTestManagementTunnel by rememberUpdatedState(onTestManagementTunnel)
+    val currentAuditOccurredAtEpochMillisProvider by rememberUpdatedState(auditOccurredAtEpochMillisProvider)
     val observedConfig = configProvider()
     val observedTokenStatus = tokenStatusProvider()
     val observedTunnelStatus = tunnelStatusProvider()
@@ -78,30 +84,32 @@ internal fun CellularProxyCloudflareRoute(
     val observedManagementApiRoundTrip = managementApiRoundTripProvider()
     val observedManagementApiRoundTripVersion = managementApiRoundTripVersionProvider()
     val observedRedactionSecrets = redactionSecretsProvider()
-    val controller =
-        remember {
-            CloudflareScreenController(
-                configProvider = { currentConfigProvider() },
-                tokenStatusProvider = { currentTokenStatusProvider() },
-                tunnelStatusProvider = { currentTunnelStatusProvider() },
-                edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() },
-                managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() },
-                managementApiRoundTripVersionProvider = { currentManagementApiRoundTripVersionProvider() },
-                secretsProvider = { currentRedactionSecretsProvider() },
-                auditActionsEnabled = true,
-                auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
-                actionHandler = { action ->
-                    when (action) {
-                        CloudflareScreenAction.StartTunnel -> currentOnStartTunnel()
-                        CloudflareScreenAction.StopTunnel -> currentOnStopTunnel()
-                        CloudflareScreenAction.ReconnectTunnel -> currentOnReconnectTunnel()
-                        CloudflareScreenAction.TestManagementTunnel -> currentOnTestManagementTunnel()
-                        CloudflareScreenAction.CopyDiagnostics -> Unit
-                    }
+    val cloudflareViewModel =
+        viewModel<CloudflareViewModel>(
+            factory =
+                remember {
+                    CloudflareViewModelFactory(
+                        configProvider = { currentConfigProvider() },
+                        tokenStatusProvider = { currentTokenStatusProvider() },
+                        tunnelStatusProvider = { currentTunnelStatusProvider() },
+                        edgeSessionSummaryProvider = { currentEdgeSessionSummaryProvider() },
+                        managementApiRoundTripProvider = { currentManagementApiRoundTripProvider() },
+                        managementApiRoundTripVersionProvider = { currentManagementApiRoundTripVersionProvider() },
+                        redactionSecretsProvider = { currentRedactionSecretsProvider() },
+                        auditOccurredAtEpochMillisProvider = { currentAuditOccurredAtEpochMillisProvider() },
+                        actionHandler = { action ->
+                            when (action) {
+                                CloudflareScreenAction.StartTunnel -> currentOnStartTunnel()
+                                CloudflareScreenAction.StopTunnel -> currentOnStopTunnel()
+                                CloudflareScreenAction.ReconnectTunnel -> currentOnReconnectTunnel()
+                                CloudflareScreenAction.TestManagementTunnel -> currentOnTestManagementTunnel()
+                                CloudflareScreenAction.CopyDiagnostics -> Unit
+                            }
+                        },
+                    )
                 },
-            )
-        }
-    var screenState by remember { mutableStateOf(controller.state) }
+        )
+    val screenState by cloudflareViewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(
         observedConfig,
         observedTokenStatus,
@@ -111,18 +119,16 @@ internal fun CellularProxyCloudflareRoute(
         observedManagementApiRoundTripVersion,
         observedRedactionSecrets,
     ) {
-        controller.handle(CloudflareScreenEvent.Refresh)
-        screenState = controller.state
+        cloudflareViewModel.handle(CloudflareScreenEvent.Refresh)
     }
     val dispatchEvent: (CloudflareScreenEvent) -> Unit = { event ->
-        controller.handle(event)
-        controller.consumeEffects().forEach { effect ->
+        cloudflareViewModel.handle(event)
+        cloudflareViewModel.consumeEffects().forEach { effect ->
             when (effect) {
                 is CloudflareScreenEffect.CopyText -> onCopyDiagnosticsText(effect.text)
                 is CloudflareScreenEffect.RecordAuditAction -> onRecordCloudflareAuditAction(effect.record)
             }
         }
-        screenState = controller.state
     }
 
     CellularProxyCloudflareScreen(
@@ -134,6 +140,32 @@ internal fun CellularProxyCloudflareRoute(
         onTestManagementTunnel = { dispatchEvent(CloudflareScreenEvent.TestManagementTunnel) },
         onCopyDiagnostics = { dispatchEvent(CloudflareScreenEvent.CopyDiagnostics) },
     )
+}
+
+private class CloudflareViewModelFactory(
+    private val configProvider: () -> AppConfig,
+    private val tunnelStatusProvider: () -> CloudflareTunnelStatus,
+    private val tokenStatusProvider: () -> CloudflareTokenStatus,
+    private val edgeSessionSummaryProvider: () -> String?,
+    private val managementApiRoundTripProvider: () -> String?,
+    private val managementApiRoundTripVersionProvider: () -> Long,
+    private val redactionSecretsProvider: () -> LogRedactionSecrets,
+    private val auditOccurredAtEpochMillisProvider: () -> Long,
+    private val actionHandler: (CloudflareScreenAction) -> Unit,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = CloudflareViewModel(
+        configProvider = configProvider,
+        tunnelStatusProvider = tunnelStatusProvider,
+        tokenStatusProvider = tokenStatusProvider,
+        edgeSessionSummaryProvider = edgeSessionSummaryProvider,
+        managementApiRoundTripProvider = managementApiRoundTripProvider,
+        managementApiRoundTripVersionProvider = managementApiRoundTripVersionProvider,
+        secretsProvider = redactionSecretsProvider,
+        auditActionsEnabled = true,
+        auditOccurredAtEpochMillisProvider = auditOccurredAtEpochMillisProvider,
+        actionHandler = actionHandler,
+    ) as T
 }
 
 @Composable

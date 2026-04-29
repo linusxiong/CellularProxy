@@ -956,6 +956,11 @@ class ComposeAppShellContractTest {
             "Cloudflare route must use the tested screen controller boundary.",
         )
         assertTrue(
+            cloudflareSource.contains("viewModel<CloudflareViewModel>") &&
+                cloudflareSource.contains("collectAsStateWithLifecycle()"),
+            "Cloudflare route must collect ViewModel StateFlow with Lifecycle-aware Compose APIs.",
+        )
+        assertTrue(
             cloudflareSource.contains("configProvider: () -> AppConfig = AppConfig::default"),
             "Cloudflare route must accept an injectable config provider for app-shell runtime data.",
         )
