@@ -75,6 +75,7 @@ private fun sendManagementApiStatusRequest(
     val connection = URL(request.url).openConnection() as HttpURLConnection
     return try {
         connection.requestMethod = "GET"
+        connection.instanceFollowRedirects = false
         connection.connectTimeout = DEFAULT_TIMEOUT_MILLIS
         connection.readTimeout = DEFAULT_TIMEOUT_MILLIS
         connection.setRequestProperty(AUTHORIZATION_HEADER, request.authorizationHeader)

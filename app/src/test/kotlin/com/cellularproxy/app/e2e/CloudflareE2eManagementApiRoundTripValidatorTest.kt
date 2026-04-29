@@ -1,5 +1,8 @@
 package com.cellularproxy.app.e2e
 
+import java.net.ServerSocket
+import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -200,6 +203,68 @@ class CloudflareE2eManagementApiRoundTripValidatorTest {
         assertFalse(evidence.safeSummary.contains("management-secret"))
         assertFalse(evidence.safeSummary.contains(validTunnelToken))
         assertFalse(evidence.safeSummary.contains("Authorization"))
+    }
+
+    @Test
+    fun `default transport does not follow management status redirects after attaching authorization`() {
+        val server = ServerSocket(0).apply { soTimeout = 2_000 }
+        val redirectedRequests = AtomicInteger(0)
+        val serverThread =
+            Thread {
+                repeat(2) {
+                    try {
+                        server.accept().use { socket ->
+                            val reader = socket.getInputStream().bufferedReader()
+                            val requestLine = reader.readLine().orEmpty()
+                            generateSequence { reader.readLine() }
+                                .takeWhile { it.isNotEmpty() }
+                                .forEach { }
+                            if (requestLine.startsWith("GET /redirected ")) {
+                                redirectedRequests.incrementAndGet()
+                            }
+                            val response =
+                                if (requestLine.startsWith("GET /api/status ")) {
+                                    "HTTP/1.1 302 Found\r\n" +
+                                        "Location: http://127.0.0.1:${server.localPort}/redirected\r\n" +
+                                        "Content-Length: 0\r\n" +
+                                        "Connection: close\r\n\r\n"
+                                } else {
+                                    "HTTP/1.1 200 OK\r\n" +
+                                        "Content-Length: 0\r\n" +
+                                        "Connection: close\r\n\r\n"
+                                }
+                            socket.getOutputStream().write(response.toByteArray(Charsets.US_ASCII))
+                        }
+                    } catch (_: SocketTimeoutException) {
+                        return@Thread
+                    }
+                }
+            }.also(Thread::start)
+
+        try {
+            val result =
+                CloudflareE2eManagementApiRoundTripValidator()
+                    .validate(
+                        CloudflareE2eValidationConfig.Ready(
+                            tunnelToken = validTunnelToken,
+                            managementApiToken = "management-secret",
+                            managementHostname = "http://127.0.0.1:${server.localPort}",
+                        ),
+                    )
+
+            assertEquals(
+                CloudflareE2eValidationAttemptResult.Failure(
+                    edgeSessionCategory = CloudflareE2eEdgeSessionCategory.ManagementApiRoundTrip,
+                    httpStatusCode = 302,
+                    errorClass = CloudflareE2eErrorClass.Network,
+                ),
+                result,
+            )
+            assertEquals(0, redirectedRequests.get())
+        } finally {
+            server.close()
+            serverThread.join(2_000)
+        }
     }
 }
 
